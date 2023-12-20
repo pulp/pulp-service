@@ -1,27 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
-labels:
-  app: pulp
-  template: pulp-clowdapp
 metadata:
-  annotations:
-    description: |-
-      A quick way to test and try Pulp running in OpenShift clusters. For more information about using this template see ...
-
-      WARNING: Any data stored will be lost upon pod destruction. Only use this template for testing.
-    openshift.io/display-name: Pulp (Ephemeral)
-    openshift.io/documentation-url: https://docs.pulpproject.org/pulpcore/
-    openshift.io/long-description: This template defines resources needed
-      to install Pulp. The database is stored in non-persistent storage,
-      so this configuration should be used for experimental purposes only.
-    openshift.io/support-url: https://github.com/pulp/pulp-operator/issues
-    samples.operator.openshift.io/version: 4.10.12
-    tags: quickstart,pulp
-    template.openshift.io/bindable: "false"
-    iconClass: icon-python
-  labels:
-    samples.operator.openshift.io/managed: "false"
-  name: pulp-clowdapp
+  name: pulp
 objects:
 - apiVersion: v1
   kind: ConfigMap
@@ -53,7 +33,6 @@ objects:
             receivers: [otlp]
             processors: []
             exporters: [otlp]
-
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -166,7 +145,6 @@ objects:
   kind: ClowdApp
   metadata:
     name: pulp
-  #  namespace: "${ENV_NAME}"
   spec:
     envName: "${ENV_NAME}"
     testing:
