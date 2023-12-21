@@ -7,7 +7,7 @@ IMAGE="quay.io/cloudservices/pulp-ubi"
 # be explicit about what to build
 DOCKERFILE=Dockerfile
 
-IQE_PLUGINS="pulp"
+IQE_PLUGINS="content-sources"
 IQE_MARKER_EXPRESSION="api"
 IQE_FILTER_EXPRESSION="not test_introspection_of_persistent_user"
 IQE_CJI_TIMEOUT="30m"
@@ -23,4 +23,4 @@ source $CICD_ROOT/build.sh
 source $APP_ROOT/unit_test.sh
 source $CICD_ROOT/deploy_ephemeral_env.sh
 # source $CICD_ROOT/cji_smoke_test.sh
-# source $CICD_ROOT/post_test_results.sh
+source $CICD_ROOT/post_test_results.sh
