@@ -319,6 +319,11 @@ objects:
             - name: config-sh
               mountPath: /tmp/config.sh
               subPath: config-sh-file
+          resources:
+            requests:
+              memory: 192Mi
+            limits:
+              memory: 384Mi
       - name: migrate-db
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
