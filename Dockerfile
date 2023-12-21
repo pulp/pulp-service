@@ -119,4 +119,10 @@ USER root:root
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
+COPY images/assets/3460e4bdc4bac870941a66dc65c1b7710250f652.diff /tmp/3460e4bdc4bac870941a66dc65c1b7710250f652.diff
+
+RUN dnf install -y patch && dnf clean all
+
+RUN patch /usr/local/lib/python3.8/site-packages/pulpcore/tests/functional/__init__.py < /tmp/3460e4bdc4bac870941a66dc65c1b7710250f652.diff || /bin/true
+
 EXPOSE 80
