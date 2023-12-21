@@ -203,7 +203,7 @@ objects:
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: [ 'pulpcore-content' ]
+        command: [ 'pulpcore-content', '--access-logfile', '-' ]
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
