@@ -76,6 +76,10 @@ objects:
       openssl rand -base64 32 > /tmp/database_fields.symmetric.key
       kubectl create secret generic pulp-db-fields-encryption --from-file /tmp/database_fields.symmetric.key
 
+      # Generate admin password
+      openssl rand -base64 32 > /tmp/password
+      kubectl create secret generic cs-pulp-admin-password --from-file /tmp/password
+
       # Create settings.py
       cat <<EOF > /tmp/settings.py
       # Auto-generated settings file
@@ -341,7 +345,7 @@ objects:
             - name: PULP_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: pulp-admin-password
+                  name: cs-pulp-admin-password
                   key: password
                   optional: true
           volumeMounts:
