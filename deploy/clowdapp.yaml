@@ -305,7 +305,7 @@ objects:
       version: 15
     inMemoryDb: true
     objectStore:
-      - pulp-s3
+      - pulp-default-domain-s3
     jobs:
       - name: create-settings-and-ingress
         podSpec:
