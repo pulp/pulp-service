@@ -305,7 +305,7 @@ objects:
       version: 15
     inMemoryDb: true
     objectStore:
-      - pulp-default-domain-s3
+      - ${{OBJECT_STORE_NAME}}
     jobs:
       - name: create-settings-and-ingress
         podSpec:
@@ -536,3 +536,6 @@ parameters:
   - name: CONTENT_ORIGIN
     description: The value for the CONTENT_ORIGIN pulp setting
     value: http://pulp-content-svc.local
+  - name: OBJECT_STORE_NAME
+    description: The name of the S3 bucket.
+    value: pulp-stage-default-domain-s3
