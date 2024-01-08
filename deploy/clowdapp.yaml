@@ -78,7 +78,7 @@ objects:
 
       # Generate admin password
       openssl rand -base64 32 > /tmp/password
-      kubectl create secret generic cs-pulp-admin-password --from-file /tmp/password
+      kubectl create secret generic pulp-admin-password --from-file /tmp/password
 
       # Create settings.py
       cat <<EOF > /tmp/settings.py
@@ -350,7 +350,7 @@ objects:
             - name: PULP_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: cs-pulp-admin-password
+                  name: pulp-admin-password
                   key: password
                   optional: true
           volumeMounts:
@@ -443,7 +443,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: reset-admin-password
+    name: reset-admin-password-again
   spec:
     appName: pulp
     jobs:
