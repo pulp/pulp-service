@@ -443,7 +443,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: reset-admin-password-01-Jan-2024
+    name: reset-admin-password-1
   spec:
     appName: pulp
     jobs:
