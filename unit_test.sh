@@ -40,7 +40,7 @@ cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratc
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
 
 cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
-sed "s/password/${PASSWORD}/g" pulp-smash.json > pulp-smash.customized.json
+sed "s#password#${PASSWORD}#g" pulp-smash.json > pulp-smash.customized.json
 sed -i "s/pulp-content-svc/env-${NAMESPACE}.apps.c-rh-c-eph.8p0c.p1.openshiftapps.com/g" pulp-smash.customized.json
 
 echo "PULP-SMASH CONFIG:"
