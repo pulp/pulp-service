@@ -11,6 +11,7 @@ IQE_PLUGINS="content-sources"
 IQE_MARKER_EXPRESSION="api"
 IQE_FILTER_EXPRESSION="not test_introspection_of_persistent_user"
 IQE_CJI_TIMEOUT="30m"
+COMPONENTS_W_RESOURCES="pulp"
 
 # Install bonfire repo/initialize
 CICD_URL=https://raw.githubusercontent.com/RedHatInsights/cicd-tools/master
