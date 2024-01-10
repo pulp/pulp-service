@@ -22,10 +22,6 @@ objects:
             receivers: [otlp]
             processors: []
             exporters: [prometheus]
-          traces:
-            receivers: [otlp]
-            processors: []
-            exporters: []
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -194,7 +190,7 @@ objects:
             memory: ${{PULP_API_MEMORY_LIMIT}}
         env:
           - name: PULP_OTEL_ENABLED
-            value: ${{TELEMETRY_ENABLED}}
+            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -240,7 +236,7 @@ objects:
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
         env:
           - name: PULP_OTEL_ENABLED
-            value: ${{TELEMETRY_ENABLED}}
+            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -287,7 +283,7 @@ objects:
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
         env:
           - name: PULP_OTEL_ENABLED
-            value: ${{TELEMETRY_ENABLED}}
+            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -530,7 +526,7 @@ parameters:
     value: "512Mi"
   - name: TELEMETRY_ENABLED
     description: Enables the application to send telemetry data.
-    value: True
+    value: "true"
   - name: PULP_OTEL_COLLECTOR_SERVICE_NAME
     description: The name of the collector service
     value: pulp-otel-collector-svc
