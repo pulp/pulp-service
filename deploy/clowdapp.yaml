@@ -151,7 +151,7 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4317', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -203,7 +203,7 @@ objects:
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: [ 'pulpcore-content', '--access-logfile', '-' ]
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '--access-logfile', '-']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -429,10 +429,6 @@ objects:
         protocol: TCP
         port: 8889
         targetPort: 8889
-      - name: otel-4317
-        protocol: TCP
-        port: 4317
-        targetPort: 4317
       - name: otel-4318
         protocol: TCP
         port: 4318
@@ -543,7 +539,7 @@ parameters:
     value: "http/json"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
     description: The collector endpoint used to receive telemetry data from the application.
-    value: ${{PULP_OTEL_COLLECTOR_SERVICE_NAME}}:4318/
+    value: http://pulp-otel-collector-svc:4318/
   - name: OTEL_COLLECTOR_CPU_REQUEST
     description: Amount of CPU to request for OpenTelemetry Collector container
     value: "250m"
