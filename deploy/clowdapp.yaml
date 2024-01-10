@@ -13,16 +13,9 @@ objects:
         otlp:
           protocols:
             http:
-              endpoint: "0.0.0.0:4318"
-            grpc:
-              endpoint: "0.0.0.0:4317"
       exporters:
         prometheus:
           endpoint: "0.0.0.0:8889"
-        otlp:
-          endpoint: "http://pulp-otel-collector-svc:4317"
-          tls:
-            insecure: true
       service:
         pipelines:
           metrics:
@@ -32,7 +25,7 @@ objects:
           traces:
             receivers: [otlp]
             processors: []
-            exporters: [otlp]
+            exporters: []
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -199,6 +192,13 @@ objects:
           limits:
             cpu: ${{PULP_API_CPU_LIMIT}}
             memory: ${{PULP_API_MEMORY_LIMIT}}
+        env:
+          - name: PULP_OTEL_ENABLED
+            value: ${{TELEMETRY_ENABLED}}
+          - name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
@@ -238,6 +238,13 @@ objects:
           limits:
             cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
+        env:
+          - name: PULP_OTEL_ENABLED
+            value: ${{TELEMETRY_ENABLED}}
+          - name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
@@ -278,6 +285,13 @@ objects:
           limits:
             cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
+        env:
+          - name: PULP_OTEL_ENABLED
+            value: ${{TELEMETRY_ENABLED}}
+          - name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
     - name: otel-collector
       replicas: 1
       podSpec:
@@ -408,7 +422,7 @@ objects:
     labels:
       otel: ""
       pulp_cr: pulp
-    name: pulp-otel-collector-svc
+    name: ${{PULP_OTEL_COLLECTOR_SERVICE_NAME}}
   spec:
     ports:
       - name: otel-8889
@@ -518,6 +532,18 @@ parameters:
   - name: PULP_WORKER_MEMORY_LIMIT
     description: Limit of memory use by Worker pods
     value: "512Mi"
+  - name: TELEMETRY_ENABLED
+    description: Enables the application to send telemetry data.
+    value: True
+  - name: PULP_OTEL_COLLECTOR_SERVICE_NAME
+    description: The name of the collector service
+    value: pulp-otel-collector-svc
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    description: Defines the protocol used to feed the OpenTelemetry collector.
+    value: "http/json"
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    description: The collector endpoint used to receive telemetry data from the application.
+    value: ${{PULP_OTEL_COLLECTOR_SERVICE_NAME}}:4318/
   - name: OTEL_COLLECTOR_CPU_REQUEST
     description: Amount of CPU to request for OpenTelemetry Collector container
     value: "250m"
