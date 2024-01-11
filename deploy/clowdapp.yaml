@@ -74,6 +74,11 @@ objects:
       # Generate admin password
       openssl rand -base64 32 | tr -d '\n' > /tmp/password
       kubectl create secret generic pulp-admin-password --from-file /tmp/password
+      rm /tmp/password
+
+      # Generate contentsources user password
+      openssl rand -base64 32 | tr -d '\n' > /tmp/password
+      kubectl create secret generic pulp-content-sources-password --from-file /tmp/password
 
       # Create settings.py
       cat <<EOF > /tmp/settings.py
@@ -411,7 +416,13 @@ objects:
                 secretKeyRef:
                   name: pulp-admin-password
                   key: password
-                  optional: true
+                  optional: false
+            - name: CONTENT_SOURCES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-content-sources-password
+                  key: password
+                  optional: false
             - name: XDG_CONFIG_HOME
               value: "/tmp"
             - name: XDG_CACHE_HOME
