@@ -532,7 +532,7 @@ parameters:
     value: pulp-otel-collector-svc
   - name: OTEL_EXPORTER_OTLP_PROTOCOL
     description: Defines the protocol used to feed the OpenTelemetry collector.
-    value: "http/json"
+    value: "http/protobuf"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
     description: The collector endpoint used to receive telemetry data from the application.
     value: http://pulp-otel-collector-svc:4318/
