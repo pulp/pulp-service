@@ -153,7 +153,7 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -201,11 +201,13 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
+          - name: OTEL_TRACES_EXPORTER
+            value: "none"
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '--access-logfile', '-']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -247,6 +249,8 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
+          - name: OTEL_TRACES_EXPORTER
+            value: "none"
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
@@ -294,6 +298,8 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
+          - name: OTEL_TRACES_EXPORTER
+            value: "none"
     - name: otel-collector
       replicas: 1
       podSpec:
