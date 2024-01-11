@@ -153,7 +153,7 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -205,7 +205,7 @@ objects:
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '--access-logfile', '-']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
