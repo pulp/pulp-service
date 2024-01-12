@@ -33,6 +33,15 @@ cmd_stdin_prefix() {
 }
 ### END Adapted from ./.github/workflows/scripts/utils.sh
 
+debug_and_fail() {
+  oc logs $(oc get pod | grep -oE "pulp-content\S*")
+  echo "CURL OUTPUT"
+  curl https://env-${NAMESPACE}.apps.c-rh-c-eph.8p0c.p1.openshiftapps.com/pulp/content/default/
+  echo "ROUTES"
+  oc get route
+  exit 1
+}
+
 cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest"
 cmd_prefix git clone https://github.com/mikedep333/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
@@ -60,10 +69,15 @@ cat pulp-smash.customized.json | cmd_stdin_prefix bash -c "cat > /tmp/home/.conf
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -r /tmp/unittest_requirements.txt -r /tmp/functest_requirements.txt"
 # Because we pass the path to pytest -o cache_dir=/tmp/home/.cache/pytest_cache, pulpcore-manager must be in the same dir
 cmd_prefix bash -c "ln -s /usr/local/bin/pulpcore-manager /tmp/home/.local/bin/pulpcore-manager || /bin/true"
+echo "CURL OUTPUT"
+curl https://env-${NAMESPACE}.apps.c-rh-c-eph.8p0c.p1.openshiftapps.com/pulp/content/default/
+echo "ROUTES"
+oc get route
+set +e
 # Only testing test_download_content because it is a very thorough test that tests that all the components of pulp can work
-cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_rpm.tests.functional -m parallel -n 1 -k 'test_download_content'"
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_rpm.tests.functional -m parallel -n 1 -k 'test_download_content'" || debug_and_fail
 # Never test test_package_manager_consume because they require sudo
 # Do not test test_domain_create because it requires more than 2GB of RAM
 # Only testing test_download_policies because they are very thorough tests that test that all the components of pulp can work
-cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies'"
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies'" || debug_and_fail
 ### END Adapted from ./.github/workflows/scripts/script.sh
