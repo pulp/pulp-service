@@ -31,7 +31,7 @@ objects:
 - apiVersion: v1
   kind: ConfigMap
   metadata:
-    name: cs-config-sh-map
+    name: config-sh-map
   data:
     config-sh-file: |
       #!/bin/bash
@@ -347,7 +347,7 @@ objects:
           volumes:
             - name: config-sh
               configMap:
-                name: cs-config-sh-map
+                name: config-sh-map
           volumeMounts:
             - name: config-sh
               mountPath: /tmp/config.sh
