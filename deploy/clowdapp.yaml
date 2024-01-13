@@ -407,7 +407,7 @@ objects:
           - "-c"
           - |
             pulp config create --base-url http://pulp-api-svc:24817 --username admin --password "$PULP_ADMIN_PASSWORD" --domain default && \
-            pulp user create --username contentsources && \
+            pulp user create --username contentsources --password "$CONTENT_SOURCES_PASSWORD" && \
             pulp role create --name domain.admin --permission core.add_domain --permission core.add_headercontentguard --permission core.add_compositecontentguard --permission rpm.add_rpmrepository --permission rpm.add_rpmremote --permission rpm.add_rpmdistribution --permission rpm.add_rpmpublication && \
             pulp user role-assignment add --username contentsources --role domain.admin --object ""
           env:
