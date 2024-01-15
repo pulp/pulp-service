@@ -427,32 +427,6 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
-      - name: set-contentsources-user-password
-        podSpec:
-          image: ${IMAGE}:${IMAGE_TAG}
-          command: [ '/bin/sh' ]
-          args:
-          - "-c"
-          - |
-            pulp config create --base-url http://pulp-api-svc:24817 --username admin --password "$PULP_ADMIN_PASSWORD" --domain default && \
-            pulp user update --username contentsources --password "$CONTENT_SOURCES_PASSWORD"
-          env:
-            - name: PULP_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-admin-password
-                  key: password
-                  optional: false
-            - name: CONTENT_SOURCES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-content-sources-password
-                  key: password
-                  optional: false
-            - name: XDG_CONFIG_HOME
-              value: "/tmp"
-            - name: XDG_CACHE_HOME
-              value: "/tmp"
 - apiVersion: v1
   kind: Service
   metadata:
@@ -548,14 +522,6 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: set-contentsources-user-password
-  spec:
-    appName: pulp
-    jobs:
-      - set-contentsources-user-password
 parameters:
   - name: ENV_NAME
     description: Specify your (ephemeral) namespace
