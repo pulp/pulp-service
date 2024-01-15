@@ -549,7 +549,7 @@ parameters:
     value: "1"
   - name: PULP_API_CPU_REQUEST
     description: Amount of CPU to request for the API pods
-    value: "250m"
+    value: "500m"
   - name: PULP_CONTENT_CPU_REQUEST
     description: Amount of CPU to request for the Content pods
     value: "250m"
@@ -558,7 +558,7 @@ parameters:
     value: "250m"
   - name: PULP_API_CPU_LIMIT
     description: Limit of CPU use by API pods
-    value: "500m"
+    value: "1000m"
   - name: PULP_CONTENT_CPU_LIMIT
     description: Limit of CPU use by Content pods
     value: "500m"
