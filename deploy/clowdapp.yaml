@@ -492,7 +492,7 @@ objects:
   metadata:
     labels:
       app: pulp
-    name: migrations-12-14-2023
+    name: migrations-01-16-2023
   spec:
     appName: pulp
     runOnNotReady: True
