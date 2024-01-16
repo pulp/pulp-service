@@ -361,6 +361,7 @@ objects:
       - name: migrate-db
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
+          imagePullPolicy: Always
           command: [ '/usr/local/bin/pulpcore-manager', 'migrate', '--noinput' ]
           volumeMounts:
             - name: secret-volume
@@ -492,7 +493,7 @@ objects:
   metadata:
     labels:
       app: pulp
-    name: migrations-01-16-2023
+    name: migrations-01-16-2023-again
   spec:
     appName: pulp
     runOnNotReady: True
