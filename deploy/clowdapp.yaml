@@ -361,7 +361,6 @@ objects:
       - name: migrate-db
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
-          imagePullPolicy: Always
           command: [ '/usr/local/bin/pulpcore-manager', 'migrate', '--noinput' ]
           volumeMounts:
             - name: secret-volume
