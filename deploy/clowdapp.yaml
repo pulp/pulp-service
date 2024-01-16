@@ -65,7 +65,7 @@ objects:
       
       ENV_NAME=$(cat /cdapp/cdappconfig.json | ./jq -r '.metadata.envName')
 
-      HOST=${ENV_NAME}.apps.c-rh-c-eph.8p0c.p1.openshiftapps.com
+      HOST=${ENV_NAME}.apps.crc-eph.r9lp.p1.openshiftapps.com
 
       # Generate a db key
       openssl rand -base64 32 > /tmp/database_fields.symmetric.key
