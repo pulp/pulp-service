@@ -77,8 +77,8 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 
 
 RUN pip3 install --upgrade \
-  pulpcore==3.43.2 \
-  pulp-rpm==3.24.0 \
+  pulpcore==3.44.1 \
+  pulp-rpm==3.25.0 \
   pulp-gem==0.4.0 \
   pulp-cli && \
   rm -rf /root/.cache/pip
@@ -119,15 +119,5 @@ USER root:root
 
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
-
-COPY images/assets/3460e4bdc4bac870941a66dc65c1b7710250f652.diff /tmp/3460e4bdc4bac870941a66dc65c1b7710250f652.diff
-COPY images/assets/ff94c61ced3d7f3722272ada7cb452e3ecfacd7a.diff /tmp/ff94c61ced3d7f3722272ada7cb452e3ecfacd7a.diff
-COPY images/assets/ce6efad1ffef0a8fd08e01446fd0f46ad903caf6.diff /tmp/ce6efad1ffef0a8fd08e01446fd0f46ad903caf6.diff
-
-RUN dnf install -y patch && dnf clean all
-
-RUN patch /usr/local/lib/python3.8/site-packages/pulpcore/tests/functional/__init__.py < /tmp/3460e4bdc4bac870941a66dc65c1b7710250f652.diff || /bin/true
-RUN patch /usr/local/lib/python3.8/site-packages/pulpcore/app/global_access_conditions.py < /tmp/ce6efad1ffef0a8fd08e01446fd0f46ad903caf6.diff || /bin/true
-RUN patch /usr/local/lib/python3.8/site-packages/pulp_rpm/app/viewsets/repository.py < /tmp/ff94c61ced3d7f3722272ada7cb452e3ecfacd7a.diff || /bin/true
 
 EXPOSE 80
