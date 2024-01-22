@@ -85,6 +85,7 @@ objects:
       # Auto-generated settings file
       import secrets
       
+      API_ROOT = "/api/pulp/"
       DB_ENCRYPTION_KEY = "/etc/pulp/keys/database_fields.symmetric.key"
       DATABASES = {
         'default': {
@@ -182,13 +183,13 @@ objects:
             inheritEnv: True
         readinessProbe:
           exec:
-            command: ["/usr/bin/readyz.py","/pulp/api/v3/status/"]
+            command: ["/usr/bin/readyz.py","/api/pulp/api/v3/status/"]
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 10
         livenessProbe:
           httpGet:
-            path: /pulp/api/v3/status/
+            path: /api/pulp/api/v3/status/
             port: 24817
             initialDelaySeconds: 60
             periodSeconds: 10
@@ -407,7 +408,7 @@ objects:
           args:
           - "-c"
           - |
-            pulp config create --base-url http://pulp-api-svc:24817 --username admin --password "$PULP_ADMIN_PASSWORD" --domain default && \
+            pulp config create --base-url http://pulp-api-svc:24817 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default && \
             pulp user create --username contentsources --password "$CONTENT_SOURCES_PASSWORD" && \
             pulp role create --name domain.admin --permission core.add_domain --permission core.add_headercontentguard --permission core.add_compositecontentguard --permission rpm.add_rpmrepository --permission rpm.add_rpmremote --permission rpm.add_rpmdistribution --permission rpm.add_rpmpublication && \
             pulp user role-assignment add --username contentsources --role domain.admin --object ""
