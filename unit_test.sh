@@ -47,7 +47,7 @@ debug_and_fail() {
 }
 
 cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest"
-cmd_prefix git clone https://github.com/mikedep333/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
+cmd_prefix git clone https://github.com/mikedep333/pulp-openapi-scratch-builds.git@0b3e33c25b2f70c9c2f50277478f24aed2df341a /tmp/home/pulp-openapi-scratch-builds | /bin/true
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
