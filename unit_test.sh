@@ -40,7 +40,7 @@ cmd_stdin_prefix() {
 debug_and_fail() {
   oc logs $(oc get pod | grep -oE "pulp-content\S*")
   echo "CURL OUTPUT"
-  curl https://env-${NAMESPACE}.apps.crc-eph.r9lp.p1.openshiftapps.com/pulp/content/default/
+  curl https://env-${NAMESPACE}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
   echo "ROUTES"
   oc get route
   exit 1
@@ -74,7 +74,7 @@ cmd_prefix bash -c "HOME=/tmp/home pip3 install -r /tmp/unittest_requirements.tx
 # Because we pass the path to pytest -o cache_dir=/tmp/home/.cache/pytest_cache, pulpcore-manager must be in the same dir
 cmd_prefix bash -c "ln -s /usr/local/bin/pulpcore-manager /tmp/home/.local/bin/pulpcore-manager || /bin/true"
 echo "CURL OUTPUT"
-curl https://env-${NAMESPACE}.apps.crc-eph.r9lp.p1.openshiftapps.com/pulp/content/default/
+curl https://env-${NAMESPACE}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
 echo "ROUTES"
 oc get route
 set +e
