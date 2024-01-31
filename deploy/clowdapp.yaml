@@ -116,6 +116,7 @@ objects:
       MEDIA_ROOT = ""
       SECRET_KEY = secrets.token_urlsafe(50)
       CONTENT_ORIGIN = "https://$HOST"
+      CONTENT_PATH_PREFIX = "/api/pulp-content/"
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
       
