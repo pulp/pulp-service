@@ -138,7 +138,7 @@ objects:
           - host: "${HOST}"
             http:
               paths:
-                - path: /pulp/content/
+                - path: /api/pulp-content/
                   pathType: Prefix
                   backend:
                     service:
