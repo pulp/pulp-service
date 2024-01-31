@@ -1,0 +1,43 @@
+diff --git a/pulpcore/tests/functional/__init__.py b/pulpcore/tests/functional/__init__.py
+index fa3e77765b..9634993527 100644
+--- a/pulpcore/tests/functional/__init__.py
++++ b/pulpcore/tests/functional/__init__.py
+@@ -1043,8 +1043,8 @@ def pulp_domain_enabled(pulp_settings):
+
+
+ @pytest.fixture(scope="session")
+-def pulp_content_origin(pulp_settings):
+-    return pulp_settings.CONTENT_ORIGIN
++def pulp_content_orgin_with_prefix(pulp_settings):
++    return pulp_settings.CONTENT_ORIGIN + pulp_settings.CONTENT_PATH_PREFIX[-1:-1]
+
+
+ @pytest.fixture(scope="session")
+@@ -1200,7 +1200,7 @@ def _add_to_filesystem_cleanup(path):
+
+
+ @pytest.fixture(scope="session")
+-def download_content_unit(pulp_domain_enabled, pulp_content_origin):
++def download_content_unit(pulp_domain_enabled, pulp_content_orgin_with_prefix):
+     def _download_content_unit(base_path, content_path, domain="default"):
+         async def _get_response(url):
+             async with aiohttp.ClientSession() as session:
+@@ -1209,16 +1209,14 @@ async def _get_response(url):
+
+         if pulp_domain_enabled:
+             url_fragments = [
+-                pulp_content_origin,
+-                "pulp/content",
++                pulp_content_orgin_with_prefix,
+                 domain,
+                 base_path,
+                 content_path,
+             ]
+         else:
+             url_fragments = [
+-                pulp_content_origin,
+-                "pulp/content",
++                pulp_content_orgin_with_prefix,
+                 base_path,
+                 content_path,
+             ]
