@@ -1,34 +1,35 @@
 diff --git a/pulpcore/tests/functional/__init__.py b/pulpcore/tests/functional/__init__.py
-index fa3e77765b..9634993527 100644
+index fa3e77765..a3293e4fb 100644
 --- a/pulpcore/tests/functional/__init__.py
 +++ b/pulpcore/tests/functional/__init__.py
-@@ -1043,8 +1043,8 @@ def pulp_domain_enabled(pulp_settings):
+@@ -1047,6 +1047,11 @@ def pulp_content_origin(pulp_settings):
+     return pulp_settings.CONTENT_ORIGIN
 
 
- @pytest.fixture(scope="session")
--def pulp_content_origin(pulp_settings):
--    return pulp_settings.CONTENT_ORIGIN
-+def pulp_content_orgin_with_prefix(pulp_settings):
++@pytest.fixture(scope="session")
++def pulp_content_origin_with_prefix(pulp_settings):
 +    return pulp_settings.CONTENT_ORIGIN + pulp_settings.CONTENT_PATH_PREFIX[-1:-1]
-
-
++
++
  @pytest.fixture(scope="session")
-@@ -1200,7 +1200,7 @@ def _add_to_filesystem_cleanup(path):
+ def pulp_api_v3_path(pulp_settings, pulp_domain_enabled):
+     if pulp_domain_enabled:
+@@ -1200,7 +1205,7 @@ def add_to_filesystem_cleanup():
 
 
  @pytest.fixture(scope="session")
 -def download_content_unit(pulp_domain_enabled, pulp_content_origin):
-+def download_content_unit(pulp_domain_enabled, pulp_content_orgin_with_prefix):
++def download_content_unit(pulp_domain_enabled, pulp_content_origin_with_prefix):
      def _download_content_unit(base_path, content_path, domain="default"):
          async def _get_response(url):
              async with aiohttp.ClientSession() as session:
-@@ -1209,16 +1209,14 @@ async def _get_response(url):
+@@ -1209,20 +1214,19 @@ def download_content_unit(pulp_domain_enabled, pulp_content_origin):
 
          if pulp_domain_enabled:
              url_fragments = [
 -                pulp_content_origin,
 -                "pulp/content",
-+                pulp_content_orgin_with_prefix,
++                pulp_content_origin_with_prefix,
                  domain,
                  base_path,
                  content_path,
@@ -37,7 +38,12 @@ index fa3e77765b..9634993527 100644
              url_fragments = [
 -                pulp_content_origin,
 -                "pulp/content",
-+                pulp_content_orgin_with_prefix,
++                pulp_content_origin_with_prefix,
                  base_path,
                  content_path,
              ]
+         url = "/".join(url_fragments)
++        print(url)
+         return asyncio.run(_get_response(url))
+
+     return _download_content_unit
