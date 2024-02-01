@@ -1,5 +1,5 @@
 diff --git a/pulpcore/tests/functional/__init__.py b/pulpcore/tests/functional/__init__.py
-index fa3e77765..a3293e4fb 100644
+index fa3e77765..43f11cde3 100644
 --- a/pulpcore/tests/functional/__init__.py
 +++ b/pulpcore/tests/functional/__init__.py
 @@ -1047,6 +1047,11 @@ def pulp_content_origin(pulp_settings):
@@ -8,7 +8,7 @@ index fa3e77765..a3293e4fb 100644
 
 +@pytest.fixture(scope="session")
 +def pulp_content_origin_with_prefix(pulp_settings):
-+    return pulp_settings.CONTENT_ORIGIN + pulp_settings.CONTENT_PATH_PREFIX[-1:-1]
++    return pulp_settings.CONTENT_ORIGIN + pulp_settings.CONTENT_PATH_PREFIX[:-1]
 +
 +
  @pytest.fixture(scope="session")
