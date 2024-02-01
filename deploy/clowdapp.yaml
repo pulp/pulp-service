@@ -241,7 +241,7 @@ objects:
             inheritEnv: True
         readinessProbe:
           exec:
-            command: ["/usr/bin/readyz.py", "/pulp/content/default/"]
+            command: ["/usr/bin/readyz.py", "/api/pulp-content/default/"]
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 10
