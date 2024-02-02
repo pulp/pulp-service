@@ -1,5 +1,5 @@
 diff --git a/pulpcore/tests/functional/__init__.py b/pulpcore/tests/functional/__init__.py
-index fa3e77765..43f11cde3 100644
+index fa3e77765..531fe2322 100644
 --- a/pulpcore/tests/functional/__init__.py
 +++ b/pulpcore/tests/functional/__init__.py
 @@ -1047,6 +1047,11 @@ def pulp_content_origin(pulp_settings):
@@ -23,7 +23,7 @@ index fa3e77765..43f11cde3 100644
      def _download_content_unit(base_path, content_path, domain="default"):
          async def _get_response(url):
              async with aiohttp.ClientSession() as session:
-@@ -1209,20 +1214,19 @@ def download_content_unit(pulp_domain_enabled, pulp_content_origin):
+@@ -1209,16 +1214,14 @@ def download_content_unit(pulp_domain_enabled, pulp_content_origin):
 
          if pulp_domain_enabled:
              url_fragments = [
@@ -42,8 +42,3 @@ index fa3e77765..43f11cde3 100644
                  base_path,
                  content_path,
              ]
-         url = "/".join(url_fragments)
-+        print(url)
-         return asyncio.run(_get_response(url))
-
-     return _download_content_unit
