@@ -116,7 +116,6 @@ objects:
       MEDIA_ROOT = ""
       SECRET_KEY = secrets.token_urlsafe(50)
       CONTENT_ORIGIN = "https://$HOST"
-      CONTENT_PATH_PREFIX = "/api/pulp-content/"
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
       
@@ -138,7 +137,7 @@ objects:
           - host: "${HOST}"
             http:
               paths:
-                - path: /api/pulp-content/
+                - path: /pulp/content/
                   pathType: Prefix
                   backend:
                     service:
@@ -241,7 +240,7 @@ objects:
             inheritEnv: True
         readinessProbe:
           exec:
-            command: ["/usr/bin/readyz.py", "/api/pulp-content/default/"]
+            command: ["/usr/bin/readyz.py", "/pulp/content/default/"]
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 10
