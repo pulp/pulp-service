@@ -79,7 +79,7 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 RUN pip3 install --upgrade \
   pulpcore==3.44.1 \
   pulp-rpm==3.25.0 \
-  pulp-gem==0.4.0 \
+  pulp-gem==0.4.1 \
   pulp-cli && \
   rm -rf /root/.cache/pip
 
@@ -121,11 +121,9 @@ RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
 COPY images/assets/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff /tmp/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff
-COPY images/assets/pulp_gem-209-fix.diff /tmp/pulp_gem-209-fix.diff
 
 RUN dnf install -y patch && dnf clean all
 
 RUN patch /usr/local/lib/python3.8/site-packages/pulpcore/tests/functional/__init__.py < /tmp/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff || /bin/true
-RUN patch /usr/local/lib/python3.8/site-packages/pulp_gem/specs.py < /tmp/pulp_gem-209-fix.diff || /bin/true
 
 EXPOSE 80
