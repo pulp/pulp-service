@@ -79,7 +79,7 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 RUN pip3 install --upgrade \
   pulpcore==3.44.1 \
   pulp-rpm==3.25.0 \
-  pulp-gem==0.4.1 \
+  pulp-gem==0.5.0 \
   pulp-cli && \
   rm -rf /root/.cache/pip
 
