@@ -147,6 +147,20 @@ objects:
                         number: 24816
       EOF
 
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: migrate-sh-map
+  data:
+    migrate-sh-file: |
+      #!/bin/bash
+      set -e
+      /usr/local/bin/pulpcore-manager migrate --noinput
+      touch /tmp/migrated
+      while true; do
+        sleep 1d
+      done
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdApp
   metadata:
@@ -336,6 +350,41 @@ objects:
           limits:
             cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
             memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
+    - name: migrate-db
+      replicas: 1
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: [ 'bash', '-x', '/tmp/migrate.sh' ]
+        volumeMounts:
+          - name: migrate-sh
+            mountPath: /tmp/migrate.sh
+            subPath: migrate-sh-file
+          - name: secret-volume
+            mountPath: "/etc/pulp/keys"
+          - name: pulp-settings
+            mountPath: "/etc/pulp/settings.py"
+            subPath: "settings.py"
+        volumes:
+          - name: migrate-sh
+            configMap:
+              name: migrate-sh-map
+          - name: secret-volume
+            secret:
+              secretName: pulp-db-fields-encryption
+          - name: pulp-settings
+            secret:
+              secretName: pulp-settings
+        initContainers:
+          - name: wait-on-migrations
+            image: ${IMAGE}:${IMAGE_TAG}
+            command: [ "/usr/bin/wait_on_postgres.py" ]
+            inheritEnv: True
+        readinessProbe:
+          exec:
+            command: ["stat", "/tmp/migrated"]
+          initialDelaySeconds: 2
+          periodSeconds: 2
+          timeoutSeconds: 10
     database:
       name: pulp
       version: 15
@@ -360,23 +409,6 @@ objects:
               memory: 192Mi
             limits:
               memory: 384Mi
-      - name: migrate-db
-        podSpec:
-          image: ${IMAGE}:${IMAGE_TAG}
-          command: [ '/usr/local/bin/pulpcore-manager', 'migrate', '--noinput' ]
-          volumeMounts:
-            - name: secret-volume
-              mountPath: "/etc/pulp/keys"
-            - name: pulp-settings
-              mountPath: "/etc/pulp/settings.py"
-              subPath: "settings.py"
-          volumes:
-            - name: secret-volume
-              secret:
-                secretName: pulp-db-fields-encryption
-            - name: pulp-settings
-              secret:
-                secretName: pulp-settings
       - name: reset-admin-password
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
@@ -489,17 +521,6 @@ objects:
     type: ClusterIP
   status:
     loadBalancer: {}
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    labels:
-      app: pulp
-    name: migrations-01-23-2023
-  spec:
-    appName: pulp
-    runOnNotReady: True
-    jobs:
-      - migrate-db
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
