@@ -80,7 +80,8 @@ RUN pip3 install --upgrade \
   pulpcore==3.44.1 \
   pulp-rpm==3.25.0 \
   pulp-gem==0.4.1 \
-  pulp-cli && \
+  pulp-cli \
+  pulp-cli-gem && \
   rm -rf /root/.cache/pip
 
 RUN sed 's|^#mount_program|mount_program|g' -i /etc/containers/storage.conf
