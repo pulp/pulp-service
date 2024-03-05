@@ -22,9 +22,9 @@ RUN dnf -y install dnf-plugins-core && \
     # dnf config-manager --set-enabled powertools && \
     dnf -y update
 
-# use python38
+# use python39
 RUN dnf -y module disable python36
-RUN dnf -y module enable python38
+RUN dnf -y module enable python39
 
 # lsof & procps-ng(`ps`) are needed for running pytests (unit/functional)
 #
@@ -36,7 +36,7 @@ RUN dnf -y module enable python38
 #
 # TODO: Investigate differences between `dnf builddep createrepo_c` vs the list
 # of dependencies below. For example, drpm-devel.
-RUN dnf -y install python38 python38-cryptography python38-devel && \
+RUN dnf -y install python39 python39-cryptography python39-devel && \
     dnf -y install openssl openssl-devel && \
     dnf -y install openldap-devel && \
     dnf -y install wget git && \
@@ -77,8 +77,8 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 
 
 RUN pip3 install --upgrade \
-  pulpcore==3.46.0 \
-  pulp-rpm==3.25.0 \
+  pulpcore==3.49.0 \
+  pulp-rpm==3.25.1 \
   pulp-gem==0.5.0 \
   pulp-cli \
   pulp-cli-gem && \
@@ -125,6 +125,6 @@ COPY images/assets/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff /tmp/bfae9eabcb
 
 RUN dnf install -y patch && dnf clean all
 
-RUN patch /usr/local/lib/python3.8/site-packages/pulpcore/tests/functional/__init__.py < /tmp/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff || /bin/true
+RUN patch /usr/local/lib/python3.9/site-packages/pulpcore/tests/functional/__init__.py < /tmp/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff || /bin/true
 
 EXPOSE 80
