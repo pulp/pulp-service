@@ -119,7 +119,11 @@ objects:
       CONTENT_PATH_PREFIX = "/api/pulp-content/"
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
-      
+      AUTHENTICATION_BACKENDS = "@merge django.contrib.auth.backends.RemoteUserBackend"
+      REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES = "@merge pulpcore.app.authentication.JSONHeaderRemoteAuthentication"
+      AUTHENTICATION_JSON_HEADER = "HTTP_X_RH_IDENTITY"
+      AUTHENTICATION_JSON_HEADER_JQ_FILTER = ".identity.user.username"
+
       EOF
       
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
@@ -462,6 +466,32 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
+      - name: print-settings
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/bin/sh' ]
+          args: ['-c', '/usr/local/bin/dynaconf list -k AUTHENTICATION_BACKENDS && /usr/local/bin/dynaconf list -k REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES && /usr/local/bin/dynaconf list -k AUTHENTICATION_JSON_HEADER && /usr/local/bin/dynaconf list -k AUTHENTICATION_JSON_HEADER_JQ_FILTER' ]
+          env:
+            - name: PULP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-admin-password
+                  key: password
+                  optional: true
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
+
 - apiVersion: v1
   kind: Service
   metadata:
@@ -546,6 +576,16 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: pulp-print-settings
+  spec:
+    appName: pulp
+    runOnNotReady: True
+    jobs:
+      - print-settings
+
 parameters:
   - name: ENV_NAME
     description: Specify your (ephemeral) namespace
