@@ -122,9 +122,11 @@ RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
 COPY images/assets/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff /tmp/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff
+COPY images/assets/0001-Enable-logging-header-info.patch /tmp/0001-Enable-logging-header-info.patch
 
 RUN dnf install -y patch && dnf clean all
 
 RUN patch /usr/local/lib/python3.9/site-packages/pulpcore/tests/functional/__init__.py < /tmp/bfae9eabcb62a593dd574ff001ce53a2545b925d.diff || /bin/true
+RUN patch /usr/local/lib/python3.9/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch || /bin/true
 
 EXPOSE 80
