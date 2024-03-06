@@ -84,6 +84,10 @@ cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/sit
 # Do not test test_domain_create because it requires more than 2GB of RAM
 # Only testing test_download_policies because they are very thorough tests that test that all the components of pulp can work
 cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+
+# Run the jq header auth test
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulpcore.tests.functional -m 'parallel' -k 'test_jq_header_remote_auth' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+
 ### END Adapted from ./.github/workflows/scripts/script.sh
 mkdir -p $ARTIFACTS_DIR
 oc cp $POD:/tmp/home/junit-pulp-parallel.xml $ARTIFACTS_DIR/junit-pulp-parallel.xml
