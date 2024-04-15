@@ -14,7 +14,7 @@ IQE_CJI_TIMEOUT="30m"
 COMPONENTS_W_RESOURCES="pulp"
 
 # Install bonfire repo/initialize
-CICD_URL=https://raw.githubusercontent.com/RedHatInsights/cicd-tools/master
+CICD_URL=https://raw.githubusercontent.com/RedHatInsights/cicd-tools/main
 curl -s $CICD_URL/bootstrap.sh > .cicd_bootstrap.sh && source .cicd_bootstrap.sh
 
 # Include all impacted HMS apps for deployment
