@@ -121,6 +121,10 @@ USER root:root
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
+COPY images/assets/status_head.diff /tmp/status_head.diff
+
 RUN dnf install -y patch && dnf clean all
+
+RUN patch /usr/local/lib/python3.9/site-packages/pulpcore/app/views/status.py < /tmp/status_head.diff || /bin/true
 
 EXPOSE 80
