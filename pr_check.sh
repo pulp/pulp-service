@@ -20,6 +20,10 @@ curl -s $CICD_URL/bootstrap.sh > .cicd_bootstrap.sh && source .cicd_bootstrap.sh
 # Include all impacted HMS apps for deployment
 EXTRA_DEPLOY_ARGS="--set-parameter pulp/PULP_API_MEMORY_LIMIT=2048Mi --set-parameter pulp/PULP_API_MEMORY_REQUEST=1024Mi provisioning sources image-builder-crc"
 
+podman --version || /bin/true
+podman build --help || /bin/true
+buildah --version
+
 source $CICD_ROOT/build.sh
 source $CICD_ROOT/deploy_ephemeral_env.sh
 source $APP_ROOT/unit_test.sh

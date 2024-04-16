@@ -15,6 +15,10 @@ if [[ -z "$RH_REGISTRY_USER" || -z "$RH_REGISTRY_TOKEN" ]]; then
     exit 1
 fi
 
+podman --version || /bin/true
+podman build --help || /bin/true
+buildah --version
+
 DOCKER_CONF="$PWD/.docker"
 mkdir -p "$DOCKER_CONF"
 
