@@ -220,6 +220,10 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
+          - name: OTEL_METRIC_EXPORT_INTERVAL
+            value: ${OTEL_METRIC_EXPORT_INTERVAL}
+          - name: OTEL_METRIC_EXPORT_TIMEOUT
+            value: ${OTEL_METRIC_EXPORT_TIMEOUT}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
           - name: PULP_REDIS_PORT
@@ -651,7 +655,13 @@ parameters:
     value: "http/protobuf"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
     description: The collector endpoint used to receive telemetry data from the application.
-    value: http://pulp-otel-collector-svc:4318/
+    value: "http://pulp-otel-collector-svc:4318/"
+  - name: OTEL_METRIC_EXPORT_INTERVAL
+    description: The time interval (in milliseconds) between the start of two export attempts.
+    value: "10000"
+  - name: OTEL_METRIC_EXPORT_TIMEOUT
+    description: Maximum allowed time (in milliseconds) to export data.
+    value: "10000"
   - name: OTEL_COLLECTOR_CPU_REQUEST
     description: Amount of CPU to request for OpenTelemetry Collector container
     value: "250m"
