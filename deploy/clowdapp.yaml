@@ -206,6 +206,13 @@ objects:
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/pulp/api/v3/livez/
+            port: 24817
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 10
         resources:
           requests:
             cpu: ${{PULP_API_CPU_REQUEST}}
