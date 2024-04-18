@@ -123,4 +123,7 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
 RUN dnf install -y patch && dnf clean all
 
+COPY images/assets/b55047ed0b7a3a378d703d1f38ab88939110f8a0.patch /tmp/b55047ed0b7a3a378d703d1f38ab88939110f8a0.patch
+RUN patch -p1 -d /usr/local/lib/python3.9/site-packages/ < /tmp/b55047ed0b7a3a378d703d1f38ab88939110f8a0.patch || /bin/true
+
 EXPOSE 80
