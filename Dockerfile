@@ -55,6 +55,7 @@ RUN dnf -y install python39 python39-cryptography python39-devel && \
     dnf -y install libcomps-devel && \
     dnf -y install zchunk-devel && \
     dnf -y install ninja-build && \
+    dnf -y install ostree-libs ostree --allowerasing --nobest && \
     dnf -y install cairo-devel cmake gobject-introspection-devel cairo-gobject-devel && \
     dnf -y install libcurl-devel libxml2-devel sqlite-devel file-devel && \
     dnf -y install zstd
@@ -80,6 +81,7 @@ RUN pip3 install --upgrade \
   pulpcore==3.50.2 \
   pulp-rpm==3.25.2 \
   pulp-gem==0.5.0 \
+  pulp-ostree==2.3.0 \
   pulp-cli \
   pulp-cli-gem && \
   rm -rf /root/.cache/pip
