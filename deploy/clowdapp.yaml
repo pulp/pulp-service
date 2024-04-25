@@ -235,6 +235,8 @@ objects:
             value: "none"
           - name: PULP_REDIS_PORT
             value: "6379"
+          - name: OTEL_PYTHON_EXCLUDED_URLS
+            value: "/api/pulp/api/v3/livez/"
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
