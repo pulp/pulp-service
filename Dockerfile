@@ -78,8 +78,8 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 
 
 RUN pip3 install --upgrade \
-  pulpcore==3.51.* \
-  pulp-rpm==3.25.* \
+  pulpcore==3.52.0 \
+  pulp-rpm==3.25.2 \
   pulp-gem==0.5.0 \
   pulp-ostree==2.3.0 \
   pulp-cli \
