@@ -78,7 +78,7 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 
 
 RUN pip3 install --upgrade \
-  pulpcore==3.50.2 \
+  pulpcore==3.52.0 \
   pulp-rpm==3.25.2 \
   pulp-gem==0.5.0 \
   pulp-ostree==2.3.0 \
@@ -124,8 +124,5 @@ RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
 RUN dnf install -y patch && dnf clean all
-
-COPY images/assets/b55047ed0b7a3a378d703d1f38ab88939110f8a0.patch /tmp/b55047ed0b7a3a378d703d1f38ab88939110f8a0.patch
-RUN patch -p1 -d /usr/local/lib/python3.9/site-packages/ < /tmp/b55047ed0b7a3a378d703d1f38ab88939110f8a0.patch || /bin/true
 
 EXPOSE 80
