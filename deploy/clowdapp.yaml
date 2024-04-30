@@ -237,6 +237,12 @@ objects:
             value: "6379"
           - name: OTEL_PYTHON_EXCLUDED_URLS
             value: "v3/livez"
+          - name: SENTRY_DSN
+            valueFrom:
+              secretKeyRef:
+                name: pulp-glitchtip
+                key: dsn
+                optional: true
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
@@ -287,6 +293,12 @@ objects:
             value: "none"
           - name: PULP_REDIS_PORT
             value: "6379"
+          - name: SENTRY_DSN
+            valueFrom:
+              secretKeyRef:
+                name: pulp-glitchtip
+                key: dsn
+                optional: true
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
@@ -338,6 +350,12 @@ objects:
             value: "none"
           - name: PULP_REDIS_PORT
             value: "6379"
+          - name: SENTRY_DSN
+            valueFrom:
+              secretKeyRef:
+                name: pulp-glitchtip
+                key: dsn
+                optional: true
     - name: otel-collector
       replicas: 1
       podSpec:
@@ -395,6 +413,13 @@ objects:
           initialDelaySeconds: 2
           periodSeconds: 2
           timeoutSeconds: 10
+        env:
+          - name: SENTRY_DSN
+            valueFrom:
+              secretKeyRef:
+                name: pulp-glitchtip
+                key: dsn
+                optional: true
     database:
       name: pulp
       version: 15

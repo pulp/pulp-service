@@ -83,7 +83,8 @@ RUN pip3 install --upgrade \
   pulp-gem==0.5.0 \
   pulp-ostree==2.3.0 \
   pulp-cli \
-  pulp-cli-gem && \
+  pulp-cli-gem \
+  sentry-sdk && \
   rm -rf /root/.cache/pip
 
 RUN sed 's|^#mount_program|mount_program|g' -i /etc/containers/storage.conf
