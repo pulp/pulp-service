@@ -80,16 +80,6 @@ objects:
       openssl rand -base64 32 | tr -d '\n' > /tmp/password
       kubectl create secret generic pulp-content-sources-password --from-file /tmp/password
 
-      # Generate insights-cicd user password
-      openssl rand -base64 32 | tr -d '\n' > /tmp/password
-      kubectl create secret generic pulp-insights-cicd-password --from-file /tmp/password
-
-      # Generate insights-cicd s3 bucket info
-      kubectl create secret generic insights-cicd-s3 \
-        --from-literal=bucket_name=my-bucket \
-        --from-literal=access_key=my-access-key \
-        --from-literal=secret_key=my-secret-key
-
       # Create settings.py
       cat <<EOF > /tmp/settings.py
       # Auto-generated settings file
@@ -507,70 +497,6 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
-      - name: create-insights-cicd
-        podSpec:
-          image: ${IMAGE}:${IMAGE_TAG}
-          command: [ '/bin/sh' ]
-          args:
-          - "-c"
-          - |
-            pulpcore-manager reset-admin-password --password "$PULP_ADMIN_PASSWORD"
-            pulp config create --base-url http://pulp-api-svc:24817 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
-            pulp role create --name insights.cicd.admin --permission core.add_domain --permission core.add_headercontentguard --permission core.add_compositecontentguard --permission rpm.add_rpmrepository --permission rpm.add_rpmremote --permission rpm.add_rpmdistribution --permission rpm.add_rpmpublication --permission gem.add_gemdistribution --permission gem.add_gempublication --permission gem.add_gemremote --permission gem.add_gemrepository
-            pulp user create --username insights-cicd --password "$INSIGHTS_CICD_PASSWORD"
-            pulp user role-assignment add --username insights-cicd --role insights.cicd.admin --object ""
-            pulp config create --overwrite --base-url http://pulp-api-svc:24817 --api-root /api/pulp/ --username insights-cicd --password "$INSIGHTS_CICD_PASSWORD" --domain insights-cicd
-            pulp --domain default domain create --name insights-cicd --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "{\"access_key\": \"$INSIGHTS_ACCESS_KEY\", \"secret_key\": \"$INSIGHTS_SECRET_KEY\", \"bucket_name\": \"$INSIGHTS_BUCKET_NAME\", \"region_name\": \"us-east-1\", \"default_acl\": \"private\"}" || true
-            pulp gem remote create --name rubygems.org --url https://index.rubygems.org/ || true
-            pulp gem distribution create --name rubygems.org.cache --base-path rubygems --remote rubygems.org || true
-          env:
-            - name: PULP_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-admin-password
-                  key: password
-                  optional: false
-            - name: INSIGHTS_CICD_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-insights-cicd-password
-                  key: password
-                  optional: false
-            - name: INSIGHTS_BUCKET_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: insights-cicd-s3
-                  key: bucket_name
-                  optional: true
-            - name: INSIGHTS_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: insights-cicd-s3
-                  key: access_key
-                  optional: true
-            - name: INSIGHTS_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: insights-cicd-s3
-                  key: secret_key
-                  optional: true
-            - name: XDG_CONFIG_HOME
-              value: "/tmp"
-            - name: XDG_CACHE_HOME
-              value: "/tmp"
-          volumeMounts:
-            - name: secret-volume
-              mountPath: "/etc/pulp/keys"
-            - name: pulp-settings
-              mountPath: "/etc/pulp/settings.py"
-              subPath: "settings.py"
-          volumes:
-            - name: secret-volume
-              secret:
-                secretName: pulp-db-fields-encryption
-            - name: pulp-settings
-              secret:
-                secretName: pulp-settings
       - name: print-settings
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
@@ -684,11 +610,12 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-insights-cicd
+    name: pulp-print-settings
   spec:
     appName: pulp
+    runOnNotReady: True
     jobs:
-      - create-insights-cicd
+      - print-settings
 
 parameters:
   - name: ENV_NAME
