@@ -491,6 +491,8 @@ objects:
           periodSeconds: 2
           timeoutSeconds: 10
         env:
+          - name: PULP_CONTENT_ORIGIN
+            value: {{PULP_CONTENT_ORIGIN}}
           - name: SENTRY_DSN
             valueFrom:
               secretKeyRef:
