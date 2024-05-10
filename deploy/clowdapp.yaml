@@ -173,7 +173,7 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
+        command: ['pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-', '--backlog', '64']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
