@@ -247,7 +247,7 @@ objects:
           - name: PULP_AWS_DEFAULT_ACL
             value: ${{PULP_AWS_DEFAULT_ACL}}
           - name: PULP_S3_USE_SIGV4
-            value: ${{PULP_S3_USE_SIGV4}}
+            value: ${PULP_S3_USE_SIGV4}
           - name: PULP_AWS_S3_SIGNATURE_VERSION
             value: ${{PULP_AWS_S3_SIGNATURE_VERSION}}
           - name: PULP_AWS_S3_ADDRESSING_STYLE
@@ -337,7 +337,7 @@ objects:
           - name: PULP_AWS_DEFAULT_ACL
             value: ${{PULP_AWS_DEFAULT_ACL}}
           - name: PULP_S3_USE_SIGV4
-            value: ${{PULP_S3_USE_SIGV4}}
+            value: ${PULP_S3_USE_SIGV4}
           - name: PULP_AWS_S3_SIGNATURE_VERSION
             value: ${{PULP_AWS_S3_SIGNATURE_VERSION}}
           - name: PULP_AWS_S3_ADDRESSING_STYLE
@@ -418,7 +418,7 @@ objects:
           - name: PULP_AWS_DEFAULT_ACL
             value: ${{PULP_AWS_DEFAULT_ACL}}
           - name: PULP_S3_USE_SIGV4
-            value: ${{PULP_S3_USE_SIGV4}}
+            value: ${PULP_S3_USE_SIGV4}
           - name: PULP_AWS_S3_SIGNATURE_VERSION
             value: ${{PULP_AWS_S3_SIGNATURE_VERSION}}
           - name: PULP_AWS_S3_ADDRESSING_STYLE
