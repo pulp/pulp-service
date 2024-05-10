@@ -841,7 +841,7 @@ parameters:
     value: ""
   - name: PULP_CONTENT_ORIGIN
     description: Content Origin
-    value: "https://cert.console.stage.redhat.com"
+    value: "http://pulp-content-svc:24816"
   - name: PULP_CONTENT_PATH_PREFIX
     description: Content Path Prefix
     value: "/api/pulp-content/"
