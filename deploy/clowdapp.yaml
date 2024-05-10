@@ -119,11 +119,6 @@ objects:
       CONTENT_PATH_PREFIX = "/api/pulp-content/"
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
-      AUTHENTICATION_BACKENDS = "@merge django.contrib.auth.backends.RemoteUserBackend"
-      REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES = "@merge pulpcore.app.authentication.JSONHeaderRemoteAuthentication"
-      AUTHENTICATION_JSON_HEADER = "HTTP_X_RH_IDENTITY"
-      AUTHENTICATION_JSON_HEADER_JQ_FILTER = ".identity.user.username"
-
       EOF
       
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
@@ -243,6 +238,16 @@ objects:
                 name: pulp-glitchtip
                 key: dsn
                 optional: true
+          - name: PULP_AUTHENTICATION_BACKENDS
+            value: ${{PULP_AUTHENTICATION_BACKENDS}}
+          - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
+            value: ${{PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES}}
+          - name: PULP_AUTHENTICATION_JSON_HEADER
+            value: ${{PULP_AUTHENTICATION_JSON_HEADER}}
+          - name: PULP_AUTHENTICATION_JSON_HEADER_JQ_FILTER
+            value: ${{PULP_AUTHENTICATION_JSON_HEADER_JQ_FILTER}}
+          - name: PULP_AUTHENTICATION_JSON_HEADER_OPENAPI_SECURITY_SCHEME
+            value: ${{PULP_AUTHENTICATION_JSON_HEADER_OPENAPI_SECURITY_SCHEME}}
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
@@ -717,3 +722,19 @@ parameters:
   - name: OBJECT_STORE_NAME
     description: The name of the S3 bucket.
     value: pulp-stage-default-domain-s3
+  - name: PULP_AUTHENTICATION_BACKENDS
+    description: The AUTHENTICATION_BACKENDS to be used by Pulp.
+    value: "@merge django.contrib.auth.backends.RemoteUserBackend" 
+  - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
+    description: The defaul authentication classes for Pulp.
+    value: "@merge pulpcore.app.authentication.JSONHeaderRemoteAuthentication"
+  - name: PULP_AUTHENTICATION_JSON_HEADER
+    description: The name of the header where Authentication information is found.
+    value: "HTTP_X_RH_IDENTITY"
+  - name: PULP_AUTHENTICATION_JSON_HEADER_JQ_FILTER
+    description: The JQ filter used to filter authentication info.
+    value: ".identity.user.username"
+  - name: PULP_AUTHENTICATION_JSON_HEADER_OPENAPI_SECURITY_SCHEME
+    description: The security scheme to be send to external clients to authenticate on api gateway.
+    value: >
+      '@json {"type": "oauth2", "description": "External OAuth2 integration", "flows": { "clientCredentials": { "tokenUrl": "https://sso.stage.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token", "scopes": {"api.console": "grant_access_to_pulp"}}}}'
