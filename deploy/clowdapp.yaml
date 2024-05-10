@@ -819,14 +819,14 @@ parameters:
     description: Path to DB encryption key
     value: "/etc/pulp/keys/database_fields.symmetric.key"
   - name: PULP_CACHE_ENABLED
-    description: Enable CACHE (Need REDIS installed)
-    value: true
+    description: Enable CACHE. Need REDIS installed.
+    value: "true"
   - name: PULP_AWS_DEFAULT_ACL
     description: AWS default ACL
     value: "@none None"
   - name: PULP_S3_USE_SIGV4
     description: S3 using SIGV4
-    value: true
+    value: "true"
   - name: PULP_AWS_S3_SIGNATURE_VERSION
     description: S3 Signature version
     value: "s3v4"
@@ -847,4 +847,4 @@ parameters:
     value: "/api/pulp-content/"
   - name: PULP_DOMAIN_ENABLED
     description: Domain Enabled
-    value: true
+    value: "true"
