@@ -493,6 +493,8 @@ objects:
         env:
           - name: PULP_CONTENT_ORIGIN
             value: ${{PULP_CONTENT_ORIGIN}}
+          - name: PULP_DB_ENCRYPTION_KEY
+            value: ${{PULP_DB_ENCRYPTION_KEY}}
           - name: SENTRY_DSN
             valueFrom:
               secretKeyRef:
