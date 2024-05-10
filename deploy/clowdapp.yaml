@@ -238,6 +238,30 @@ objects:
                 name: pulp-glitchtip
                 key: dsn
                 optional: true
+          - name: PULP_API_ROOT
+            value: ${{PULP_API_ROOT}}
+          - name: PULP_DB_ENCRYPTION_KEY
+            value: ${{PULP_DB_ENCRYPTION_KEY}}
+          - name: PULP_CACHE_ENABLED
+            value: ${PULP_CACHE_ENABLED}
+          - name: PULP_AWS_DEFAULT_ACL
+            value: ${{PULP_AWS_DEFAULT_ACL}}
+          - name: PULP_S3_USE_SIGV4
+            value: ${PULP_S3_USE_SIGV4}
+          - name: PULP_AWS_S3_SIGNATURE_VERSION
+            value: ${{PULP_AWS_S3_SIGNATURE_VERSION}}
+          - name: PULP_AWS_S3_ADDRESSING_STYLE
+            value: ${{PULP_AWS_S3_ADDRESSING_STYLE}}
+          - name: PULP_DEFAULT_FILE_STORAGE
+            value: ${{PULP_DEFAULT_FILE_STORAGE}}
+          - name: PULP_MEDIA_ROOT
+            value: ${{PULP_MEDIA_ROOT}}
+          - name: PULP_CONTENT_ORIGIN
+            value: ${{PULP_CONTENT_ORIGIN}}
+          - name: PULP_CONTENT_PATH_PREFIX
+            value: ${{PULP_CONTENT_PATH_PREFIX}}
+          - name: PULP_DOMAIN_ENABLED
+            value: ${PULP_DOMAIN_ENABLED}
           - name: PULP_AUTHENTICATION_BACKENDS
             value: ${{PULP_AUTHENTICATION_BACKENDS}}
           - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
@@ -304,6 +328,30 @@ objects:
                 name: pulp-glitchtip
                 key: dsn
                 optional: true
+          - name: PULP_API_ROOT
+            value: ${{PULP_API_ROOT}}
+          - name: PULP_DB_ENCRYPTION_KEY
+            value: ${{PULP_DB_ENCRYPTION_KEY}}
+          - name: PULP_CACHE_ENABLED
+            value: ${PULP_CACHE_ENABLED}
+          - name: PULP_AWS_DEFAULT_ACL
+            value: ${{PULP_AWS_DEFAULT_ACL}}
+          - name: PULP_S3_USE_SIGV4
+            value: ${PULP_S3_USE_SIGV4}
+          - name: PULP_AWS_S3_SIGNATURE_VERSION
+            value: ${{PULP_AWS_S3_SIGNATURE_VERSION}}
+          - name: PULP_AWS_S3_ADDRESSING_STYLE
+            value: ${{PULP_AWS_S3_ADDRESSING_STYLE}}
+          - name: PULP_DEFAULT_FILE_STORAGE
+            value: ${{PULP_DEFAULT_FILE_STORAGE}}
+          - name: PULP_MEDIA_ROOT
+            value: ${{PULP_MEDIA_ROOT}}
+          - name: PULP_CONTENT_ORIGIN
+            value: ${{PULP_CONTENT_ORIGIN}}
+          - name: PULP_CONTENT_PATH_PREFIX
+            value: ${{PULP_CONTENT_PATH_PREFIX}}
+          - name: PULP_DOMAIN_ENABLED
+            value: ${PULP_DOMAIN_ENABLED}
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
@@ -361,6 +409,30 @@ objects:
                 name: pulp-glitchtip
                 key: dsn
                 optional: true
+          - name: PULP_API_ROOT
+            value: ${{PULP_API_ROOT}}
+          - name: PULP_DB_ENCRYPTION_KEY
+            value: ${{PULP_DB_ENCRYPTION_KEY}}
+          - name: PULP_CACHE_ENABLED
+            value: ${PULP_CACHE_ENABLED}
+          - name: PULP_AWS_DEFAULT_ACL
+            value: ${{PULP_AWS_DEFAULT_ACL}}
+          - name: PULP_S3_USE_SIGV4
+            value: ${PULP_S3_USE_SIGV4}
+          - name: PULP_AWS_S3_SIGNATURE_VERSION
+            value: ${{PULP_AWS_S3_SIGNATURE_VERSION}}
+          - name: PULP_AWS_S3_ADDRESSING_STYLE
+            value: ${{PULP_AWS_S3_ADDRESSING_STYLE}}
+          - name: PULP_DEFAULT_FILE_STORAGE
+            value: ${{PULP_DEFAULT_FILE_STORAGE}}
+          - name: PULP_MEDIA_ROOT
+            value: ${{PULP_MEDIA_ROOT}}
+          - name: PULP_CONTENT_ORIGIN
+            value: ${{PULP_CONTENT_ORIGIN}}
+          - name: PULP_CONTENT_PATH_PREFIX
+            value: ${{PULP_CONTENT_PATH_PREFIX}}
+          - name: PULP_DOMAIN_ENABLED
+            value: ${PULP_DOMAIN_ENABLED}
     - name: otel-collector
       replicas: 1
       podSpec:
@@ -419,6 +491,8 @@ objects:
           periodSeconds: 2
           timeoutSeconds: 10
         env:
+          - name: PULP_CONTENT_ORIGIN
+            value: ${{PULP_CONTENT_ORIGIN}}
           - name: SENTRY_DSN
             valueFrom:
               secretKeyRef:
@@ -738,3 +812,39 @@ parameters:
     description: The security scheme to be send to external clients to authenticate on api gateway.
     value: >
       '@json {"type": "oauth2", "description": "External OAuth2 integration", "flows": { "clientCredentials": { "tokenUrl": "https://sso.stage.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token", "scopes": {"api.console": "grant_access_to_pulp"}}}}'
+  - name: PULP_API_ROOT
+    description: The root path to the API
+    value: "/api/pulp/"
+  - name: PULP_DB_ENCRYPTION_KEY
+    description: Path to DB encryption key
+    value: "/etc/pulp/keys/database_fields.symmetric.key"
+  - name: PULP_CACHE_ENABLED
+    description: Enable CACHE. Need REDIS installed.
+    value: "true"
+  - name: PULP_AWS_DEFAULT_ACL
+    description: AWS default ACL
+    value: "@none None"
+  - name: PULP_S3_USE_SIGV4
+    description: S3 using SIGV4
+    value: "true"
+  - name: PULP_AWS_S3_SIGNATURE_VERSION
+    description: S3 Signature version
+    value: "s3v4"
+  - name: PULP_AWS_S3_ADDRESSING_STYLE
+    description: S3 Addressing style
+    value: "path"
+  - name: PULP_DEFAULT_FILE_STORAGE
+    description: Pulp default file storage
+    value: "storages.backends.s3boto3.S3Boto3Storage"
+  - name: PULP_MEDIA_ROOT
+    description: Pulp media root
+    value: ""
+  - name: PULP_CONTENT_ORIGIN
+    description: Content Origin
+    value: "http://pulp-content-svc:24816"
+  - name: PULP_CONTENT_PATH_PREFIX
+    description: Content Path Prefix
+    value: "/api/pulp-content/"
+  - name: PULP_DOMAIN_ENABLED
+    description: Domain Enabled
+    value: "true"
