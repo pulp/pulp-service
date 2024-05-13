@@ -173,7 +173,7 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '--timeout', '90', '--workers', '10', '--access-logfile', '-']
+        command: ['pulpcore-api', '--timeout', '90', '--workers', '18', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -749,7 +749,7 @@ parameters:
     value: "256Mi"
   - name: PULP_WORKER_MEMORY_REQUEST
     description: Amount of memory to request for Worker pods
-    value: "256Mi"
+    value: "1024Mi"
   - name: PULP_API_MEMORY_LIMIT
     description: Limit of memory use by API pods
     value: "512Mi"
@@ -758,7 +758,7 @@ parameters:
     value: "512Mi"
   - name: PULP_WORKER_MEMORY_LIMIT
     description: Limit of memory use by Worker pods
-    value: "512Mi"
+    value: "2048Mi"
   - name: TELEMETRY_ENABLED
     description: Enables the application to send telemetry data.
     value: "true"
