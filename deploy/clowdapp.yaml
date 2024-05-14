@@ -173,7 +173,7 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '--timeout', '90', '--workers', '18', '--access-logfile', '-']
+        command: ['pulpcore-api', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -850,3 +850,6 @@ parameters:
   - name: PULP_DOMAIN_ENABLED
     description: Domain Enabled
     value: "true"
+  - name: PULP_API_GUNICORN_WORKERS
+    description: Number of gunicorn workers in the API pods
+    value: "2"
