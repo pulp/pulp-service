@@ -197,17 +197,17 @@ objects:
             inheritEnv: True
         readinessProbe:
           exec:
-            command: ["/usr/bin/readyz.py","/api/pulp/api/v3/status/"]
+            command: ["/usr/bin/readyz.py","/api/pulp/api/v3/livez/"]
           initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 10
+          periodSeconds: 60
+          timeoutSeconds: 60
         livenessProbe:
           httpGet:
             path: /api/pulp/api/v3/livez/
             port: 24817
           initialDelaySeconds: 60
-          periodSeconds: 10
-          timeoutSeconds: 10
+          periodSeconds: 60
+          timeoutSeconds: 60
         resources:
           requests:
             cpu: ${{PULP_API_CPU_REQUEST}}
