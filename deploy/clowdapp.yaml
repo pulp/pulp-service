@@ -208,6 +208,7 @@ objects:
           initialDelaySeconds: 60
           periodSeconds: 60
           timeoutSeconds: 60
+        terminationGracePeriod: 60
         resources:
           requests:
             cpu: ${{PULP_API_CPU_REQUEST}}
@@ -304,6 +305,7 @@ objects:
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 10
+        terminationGracePeriod: 60
         resources:
           requests:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
