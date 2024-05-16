@@ -580,31 +580,6 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
-      - name: print-settings
-        podSpec:
-          image: ${IMAGE}:${IMAGE_TAG}
-          command: [ '/bin/sh' ]
-          args: ['-c', '/usr/local/bin/dynaconf list -k AUTHENTICATION_BACKENDS && /usr/local/bin/dynaconf list -k REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES && /usr/local/bin/dynaconf list -k AUTHENTICATION_JSON_HEADER && /usr/local/bin/dynaconf list -k AUTHENTICATION_JSON_HEADER_JQ_FILTER' ]
-          env:
-            - name: PULP_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-admin-password
-                  key: password
-                  optional: true
-          volumeMounts:
-            - name: secret-volume
-              mountPath: "/etc/pulp/keys"
-            - name: pulp-settings
-              mountPath: "/etc/pulp/settings.py"
-              subPath: "settings.py"
-          volumes:
-            - name: secret-volume
-              secret:
-                secretName: pulp-db-fields-encryption
-            - name: pulp-settings
-              secret:
-                secretName: pulp-settings
 
 - apiVersion: v1
   kind: Service
