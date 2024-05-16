@@ -665,15 +665,6 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: pulp-print-settings
-  spec:
-    appName: pulp
-    runOnNotReady: True
-    jobs:
-      - print-settings
 
 parameters:
   - name: ENV_NAME
