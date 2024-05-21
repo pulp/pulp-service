@@ -206,9 +206,9 @@ objects:
             path: /api/pulp/api/v3/livez/
             port: 24817
           initialDelaySeconds: 60
-          periodSeconds: 60
-          timeoutSeconds: 60
-        terminationGracePeriod: 60
+          periodSeconds: 120
+          timeoutSeconds: 120
+        terminationGracePeriod: 120
         resources:
           requests:
             cpu: ${{PULP_API_CPU_REQUEST}}
