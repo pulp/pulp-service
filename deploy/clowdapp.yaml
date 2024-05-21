@@ -539,6 +539,8 @@ objects:
                   name: pulp-admin-password
                   key: password
                   optional: true
+            - name: PULP_CONTENT_ORIGIN
+              value: ${{PULP_CONTENT_ORIGIN}}
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
