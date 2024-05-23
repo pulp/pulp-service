@@ -129,4 +129,5 @@ RUN dnf install -y patch && dnf clean all
 COPY images/assets/otel-django.patch /tmp/otel-django.patch
 RUN patch -p1 -d /usr/local/lib/python3.9/site-packages/ < /tmp/otel-django.patch || /bin/true
 
+
 EXPOSE 80
