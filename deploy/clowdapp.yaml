@@ -582,6 +582,34 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
+      - name: create-edge-user
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/bin/sh' ]
+          args:
+          - "-c"
+          - |
+            pulp config create --base-url http://pulp-api-svc:24817 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
+            pulp role create --name edge_ostree.admin --permission core.add_domain --permission core.add_headercontentguard --permission core.add_compositecontentguard --permission ostree.add_ostreerepository --permission ostree.add_ostreeremote --permission ostree.add_ostreedistribution || true
+            pulp user create --username edge --password "$EDGE_PASSWORD" || true
+            pulp user role-assignment add --username edge --role edge_ostree.admin --object "" #Last command will fail if the first two have
+          env:
+            - name: PULP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-admin-password
+                  key: password
+                  optional: false
+            - name: EDGE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-edge-password
+                  key: password
+                  optional: false
+            - name: XDG_CONFIG_HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
 
 - apiVersion: v1
   kind: Service
@@ -667,6 +695,14 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: create-edge-user
+  spec:
+    appName: pulp
+    jobs:
+      - create-edge-user
 
 parameters:
   - name: ENV_NAME
