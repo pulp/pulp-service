@@ -173,7 +173,7 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
