@@ -13,6 +13,7 @@ objects:
         otlp:
           protocols:
             http:
+              endpoint: 0.0.0.0:8000
       processors:
         batch:
         memory_limiter:
@@ -20,7 +21,7 @@ objects:
           limit_mib: 350
       exporters:
         prometheus:
-          endpoint: "0.0.0.0:8889"
+          endpoint: "0.0.0.0:9000"
           namespace: pulp
       service:
         pipelines:
@@ -123,28 +124,7 @@ objects:
       
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
 
-      # Create an ingress for the content app
-      kubectl apply -f- <<EOF
-      apiVersion: networking.k8s.io/v1
-      kind: Ingress
-      metadata:
-        name: pulp-content-ingress
-        annotations:
-          route.openshift.io/termination: edge
-          cert-manager.io/cluster-issuer: letsencrypt-http
-      spec:
-        rules:
-          - host: "${HOST}"
-            http:
-              paths:
-                - path: /api/pulp-content/
-                  pathType: Prefix
-                  backend:
-                    service:
-                      name: pulp-content-svc
-                      port:
-                        number: 24816
-      EOF
+
 
 - apiVersion: v1
   kind: ConfigMap
@@ -171,10 +151,14 @@ objects:
     deployments:
     - name: api
       replicas: ${{PULP_API_REPLICAS}}
+      webServices:
+        public:
+          enabled: true
+          apiPath: pulp
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        # command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
-        command: ['pulpcore-api', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        # command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -197,15 +181,16 @@ objects:
               - "/usr/bin/wait_on_postgres.py && /usr/bin/wait_on_database_migrations.sh"
             inheritEnv: True
         readinessProbe:
-          exec:
-            command: ["/usr/bin/readyz.py","/api/pulp/api/v3/livez/"]
+          httpGet:
+            path: /api/pulp/api/v3/livez/
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 60
           timeoutSeconds: 60
         livenessProbe:
           httpGet:
             path: /api/pulp/api/v3/livez/
-            port: 24817
+            port: 8000
           initialDelaySeconds: 60
           periodSeconds: 120
           timeoutSeconds: 120
@@ -276,9 +261,13 @@ objects:
             value: ${{PULP_AUTHENTICATION_JSON_HEADER_OPENAPI_SECURITY_SCHEME}}
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
+      webServices:
+        public:
+          enabled: true
+          apiPath: pulp-content
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:8000', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -301,8 +290,16 @@ objects:
               - "/usr/bin/wait_on_postgres.py && /usr/bin/wait_on_database_migrations.sh"
             inheritEnv: True
         readinessProbe:
-          exec:
-            command: ["/usr/bin/readyz.py", "/api/pulp-content/default/"]
+          httpGet:
+            path: /api/pulp-content/default/
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/pulp-content/default/
+            port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 10
@@ -438,6 +435,8 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
     - name: otel-collector
       replicas: 1
+      private:
+        enabled: true
       podSpec:
         image: "quay.io/cloudservices/opentelemetry-collector"
         args:
@@ -562,7 +561,7 @@ objects:
           args:
           - "-c"
           - |
-            pulp config create --base-url http://pulp-api-svc:24817 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
+            pulp config create --base-url http://pulp-api:8000 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
             pulp role create --name domain.admin --permission core.add_domain --permission core.add_headercontentguard --permission core.add_compositecontentguard --permission rpm.add_rpmrepository --permission rpm.add_rpmremote --permission rpm.add_rpmdistribution --permission rpm.add_rpmpublication || true
             pulp user create --username contentsources --password "$CONTENT_SOURCES_PASSWORD" || true
             pulp user role-assignment add --username contentsources --role domain.admin --object "" #Last command will fail if the first two have
@@ -595,7 +594,7 @@ objects:
       - name: api-24817
         protocol: TCP
         port: 24817
-        targetPort: 24817
+        targetPort: 8000
     selector:
       pod: pulp-api
     sessionAffinity: None
@@ -613,7 +612,7 @@ objects:
       - name: content-24816
         protocol: TCP
         port: 24816
-        targetPort: 24816
+        targetPort: 8000
     selector:
       pod: pulp-content
     sessionAffinity: None
@@ -632,11 +631,11 @@ objects:
       - name: otel-8889
         protocol: TCP
         port: 8889
-        targetPort: 8889
+        targetPort: 9000
       - name: otel-4318
         protocol: TCP
         port: 4318
-        targetPort: 4318
+        targetPort: 8000
     selector:
       pod: pulp-otel-collector
     sessionAffinity: None
@@ -741,7 +740,7 @@ parameters:
     value: "http/protobuf"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
     description: The collector endpoint used to receive telemetry data from the application.
-    value: "http://pulp-otel-collector-svc:4318/"
+    value: "http://pulp-otel-collector:8000/"
   - name: OTEL_METRIC_EXPORT_INTERVAL
     description: The time interval (in milliseconds) between the start of two export attempts.
     value: "10000"
