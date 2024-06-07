@@ -136,7 +136,7 @@ data:
               },
               "editorMode": "builder",
               "expr": "pulp_disk_usage_Bytes",
-              "legendFormat": "Domain: {{name}}",
+              "legendFormat": "{{domain_name}}",
               "range": true,
               "refId": "A"
             }
