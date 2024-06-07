@@ -58,6 +58,7 @@ RUN dnf -y install python39 python39-cryptography python39-devel && \
     dnf -y install ostree-libs ostree --allowerasing --nobest && \
     dnf -y install cairo-devel cmake gobject-introspection-devel cairo-gobject-devel && \
     dnf -y install libcurl-devel libxml2-devel sqlite-devel file-devel && \
+    dnf -y install patch && \
     dnf -y install zstd
 RUN dnf clean all
 
@@ -124,9 +125,12 @@ USER root:root
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
-RUN dnf install -y patch && dnf clean all
+# RUN dnf install -y patch && dnf clean all
 
 COPY images/assets/otel-django.patch /tmp/otel-django.patch
+COPY images/assets/0001-Enable-logging-header-info.patch /tmp/0001-Enable-logging-header-info.patch
+
 RUN patch -p1 -d /usr/local/lib/python3.9/site-packages/ < /tmp/otel-django.patch || /bin/true
+RUN patch /usr/local/lib/python3.9/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch || /bin/true
 
 EXPOSE 80
