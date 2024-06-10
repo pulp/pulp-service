@@ -31,6 +31,16 @@ objects:
 - apiVersion: v1
   kind: ConfigMap
   metadata:
+    name: domain-storage-map
+  data:
+    domain-storage-script: |
+      from app_common_python import LoadedConfig
+      c = LoadedConfig.objectStore
+      config = f"{{\"access_key\": \"{c.accessKey}\", \"secret_key\": \"{c.secretKey}\", \"bucket_name\": \"{c.buckets[0].name}\", \"region_name\": \"us-east-1\", \"default_acl\": \"private\"}}"
+      print(config)
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
     name: config-sh-map
   data:
     config-sh-file: |
@@ -583,6 +593,34 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
+      - name: create-rhivos-domain
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/bin/sh' ]
+          args:
+          - "-c"
+          - |
+            pulp config create --base-url http://pulp-api-svc:24817 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
+            pulp --password $PULP_ADMIN_PASSWORD domain create --name rhivos --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)"
+          volumeMounts:
+            - name: domain-storage-config
+              mountPath: /tmp/domain-storage-script.py
+              subPath: domain-storage-script
+          volumes:
+            - name: domain-storage-config
+              configMap:
+                name: domain-storage-map
+          env:
+            - name: PULP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-admin-password
+                  key: password
+                  optional: false
+            - name: XDG_CONFIG_HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
 
 - apiVersion: v1
   kind: Service
@@ -668,6 +706,14 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: create-rhivos-domain
+  spec:
+    appName: pulp
+    jobs:
+      - create-rhivos-domain
 
 parameters:
   - name: ENV_NAME
