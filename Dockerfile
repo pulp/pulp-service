@@ -107,7 +107,6 @@ RUN mkdir -p /etc/pulp/certs \
 RUN chown pulp:pulp -R /var/lib/pulp \
                        /var/lib/operator/static
 
-COPY images/assets/readyz.py /usr/bin/readyz.py
 COPY images/assets/route_paths.py /usr/bin/route_paths.py
 COPY images/assets/wait_on_postgres.py /usr/bin/wait_on_postgres.py
 COPY images/assets/wait_on_database_migrations.sh /usr/bin/wait_on_database_migrations.sh
