@@ -1,0 +1,8 @@
+[centos9-crb]
+name=CentOS Stream $releasever - CRB
+#metalink=https://mirrors.centos.org/metalink?repo=centos-crb-$stream&arch=$basearch&protocol=https,http
+baseurl=http://mirror.stream.centos.org/9-stream/CRB/x86_64/os/
+gpgcheck=0
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial
+priority=100
