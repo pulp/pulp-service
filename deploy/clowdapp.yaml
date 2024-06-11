@@ -629,8 +629,10 @@ objects:
           - |
             /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=ddebrito"
             /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=dkliban"
-          env:
-            - name: XDG_CONFIG_HOME
+            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=bmbouter"
+            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=mdepaulo"
+            env:
+              - name: XDG_CONFIG_HOME
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
