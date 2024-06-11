@@ -620,6 +620,20 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
+      - name: create-pulp-services-admin-users
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/bin/sh' ]
+          args:
+          - "-c"
+          - |
+            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=ddebrito"
+            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=dkliban"
+          env:
+            - name: XDG_CONFIG_HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
 
 - apiVersion: v1
   kind: Service
@@ -688,6 +702,14 @@ objects:
     appName: pulp
     jobs:
       - reset-admin-password
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: create-pulp-services-admin-users
+  spec:
+    appName: pulp
+    jobs:
+      - create-pulp-services-admin-users
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
