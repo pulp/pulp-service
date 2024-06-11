@@ -13,7 +13,7 @@ objects:
         otlp:
           protocols:
             http:
-              endpoint: 0.0.0.0:8000
+              endpoint: 0.0.0.0:10000
       processors:
         batch:
         memory_limiter:
@@ -167,7 +167,7 @@ objects:
           apiPath: pulp
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        # command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector-svc:4318', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        # command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
@@ -277,7 +277,7 @@ objects:
           apiPath: pulp-content
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:8000', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -445,8 +445,9 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
     - name: otel-collector
       replicas: 1
-      private:
-        enabled: true
+      webServices:
+        private:
+          enabled: true
       podSpec:
         image: "quay.io/cloudservices/opentelemetry-collector"
         args:
