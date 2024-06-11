@@ -51,6 +51,7 @@ cmd_prefix git clone https://github.com/mikedep333/pulp-openapi-scratch-builds.g
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
 
 cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
 sed "s#password#${PASSWORD}#g" pulp-smash.json > pulp-smash.customized.json
@@ -79,16 +80,20 @@ echo "ROUTES"
 oc get route
 set +e
 # Only testing test_download_content because it is a very thorough test that tests that all the components of pulp can work
-cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_rpm.tests.functional -m parallel -n 1 -k 'test_download_content or test_rbac_crud' --junitxml=/tmp/home/junit-pulp-parallel.xml" || debug_and_fail
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_rpm.tests.functional -m parallel -n 1 -k 'test_download_content or test_rbac_crud' --junitxml=/tmp/home/junit-pulp-parallel.xml" || debug_and_fail
 # Never test test_package_manager_consume because they require sudo
 # Do not test test_domain_create because it requires more than 2GB of RAM
 # Only testing test_download_policies because they are very thorough tests that test that all the components of pulp can work
-cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
 # Run the jq header auth test
-cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.8/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulpcore.tests.functional -m 'parallel' -k 'test_jq_header_remote_auth' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulpcore.tests.functional -m 'parallel' -k 'test_jq_header_remote_auth' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
 ### END Adapted from ./.github/workflows/scripts/script.sh
+
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_ostree.tests.functional -m parallel -n 4 --junitxml=/tmp/home/junit-pulp-parallel.xml" || debug_and_fail
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api-svc API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_ostree.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+
 mkdir -p $ARTIFACTS_DIR
 oc cp $POD:/tmp/home/junit-pulp-parallel.xml $ARTIFACTS_DIR/junit-pulp-parallel.xml
 oc cp $POD:/tmp/home/junit-pulp-serial.xml $ARTIFACTS_DIR/junit-pulp-serial.xml
