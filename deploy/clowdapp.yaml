@@ -674,7 +674,7 @@ objects:
       - name: otel-4318
         protocol: TCP
         port: 4318
-        targetPort: 8000
+        targetPort: 10000
     selector:
       pod: pulp-otel-collector
     sessionAffinity: None
