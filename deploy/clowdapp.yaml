@@ -624,20 +624,19 @@ objects:
       - name: create-pulp-services-admin-users
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
-          command: [ '/bin/sh' ]
+          command: [ 'python3' ]
           args:
-          - "-c"
-          - |
-            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=ddebrito"
-            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=dkliban"
-            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=bmbouter"
-            /usr/local/bin/pulpcore-manager createsuperuser "/O=rhds/OU=serviceaccounts/UID=mdepaulo"
-            env:
-              - name: XDG_CONFIG_HOME
+            - "manage.py"
+            - "shell"
+            - "-c"
+            - "from os import getenv; from django.contrib.auth import get_user_model; usernames=getenv(USER_LIST).split(','); User = get_user_model(); [User.objects.get_or_create(username=username, is_superuser=True, is_staff=True)]"
+          env:
+            - name: XDG_CONFIG_HOME
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
-
+            - name: USER_LIST
+              value: "/O=rhds/OU=serviceaccounts/UID=ddebrito,/O=rhds/OU=serviceaccounts/UID=dkliban,/O=rhds/OU=serviceaccounts/UID=mdepaulo,/O=rhds/OU=serviceaccounts/UID=bmbouter"
 - apiVersion: v1
   kind: Service
   metadata:
