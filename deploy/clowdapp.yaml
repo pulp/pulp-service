@@ -645,6 +645,8 @@ objects:
               value: "/tmp"
             - name: PULP_CONTENT_ORIGIN
               value: ${{PULP_CONTENT_ORIGIN}}
+            - name: PULP_DB_ENCRYPTION_KEY
+              value: ${{PULP_DB_ENCRYPTION_KEY}}
             - name: USER_LIST
               value: "/O=rhds/OU=serviceaccounts/UID=ddebrito,/O=rhds/OU=serviceaccounts/UID=dkliban,/O=rhds/OU=serviceaccounts/UID=mdepaulo,/O=rhds/OU=serviceaccounts/UID=bmbouter,/O=rhds/OU=serviceaccounts/UID=kchim,edge-api-dev"
           volumeMounts:
