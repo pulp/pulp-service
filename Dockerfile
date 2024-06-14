@@ -47,7 +47,6 @@ RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography 
     dnf -y install xz && \
     dnf -y install ninja-build && \
     dnf -y install ostree-libs ostree --allowerasing --nobest && \
-    dnf -y install cairo-devel gobject-introspection-devel cairo-gobject-devel glib2 pkg-config && \
     dnf -y install patch && \
     dnf -y install zstd
 RUN dnf clean all
@@ -77,9 +76,6 @@ RUN pip${PYTHON_VERSION} install --upgrade \
   pulp-ostree==2.3.0 \
   pulp-cli \
   pulp-cli-gem \
-  PyGObject \
-  pycairo \
-  createrepo-c \
   sentry-sdk \
   app-common-python && \
   rm -rf /root/.cache/pip
