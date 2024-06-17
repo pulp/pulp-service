@@ -115,10 +115,12 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
 # RUN dnf install -y patch && dnf clean all
 
-COPY images/assets/otel-django.patch /tmp/otel-django.patch
-COPY images/assets/0001-Enable-logging-header-info.patch /tmp/0001-Enable-logging-header-info.patch
+COPY images/assets/patches/otel-django.patch /tmp/otel-django.patch
+COPY images/assets/patches/0001-Enable-logging-header-info.patch /tmp/0001-Enable-logging-header-info.patch
+COPY images/assets/patches/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
 
-RUN patch -p1 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/ < /tmp/otel-django.patch || /bin/true
-RUN patch /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch || /bin/true
+RUN patch -p1 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
+RUN patch /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch
+RUN patch -p2 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
 
 EXPOSE 80
