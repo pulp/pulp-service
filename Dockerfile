@@ -117,8 +117,10 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
 COPY images/assets/otel-django.patch /tmp/otel-django.patch
 COPY images/assets/0001-Enable-logging-header-info.patch /tmp/0001-Enable-logging-header-info.patch
+COPY images/assets/disable_storage_metrics_emitter.patch  /tmp/disable_storage_metrics_emitter.patch
 
 RUN patch -p1 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/ < /tmp/otel-django.patch || /bin/true
 RUN patch /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch || /bin/true
+RUN patch -p1 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/ < /tmp/disable_storage_metrics_emitter.patch
 
 EXPOSE 80
