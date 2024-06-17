@@ -701,29 +701,6 @@ objects:
     type: ClusterIP
   status:
     loadBalancer: {}
-- apiVersion: v1
-  kind: Service
-  metadata:
-    labels:
-      otel: ""
-      pulp_cr: pulp
-    name: ${{PULP_OTEL_COLLECTOR_SERVICE_NAME}}
-  spec:
-    ports:
-      - name: otel-8889
-        protocol: TCP
-        port: 8889
-        targetPort: 9000
-      - name: otel-4318
-        protocol: TCP
-        port: 4318
-        targetPort: 8000
-    selector:
-      pod: pulp-otel-collector
-    sessionAffinity: None
-    type: ClusterIP
-  status:
-    loadBalancer: {}
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -830,9 +807,6 @@ parameters:
   - name: TELEMETRY_ENABLED
     description: Enables the application to send telemetry data.
     value: "false"
-  - name: PULP_OTEL_COLLECTOR_SERVICE_NAME
-    description: The name of the collector service
-    value: pulp-otel-collector-svc
   - name: OTEL_EXPORTER_OTLP_PROTOCOL
     description: Defines the protocol used to feed the OpenTelemetry collector.
     value: "http/protobuf"
