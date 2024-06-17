@@ -167,8 +167,8 @@ objects:
           apiPath: pulp
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        # command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
-        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        # command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -806,13 +806,13 @@ parameters:
     value: "2048Mi"
   - name: TELEMETRY_ENABLED
     description: Enables the application to send telemetry data.
-    value: "false"
+    value: "true"
   - name: OTEL_EXPORTER_OTLP_PROTOCOL
     description: Defines the protocol used to feed the OpenTelemetry collector.
     value: "http/protobuf"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
     description: The collector endpoint used to receive telemetry data from the application.
-    value: "http://pulp-otel-collector:8000/"
+    value: "http://pulp-otel-collector:10000/"
   - name: OTEL_METRIC_EXPORT_INTERVAL
     description: The time interval (in milliseconds) between the start of two export attempts.
     value: "10000"
