@@ -631,7 +631,9 @@ objects:
             - |
               from os import getenv
               from django.contrib.auth import get_user_model
-              usernames=getenv("USER_LIST").split(',')
+              usernames=getenv("PULP_LIST_OF_ADMINS").split(',')
+              if not usernames:
+                quit()
               User = get_user_model()
               for username in usernames:
                 user, created = User.objects.get_or_create(username=username)
@@ -647,8 +649,8 @@ objects:
               value: ${{PULP_CONTENT_ORIGIN}}
             - name: PULP_DB_ENCRYPTION_KEY
               value: ${{PULP_DB_ENCRYPTION_KEY}}
-            - name: USER_LIST
-              value: "/O=rhds/OU=serviceaccounts/UID=ddebrito,/O=rhds/OU=serviceaccounts/UID=dkliban,/O=rhds/OU=serviceaccounts/UID=mdepaulo,/O=rhds/OU=serviceaccounts/UID=bmbouter,/O=rhds/OU=serviceaccounts/UID=kchim,edge-api-dev"
+            - name: PULP_LIST_OF_ADMINS
+              value: ${{PULP_LIST_OF_ADMINS}}
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
@@ -919,3 +921,6 @@ parameters:
   - name: PULP_API_GUNICORN_WORKERS
     description: Number of gunicorn workers in the API pods
     value: "2"
+  - name: PULP_LIST_OF_ADMINS
+    description: List of user accounts to become Pulp admin accounts
+    value: ""
