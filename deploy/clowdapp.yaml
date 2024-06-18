@@ -894,7 +894,7 @@ parameters:
     value: "true"
   - name: PULP_API_GUNICORN_WORKERS
     description: Number of gunicorn workers in the API pods
-    value: "2"
+    value: "1"
   - name: PULP_LIST_OF_ADMINS
     description: List of user accounts to become Pulp admin accounts
     value: ""
