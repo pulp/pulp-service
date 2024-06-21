@@ -123,4 +123,7 @@ RUN patch -p1 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages < /tmp/ote
 RUN patch /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch
 RUN patch -p2 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
 
+RUN mkdir /licenses
+COPY LICENSE /licenses/LICENSE
+
 EXPOSE 80
