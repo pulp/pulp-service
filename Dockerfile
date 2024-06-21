@@ -35,7 +35,7 @@ RUN dnf -y install dnf-plugins-core && \
 #
 # TODO: Investigate differences between `dnf builddep createrepo_c` vs the list
 # of dependencies below. For example, drpm-devel.
-RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip && \
+RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip && \
     dnf -y install openssl openssl-devel && \
     dnf -y install wget git && \
     dnf -y install lsof procps-ng && \
@@ -76,7 +76,6 @@ RUN pip${PYTHON_VERSION} install --upgrade \
   pulp-ostree==2.3.1 \
   pulp-cli \
   pulp-cli-gem \
-  sentry-sdk \
   app-common-python && \
   rm -rf /root/.cache/pip
 
