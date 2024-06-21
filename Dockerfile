@@ -70,10 +70,10 @@ RUN pip${PYTHON_VERSION} install --upgrade pip setuptools wheel && \
 
 
 RUN pip${PYTHON_VERSION} install --upgrade \
-  pulpcore==3.54.0 \
+  pulpcore==3.54.1 \
   pulp-rpm==3.25.3 \
   pulp-gem==0.5.1 \
-  pulp-ostree==2.3.0 \
+  pulp-ostree==2.3.1 \
   pulp-cli \
   pulp-cli-gem \
   sentry-sdk \
