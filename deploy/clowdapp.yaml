@@ -144,7 +144,7 @@ objects:
     migrate-sh-file: |
       #!/bin/bash
       set -e
-      /usr/local/bin/pulpcore-manager migrate --noinput
+      /usr/local/lib/pulp/bin/pulpcore-manager migrate --noinput
       touch /tmp/migrated
       while true; do
         sleep 1d
@@ -167,7 +167,7 @@ objects:
           apiPath: pulp
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        command: ['/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         # command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
@@ -277,7 +277,7 @@ objects:
           apiPath: pulp-content
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-']
+        command: ['/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-content', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -542,7 +542,7 @@ objects:
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ '/bin/sh' ]
-          args: ['-c', '/usr/local/bin/pulpcore-manager reset-admin-password --password "$PULP_ADMIN_PASSWORD"' ]
+          args: ['-c', '/usr/local/lib/pulp/bin/pulpcore-manager reset-admin-password --password "$PULP_ADMIN_PASSWORD"' ]
           env:
             - name: PULP_ADMIN_PASSWORD
               valueFrom:

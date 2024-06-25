@@ -51,14 +51,16 @@ RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography 
     dnf -y install zstd
 RUN dnf clean all
 
-RUN ln -s /usr/bin/python${PYTHON_VERSION} /usr/local/bin/python3
+RUN python${PYTHON_VERSION} -m venv --system-site-packages /usr/local/lib/pulp
+
+ENV PATH="/usr/local/lib/pulp/bin:${PATH}"
 
 # Needed to prevent the wrong version of cryptography from being installed,
 # which would break PyOpenSSL.
 # Need to install optional dep, rhsm, for pulp-certguard
-RUN pip${PYTHON_VERSION} install --upgrade pip setuptools wheel && \
+RUN pip install --upgrade pip setuptools wheel && \
     rm -rf /root/.cache/pip && \
-    pip3 install  \
+    pip install  \
          rhsm \
          setproctitle \
          gunicorn \
@@ -69,7 +71,7 @@ RUN pip${PYTHON_VERSION} install --upgrade pip setuptools wheel && \
          rm -rf /root/.cache/pip
 
 
-RUN pip${PYTHON_VERSION} install --upgrade \
+RUN pip install --upgrade \
   pulpcore==3.54.1 \
   pulp-rpm==3.25.3 \
   pulp-gem==0.5.1 \
@@ -108,8 +110,11 @@ COPY images/assets/pulp-worker /usr/bin/pulp-worker
 
 USER pulp:pulp
 RUN PULP_STATIC_ROOT=/var/lib/operator/static/ PULP_CONTENT_ORIGIN=localhost \
-       /usr/local/bin/pulpcore-manager collectstatic --clear --noinput --link
+       pulpcore-manager collectstatic --clear --noinput --link
 USER root:root
+
+# This path seems to be hardcoded in tests
+RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manager
 
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
@@ -121,10 +126,10 @@ COPY images/assets/patches/0001-Enable-logging-header-info.patch /tmp/0001-Enabl
 COPY images/assets/patches/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
 COPY images/assets/patches/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch /tmp/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch
 
-RUN patch -p1 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
-RUN patch /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch
-RUN patch -p2 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
-RUN patch -p2 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulp_ostree < /tmp/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch 
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
+RUN patch /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch
+RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
+RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulp_ostree < /tmp/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
