@@ -35,7 +35,7 @@ RUN dnf -y install dnf-plugins-core && \
 #
 # TODO: Investigate differences between `dnf builddep createrepo_c` vs the list
 # of dependencies below. For example, drpm-devel.
-RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip && \
+RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-devel python${PYTHON_VERSION}-pip && \
     dnf -y install openssl openssl-devel && \
     dnf -y install wget git && \
     dnf -y install lsof procps-ng && \
@@ -77,7 +77,6 @@ RUN pip${PYTHON_VERSION} install --upgrade \
   pulp-python==3.12.0 \
   pulp-cli \
   pulp-cli-gem \
-  sentry-sdk \
   app-common-python && \
   rm -rf /root/.cache/pip
 
@@ -123,5 +122,8 @@ COPY images/assets/patches/0002-Disable-the-Storage-Metrics-emmiter-for-now.patc
 RUN patch -p1 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
 RUN patch /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch
 RUN patch -p2 -d /usr/local/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
+
+RUN mkdir /licenses
+COPY LICENSE /licenses/LICENSE
 
 EXPOSE 80
