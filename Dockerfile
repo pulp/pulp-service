@@ -74,6 +74,7 @@ RUN pip${PYTHON_VERSION} install --upgrade \
   pulp-rpm==3.25.3 \
   pulp-gem==0.5.1 \
   pulp-ostree==2.3.1 \
+  pulp-python==3.12.0 \
   pulp-cli \
   pulp-cli-gem \
   sentry-sdk \
