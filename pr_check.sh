@@ -23,5 +23,5 @@ EXTRA_DEPLOY_ARGS="--set-parameter pulp/PULP_API_MEMORY_LIMIT=4096Mi --set-param
 source $CICD_ROOT/build.sh
 source $CICD_ROOT/deploy_ephemeral_env.sh
 source $APP_ROOT/unit_test.sh
-# source $CICD_ROOT/cji_smoke_test.sh
+source $CICD_ROOT/cji_smoke_test.sh
 source $CICD_ROOT/post_test_results.sh
