@@ -7,10 +7,6 @@ IMAGE="quay.io/cloudservices/pulp-ubi"
 # be explicit about what to build
 DOCKERFILE=Dockerfile
 
-IQE_PLUGINS="content-sources"
-IQE_MARKER_EXPRESSION="api"
-IQE_FILTER_EXPRESSION="not test_introspection_of_persistent_user"
-IQE_CJI_TIMEOUT="30m"
 COMPONENTS_W_RESOURCES="pulp"
 REF_ENV="insights-stage"
 
