@@ -73,7 +73,7 @@ RUN pip${PYTHON_VERSION} install --upgrade \
   pulpcore==3.54.1 \
   pulp-rpm==3.25.3 \
   pulp-gem==0.5.1 \
-  pulp-ostree==2.3.1 \
+  pulp-ostree==2.4.1 \
   pulp-python==3.12.0 \
   pulp-cli \
   pulp-cli-gem \
