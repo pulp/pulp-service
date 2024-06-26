@@ -273,7 +273,7 @@ objects:
       replicas: ${{PULP_CONTENT_REPLICAS}}
       webServices:
         public:
-          enabled: true
+          enabled: false
           apiPath: pulp-content
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
