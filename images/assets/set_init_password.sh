@@ -5,10 +5,10 @@
 
 if [[ -n "$PULP_DEFAULT_ADMIN_PASSWORD" ]]
 then
-  PASSWORD_SET=$(/usr/local/bin/pulpcore-manager shell -c "from django.contrib.auth import get_user_model; print(get_user_model().objects.filter(username=\"admin\").exists())")
+  PASSWORD_SET=$(pulpcore-manager shell -c "from django.contrib.auth import get_user_model; print(get_user_model().objects.filter(username=\"admin\").exists())")
   if [ "$PASSWORD_SET" = "False" ]
   then
-    /usr/local/bin/pulpcore-manager reset-admin-password --password "${PULP_DEFAULT_ADMIN_PASSWORD}"
+    pulpcore-manager reset-admin-password --password "${PULP_DEFAULT_ADMIN_PASSWORD}"
   fi
 else
   ADMIN_PASSWORD_FILE=/etc/pulp/pulp-admin-password
@@ -18,7 +18,7 @@ else
   fi
 
   if [ -n "${PULP_ADMIN_PASSWORD}" ]; then
-      /usr/local/bin/pulpcore-manager reset-admin-password --password "${PULP_ADMIN_PASSWORD}"
+      pulpcore-manager reset-admin-password --password "${PULP_ADMIN_PASSWORD}"
   fi
 fi
 set -x

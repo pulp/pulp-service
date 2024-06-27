@@ -73,7 +73,7 @@ cd $ORIG_DIR
 cat pulp-smash.customized.json | cmd_stdin_prefix bash -c "cat > /tmp/home/.config/pulp_smash/settings.json"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install -r /tmp/unittest_requirements.txt -r /tmp/functest_requirements.txt"
 # Because we pass the path to pytest -o cache_dir=/tmp/home/.cache/pytest_cache, pulpcore-manager must be in the same dir
-cmd_prefix bash -c "ln -s /usr/local/bin/pulpcore-manager /tmp/home/.local/bin/pulpcore-manager || /bin/true"
+cmd_prefix bash -c "ln -s /usr/local/lib/pulp/bin/pulpcore-manager /tmp/home/.local/bin/pulpcore-manager || /bin/true"
 echo "CURL OUTPUT"
 curl https://env-${NAMESPACE}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
 echo "ROUTES"
