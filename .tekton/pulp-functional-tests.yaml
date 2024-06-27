@@ -2,14 +2,6 @@ kind: Pipeline
 apiVersion: tekton.dev/v1beta1
 metadata:
   name: pulp-functional-tests
-  annotations:
-    build.appstudio.openshift.io/repo: https://github.com/pulp/pulp-service?rev={{revision}}
-    build.appstudio.redhat.com/commit_sha: '{{revision}}'
-    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
-    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "main" && source_branch == "konflux_functional_tests"
 spec:
   params:
     - description: 'Snapshot of the application'
@@ -25,11 +17,31 @@ spec:
       default: "Hello World!"
       type: string
   tasks:
-    - name: task-1
+    - name: test-metadata
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/integration-examples
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/test_metadata.yaml
+    - name: functional-tests
       description: Placeholder task that prints the Snapshot and outputs standard TEST_OUTPUT
       params:
         - name: SNAPSHOT
           value: $(params.SNAPSHOT)
+      when:
+        - input: $(tasks.test-metadata.results.test-event-type)
+          operator: notin
+          values: [ "push", "Push" ]
+        - input: $(tasks.test-metadata.results.pull-request-number)
+          operator: in
+          values: [ "167", 167 ]
       taskSpec:
         params:
         - name: SNAPSHOT
