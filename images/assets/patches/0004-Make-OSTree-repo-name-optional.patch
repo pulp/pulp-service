@@ -1,0 +1,26 @@
+From a1889c842e16ec933f8d626282d119e775dbc06c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C4=BDubo=C5=A1=20Mjachky?= <lmjachky@redhat.com>
+Date: Fri, 28 Jun 2024 16:32:33 +0200
+Subject: [PATCH] Make the repository_name parameter optional when importing
+ commits
+
+[noissue]
+---
+ pulp_ostree/app/serializers.py | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/pulp_ostree/app/serializers.py b/pulp_ostree/app/serializers.py
+index bb4f72b8..acda43f1 100755
+--- a/pulp_ostree/app/serializers.py
++++ b/pulp_ostree/app/serializers.py
+@@ -22,7 +22,9 @@ class OstreeImportAllSerializer(serializers.Serializer):
+         help_text=_("An artifact representing OSTree content compressed as a tarball."),
+     )
+     repository_name = serializers.CharField(
+-        help_text=_("The name of a repository that contains the compressed OSTree content.")
++        help_text=_("The name of a repository that contains the compressed OSTree content."),
++        allow_blank=True,
++        default="",
+     )
+
+     def validate(self, data):
