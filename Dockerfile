@@ -125,11 +125,13 @@ COPY images/assets/patches/otel-django.patch /tmp/otel-django.patch
 COPY images/assets/patches/0001-Enable-logging-header-info.patch /tmp/0001-Enable-logging-header-info.patch
 COPY images/assets/patches/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
 COPY images/assets/patches/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch /tmp/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch
+COPY images/assets/patches/0004-Accept-lists-of-JQ-paths.patch /tmp/0004-Accept-lists-of-JQ-paths.patch
 
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
 RUN patch /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore/app/authentication.py < /tmp/0001-Enable-logging-header-info.patch
 RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
 RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulp_ostree < /tmp/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch
+RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0004-Accept-lists-of-JQ-paths.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
