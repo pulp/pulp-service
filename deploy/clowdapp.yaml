@@ -632,6 +632,10 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
+            - name: PULP_CONTENT_ORIGIN
+              value: ${{PULP_CONTENT_ORIGIN}}
+            - name: PULP_DB_ENCRYPTION_KEY
+              value: ${{PULP_DB_ENCRYPTION_KEY}}
       - name: create-pulp-services-admin-users
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
