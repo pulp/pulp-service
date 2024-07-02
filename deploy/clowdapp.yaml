@@ -752,7 +752,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-copr-domain2
+    name: create-copr-domain3
   spec:
     appName: pulp
     jobs:
