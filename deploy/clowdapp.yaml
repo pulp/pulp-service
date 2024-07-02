@@ -35,9 +35,8 @@ objects:
     name: domain-storage-map
   data:
     domain-storage-script: |
-      from app_common_python import LoadedConfig
-      c = LoadedConfig.objectStore
-      config = f"{{\"access_key\": \"{c.accessKey}\", \"secret_key\": \"{c.secretKey}\", \"bucket_name\": \"{c.buckets[0].name}\", \"region_name\": \"us-east-1\", \"default_acl\": \"private\"}}"
+      from django.conf import settings as s
+      config = f"{{\"access_key\": \"{s.AWS_ACCESS_KEY_ID}\", \"secret_key\": \"{s.AWS_SECRET_ACCESS_KEY}\", \"bucket_name\": \"{s.AWS_STORAGE_BUCKET_NAME}\", \"region_name\": \"us-east-1\", \"default_acl\": \"private\"}}"
       print(config)
 - apiVersion: v1
   kind: ConfigMap
@@ -601,15 +600,27 @@ objects:
           - "-c"
           - |
             pulp config create --base-url http://pulp-api:8000 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
-            pulp domain create --name copr --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)"
+            pulp domain create --name copr --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)" || true
+            pulp domain update --name copr --storage-settings "$(python3 /tmp/domain-storage-script.py)"
           volumeMounts:
             - name: domain-storage-config
               mountPath: /tmp/domain-storage-script.py
               subPath: domain-storage-script
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
           volumes:
             - name: domain-storage-config
               configMap:
                 name: domain-storage-map
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
           env:
             - name: PULP_ADMIN_PASSWORD
               valueFrom:
@@ -737,7 +748,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-copr-domain
+    name: create-copr-domain2
   spec:
     appName: pulp
     jobs:
