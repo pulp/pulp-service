@@ -6,8 +6,6 @@ kind: Pipeline
 metadata:
   name: bonfire
   annotations:
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "main" && files.all.exists(x, x.matches('.tekton/'))
   labels:
     build.appstudio.redhat.com/pipeline: "bonfire"
 spec:
@@ -113,7 +111,28 @@ spec:
           - name: pathInRepo
             value: tasks/teardown.yaml
   tasks:
+    - name: test-metadata
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-qe-incubator/konflux-qe-definitions.git
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: common/tasks/test-metadata/test-metadata.yaml
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+        - name: oras-container
+          value: "dummy"
+        - name: test-name
+          value: $(context.pipelineRun.name)
     - name: reserve-namespace
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
       params:
         - name: NS_REQUESTER
           value: "$(context.pipelineRun.name)"
@@ -130,7 +149,13 @@ spec:
             value: "$(params.REVISION_ORIG)"
           - name: pathInRepo
             value: tasks/reserve-namespace.yaml
+      runAfter:
+        - test-metadata
     - name: deploy-application
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
       params:
         - name: BONFIRE_IMAGE
           value: "$(params.BONFIRE_IMAGE)"
@@ -166,6 +191,10 @@ spec:
           - name: pathInRepo
             value: tasks/deploy.yaml
     - name: pulp-functional-tests
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
       runAfter:
         - deploy-application
       params:
