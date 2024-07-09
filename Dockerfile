@@ -75,7 +75,7 @@ RUN pip install --upgrade \
   pulpcore==3.54.1 \
   pulp-rpm==3.25.3 \
   pulp-gem==0.5.1 \
-  pulp-ostree==2.4.1 \
+  pulp-ostree==2.4.3 \
   pulp-python==3.12.0 \
   pulp-cli \
   pulp-cli-gem \
@@ -123,12 +123,10 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
 COPY images/assets/patches/otel-django.patch /tmp/otel-django.patch
 COPY images/assets/patches/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
-COPY images/assets/patches/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch /tmp/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch
 COPY images/assets/patches/0004-Add-RHServiceAccountCertAuthentication-backend.patch /tmp/0004-Add-RHServiceAccountCertAuthentication-backend.patch
 
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
 RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0002-Disable-the-Storage-Metrics-emmiter-for-now.patch
-RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulp_ostree < /tmp/0003-Change-the-repo-name-on-the-test-to-avoid-colisions.patch
 RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0004-Add-RHServiceAccountCertAuthentication-backend.patch
 
 RUN mkdir /licenses
