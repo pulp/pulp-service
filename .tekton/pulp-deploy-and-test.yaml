@@ -199,13 +199,10 @@ spec:
         - deploy-application
       params:
         - name: BONFIRE_IMAGE
-          type: string
           value: "$(params.BONFIRE_IMAGE)"
         - name: NS
-          type: string
           value: "$(tasks.reserve-namespace.results.NS)"
         - name: EPHEMERAL_ENV_PROVIDER_SECRET
-          type: string
           value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
       taskSpec:
         params:
