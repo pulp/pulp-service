@@ -67,7 +67,8 @@ RUN pip install --upgrade pip setuptools wheel && \
          python-nginx \
          django-storages\[boto3,azure]\>=1.12.2 \
          requests\[use_chardet_on_py3] \
-         importlib-metadata && \
+         importlib-metadata \
+         watchtower && \
          rm -rf /root/.cache/pip
 
 
