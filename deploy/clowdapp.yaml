@@ -268,6 +268,8 @@ objects:
             value: ${{PULP_AUTHENTICATION_JSON_HEADER_JQ_FILTER}}
           - name: PULP_AUTHENTICATION_JSON_HEADER_OPENAPI_SECURITY_SCHEME
             value: ${{PULP_AUTHENTICATION_JSON_HEADER_OPENAPI_SECURITY_SCHEME}}
+          - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+            value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       webServices:
@@ -361,6 +363,8 @@ objects:
             value: ${{PULP_CONTENT_PATH_PREFIX}}
           - name: PULP_DOMAIN_ENABLED
             value: ${PULP_DOMAIN_ENABLED}
+          - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+            value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
@@ -442,6 +446,8 @@ objects:
             value: ${{PULP_CONTENT_PATH_PREFIX}}
           - name: PULP_DOMAIN_ENABLED
             value: ${PULP_DOMAIN_ENABLED}
+          - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+            value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
     - name: otel-collector
       replicas: 1
       webServices:
@@ -513,6 +519,8 @@ objects:
                 name: pulp-glitchtip
                 key: dsn
                 optional: true
+          - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+            value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
     database:
       name: pulp
       version: 15
@@ -592,7 +600,7 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
-      - name: create-copr-domain
+      - name: create-rhel-ai-domain
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ '/bin/sh' ]
@@ -600,8 +608,7 @@ objects:
           - "-c"
           - |
             pulp config create --base-url http://pulp-api:8000 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
-            pulp domain create --name copr --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)" || true
-            pulp domain update --name copr --storage-settings "$(python3 /tmp/domain-storage-script.py)"
+            pulp domain create --name rhel-ai --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)"
           volumeMounts:
             - name: domain-storage-config
               mountPath: /tmp/domain-storage-script.py
@@ -752,11 +759,11 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-copr-domain3
+    name: create-rhel-ai-domain
   spec:
     appName: pulp
     jobs:
-      - create-copr-domain
+      - create-rhel-ai-domain
 
 parameters:
   - name: ENV_NAME
@@ -907,6 +914,9 @@ parameters:
   - name: PULP_DOMAIN_ENABLED
     description: Domain Enabled
     value: "true"
+  - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+    description: Checksums that Pulp can use to validate packages.
+    value: "[\"sha224\", \"sha256\", \"sha384\", \"sha512\"]"
   - name: PULP_API_GUNICORN_WORKERS
     description: Number of gunicorn workers in the API pods
     value: "1"
