@@ -582,6 +582,8 @@ objects:
               value: ${{PULP_CONTENT_ORIGIN}}
             - name: PULP_ALLOWED_CONTENT_CHECKSUMS
               value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
+            - name: PULP_DB_ENCRYPTION_KEY
+              value: ${{PULP_DB_ENCRYPTION_KEY}}
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
@@ -765,7 +767,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: remove-sha1-checksums
+    name: remove-sha1-checksums1
   spec:
     appName: pulp
     runOnNotReady: True
