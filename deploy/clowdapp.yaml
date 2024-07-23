@@ -498,11 +498,14 @@ objects:
           - name: pulp-settings
             secret:
               secretName: pulp-settings
-#        initContainers:
-#          - name: wait-on-migrations
-#            image: ${IMAGE}:${IMAGE_TAG}
-#            command: [ "/usr/bin/wait_on_postgres.py" ]
-#            inheritEnv: True
+        initContainers:
+          - name: wait-on-migrations
+            image: ${IMAGE}:${IMAGE_TAG}
+            command: [ "/usr/bin/wait_on_postgres.py" ]
+            inheritEnv: True
+            env:
+              - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+                value: "[\"sha224\", \"sha256\", \"sha384\", \"sha512\"]"
         readinessProbe:
           exec:
             command: ["stat", "/tmp/migrated"]
