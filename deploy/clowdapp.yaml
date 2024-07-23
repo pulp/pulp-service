@@ -767,7 +767,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: remove-sha1-checksums1
+    name: remove-sha1-checksums2
   spec:
     appName: pulp
     runOnNotReady: True
