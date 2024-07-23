@@ -633,7 +633,8 @@ objects:
           - "-c"
           - |
             pulp config create --base-url http://pulp-api:8000 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
-            pulp domain create --name rhel-ai --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)"
+            pulp domain create --name rhel-ai --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)" || true
+            pulp domain update --name rhel-ai --storage-class storages.backends.s3boto3.S3Boto3Storage --storage-settings "$(python3 /tmp/domain-storage-script.py)"
           volumeMounts:
             - name: domain-storage-config
               mountPath: /tmp/domain-storage-script.py
@@ -793,7 +794,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-rhel-ai-domain
+    name: create-rhel-ai-domain1
   spec:
     appName: pulp
     jobs:
