@@ -572,6 +572,29 @@ objects:
             - name: pulp-settings
               secret:
                 secretName: pulp-settings
+      - name: remove-sha1-checksums
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/bin/sh' ]
+          args: ['-c', '/usr/local/lib/pulp/bin/pulpcore-manager handle-artifact-checksums' ]
+          env:
+            - name: PULP_CONTENT_ORIGIN
+              value: ${{PULP_CONTENT_ORIGIN}}
+            - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+              value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
       - name: create-contentsources-user
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
@@ -739,6 +762,14 @@ objects:
     appName: pulp
     jobs:
       - create-pulp-services-admin-users
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: remove-sha1-checksums
+  spec:
+    appName: pulp
+    jobs:
+      - remove-sha1-checksums
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
