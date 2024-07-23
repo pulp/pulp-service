@@ -768,6 +768,7 @@ objects:
     name: remove-sha1-checksums
   spec:
     appName: pulp
+    runOnNotReady: True
     jobs:
       - remove-sha1-checksums
 - apiVersion: cloud.redhat.com/v1alpha1
