@@ -143,7 +143,6 @@ objects:
     migrate-sh-file: |
       #!/bin/bash
       set -e
-      /usr/local/lib/pulp/bin/pulpcore-manager handle-artifact-checksums
       /usr/local/lib/pulp/bin/pulpcore-manager migrate --noinput
       touch /tmp/migrated
       while true; do
@@ -503,9 +502,6 @@ objects:
             image: ${IMAGE}:${IMAGE_TAG}
             command: [ "/usr/bin/wait_on_postgres.py" ]
             inheritEnv: True
-            env:
-              - name: PULP_ALLOWED_CONTENT_CHECKSUMS
-                value: "[\"sha1\", \"sha224\", \"sha256\", \"sha384\", \"sha512\"]"
         readinessProbe:
           exec:
             command: ["stat", "/tmp/migrated"]
