@@ -143,7 +143,6 @@ objects:
     migrate-sh-file: |
       #!/bin/bash
       set -e
-      /usr/local/lib/pulp/bin/pulpcore-manager handle-artifact-checksums
       /usr/local/lib/pulp/bin/pulpcore-manager migrate --noinput
       touch /tmp/migrated
       while true; do
