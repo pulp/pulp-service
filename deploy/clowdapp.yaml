@@ -505,7 +505,7 @@ objects:
             inheritEnv: True
             env:
               - name: PULP_ALLOWED_CONTENT_CHECKSUMS
-                value: "[\"sha224\", \"sha256\", \"sha384\", \"sha512\"]"
+                value: "[\"sha1\", \"sha224\", \"sha256\", \"sha384\", \"sha512\"]"
         readinessProbe:
           exec:
             command: ["stat", "/tmp/migrated"]
