@@ -849,14 +849,6 @@ objects:
     appName: pulp
     jobs:
       - create-rhel-ai-domain
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: create-vendor-repos
-  spec:
-    appName: pulp
-    jobs:
-      - create-vendor-repos
 
 parameters:
   - name: ENV_NAME
