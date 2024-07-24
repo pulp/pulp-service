@@ -669,6 +669,56 @@ objects:
               value: ${{PULP_CONTENT_ORIGIN}}
             - name: PULP_DB_ENCRYPTION_KEY
               value: ${{PULP_DB_ENCRYPTION_KEY}}
+      - name: create-vendor-repos
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/bin/sh' ]
+          args:
+          - "-c"
+          - |
+            pulp config create --base-url http://pulp-api:8000 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain rhel-ai
+            pulp rpm remote create --name gaudi --url https://pulp.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/gaudi/ --download-concurrency 1
+            pulp rpm repository create --name gaudi --remote gaudi --autopublish
+            pulp rpm distribution create --name gaudi --base-path gaudi
+            pulp rpm repository sync --name gaudi
+            pulp rpm remote create --name mkl --url https://pulp.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/mkl/ --download-concurrency 1
+            pulp rpm repository create --name mkl --remote mkl --autopublish
+            pulp rpm distribution create --name mkl --base-path mkl
+            pulp rpm repository sync --name mkl
+          volumeMounts:
+            - name: domain-storage-config
+              mountPath: /tmp/domain-storage-script.py
+              subPath: domain-storage-script
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+          volumes:
+            - name: domain-storage-config
+              configMap:
+                name: domain-storage-map
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
+          env:
+            - name: PULP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-admin-password
+                  key: password
+                  optional: false
+            - name: XDG_CONFIG_HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
+            - name: PULP_CONTENT_ORIGIN
+              value: ${{PULP_CONTENT_ORIGIN}}
+            - name: PULP_DB_ENCRYPTION_KEY
+              value: ${{PULP_DB_ENCRYPTION_KEY}}
       - name: create-pulp-services-admin-users
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
@@ -799,6 +849,14 @@ objects:
     appName: pulp
     jobs:
       - create-rhel-ai-domain
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: create-vendor-repos
+  spec:
+    appName: pulp
+    jobs:
+      - create-vendor-repos
 
 parameters:
   - name: ENV_NAME
