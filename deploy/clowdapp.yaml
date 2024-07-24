@@ -679,11 +679,11 @@ objects:
             pulp config create --base-url http://pulp-api:8000 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain rhel-ai
             pulp rpm remote create --name gaudi --url https://pulp.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/gaudi/ --download-concurrency 1
             pulp rpm repository create --name gaudi --remote gaudi --autopublish
-            pulp rpm distribution create --name gaudi --base-path gaudi
+            pulp rpm distribution create --name gaudi --base-path gaudi --repository gaudi
             pulp rpm repository sync --name gaudi
             pulp rpm remote create --name mkl --url https://pulp.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/mkl/ --download-concurrency 1
             pulp rpm repository create --name mkl --remote mkl --autopublish
-            pulp rpm distribution create --name mkl --base-path mkl
+            pulp rpm distribution create --name mkl --base-path mkl --repository mkl
             pulp rpm repository sync --name mkl
           volumeMounts:
             - name: domain-storage-config
