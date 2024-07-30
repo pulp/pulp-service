@@ -304,17 +304,17 @@ objects:
           httpGet:
             path: /api/pulp-content/default/
             port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 10
+          initialDelaySeconds: 60
+          periodSeconds: 60
+          timeoutSeconds: 60
         livenessProbe:
           httpGet:
             path: /api/pulp-content/default/
             port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 10
-        terminationGracePeriod: 60
+          initialDelaySeconds: 60
+          periodSeconds: 120
+          timeoutSeconds: 120
+        terminationGracePeriod: 120
         resources:
           requests:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
