@@ -1,0 +1,10 @@
+pulpcore==3.56.1
+pulp-rpm==3.27.1
+pulp-gem==0.6.1
+pulp-ostree==2.4.3
+pulp-python==3.12.1
+pulp-cli
+pulp-cli-gem
+sentry-sdk
+app-common-python
+
