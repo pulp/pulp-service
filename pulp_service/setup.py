@@ -7,14 +7,14 @@ with open("requirements.txt") as requirements:
 
 setup(
     name="pulp-service",
-    version="0.1.0a1.dev",
+    version="0.1.0",
     description="pulp-service plugin for the Pulp Project",
     long_description="pulp-service plugin for the Pulp Project",
     long_description_content_type="text/markdown",
     license="GPLv2+",
     author="AUTHOR",
-    author_email="author@email.here",
-    url="http://example.com/",
+    author_email="decko@redhat.com",
+    url="https://github.com/pulp/pulp-service",
     python_requires=">=3.9",
     install_requires=requirements,
     extra_require={"ci": []},

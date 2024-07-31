@@ -6,6 +6,6 @@ class PulpServicePluginAppConfig(PulpPluginAppConfig):
 
     name = "pulp_service.app"
     label = "service"
-    version = "0.1.0a1.dev"
+    version = "0.1.0"
     python_package_name = "pulp_service"
     domain_compatible = True
