@@ -72,17 +72,8 @@ RUN pip install --upgrade pip setuptools wheel && \
          rm -rf /root/.cache/pip
 
 
-# RUN pip install --upgrade \
-#   pulpcore==3.56.1 \
-#   pulp-rpm==3.27.1 \
-#   pulp-gem==0.6.1 \
-#   pulp-ostree==2.4.3 \
-#   pulp-python==3.12.1 \
-#   pulp-cli \
-#   pulp-cli-gem \
-#   sentry-sdk \
-#   app-common-python && \
 COPY pulp_service/ /tmp/pulp_service
+
 RUN pip install /tmp/pulp_service && \
   rm -rf /root/.cache/pip
 
@@ -125,7 +116,10 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 # RUN dnf install -y patch && dnf clean all
 
 COPY images/assets/patches/otel-django.patch /tmp/otel-django.patch
+COPY images/assets/patches/0004-Add-RHServiceAccountCertAuthentication-backend.patch /tmp/
+
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
+RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0004-Add-RHServiceAccountCertAuthentication-backend.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
