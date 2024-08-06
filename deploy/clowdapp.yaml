@@ -157,6 +157,8 @@ objects:
     envName: "${ENV_NAME}"
     testing:
       iqePlugin: content-sources
+    dependencies:
+      - rbac
     deployments:
     - name: api
       replicas: ${{PULP_API_REPLICAS}}
