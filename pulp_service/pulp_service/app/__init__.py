@@ -9,3 +9,7 @@ class PulpServicePluginAppConfig(PulpPluginAppConfig):
     version = "0.1.0"
     python_package_name = "pulp_service"
     domain_compatible = True
+
+    def ready(self):
+        super().ready()
+        from . import signals
