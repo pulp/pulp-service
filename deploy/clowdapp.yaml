@@ -258,6 +258,8 @@ objects:
             value: ${{PULP_CONTENT_PATH_PREFIX}}
           - name: PULP_DOMAIN_ENABLED
             value: ${PULP_DOMAIN_ENABLED}
+          - name: PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES
+            value: ${{PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES}}
           - name: PULP_AUTHENTICATION_BACKENDS
             value: ${{PULP_AUTHENTICATION_BACKENDS}}
           - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
@@ -883,6 +885,9 @@ parameters:
   - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
     description: The defaul authentication classes for Pulp.
     value: "@merge pulpcore.app.authentication.JSONHeaderRemoteAuthentication"
+  - name: PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES
+    description: The default permission classes for the REST API
+    value: "['pulpcore.plugin.access_policy.AccessPolicyFromDB']"
   - name: PULP_AUTHENTICATION_JSON_HEADER
     description: The name of the header where Authentication information is found.
     value: "HTTP_X_RH_IDENTITY"
