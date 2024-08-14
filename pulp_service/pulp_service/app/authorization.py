@@ -20,6 +20,9 @@ class DomainBasedPermission(BasePermission):
     """
 
     def has_permission(self, request, view):
+        # Admins have all permissions
+        if request.user.is_superuser:
+            return True
         # Decode the identity header
         try:
             header_content = request.META.get('HTTP_X_RH_IDENTITY')
