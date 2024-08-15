@@ -577,21 +577,33 @@ objects:
       - name: create-contentsources-user
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
-          command: [ '/bin/sh' ]
+          command: [ 'pulpcore-manager' ]
           args:
-          - "-c"
-          - |
-            pulp config create --base-url http://pulp-api:8000 --api-root /api/pulp/ --username admin --password "$PULP_ADMIN_PASSWORD" --domain default
-            pulp role create --name domain.admin --permission core.add_domain --permission core.add_headercontentguard --permission core.add_compositecontentguard --permission rpm.add_rpmrepository --permission rpm.add_rpmremote --permission rpm.add_rpmdistribution --permission rpm.add_rpmpublication || true
-            pulp user create --username contentsources --password "$CONTENT_SOURCES_PASSWORD" || true
-            pulp user role-assignment add --username contentsources --role domain.admin --object "" #Last command will fail if the first two have
+            - "shell"
+            - "-c"
+            - |
+              from os import getenv
+              from django.contrib.auth import get_user_model
+              User = get_user_model()
+              user, created = User.objects.get_or_create(username='contentsources')
+              password = getenv("CONTENT_SOURCES_PASSWORD")
+              user.set_password(password)
+              user.is_superuser = True
+              user.save()
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
           env:
-            - name: PULP_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-admin-password
-                  key: password
-                  optional: false
             - name: CONTENT_SOURCES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -887,7 +899,7 @@ parameters:
     value: "@merge pulpcore.app.authentication.JSONHeaderRemoteAuthentication"
   - name: PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES
     description: The default permission classes for the REST API
-    value: "['pulpcore.plugin.access_policy.AccessPolicyFromDB']"
+    value: "['pulp_service.app.authorization.DomainBasedPermission']"
   - name: PULP_AUTHENTICATION_JSON_HEADER
     description: The name of the header where Authentication information is found.
     value: "HTTP_X_RH_IDENTITY"
