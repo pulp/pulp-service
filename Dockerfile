@@ -116,10 +116,8 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 # RUN dnf install -y patch && dnf clean all
 
 COPY images/assets/patches/otel-django.patch /tmp/otel-django.patch
-COPY images/assets/patches/0004-Add-RHServiceAccountCertAuthentication-backend.patch /tmp/
 
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
-RUN patch -p2 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages/pulpcore < /tmp/0004-Add-RHServiceAccountCertAuthentication-backend.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
