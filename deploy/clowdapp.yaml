@@ -751,6 +751,52 @@ objects:
             - name: pulp-settings
               secret:
                 secretName: pulp-settings
+      - name: populate-org-id-data
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ 'pulpcore-manager' ]
+          args:
+            - "shell"
+            - "-c"
+            - |
+              import json
+              import os
+              from pulpcore.app.models import Domain
+              from pulp_service.app.models import DomainOrg
+              domain_org_id_map = os.getenv("PULP_DOMAIN_ORG_ID_MAP")
+              if domain_org_id_map:
+                domain_org_id_map = json.loads(domain_org_id_map)
+                for domain, org_id in domain_org_id_map.items():
+                  try:
+                    domain = Domain.objects.get(name=domain)
+                  except Domain.DoesNotExist:
+                    print(f"Skipping {domain=}...")
+                  else:
+                    DomainOrg.objects.get_or_create(org_id=org_id, domain=domain)
+          env:
+            - name: XDG_CONFIG_HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
+            - name: PULP_CONTENT_ORIGIN
+              value: ${{PULP_CONTENT_ORIGIN}}
+            - name: PULP_DB_ENCRYPTION_KEY
+              value: ${{PULP_DB_ENCRYPTION_KEY}}
+            - name: PULP_ORG_ID_MAP
+              value: ${{PULP_ORG_ID_MAP}}
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
 
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
@@ -768,6 +814,14 @@ objects:
     appName: pulp
     jobs:
       - create-pulp-services-admin-users
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: populate-org-id-data
+  spec:
+    appName: pulp
+    jobs:
+      - populate-org-id-data
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -954,4 +1008,7 @@ parameters:
     value: "1"
   - name: PULP_LIST_OF_ADMINS
     description: List of user accounts to become Pulp admin accounts
+    value: ""
+  - name: PULP_DOMAIN_ORG_ID_MAP
+    description: Mapping between Pulp domains (dict keys) and organization IDs (dict values)
     value: ""
