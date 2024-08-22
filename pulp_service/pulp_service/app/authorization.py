@@ -13,6 +13,8 @@ _logger = logging.getLogger(__name__)
 org_id_var = ContextVar('org_id')
 org_id_json_path = jq.compile(".identity.internal.org_id")
 
+user_id_var = ContextVar("user_id")
+
 
 class DomainBasedPermission(BasePermission):
     """
@@ -44,12 +46,28 @@ class DomainBasedPermission(BasePermission):
         # Anyone can create a domain
         if request.META['PATH_INFO'].endswith('/default/api/v3/domains/') and request.META['REQUEST_METHOD'] == 'POST':
             org_id_var.set(org_id)
+            user_id_var.set(request.user.pk)
             return True
-        # User has permission if the org_id matches the domain's org_id
+        # User has permission if the org_id matches the domain's org_id or the user has group perms
         else:
-            domain_name = request.META['PATH_INFO'].removeprefix(settings.API_ROOT).split("/")[0]
-            try:
-                DomainOrg.objects.get(domain__name=domain_name, org_id=org_id)
-                return True
-            except DomainOrg.DoesNotExist:
-                return False
+            checker = DomainPermissionChecker(request, org_id)
+            return checker.has_permissions()
+
+
+class DomainPermissionChecker:
+    def __init__(self, request, org_id):
+        self.user = request.user
+        self.domain_name = request.META['PATH_INFO'].removeprefix(settings.API_ROOT).split("/")[0]
+        self.org_id = org_id
+
+    def has_permissions(self):
+        return self.has_org_id_perms() or self.has_user_perms() or self.has_group_perms()
+
+    def has_org_id_perms(self):
+        return DomainOrg.objects.filter(domain__name=self.domain_name, org_id=self.org_id).exists()
+
+    def has_user_perms(self):
+        return DomainOrg.objects.filter(domain__name=self.domain_name, user=self.user).exists()
+
+    def has_group_perms(self):
+        return DomainOrg.objects.filter(domain_name=self.domain_name, group__in=self.user.groups).exists()
