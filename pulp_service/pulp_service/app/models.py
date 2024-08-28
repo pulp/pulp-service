@@ -13,4 +13,3 @@ class DomainOrg(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, related_name="users", on_delete=models.CASCADE
     )
-    group = models.ForeignKey(Group, related_name="groups", on_delete=models.CASCADE)

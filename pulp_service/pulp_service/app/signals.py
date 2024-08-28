@@ -12,15 +12,11 @@ def post_create_domain(sender, **kwargs):
     if kwargs['created']:
         from pulp_service.app.authorization import org_id_var, user_id_var
         org_id = org_id_var.get(None)
-        # The default domain is created when migrations are run for the first time.
-        # org_id is only available when REST API is used to create the domain.
-        if org_id:
-            DomainOrg.objects.create(domain=kwargs['instance'], org_id=org_id)
-
+        org_id_var.set(None)
         user_id = user_id_var.get(None)
+        user_id_var.set(None)
         if user_id:
+            # The default domain is created when migrations are run for the first time.
+            # User is only available when the REST API is used to create the domain.
             user = get_user_model().objects.get(pk=user_id)
-            DomainOrg.objects.create(domain=kwargs['instance'], user=user)
-
-            for group in user.groups:
-                DomainOrg.objects.get_or_create(domain=kwargs['instance'], group=group)
+            DomainOrg.objects.create(domain=kwargs['instance'], org_id=org_id, user=user)
