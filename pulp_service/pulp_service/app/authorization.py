@@ -26,7 +26,12 @@ class DomainBasedPermission(BasePermission):
         # Admins have all permissions
         if request.user.is_superuser:
             return True
+
         user = request.user
+
+        # Anonymous users have no permissions
+        if not user.is_authenticated:
+            return False
 
         # Check if user is creating a domain or creating a resource within a domain
         action = self.get_user_action(request)
