@@ -268,6 +268,7 @@ spec:
 
               debug_and_fail() {
                 oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-content\S*")
+                oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-api\S*")
                 echo "CURL OUTPUT"
                 curl https://env-${NS}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
                 echo "ROUTES"
