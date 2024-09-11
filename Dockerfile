@@ -113,12 +113,6 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
-# RUN dnf install -y patch && dnf clean all
-
-COPY images/assets/patches/otel-django.patch /tmp/otel-django.patch
-
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
-
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
