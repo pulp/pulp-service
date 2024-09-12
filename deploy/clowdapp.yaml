@@ -272,6 +272,10 @@ objects:
             value: ${{PULP_AUTHENTICATION_JSON_HEADER_OPENAPI_SECURITY_SCHEME}}
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
+          - name: PULP_INSTALLED_APPS
+            value: ${PULP_INSTALLED_APPS}
+          - name: PULP_CSRF_TRUSTED_ORIGINS
+            value: ${PULP_CSRF_TRUSTED_ORIGINS}
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       webServices:
@@ -955,3 +959,8 @@ parameters:
   - name: PULP_LIST_OF_ADMINS
     description: List of user accounts to become Pulp admin accounts
     value: ""
+  - name: PULP_INSTALLED_APPS
+    description: Installed Django apps
+    value: "@merge django.contrib.admin.apps.SimpleAdminConfig"
+  - name: PULP_CSRF_TRUSTED_ORIGINS
+    value: "['https://*.apps.crc-eph.r9lp.p1.openshiftapps.com']"
