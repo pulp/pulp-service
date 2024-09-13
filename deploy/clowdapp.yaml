@@ -18,7 +18,7 @@ objects:
         batch:
         memory_limiter:
           check_interval: 1s
-          limit_mib: 350
+          limit_mib: 2048
       exporters:
         prometheus:
           endpoint: "0.0.0.0:9000"
@@ -878,10 +878,10 @@ parameters:
     value: "500m"
   - name: OTEL_COLLECTOR_MEMORY_REQUEST
     description: Amount of memory to request for OpenTelemetry Collector container
-    value: "256Mi"
+    value: "1024Mi"
   - name: OTEL_COLLECTOR_MEMORY_LIMIT
     description: Limit of memory use by OpenTelemetry Collector contaienr
-    value: "512Mi"
+    value: "2048Mi"
   - name: DB_SECRET_NAME
     description: Name of the secret with external database information for the operator.
     value: "pulp-external-database"
