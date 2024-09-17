@@ -276,6 +276,8 @@ objects:
             value: ${PULP_INSTALLED_APPS}
           - name: PULP_CSRF_TRUSTED_ORIGINS
             value: ${PULP_CSRF_TRUSTED_ORIGINS}
+          - name: PULP_STATIC_URL
+            value: ${PULP_STATIC_URL}
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       webServices:
@@ -966,3 +968,6 @@ parameters:
     value: "@merge django.contrib.admin.apps.SimpleAdminConfig"
   - name: PULP_CSRF_TRUSTED_ORIGINS
     value: "['https://*.apps.crc-eph.r9lp.p1.openshiftapps.com']"
+  - name: PULP_STATIC_URL
+    description: The path to the static assets needed by some Django apps
+    value: "/api/pulp/assets/"
