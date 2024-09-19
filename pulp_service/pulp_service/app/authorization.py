@@ -48,14 +48,25 @@ class DomainBasedPermission(BasePermission):
                 org_id_var.set(org_id)
             user_id_var.set(request.user.pk)
             return True
-        else:
-            # User has permission if the org_id matches the domain's org_id
-            # The user that created the domain has permission to access that domain
-            return DomainOrg.objects.filter(Q(domain=get_domain(), org_id=org_id) | Q(domain=get_domain(), user=user)).exists()
+        # Anyone can list domains
+        elif action == "domain_list":
+            return True
+        elif action == "domain_delete":
+            # Delete is currently not supported. Will implement it next.
+            return False
+
+        # User has permission if the org_id matches the domain's org_id
+        # The user that created the domain has permission to access that domain
+        return DomainOrg.objects.filter(Q(domain=get_domain(), org_id=org_id) | Q(domain=get_domain(), user=user)).exists()
 
     def get_user_action(self, request):
-        if request.META['PATH_INFO'].endswith('/default/api/v3/domains/') and request.META['REQUEST_METHOD'] == 'POST':
-            return "domain_create"
+        if request.META['PATH_INFO'].endswith('/default/api/v3/domains/'):
+            if request.META['REQUEST_METHOD'] == 'POST':
+                return "domain_create"
+            elif request.META['REQUEST_METHOD'] == 'GET':
+                return "domain_list"
+            elif request.META['REQUEST_METHOD'] == 'DELETE':
+                return "domain_delete"
         else:
             return "domain_operation"
 
