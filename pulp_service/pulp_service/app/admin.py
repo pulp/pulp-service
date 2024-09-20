@@ -9,7 +9,12 @@ class PulpAdminSite(admin.AdminSite):
     site_header = "Pulp administration"
 
 
+class DomainOrgAdmin(admin.ModelAdmin):
+    list_display = ["domain", "user", "org_id"]
+    list_editable = ["user", "org_id"]
+    list_filter = ["user", "org_id"]
+
 admin_site = PulpAdminSite(name="myadmin")
 
-admin_site.register(DomainOrg)
+admin_site.register(DomainOrg, DomainOrgAdmin)
 admin_site.register(User, UserAdmin)
