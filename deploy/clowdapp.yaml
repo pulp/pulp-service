@@ -874,10 +874,10 @@ parameters:
     value: "http://pulp-otel-collector:10000/"
   - name: OTEL_METRIC_EXPORT_INTERVAL
     description: The time interval (in milliseconds) between the start of two export attempts.
-    value: "60000"
+    value: "7000"
   - name: OTEL_METRIC_EXPORT_TIMEOUT
     description: Maximum allowed time (in milliseconds) to export data.
-    value: "7000"
+    value: "30000"
   - name: OTEL_COLLECTOR_CPU_REQUEST
     description: Amount of CPU to request for OpenTelemetry Collector container
     value: "250m"
