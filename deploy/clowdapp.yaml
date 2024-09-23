@@ -901,10 +901,10 @@ parameters:
     value: pulp-stage-default-domain-s3
   - name: PULP_AUTHENTICATION_BACKENDS
     description: The AUTHENTICATION_BACKENDS to be used by Pulp.
-    value: "@merge django.contrib.auth.backends.RemoteUserBackend" 
+    value: "@merge django.contrib.auth.backends.RemoteUserBackend"
   - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
     description: The defaul authentication classes for Pulp.
-    value: "@merge pulpcore.app.authentication.JSONHeaderRemoteAuthentication"
+    value: "['pulp_service.app.authentication.RHServiceAccountCertAuthentication','pulpcore.app.authentication.JSONHeaderRemoteAuthentication','rest_framework.authentication.BasicAuthentication','rest_framework.authentication.SessionAuthentication']"
   - name: PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES
     description: The default permission classes for the REST API
     value: "['pulp_service.app.authorization.DomainBasedPermission']"
