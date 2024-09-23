@@ -877,7 +877,7 @@ parameters:
     value: "60000"
   - name: OTEL_METRIC_EXPORT_TIMEOUT
     description: Maximum allowed time (in milliseconds) to export data.
-    value: "30000"
+    value: "7000"
   - name: OTEL_COLLECTOR_CPU_REQUEST
     description: Amount of CPU to request for OpenTelemetry Collector container
     value: "250m"
