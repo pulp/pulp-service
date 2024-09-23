@@ -826,7 +826,7 @@ parameters:
     value: "1"
   - name: PULP_CONTENT_REPLICAS
     description: Number of pulp content replicas
-    value: "1"
+    value: "10"
   - name: PULP_API_CPU_REQUEST
     description: Amount of CPU to request for the API pods
     value: "500m"
