@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/ubi
+ROM registry.access.redhat.com/ubi9/ubi
 ARG PYTHON_VERSION=3.9
 
 ENV PYTHONUNBUFFERED=0
