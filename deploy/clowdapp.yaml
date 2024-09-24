@@ -594,7 +594,7 @@ objects:
               user, created = User.objects.get_or_create(username='contentsources')
               password = getenv("CONTENT_SOURCES_PASSWORD")
               user.set_password(password)
-              user.is_superuser = True
+              user.is_superuser = False
               user.save()
           volumeMounts:
             - name: secret-volume
