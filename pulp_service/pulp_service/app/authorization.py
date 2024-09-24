@@ -5,6 +5,7 @@ from django.db.models import Q
 import json
 import jq
 from pulpcore.app.util import get_domain
+from pulpcore.plugin.util import extract_pk
 from pulp_service.app.models import DomainOrg
 from rest_framework.permissions import BasePermission
 import logging
@@ -51,10 +52,12 @@ class DomainBasedPermission(BasePermission):
         # Anyone can list domains
         elif action == "domain_list":
             return True
+        elif action == "domain_update":
+            domain_pk = extract_pk(request.META['PATH_INFO'])
+            return DomainOrg.objects.filter(Q(domain__pk=domain_pk, org_id=org_id) | Q(domain__pk=domain_pk, user=user)).exists()
         elif action == "domain_delete":
-            # Delete is currently not supported. Will implement it next.
-            return False
-
+            domain_pk = extract_pk(request.META['PATH_INFO'])
+            return DomainOrg.objects.filter(Q(domain__pk=domain_pk, org_id=org_id) | Q(domain__pk=domain_pk, user=user)).exists()
         # User has permission if the org_id matches the domain's org_id
         # The user that created the domain has permission to access that domain
         return DomainOrg.objects.filter(Q(domain=get_domain(), org_id=org_id) | Q(domain=get_domain(), user=user)).exists()
@@ -65,6 +68,9 @@ class DomainBasedPermission(BasePermission):
                 return "domain_create"
             elif request.META['REQUEST_METHOD'] == 'GET':
                 return "domain_list"
+        elif request.META['PATH_INFO'].startswith('/api/pulp/default/api/v3/domains/'):
+            if request.META['REQUEST_METHOD'] == 'PATCH':
+                return "domain_update"
             elif request.META['REQUEST_METHOD'] == 'DELETE':
                 return "domain_delete"
         else:
