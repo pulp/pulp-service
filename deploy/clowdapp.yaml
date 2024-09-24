@@ -226,8 +226,6 @@ objects:
             value: "none"
           - name: PULP_REDIS_PORT
             value: "6379"
-          - name: OTEL_PYTHON_EXCLUDED_URLS
-            value: "v3/livez"
           - name: SENTRY_DSN
             valueFrom:
               secretKeyRef:
