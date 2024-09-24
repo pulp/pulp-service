@@ -633,67 +633,7 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
-      - name: populate-org-id-data
-        podSpec:
-          image: ${IMAGE}:${IMAGE_TAG}
-          command: [ 'pulpcore-manager' ]
-          args:
-            - "shell"
-            - "-c"
-            - |
-              from django.contrib.auth import get_user_model
-              import json
-              import os
-              from pulpcore.app.models import Domain
-              from pulp_service.app.models import DomainOrg
-              domain_org_id_map = os.getenv("PULP_DOMAIN_LIST")
-              user = get_user_model().objects.get(username="contentsources")
-              if domain_org_id_map:
-                domain_org_id_map = json.loads(domain_org_id_map)
-                for domain_name in domain_org_id_map:
-                  try:
-                    domain = Domain.objects.get(name=domain_name)
-                  except Domain.DoesNotExist:
-                    print(f"Skipping {domain_name}")
-                  else:
-                    do, created = DomainOrg.objects.get_or_create(domain=domain)
-                    do.org_id = '18470410'
-                    do.user = user
-                    do.save()
-                    print(f"Processed {domain_name}")
-          env:
-            - name: XDG_CONFIG_HOME
-              value: "/tmp"
-            - name: XDG_CACHE_HOME
-              value: "/tmp"
-            - name: PULP_CONTENT_ORIGIN
-              value: ${{PULP_CONTENT_ORIGIN}}
-            - name: PULP_DB_ENCRYPTION_KEY
-              value: ${{PULP_DB_ENCRYPTION_KEY}}
-            - name: PULP_DOMAIN_LIST
-              value: ${PULP_DOMAIN_LIST}
-          volumeMounts:
-            - name: secret-volume
-              mountPath: "/etc/pulp/keys"
-            - name: pulp-settings
-              mountPath: "/etc/pulp/settings.py"
-              subPath: "settings.py"
-          volumes:
-            - name: secret-volume
-              secret:
-                secretName: pulp-db-fields-encryption
-            - name: pulp-settings
-              secret:
-                secretName: pulp-settings
 
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: populate-org-id-data
-  spec:
-    appName: pulp
-    jobs:
-      - populate-org-id-data
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -886,6 +826,3 @@ parameters:
   - name: PULP_STATIC_URL
     description: The path to the static assets needed by some Django apps
     value: "/api/pulp/assets/"
-  - name: PULP_DOMAIN_LIST
-    description: List of domain names
-    value: "[]"
