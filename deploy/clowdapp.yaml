@@ -200,7 +200,7 @@ objects:
           apiPath: pulp
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        command: ['/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', --otlp-attributes', 'pulp.hostname=${HOSTNAME}', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         # command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
