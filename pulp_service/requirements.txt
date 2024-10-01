@@ -1,4 +1,4 @@
-pulpcore==3.61.0
+pulpcore==3.63.0
 pulp-rpm==3.27.1
 pulp-gem==0.6.1
 pulp-ostree==2.4.3
