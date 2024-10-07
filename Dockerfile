@@ -115,6 +115,9 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
+COPY images/assets/patches/otel-wsgi-resource.patch /tmp/otel-wsgi-resource.patch
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-wsgi-resource.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
