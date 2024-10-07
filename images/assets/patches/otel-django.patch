@@ -1,0 +1,22 @@
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 0163d1f44..3fe7cf42b 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -358,6 +358,9 @@ class AsyncContentCache(AsyncCache):
+             if size := response.headers.get("X-PULP-ARTIFACT-SIZE"):
+                 artifacts_size_counter.add(size)
+ 
++            response.headers.update({"X-TEST-LALA2": "what?!"})
++            response.headers.update({"X-TEST-LALAaaaa": "noway?!"})
++
+             return response
+ 
+         return cached_function
+@@ -402,6 +405,7 @@ class AsyncContentCache(AsyncCache):
+         except (HTTPSuccessful, HTTPFound) as e:
+             response = e
+ 
++        response.headers.update({"X-PULP-me1": "inside make_entry"})
+         entry = {"headers": dict(response.headers), "status": response.status}
+         if expires is not None:
+             # Redis TTL is not sufficient: https://github.com/pulp/pulpcore/issues/4845

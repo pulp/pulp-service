@@ -118,6 +118,12 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 COPY images/assets/patches/otel-wsgi-resource.patch /tmp/otel-wsgi-resource.patch
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-wsgi-resource.patch
 
+COPY images/assets/patches/otel-django.patch /tmp/otel-django.patch
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-django.patch
+
+COPY images/assets/patches/otel-handler.patch /tmp/otel-handler.patch
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/otel-handler.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
