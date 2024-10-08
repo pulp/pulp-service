@@ -1,0 +1,51 @@
+From 25586f0fe5bccf9206202d22402e3a60aec792a7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Tue, 8 Oct 2024 15:52:03 -0300
+Subject: [PATCH] Add the the worker name to all metric data points.
+
+---
+ pulpcore/app/wsgi.py | 18 ++++++------------
+ 1 file changed, 6 insertions(+), 12 deletions(-)
+
+diff --git a/pulpcore/app/wsgi.py b/pulpcore/app/wsgi.py
+index 9edb867bf..a4ce23571 100644
+--- a/pulpcore/app/wsgi.py
++++ b/pulpcore/app/wsgi.py
+@@ -25,28 +25,22 @@ if not using_pulp_api_worker.get(False):
+ 
+ 
+ class WorkerNameMetricsExporter(OTLPMetricExporter):
+-    def export(self, metrics_data, timeout_millis=10_000, **kwargs):
++    def export(self, metrics_data, **kwargs):
+         for resource_metric in metrics_data.resource_metrics:
+             for scope_metric in resource_metric.scope_metrics:
+                 for metric in scope_metric.metrics:
+-                    if metric.data.data_points:
+-                        point = metric.data.data_points[0]
+-                        point.attributes["worker.name"] = get_worker_name()
++                    if metric.data.data_points and isinstance(metric.data.data_points, list):
++                        for point in metric.data.data_points:
++                            point.attributes["worker.name"] = get_worker_name()
+ 
+-        return super().export(metrics_data, timeout_millis, **kwargs)
++        return super().export(metrics_data, **kwargs)
+ 
+ 
+ exporter = WorkerNameMetricsExporter()
+ reader = PeriodicExportingMetricReader(exporter)
+-resource = Resource(attributes={"service.name": "pulp-api"})
++resource = Resource(attributes={"service.name": "pulp-api", "worker.name": get_worker_name()})
+ provider = MeterProvider(metric_readers=[reader], resource=resource)
+ 
+ application = get_wsgi_application()
+ if os.getenv("PULP_OTEL_ENABLED", "").lower() == "true":
+     application = OpenTelemetryMiddleware(application, meter_provider=provider)
+-
+-# Disabling Storage metrics until we find a solution to resource usage.
+-# https://github.com/pulp/pulpcore/issues/5468
+-# from pulpcore.app.util import init_domain_metrics_exporter  # noqa: E402
+-
+-# init_domain_metrics_exporter()
+-- 
+2.46.2
+
