@@ -115,6 +115,9 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
+COPY images/assets/patches/0001-Add-the-the-worker-name-to-all-metric-data-points.patch /tmp/0001-Add-the-the-worker-name-to-all-metric-data-points.patch
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0001-Add-the-the-worker-name-to-all-metric-data-points.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
