@@ -1,0 +1,53 @@
+diff --git a/pulpcore/content/__init__.py b/pulpcore/content/__init__.py
+index b07a51cad..c2ab9e35a 100644
+--- a/pulpcore/content/__init__.py
++++ b/pulpcore/content/__init__.py
+@@ -1,14 +1,14 @@
+ import asyncio
++import copy
+ from contextlib import suppress
+ from importlib import import_module
+ import logging
+ import os
+-import socket
+ 
+ from asgiref.sync import sync_to_async
+ from aiohttp import web
+ 
+-from opentelemetry.instrumentation.aiohttp_server import middleware as instrumentation
++from opentelemetry.instrumentation import aiohttp_server
+ 
+ import django
+ 
+@@ -30,9 +30,30 @@ from .handler import Handler  # noqa: E402: module level not at top of file
+ from .authentication import authenticate  # noqa: E402: module level not at top of file
+ 
+ 
++parse_duration_attrs = copy.deepcopy(aiohttp_server._parse_duration_attrs)
++parse_active_requests_count_attrs = copy.deepcopy(aiohttp_server._parse_active_request_count_attrs)
++
++
++def _get_duration_attrs_with_worker_name(req_attrs):
++    attrs = parse_duration_attrs(req_attrs)
++    attrs["worker.name"] = get_worker_name()
++    attrs["service.name"] = "pulp-content"
++    return attrs
++
++
++def _get_active_requests_count_attrs_with_worker_name(req_attrs):
++    attrs = parse_active_requests_count_attrs(req_attrs)
++    attrs["worker.name"] = get_worker_name()
++    attrs["service.name"] = "pulp-content"
++    return attrs
++
++
++aiohttp_server._parse_duration_attrs = _get_duration_attrs_with_worker_name
++aiohttp_server._parse_active_request_count_attrs = _get_active_requests_count_attrs_with_worker_name
++
+ log = logging.getLogger(__name__)
+ 
+-app = web.Application(middlewares=[authenticate, instrumentation])
++app = web.Application(middlewares=[authenticate, aiohttp_server.middleware])
+ 
+ CONTENT_MODULE_NAME = "content"
+

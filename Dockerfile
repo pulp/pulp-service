@@ -118,6 +118,9 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 COPY images/assets/patches/0001-Add-the-the-worker-name-to-all-metric-data-points.patch /tmp/0001-Add-the-the-worker-name-to-all-metric-data-points.patch
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0001-Add-the-the-worker-name-to-all-metric-data-points.patch
 
+COPY images/assets/patches/0002-Add-the-the-worker-name-to-content-middleware.patch /tmp/0002-Add-the-the-worker-name-to-content-middleware.patch
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0002-Add-the-the-worker-name-to-content-middleware.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
