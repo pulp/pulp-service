@@ -121,6 +121,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0002-Add-the-the-worker-name-to-content-middleware.patch /tmp/0002-Add-the-the-worker-name-to-content-middleware.patch
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0002-Add-the-the-worker-name-to-content-middleware.patch
 
+COPY images/assets/patches/0003-Add-the-status-code-to-aiohttp-otel-middleware.patch /tmp/0002-Add-the-status-code-to-aiohttp-otel-middleware.patch
+RUN patch -p0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0002-Add-the-status-code-to-aiohttp-otel-middleware.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

@@ -1,0 +1,13 @@
+--- opentelemetry/instrumentation/aiohttp_server/__init__.py	2024-10-15 15:37:19.748284328 +0200
++++ opentelemetry/instrumentation/aiohttp_server/__init__.py	2024-10-15 15:37:29.126508902 +0200
+@@ -229,8 +229,10 @@
+         try:
+             resp = await handler(request)
+             set_status_code(span, resp.status)
++            duration_attrs.update({SpanAttributes.HTTP_STATUS_CODE: resp.status})
+         except web.HTTPException as ex:
+             set_status_code(span, ex.status_code)
++            duration_attrs.update({SpanAttributes.HTTP_STATUS_CODE: ex.status_code})
+             raise
+         finally:
+             duration = max((default_timer() - start) * 1000, 0)
