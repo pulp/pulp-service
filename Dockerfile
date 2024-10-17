@@ -124,6 +124,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0003-Add-the-status-code-to-aiohttp-otel-middleware.patch /tmp/0002-Add-the-status-code-to-aiohttp-otel-middleware.patch
 RUN patch -p0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0002-Add-the-status-code-to-aiohttp-otel-middleware.patch
 
+COPY images/assets/patches/0004-Add-the-file-extension-to-served-artifact-size-metric.patch /tmp/0004-Add-the-file-extension-to-served-artifact-size-metric.patch
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0004-Add-the-file-extension-to-served-artifact-size-metric.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
