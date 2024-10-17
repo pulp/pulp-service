@@ -1,0 +1,31 @@
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 0163d1f44..a161e6386 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -356,7 +356,8 @@ class AsyncContentCache(AsyncCache):
+                 )
+ 
+             if size := response.headers.get("X-PULP-ARTIFACT-SIZE"):
+-                artifacts_size_counter.add(size)
++                file_type = request.rel_url.suffix
++                artifacts_size_counter.add(size, file_type=file_type)
+ 
+             return response
+ 
+diff --git a/pulpcore/metrics.py b/pulpcore/metrics.py
+index caea4f068..4df8b530c 100644
+--- a/pulpcore/metrics.py
++++ b/pulpcore/metrics.py
+@@ -12,10 +12,11 @@ class ArtifactsSizeCounter(MetricsEmitter):
+             description="Counts the size of served artifacts",
+         )
+ 
+-    def add(self, amount):
++    def add(self, amount, **kwargs):
+         attributes = {
+             "domain_name": get_domain().name,
+             "worker_process": get_worker_name(),
++            **kwargs,
+         }
+         self.counter.add(int(amount), attributes)
+
