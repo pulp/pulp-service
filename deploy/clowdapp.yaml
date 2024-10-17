@@ -413,7 +413,7 @@ objects:
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: [ 'pulpcore-worker' ]
+        command: [ '/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-worker', 'pulpcore-worker' ]
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
