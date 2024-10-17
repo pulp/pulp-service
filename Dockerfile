@@ -1,5 +1,6 @@
 FROM registry.access.redhat.com/ubi9/ubi
 ARG PYTHON_VERSION=3.9
+ARG PYPY_VERSION="pypy3.10-v7.3.17-linux64"
 
 ENV PYTHONUNBUFFERED=0
 ENV DJANGO_SETTINGS_MODULE=pulpcore.app.settings
@@ -50,10 +51,15 @@ RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography 
     dnf -y install ninja-build && \
     dnf -y install ostree-libs ostree --allowerasing --nobest && \
     dnf -y install patch && \
-    dnf -y install zstd
+    dnf -y install zstd && \
+    dnf -y install bzip2
 RUN dnf clean all
 
-RUN python${PYTHON_VERSION} -m venv --system-site-packages /usr/local/lib/pulp
+RUN curl -L -o /tmp/${PYPY_VERSION}.tar.bz2 https://downloads.python.org/pypy/${PYPY_VERSION}.tar.bz2 && \
+    tar -xjf /tmp/${PYPY_VERSION}.tar.bz2 -C /opt && \
+    rm /tmp/${PYPY_VERSION}.tar.bz2
+
+RUN /opt/${PYPY_VERSION}/bin/pypy -m venv --system-site-packages /usr/local/lib/pulp
 
 ENV PATH="/usr/local/lib/pulp/bin:${PATH}"
 
