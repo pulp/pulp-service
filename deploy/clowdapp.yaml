@@ -312,6 +312,8 @@ objects:
             value: ${PULP_STATIC_URL}
           - name: PULP_MIDDLEWARE
             value: ${PULP_MIDDLEWARE}
+          - name: PULP_PYPI_API_HOSTNAME
+            value: ${{PULP_PYPI_API_HOSTNAME}}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -831,3 +833,6 @@ parameters:
   - name: PULP_MIDDLEWARE
     description: List of Middleware
     value: "@merge pulp_service.app.middleware.ProfilerMiddleware"
+  - name: PULP_PYPI_API_HOSTNAME
+    description: The hostname used to form the distribution's `base_url`.
+    value: "http://pulp-content:8000"
