@@ -857,7 +857,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "pulp_space_usage_bytes",
+              "expr": "sum by (domain_name) (pulp_space_usage_bytes)",
               "legendFormat": "{{domain_name}}",
               "range": true,
               "refId": "A"
