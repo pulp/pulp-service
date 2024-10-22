@@ -130,6 +130,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch
 
+COPY images/assets/patches/0006-Add-the-http-target-to-pulp-api-instrumentation.patch /tmp/0006-Add-the-http-target-to-pulp-api-instrumentation.patch
+RUN patch -p0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0006-Add-the-http-target-to-pulp-api-instrumentation.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
