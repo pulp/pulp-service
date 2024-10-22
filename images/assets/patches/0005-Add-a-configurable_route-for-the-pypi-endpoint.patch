@@ -1,0 +1,42 @@
+From 642d17259712bd90f2aa8d503be9492814b646f2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Tue, 22 Oct 2024 14:00:41 -0300
+Subject: [PATCH] Add a configurable_route for the pypi endpoint
+
+---
+ pulp_python/app/settings.py | 2 ++
+ pulp_python/app/urls.py     | 4 ++--
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/pulp_python/app/settings.py b/pulp_python/app/settings.py
+index 7084ef1..97fd047 100644
+--- a/pulp_python/app/settings.py
++++ b/pulp_python/app/settings.py
+@@ -3,6 +3,8 @@ import socket
+ PYTHON_GROUP_UPLOADS = False
+ PYPI_API_HOSTNAME = 'https://' + socket.getfqdn()
+ 
++PYPI_API_URL = "api/pulp/pypi/<slug:pulp_domain>/<path:path>/"
++
+ DRF_ACCESS_POLICY = {
+     "dynaconf_merge_unique": True,
+     "reusable_conditions": ["pulp_python.app.global_access_conditions"],
+diff --git a/pulp_python/app/urls.py b/pulp_python/app/urls.py
+index 0a78633..64ab5bf 100644
+--- a/pulp_python/app/urls.py
++++ b/pulp_python/app/urls.py
+@@ -4,9 +4,9 @@ from django.urls import path
+ from pulp_python.app.pypi.views import SimpleView, MetadataView, PyPIView, UploadView
+ 
+ if settings.DOMAIN_ENABLED:
+-    PYPI_API_URL = "pypi/<slug:pulp_domain>/<path:path>/"
++    PYPI_API_URL = getattr(settings, "PYPI_API_URL", "pypi/<slug:pulp_domain>/<path:path>/")
+ else:
+-    PYPI_API_URL = "pypi/<path:path>/"
++    PYPI_API_URL = getattr(settings, "PYPI_API_URL", "pypi/<path:path>/")
+ # TODO: Implement remaining PyPI endpoints
+ # path("project/", PackageProject.as_view()), # Endpoints to nicely see contents of index
+ # path("search/", PackageSearch.as_view()),
+-- 
+2.47.0
+
