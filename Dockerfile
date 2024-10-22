@@ -127,6 +127,9 @@ RUN patch -p0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0004-Add-the-file-extension-to-served-artifact-size-metric.patch /tmp/0004-Add-the-file-extension-to-served-artifact-size-metric.patch
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0004-Add-the-file-extension-to-served-artifact-size-metric.patch
 
+COPY images/assets/patches/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
