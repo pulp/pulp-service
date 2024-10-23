@@ -1,14 +1,15 @@
 --- opentelemetry/instrumentation/wsgi/__init__.py	2024-10-22 15:07:27.828757765 +0200
 +++ opentelemetry/instrumentation/wsgi/__init__.py	2024-10-22 15:07:39.417039530 +0200
-@@ -207,6 +207,7 @@
+@@ -207,6 +207,8 @@
  ---
  """
  
 +import re
++import urllib.parse
  import functools
  import typing
  import wsgiref.util as wsgiref_util
-@@ -266,6 +267,10 @@
+@@ -266,6 +268,10 @@
  _CARRIER_KEY_PREFIX = "HTTP_"
  _CARRIER_KEY_PREFIX_LEN = len(_CARRIER_KEY_PREFIX)
  
@@ -19,12 +20,13 @@
  
  class WSGIGetter(Getter[dict]):
      def get(
-@@ -350,7 +355,9 @@
+@@ -350,7 +356,10 @@
          target = environ.get("REQUEST_URI")
      if target:
          path, query = _parse_url_query(target)
 -        _set_http_target(result, target, path, query, sem_conv_opt_in_mode)
-+        new_path = domain_pattern.sub(r"pulp/{domain}/api/v3/", path)
++        unquoted_path = urllib.parse.unquote(path)
++        new_path = domain_pattern.sub(r"pulp/{domain}/api/v3/", unquoted_path)
 +        new_path = uuid_pattern.sub("{uuid}", new_path)
 +        _set_http_target(result, new_path, path, query, sem_conv_opt_in_mode)
      else:
