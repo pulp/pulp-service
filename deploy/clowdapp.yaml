@@ -200,8 +200,8 @@ objects:
           apiPath: pulp
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
-        # command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        # command: ['/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'http://pulp-otel-collector:10000', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
+        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -881,7 +881,7 @@ parameters:
     value: "/api/pulp/assets/"
   - name: PULP_MIDDLEWARE
     description: List of Middleware
-    value: "@merge pulp_service.app.middleware.ProfilerMiddleware"
+    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.DjangoMetricsMiddleware']"
   - name: PULP_PYPI_API_HOSTNAME
     description: The hostname used to form the distribution's `base_url`.
     value: "http://pulp-content:8000"
