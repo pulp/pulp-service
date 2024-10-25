@@ -314,6 +314,8 @@ objects:
             value: ${PULP_MIDDLEWARE}
           - name: PULP_PYPI_API_HOSTNAME
             value: ${{PULP_PYPI_API_HOSTNAME}}
+          - name: PULP_USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN
+            value: "true"
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}

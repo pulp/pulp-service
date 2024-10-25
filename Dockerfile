@@ -133,6 +133,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0006-Add-the-http-target-to-pulp-api-instrumentation.patch /tmp/0006-Add-the-http-target-to-pulp-api-instrumentation.patch
 RUN patch -p0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0006-Add-the-http-target-to-pulp-api-instrumentation.patch
 
+COPY images/assets/patches/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

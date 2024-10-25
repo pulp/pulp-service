@@ -1,0 +1,40 @@
+From f53b6ed31e097b204d7b267409967247cfb96c13 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Wed, 23 Oct 2024 16:02:05 -0300
+Subject: [PATCH 2/2] Add a new setting to use a different BASE_CONTENT_URL
+
+---
+ pulp_python/app/pypi/views.py | 3 +++
+ pulp_python/app/settings.py   | 2 ++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/pulp_python/app/pypi/views.py b/pulp_python/app/pypi/views.py
+index 60b3c04..49b1558 100644
+--- a/pulp_python/app/pypi/views.py
++++ b/pulp_python/app/pypi/views.py
+@@ -53,6 +53,9 @@ log = logging.getLogger(__name__)
+ 
+ BASE_CONTENT_URL = urljoin(settings.CONTENT_ORIGIN, settings.CONTENT_PATH_PREFIX)
+ 
++if settings.USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN:
++    BASE_CONTENT_URL = urljoin(settings.PYPI_API_HOSTNAME, settings.CONTENT_PATH_PREFIX)
++
+ 
+ class PyPIMixin:
+     """Mixin to get index specific info."""
+diff --git a/pulp_python/app/settings.py b/pulp_python/app/settings.py
+index 97fd047..e3d40a5 100644
+--- a/pulp_python/app/settings.py
++++ b/pulp_python/app/settings.py
+@@ -5,6 +5,8 @@ PYPI_API_HOSTNAME = 'https://' + socket.getfqdn()
+ 
+ PYPI_API_URL = "api/pulp/pypi/<slug:pulp_domain>/<path:path>/"
+ 
++USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN = False
++
+ DRF_ACCESS_POLICY = {
+     "dynaconf_merge_unique": True,
+     "reusable_conditions": ["pulp_python.app.global_access_conditions"],
+-- 
+2.47.0
+
