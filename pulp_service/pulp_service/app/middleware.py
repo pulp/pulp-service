@@ -20,8 +20,11 @@ from django.utils.deprecation import MiddlewareMixin
 from pulpcore.app.models import Artifact
 from pulpcore.app.util import get_artifact_url, get_worker_name
 
+from pulp_service.app.util import normalize_status
+
 
 _logger = logging.getLogger(__name__)
+
 
 class ProfilerMiddleware(MiddlewareMixin):
     """
@@ -76,10 +79,10 @@ class DjangoMetricsMiddleware:
         provider = MeterProvider(metric_readers=[reader], resource=resource)
 
         set_meter_provider(provider)
-        meter = metrics.get_meter("pulp.custom_metrics")
+        meter = metrics.get_meter("pulp.metrics")
 
         self.request_duration_histogram = meter.create_histogram(
-            name="http.server.custom.request_duration",
+            name="api.request_duration",
             description="Tracks the duration of HTTP requests",
             unit="ms"
         )
@@ -101,27 +104,13 @@ class DjangoMetricsMiddleware:
     def _process_attributes(self, request, response):
         return {
             "http.method": request.method,
-            "http.status_code": self.normalize_status(response.status_code),
+            "http.status_code": normalize_status(response.status_code),
             "http.target": self._process_path(request, response),
             "worker.name": get_worker_name(),
         }
 
     @staticmethod
-    def normalize_status(status):
-        if 100 <= status < 200:
-            return "1xx"
-        elif 200 <= status < 300:
-            return "2xx"
-        elif 300 <= status < 400:
-            return "3xx"
-        elif 400 <= status < 500:
-            return "4xx"
-        elif 500 <= status < 600:
-            return "5xx"
-        else:
-            return ""
-
-    def _process_path(self, request, response):
+    def _process_path(request, response):
         # to prevent cardinality explosion, do not record invalid paths
         if response.status_code > 400:
             return ""
