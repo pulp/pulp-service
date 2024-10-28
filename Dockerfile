@@ -115,23 +115,8 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
-COPY images/assets/patches/0001-Add-the-the-worker-name-to-all-metric-data-points.patch /tmp/0001-Add-the-the-worker-name-to-all-metric-data-points.patch
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0001-Add-the-the-worker-name-to-all-metric-data-points.patch
-
-COPY images/assets/patches/0002-Add-the-the-worker-name-to-content-middleware.patch /tmp/0002-Add-the-the-worker-name-to-content-middleware.patch
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0002-Add-the-the-worker-name-to-content-middleware.patch
-
-COPY images/assets/patches/0003-Add-the-status-code-to-aiohttp-otel-middleware.patch /tmp/0002-Add-the-status-code-to-aiohttp-otel-middleware.patch
-RUN patch -p0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0002-Add-the-status-code-to-aiohttp-otel-middleware.patch
-
-COPY images/assets/patches/0004-Add-the-file-extension-to-served-artifact-size-metric.patch /tmp/0004-Add-the-file-extension-to-served-artifact-size-metric.patch
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0004-Add-the-file-extension-to-served-artifact-size-metric.patch
-
 COPY images/assets/patches/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch
-
-COPY images/assets/patches/0006-Add-the-http-target-to-pulp-api-instrumentation.patch /tmp/0006-Add-the-http-target-to-pulp-api-instrumentation.patch
-RUN patch -p0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0006-Add-the-http-target-to-pulp-api-instrumentation.patch
 
 COPY images/assets/patches/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch
