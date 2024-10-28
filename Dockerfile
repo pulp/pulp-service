@@ -139,6 +139,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0008-Add-a-log-to-the-task-metrics-call.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0008-Add-a-log-to-the-task-metrics-call.patch
 
+COPY images/assets/patches/0009-Exclude-tasks-that-were-completed-failed-or-cancelle.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0009-Exclude-tasks-that-were-completed-failed-or-cancelle.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

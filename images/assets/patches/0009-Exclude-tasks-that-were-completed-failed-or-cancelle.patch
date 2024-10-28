@@ -1,0 +1,34 @@
+From ff2bfce9a0f4ea25b02f38d3c9c2511a73277dc4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Fri, 25 Oct 2024 18:23:55 -0300
+Subject: [PATCH] Exclude tasks that were completed, failed or cancelled from
+ task metrics.
+
+---
+ pulpcore/tasking/worker.py | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
+index 45a8b4632..52e0aaf74 100644
+--- a/pulpcore/tasking/worker.py
++++ b/pulpcore/tasking/worker.py
+@@ -21,6 +21,7 @@ from django.utils import timezone
+ from pulpcore.constants import (
+     TASK_STATES,
+     TASK_INCOMPLETE_STATES,
++    TASK_FINAL_STATES,
+     TASK_SCHEDULING_LOCK,
+     TASK_UNBLOCKING_LOCK,
+     TASK_METRICS_HEARTBEAT_LOCK,
+@@ -480,7 +481,7 @@ class PulpcoreWorker:
+             ):
+                 # For performance reasons we aggregate these statistics on a single database call.
+                 unblocked_tasks_stats = (
+-                    Task.objects.filter(unblocked_at__isnull=False, started_at__isnull=True)
++                    Task.objects.filter(unblocked_at__isnull=False, started_at__isnull=True).exclude(state__in=TASK_FINAL_STATES)
+                     .annotate(unblocked_for=Value(timezone.now()) - F("unblocked_at"))
+                     .aggregate(
+                         longest_unblocked_waiting_time=Max(
+-- 
+2.47.0
+
