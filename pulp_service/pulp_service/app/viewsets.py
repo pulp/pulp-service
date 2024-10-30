@@ -4,6 +4,12 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pulpcore.app.publication import ContentGuardViewSet
+from pulpcore.app.viewsets import RolesMixin
+
+from pulp_service.app.models import FeatureContentGuard
+from pulp_service.app.serializers import FeatureContentGuardSerializer
+    
 
 class RedirectCheck(APIView):
     """
@@ -54,3 +60,73 @@ class InternalServerErrorCheckWithException(APIView):
         """
         # the drf APIException returns a HTTP_500_INTERNAL_SERVER_ERROR
         raise APIException()
+
+
+class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
+    """
+    Content guard to protect the content guarded by Subscription Features.
+    """
+
+    endpoint_name = "feature"
+    queryset = FeatureContentGuard.objects.all()
+    serializer_class = FeatureContentGuardSerializer
+    queryset_filtering_required_permission = "core.view_featurecontentguard"
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {
+                "action": ["list"],
+                "principal": "authenticated",
+                "effect": "allow",
+            },
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_perms:core.add_featurecontentguard",
+            },
+            {
+                "action": ["retrieve", "my_permissions"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:core.view_featurecontentguard",
+            },
+            {
+                "action": ["update", "partial_update"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": ("has_model_or_domain_or_obj_perms:core.change_featurecontentguard"),
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": ("has_model_or_domain_or_obj_perms:core.delete_featurecontentguard"),
+            },
+            {
+                "action": ["list_roles", "add_role", "remove_role"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": (
+                    "has_model_or_domain_or_obj_perms:core.manage_roles_featurecontentguard"
+                ),
+            },
+        ],
+        "creation_hooks": [
+            {
+                "function": "add_roles_for_object_creator",
+                "parameters": {"roles": ["core.featurecontentguard_owner"]},
+            },
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
+    LOCKED_ROLES = {
+        "core.featurecontentguard_creator": ["core.add_featurecontentguard"],
+        "core.featurecontentguard_owner": [
+            "core.view_featurecontentguard",
+            "core.change_featurecontentguard",
+            "core.delete_featurecontentguard",
+            "core.manage_roles_featurecontentguard",
+        ],
+        "core.featurecontentguard_viewer": ["core.view_featurecontentguard"],
+    }
