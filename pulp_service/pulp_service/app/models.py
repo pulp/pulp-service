@@ -2,9 +2,11 @@ import json
 import logging
 
 import jq
+import requests
 
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
+from hashlib import sha256
 from gettext import gettext as _
 
 from django.conf import settings
@@ -13,7 +15,7 @@ from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
 from pulpcore.plugin.models import Domain
-from pulpcore.app.models import AutoAddObjPermsMixin, ContentGuard
+from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard
 from pulpcore.cache import Cache
 
 _logger = logging.getLogger(__name__)
@@ -35,8 +37,16 @@ class FeatureContentGuardCache(Cache):
     default_expires_ttl = 86400  # They key expires in one day.
 
 
-class FeatureContentGuard(ContentGuard, AutoAddObjPermsMixin):
+class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
     features = ArrayField(models.TextField())
+
+    def _check_for_feature(self, account_id):
+        account_id_query_param = f"accountId{account_id}"
+        features_query_param = "&".join(f"features={feature}" for feature in self.features)
+        request = requests.get(f"{settings.SUBSCRIPTION_API_URL}?{account_id_query_param}&{features_query_param}", cert=settings.SUBSCRIPTION_CERT_PATH)
+        response = request.json()
+        features_available = {feature["name"] for feature in response["features"] if feature["entitled"] is True}
+        return features_available == set(self.features)
 
     def permit(self, request):
         header_content = request.headers.get(self.header_name)
@@ -65,13 +75,17 @@ class FeatureContentGuard(ContentGuard, AutoAddObjPermsMixin):
             raise PermissionError(_("Access denied."))
 
         try:
+            cache_key = sha256(f"{header_value}{','.join(self.features)}")
             feature_cache = FeatureContentGuardCache()
-            feature_cache.get()
-        except:
-            pass
+            account_allowed = feature_cache.get(cache_key)
 
-        if header_value != self.header_value:
-            _logger.debug("Access not allowed - Wrong header value.")
+            if not account_allowed:
+                account_allowed = self._check_for_feature(header_value)
+                account_allowed.raise_for_status()
+        except requests.HTTPError:
+            raise PermissionError(_("Access denied."))
+
+        if not account_allowed:
             raise PermissionError(_("Access denied."))
 
         return

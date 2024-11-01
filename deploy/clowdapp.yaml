@@ -332,6 +332,9 @@ objects:
           - name: pulp-settings
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
+          - name: subscription-api-cert
+            mountPath: "/var/certs/pulp_nonprod_cert.pem"
+            subPath: "pulp_nonprod_cert.pem"
         volumes:
           - name: secret-volume
             secret:
@@ -339,6 +342,9 @@ objects:
           - name: pulp-settings
             secret:
               secretName: pulp-settings
+          - name: subscription-api-cert
+            secret:
+                secretName: subscription-api-cert
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
