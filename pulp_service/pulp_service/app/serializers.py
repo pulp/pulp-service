@@ -12,7 +12,7 @@ class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerialize
     """
 
     features = serializers.ListField(
-        child=serializers.TextField(),
+        child=serializers.CharField(),
         help_text=_("The list of features required to access the content.")
     )
 

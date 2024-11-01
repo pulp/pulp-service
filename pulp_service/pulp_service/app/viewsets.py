@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from pulpcore.app.publication import ContentGuardViewSet
 from pulpcore.app.viewsets import RolesMixin
+from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin
 
 from pulp_service.app.models import FeatureContentGuard
 from pulp_service.app.serializers import FeatureContentGuardSerializer
