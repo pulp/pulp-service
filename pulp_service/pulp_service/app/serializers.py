@@ -18,4 +18,4 @@ class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerialize
 
     class Meta(ContentGuardSerializer.Meta):
         model = FeatureContentGuard
-        fields = ContentGuardSerializer.Meta.fields + ("features")
+        fields = ContentGuardSerializer.Meta.fields + ("header_name", "header_value", "jq_filter", "features")
