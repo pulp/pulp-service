@@ -324,7 +324,7 @@ objects:
           apiPath: pulp-content
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-']
+        command: ['pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-', '--access-logformat', '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" "%{X-PULP-CACHE}o" "%{X-PULP-ARTIFACT-SIZE}o"']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
