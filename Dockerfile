@@ -126,6 +126,12 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0001-Change-how-we-filter-for-unblocked-tasks.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0001-Change-how-we-filter-for-unblocked-tasks.patch
 
+COPY images/assets/patches/0010-Added-ability-to-return-a-URL-for-a-blob.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0010-Added-ability-to-return-a-URL-for-a-blob.patch
+
+COPY images/assets/patches/0011-ocistorage-backend-changes.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0011-ocistorage-backend-changes.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
