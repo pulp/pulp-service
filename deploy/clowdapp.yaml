@@ -97,6 +97,9 @@ objects:
       openssl rand -base64 32 | tr -d '\n' > /tmp/password
       kubectl create secret generic pulp-content-sources-password --from-file /tmp/password
 
+      openssl rand -base64 32 > /tmp/subscription-api-cert.key
+      kubectl create secret generic subscription-api-cert --from-file /tmp/subscription-api-cert.key
+
       # Create settings.py
       cat <<EOF > /tmp/settings.py
       # Auto-generated settings file
