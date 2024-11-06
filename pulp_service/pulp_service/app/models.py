@@ -1,8 +1,10 @@
+import asyncio
 import json
 import logging
+import ssl
 
+import aiohttp
 import jq
-import requests
 
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
@@ -25,10 +27,16 @@ class DomainOrg(models.Model):
     """
     One-to-many relationship between org ids and Domains.
     """
+
     org_id = models.CharField(null=True, db_index=True)
-    domain = models.OneToOneField(Domain, related_name="domains", on_delete=models.CASCADE)
+    domain = models.OneToOneField(
+        Domain, related_name="domains", on_delete=models.CASCADE
+    )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, related_name="users", on_delete=models.CASCADE, null=True
+        settings.AUTH_USER_MODEL,
+        related_name="users",
+        on_delete=models.CASCADE,
+        null=True,
     )
 
 
@@ -41,11 +49,36 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
     features = ArrayField(models.TextField())
 
     def _check_for_feature(self, account_id):
+        SUBSCRIPTION_CERT = os.getenv("SUBSCRIPTION_CERT")
+        cert_context = ssl.create_default_context()
+        cert_context.load_verify_locations(cadata=SUBSCRIPTION_CERT)
+
         account_id_query_param = f"accountId{account_id}"
-        features_query_param = "&".join(f"features={feature}" for feature in self.features)
-        request = requests.get(f"{settings.SUBSCRIPTION_API_URL}?{account_id_query_param}&{features_query_param}", cert=settings.SUBSCRIPTION_CERT_PATH)
-        response = request.json()
-        features_available = {feature["name"] for feature in response["features"] if feature["entitled"] is True}
+        features_query_param = "&".join(
+            f"features={feature}" for feature in self.features
+        )
+        subscription_api_url = f"{settings.SUBSCRIPTION_API_URL}?{account_id_query_param}&{features_query_param}"
+
+        async def fetch_feature():
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    subscription_api_url, cert=cert_context, raise_for_status=True
+                ) as response:
+                    return await response.json()
+
+        try:
+            features = asyncio.run(fetch_feature())
+        except aiohttp.ClientError as err:
+            _logger.err(
+                _("Failed to fetch the Subscription feature information for a user.")
+            )
+            raise PermissionError(_("Access denied."))
+
+        features_available = {
+            feature["name"]
+            for feature in response["features"]
+            if feature["entitled"] is True
+        }
         return features_available == set(self.features)
 
     def permit(self, request):
@@ -82,6 +115,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             if not account_allowed:
                 account_allowed = self._check_for_feature(header_value)
                 account_allowed.raise_for_status()
+                feature_cache.set(cache_key, account_allowed)
         except requests.HTTPError:
             raise PermissionError(_("Access denied."))
 

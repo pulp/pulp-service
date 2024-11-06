@@ -335,9 +335,6 @@ objects:
           - name: pulp-settings
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
-          - name: subscription-api-cert
-            mountPath: "/var/certs/pulp_nonprod_cert.pem"
-            subPath: "pulp_nonprod_cert.pem"
         volumes:
           - name: secret-volume
             secret:
@@ -345,9 +342,6 @@ objects:
           - name: pulp-settings
             secret:
               secretName: pulp-settings
-          - name: subscription-api-cert
-            secret:
-                secretName: subscription-api-cert
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -425,6 +419,11 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
+          - name: PULP_SUBSCRIPTION_API_CERT
+            valueFrom:
+              secretKeyRef:
+                name: subscription-api-cert
+                optional: true
 
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
