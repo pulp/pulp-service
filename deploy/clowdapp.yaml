@@ -246,6 +246,8 @@ objects:
             cpu: ${{PULP_API_CPU_LIMIT}}
             memory: ${{PULP_API_MEMORY_LIMIT}}
         env:
+          - name: PULP_OTEL_ENABLED
+            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -368,6 +370,8 @@ objects:
             cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
         env:
+          - name: PULP_OTEL_ENABLED
+            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -450,6 +454,8 @@ objects:
             cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
         env:
+          - name: PULP_OTEL_ENABLED
+            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
