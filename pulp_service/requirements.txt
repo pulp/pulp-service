@@ -1,8 +1,8 @@
-pulpcore==3.66.0
-pulp-rpm==3.27.1
+pulpcore==3.67.0
+pulp-rpm==3.27.2
 pulp-gem==0.6.1
 pulp-ostree==2.4.3
-pulp-python==3.12.3
+pulp-python==3.12.5
 pulp-cli
 pulp-cli-gem
 sentry-sdk

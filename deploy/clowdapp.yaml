@@ -116,6 +116,7 @@ objects:
           'OPTIONS': { 'sslmode': 'disable' },
         }
       }
+      OTEL_ENABLED = True
       CACHE_ENABLED = True
       REDIS_HOST =  "$(cat /cdapp/cdappconfig.json | jq -r '.inMemoryDb.hostname')"
       REDIS_PORT =  "$(cat /cdapp/cdappconfig.json | jq -r '.inMemoryDb.port')"
@@ -245,8 +246,6 @@ objects:
             cpu: ${{PULP_API_CPU_LIMIT}}
             memory: ${{PULP_API_MEMORY_LIMIT}}
         env:
-          - name: PULP_OTEL_ENABLED
-            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -369,8 +368,6 @@ objects:
             cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
         env:
-          - name: PULP_OTEL_ENABLED
-            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -416,7 +413,7 @@ objects:
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: [ '/usr/local/lib/pulp/bin/opentelemetry-instrument', '--service_name', 'pulp-worker', 'pulpcore-worker' ]
+        command: ['pulpcore-worker']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -453,8 +450,6 @@ objects:
             cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
         env:
-          - name: PULP_OTEL_ENABLED
-            value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -833,7 +828,7 @@ parameters:
     value: "/api/pulp/assets/"
   - name: PULP_MIDDLEWARE
     description: List of Middleware
-    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.DjangoMetricsMiddleware']"
+    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware']"
   - name: PULP_PYPI_API_HOSTNAME
     description: The hostname used to form the distribution's `base_url`.
     value: "http://pulp-content:8000"
