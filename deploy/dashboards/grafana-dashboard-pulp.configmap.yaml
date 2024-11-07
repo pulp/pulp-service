@@ -1042,6 +1042,155 @@ data:
             "type": "cloudwatch",
             "uid": "P1A97A9592CB7F392"
           },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 0,
+            "y": 41
+          },
+          "id": 27,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like \"var.log.pods.pulp-stage_pulp-content\" | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m)",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "accountId": "744086762512",
+                  "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*",
+                  "name": "crcs02ue1.pulp-stage"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like \"var.log.pods.pulp-stage_pulp-content\" | filter @message like \".xml\" | stats count(*) as xml by bin(5m)",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "accountId": "744086762512",
+                  "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*",
+                  "name": "crcs02ue1.pulp-stage"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "B",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            }
+          ],
+          "title": "Number of XML/RPM Requests",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "description": "",
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -1092,17 +1241,18 @@ data:
                     "value": 80
                   }
                 ]
-              }
+              },
+              "unit": "decbytes"
             },
             "overrides": []
           },
           "gridPos": {
             "h": 8,
-            "w": 12,
-            "x": 0,
+            "w": 10,
+            "x": 10,
             "y": 41
           },
-          "id": 27,
+          "id": 29,
           "options": {
             "legend": {
               "calcs": [],
@@ -1123,7 +1273,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like \"var.log.pods.pulp-stage_pulp-content\" | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m) | sort @timestamp desc\n",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like \"var.log.pods.pulp-stage_pulp-content\"\n| filter @message like \".rpm\"\n| parse @message 'HIT\\\" \\\"*\\\"' as rpm_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as rpm_size_miss\n| stats sum(coalesce(rpm_size_hit, 0) + coalesce(rpm_size_miss, 0)) as rpm by bin(5m)",
               "id": "",
               "label": "",
               "logGroups": [
@@ -1154,7 +1304,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like \"var.log.pods.pulp-stage_pulp-content\" | filter @message like \".xml\" | stats count(*) as xml by bin(5m) | sort @timestamp desc",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like \"var.log.pods.pulp-stage_pulp-content\"\n| filter @message like \".xml\"\n| parse @message 'HIT\\\" \\\"*\\\"' as xml_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as xml_size_miss\n| stats sum(coalesce(xml_size_hit, 0) + coalesce(xml_size_miss, 0)) as xml by bin(5m)",
               "hide": false,
               "id": "",
               "label": "",
@@ -1181,7 +1331,7 @@ data:
               ]
             }
           ],
-          "title": "Number of XML/RPM Requests",
+          "title": "Size of served XML/RPM Artifacts",
           "type": "timeseries"
         }
       ],
@@ -1218,6 +1368,6 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 3,
+      "version": 4,
       "weekStart": ""
     }
