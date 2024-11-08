@@ -1,0 +1,146 @@
+From 466e21de0f8332bfa9961518d64d86bf52bfcae2 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Thu, 7 Nov 2024 12:43:48 -0500
+Subject: [PATCH] Added ability to return a URL for a blob.
+
+---
+ oras/provider.py | 36 ++++++++++++++++++++++++++----------
+ 1 file changed, 26 insertions(+), 10 deletions(-)
+
+diff --git a/oras/provider.py b/oras/provider.py
+index 809ee12..a6a1e0b 100644
+--- a/oras/provider.py
++++ b/oras/provider.py
+@@ -401,6 +401,7 @@ class Registry:
+         digest: str,
+         stream: bool = False,
+         head: bool = False,
++        return_blob_url: bool = False,
+     ) -> requests.Response:
+         """
+         Retrieve a blob for a package.
+@@ -413,10 +414,12 @@ class Registry:
+         :type stream: bool
+         :param head: use head to determine if blob exists
+         :type head: bool
++        :param return_blob_url: return blob URL instead of the blob itself.
++        :type return_blob_url: bool
+         """
+         method = "GET" if not head else "HEAD"
+         blob_url = f"{self.prefix}://{container.get_blob_url(digest)}"  # type: ignore
+-        return self.do_request(blob_url, method, headers=self.headers, stream=stream)
++        return self.do_request(blob_url, method, headers=self.headers, stream=stream, allow_redirects=not return_blob_url)
+ 
+     def get_container(self, name: container_type) -> oras.container.Container:
+         """
+@@ -477,7 +480,7 @@ class Registry:
+ 
+     @decorator.ensure_container
+     def download_blob(
+-        self, container: container_type, digest: str, outfile: str
++        self, container: container_type, digest: str, outfile: str, return_blob_url: bool
+     ) -> str:
+         """
+         Stream download a blob into an output file.
+@@ -492,13 +495,15 @@ class Registry:
+             outdir = os.path.dirname(outfile)
+             if outdir and not os.path.exists(outdir):
+                 oras.utils.mkdir_p(outdir)
+-            with self.get_blob(container, digest, stream=True) as r:
++            with self.get_blob(container, digest, stream=True, return_blob_url=return_blob_url) as r:
+                 r.raise_for_status()
+-                with open(outfile, "wb") as f:
+-                    for chunk in r.iter_content(chunk_size=8192):
+-                        if chunk:
+-                            f.write(chunk)
+-
++                if not return_blob_url:
++                    with open(outfile, "wb") as f:
++                        for chunk in r.iter_content(chunk_size=8192):
++                            if chunk:
++                                f.write(chunk)
++                else:
++                    return r
+         # Allow an empty layer to fail and return /dev/null
+         except Exception as e:
+             if digest == oras.defaults.blank_hash:
+@@ -851,6 +856,7 @@ class Registry:
+         allowed_media_type: Optional[List] = None,
+         overwrite: bool = True,
+         outdir: Optional[str] = None,
++        return_blob_url: bool = False,
+     ) -> List[str]:
+         """
+         Pull an artifact from a target
+@@ -867,6 +873,8 @@ class Registry:
+         :type outdir: str
+         :param target: target location to pull from
+         :type target: str
++        :param return_blob_url: If true, a URL for the blob is returned. If false the Blob is downloaded.
++        :type return_blob_url: bool
+         """
+         container = self.get_container(target)
+         self.auth.load_configs(
+@@ -898,14 +906,16 @@ class Registry:
+             # A directory will need to be uncompressed and moved
+             if layer["mediaType"] == oras.defaults.default_blob_dir_media_type:
+                 targz = oras.utils.get_tmpfile(suffix=".tar.gz")
+-                self.download_blob(container, layer["digest"], targz)
++                self.download_blob(container, layer["digest"], targz, return_blob_url)
+ 
+                 # The artifact will be extracted to the correct name
+                 oras.utils.extract_targz(targz, os.path.dirname(outfile))
+ 
+             # Anything else just extracted directly
+             else:
+-                self.download_blob(container, layer["digest"], outfile)
++                if return_blob_url:
++                    return self.download_blob(container, layer["digest"], outfile, return_blob_url)
++                self.download_blob(container, layer["digest"], outfile, return_blob_url)
+             logger.info(f"Successfully pulled {outfile}.")
+             files.append(outfile)
+         return files
+@@ -944,6 +954,7 @@ class Registry:
+         headers: Optional[dict] = None,
+         json: Optional[dict] = None,
+         stream: bool = False,
++        allow_redirects: bool = False,
+     ):
+         """
+         Do a request. This is a wrapper around requests to handle retry auth.
+@@ -960,6 +971,8 @@ class Registry:
+         :type json: dict
+         :param stream: stream the responses
+         :type stream: bool
++        :param allow_redirects: whether to follow the redirect or not
++        :type allow_redirects: bool
+         """
+         # Make the request and return to calling function, but attempt to use auth token if previously obtained
+         if headers is not None and isinstance(self.auth, oras.auth.TokenAuth):
+@@ -972,6 +985,7 @@ class Registry:
+             headers=headers,
+             stream=stream,
+             verify=self._tls_verify,
++            allow_redirects=allow_redirects,
+         )
+ 
+         # A 401 response is a request for authentication, 404 is not found
+@@ -990,6 +1004,7 @@ class Registry:
+             headers=headers,
+             stream=stream,
+             verify=self._tls_verify,
++            allow_redirects=allow_redirects,
+         )
+ 
+         # One retry if 403 denied (need new token?)
+@@ -1005,6 +1020,7 @@ class Registry:
+                 headers=headers,
+                 stream=stream,
+                 verify=self._tls_verify,
++                allow_redirects=allow_redirects,
+             )
+ 
+         return response
+-- 
+2.47.0
+
