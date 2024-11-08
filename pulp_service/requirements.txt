@@ -7,3 +7,4 @@ pulp-cli
 pulp-cli-gem
 sentry-sdk
 app-common-python
+oras==0.2.24

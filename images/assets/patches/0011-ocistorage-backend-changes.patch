@@ -1,0 +1,154 @@
+From c9911c643bfc0de08cdd27e7e1df97d785ba25e6 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Thu, 7 Nov 2024 15:39:12 -0500
+Subject: [PATCH] ocistorage backend changes
+
+---
+ pulpcore/app/serializers/domain.py | 11 +++++++++--
+ pulpcore/app/settings.py           |  1 +
+ pulpcore/constants.py              |  1 +
+ pulpcore/content/handler.py        |  7 +++++++
+ pulpcore/tasking/tasks.py          | 18 +++++++++++++++++-
+ 5 files changed, 35 insertions(+), 3 deletions(-)
+
+diff --git a/pulpcore/app/serializers/domain.py b/pulpcore/app/serializers/domain.py
+index 54a21b504..4e7d1e6e4 100644
+--- a/pulpcore/app/serializers/domain.py
++++ b/pulpcore/app/serializers/domain.py
+@@ -20,6 +20,7 @@ BACKEND_CHOICES = (
+     ("storages.backends.s3boto3.S3Boto3Storage", "Use Amazon S3 as storage"),
+     ("storages.backends.azure_storage.AzureStorage", "Use Azure Blob as storage"),
+     # ("storages.backends.gcloud.GoogleCloudStorage", "Use Google Cloud as storage"),
++    ("pulp_service.app.storage.OCIStorage", "Use OCI as storage"),
+ )
+ 
+ DEFAULT_CONTENT_TYPES = [
+@@ -80,6 +81,12 @@ class BaseSettingsClass(HiddenFieldsMixin, serializers.Serializer):
+         return storage_class(**validated_data)
+ 
+ 
++class OCIStorageSettingsSerializer(BaseSettingsClass):
++    STORAGE_CLASS = "pulp_service.app.storage.OCIStorage"
++    SETTING_MAPPING = {}
++
++
++
+ class FileSystemSettingsSerializer(BaseSettingsClass):
+     """A Serializer for FileSystem storage settings."""
+ 
+@@ -337,6 +344,7 @@ class StorageSettingsSerializer(serializers.Serializer):
+         "storages.backends.s3boto3.S3Boto3Storage": AmazonS3SettingsSerializer,
+         "storages.backends.azure_storage.AzureStorage": AzureSettingsSerializer,
+         "storages.backends.gcloud.GoogleCloudStorage": GoogleSettingsSerializer,
++        "pulp_service.app.storage.OCIStorage": OCIStorageSettingsSerializer,
+     }
+ 
+     def to_representation(self, instance):
+@@ -457,9 +465,8 @@ class DomainSerializer(BackendSettingsValidator, ModelSerializer):
+         # Validate for update gets called before ViewSet default check
+         if self.instance and self.instance.name == "default":
+             return data
+-
+         storage_class = data.get("storage_class") or self.instance.storage_class
+-        storage_settings = data.get("storage_settings") or self.instance.storage_settings
++        storage_settings = data.get("storage_settings") # or self.instance.storage_settings
+         self._validate_storage_backend(storage_class, storage_settings)
+ 
+         redirect = data.get("redirect_to_object_storage", True)
+diff --git a/pulpcore/constants.py b/pulpcore/constants.py
+index 91b6b37d3..0bc6b98b2 100644
+--- a/pulpcore/constants.py
++++ b/pulpcore/constants.py
+@@ -110,6 +110,7 @@ STORAGE_RESPONSE_MAP = {
+     "storages.backends.s3boto3.S3Boto3Storage": S3_RESPONSE_HEADER_MAP,
+     "storages.backends.azure_storage.AzureStorage": AZURE_RESPONSE_HEADER_MAP,
+     "storages.backends.gcloud.GoogleCloudStorage": GCS_RESPONSE_HEADER_MAP,
++    "pulp_service.app.storage.OCIStorage": S3_RESPONSE_HEADER_MAP,
+ }
+ 
+ # Message users receive when attempting to delete a protected repo version
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index 651af1bc5..f8254b761 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -23,6 +23,8 @@ import django
+ 
+ from pulpcore.constants import STORAGE_RESPONSE_MAP
+ from pulpcore.responses import ArtifactResponse
++from pulp_service.app.middleware import x_quay_auth_var
++
+ 
+ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
+ django.setup()
+@@ -257,6 +259,9 @@ class Handler:
+             [aiohttp.web.StreamResponse][] or [aiohttp.web.FileResponse][]: The response
+                 back to the client.
+         """
++        if 'Authorization' in request.headers:
++            x_quay_auth_var.set(request.headers['Authorization'])
++
+         path = request.match_info["path"]
+         return await self._match_and_stream(path, request)
+ 
+@@ -1010,6 +1015,8 @@ class Handler:
+             "storages.backends.gcloud.GoogleCloudStorage",
+         ):
+             raise HTTPFound(_build_url(), headers=headers)
++        elif domain.storage_class == "pulp_service.app.storage.OCIStorage":
++            raise HTTPFound(_build_url(http_method=request.method), headers=headers)
+         else:
+             raise NotImplementedError()
+ 
+diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
+index 2c5548696..bd9f814a1 100644
+--- a/pulpcore/tasking/tasks.py
++++ b/pulpcore/tasking/tasks.py
+@@ -13,7 +13,7 @@ from django.db.models import Model, Max
+ from django_guid import get_guid
+ from pulpcore.app.apps import MODULE_PLUGIN_VERSIONS
+ from pulpcore.app.models import Task, TaskGroup
+-from pulpcore.app.util import current_task, get_domain, get_prn
++from pulpcore.app.util import current_task, get_domain, get_prn, resolve_prn
+ from pulpcore.constants import (
+     TASK_FINAL_STATES,
+     TASK_INCOMPLETE_STATES,
+@@ -25,6 +25,8 @@ from pulpcore.tasking.kafka import send_task_notification
+ _logger = logging.getLogger(__name__)
+ 
+ 
++from pulp_service.app.middleware import repository_name_var, x_quay_auth_var
++
+ def _validate_and_get_resources(resources):
+     resource_set = set()
+     for r in resources:
+@@ -47,6 +49,11 @@ def wakeup_worker():
+ 
+ 
+ def execute_task(task):
++    if task.enc_kwargs:
++        repository_name = task.enc_kwargs.pop("quay_repository_name", None)
++        repository_name_var.set(repository_name)
++        x_quay_auth = task.enc_kwargs.pop("x_quay_auth", None)
++        x_quay_auth_var.set(x_quay_auth)
+     # This extra stack is needed to isolate the current_task ContextVar
+     contextvars.copy_context().run(_execute_task, task)
+ 
+@@ -138,6 +145,15 @@ def dispatch(
+         ValueError: When `resources` is an unsupported type.
+     """
+ 
++    if kwargs and 'data' in kwargs and 'repository' in kwargs['data']:
++        if kwargs['data']['repository'].startswith('prn:'):
++            m, pk = resolve_prn(kwargs['data']['repository'])
++            repository_name = m.objects.get(pk=pk).name
++            kwargs['quay_repository_name'] = repository_name
++    x_quay_auth = x_quay_auth_var.get(None)
++    if x_quay_auth:
++        kwargs['x_quay_auth'] = x_quay_auth
++
+     assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
+ 
+     if callable(func):
+-- 
+2.47.0
+
