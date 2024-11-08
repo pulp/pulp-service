@@ -834,7 +834,7 @@ parameters:
     value: "/api/pulp/assets/"
   - name: PULP_MIDDLEWARE
     description: List of Middleware
-    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware']"
+    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.OCIStorageMiddleware']"
   - name: PULP_PYPI_API_HOSTNAME
     description: The hostname used to form the distribution's `base_url`.
     value: "http://pulp-content:8000"
