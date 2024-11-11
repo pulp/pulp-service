@@ -17,20 +17,20 @@ class OCIStorage(BaseStorage):
 
         # Split the string to separate username and password
         username, password = credentials.split(":", 1)
-        return {"username": username, "password": password}
+        return {"username": username, "password": password, "config_path": "/tmp/.docker/config.json"}
     def _save(self, name, content):
         client = oras.client.OrasClient()
         client.login(**self.username_password)
         repository_name = repository_name_var.get("dkliban/testrepo")
         target = f"quay.io/{repository_name}:{content.name}"
-        client.push(files=[content.file.name], target=target, disable_path_validation=True)
+        client.push(files=[content.file.name], target=target, disable_path_validation=True, config_path="/tmp/.docker/config.json")
         return target
 
 
     def _open(self, name, mode='rb'):
         client = oras.client.OrasClient()
         client.login(**self.username_password)
-        res = client.pull(target=name)
+        res = client.pull(target=name, config_path="/tmp/.docker/config.json")
         return File(open(res[0], mode))
 
     def exists(self, name):
@@ -45,5 +45,5 @@ class OCIStorage(BaseStorage):
         client.login(**self.username_password)
 
         # Pull
-        res = client.pull(target=artifact_name, return_blob_url=True)
+        res = client.pull(target=artifact_name, return_blob_url=True, config_path="/tmp/.docker/config.json")
         return res.headers["Location"]
