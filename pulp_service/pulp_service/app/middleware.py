@@ -65,7 +65,7 @@ class ProfilerMiddleware(MiddlewareMixin):
 class OCIStorageMiddleware(MiddlewareMixin):
     def process_view(self, request, callback, callback_args, callback_kwargs):
         # Set the repository name in a contextvar
-        if 'repository' in request.POST:
+        if 'repository' in request.POST and request.POST['repository'].startswith('prn:'):
             m, pk = resolve_prn(request.POST['repository'])
             repository_name = m.objects.get(pk=pk).name
             repository_name_var.set(repository_name)
