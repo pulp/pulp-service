@@ -143,7 +143,7 @@ index 2c5548696..bd9f814a1 100644
 +            repository_name = m.objects.get(pk=pk).name
 +            kwargs['quay_repository_name'] = repository_name
 +    x_quay_auth = x_quay_auth_var.get(None)
-+    if x_quay_auth:
++    if x_quay_auth and kwargs:
 +        kwargs['x_quay_auth'] = x_quay_auth
 +
      assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
