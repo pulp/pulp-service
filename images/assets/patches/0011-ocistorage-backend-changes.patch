@@ -1,4 +1,4 @@
-From c9911c643bfc0de08cdd27e7e1df97d785ba25e6 Mon Sep 17 00:00:00 2001
+From 5b0d9434be5eb4c2244cf7ba5a4b04164eb84446 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Thu, 7 Nov 2024 15:39:12 -0500
 Subject: [PATCH] ocistorage backend changes
@@ -8,8 +8,8 @@ Subject: [PATCH] ocistorage backend changes
  pulpcore/app/settings.py           |  1 +
  pulpcore/constants.py              |  1 +
  pulpcore/content/handler.py        |  7 +++++++
- pulpcore/tasking/tasks.py          | 18 +++++++++++++++++-
- 5 files changed, 35 insertions(+), 3 deletions(-)
+ pulpcore/tasking/tasks.py          | 20 +++++++++++++++++++-
+ 5 files changed, 37 insertions(+), 3 deletions(-)
 
 diff --git a/pulpcore/app/serializers/domain.py b/pulpcore/app/serializers/domain.py
 index 54a21b504..4e7d1e6e4 100644
@@ -100,7 +100,7 @@ index 651af1bc5..f8254b761 100644
              raise NotImplementedError()
  
 diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
-index 2c5548696..bd9f814a1 100644
+index 2c5548696..0f7f18c1e 100644
 --- a/pulpcore/tasking/tasks.py
 +++ b/pulpcore/tasking/tasks.py
 @@ -13,7 +13,7 @@ from django.db.models import Model, Max
@@ -133,17 +133,19 @@ index 2c5548696..bd9f814a1 100644
      # This extra stack is needed to isolate the current_task ContextVar
      contextvars.copy_context().run(_execute_task, task)
  
-@@ -138,6 +145,15 @@ def dispatch(
+@@ -138,6 +145,17 @@ def dispatch(
          ValueError: When `resources` is an unsupported type.
      """
  
 +    if kwargs and 'data' in kwargs and 'repository' in kwargs['data']:
-+        if kwargs['data']['repository'].startswith('prn:'):
++        repository = kwargs['data']['repository']
++        if repository and repository.startswith('prn:'):
 +            m, pk = resolve_prn(kwargs['data']['repository'])
 +            repository_name = m.objects.get(pk=pk).name
 +            kwargs['quay_repository_name'] = repository_name
 +    x_quay_auth = x_quay_auth_var.get(None)
-+    if x_quay_auth and kwargs:
++    x_quay_auth_var.set(None)
++    if x_quay_auth:
 +        kwargs['x_quay_auth'] = x_quay_auth
 +
      assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
