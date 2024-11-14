@@ -680,7 +680,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-pulp-services-admin-users2
+    name: create-pulp-services-admin-user-hyagi
   spec:
     appName: pulp
     jobs:
