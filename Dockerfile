@@ -120,12 +120,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch
 
-COPY images/assets/patches/0008-Add-a-log-to-the-task-metrics-call.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0008-Add-a-log-to-the-task-metrics-call.patch
-
-COPY images/assets/patches/0001-Change-how-we-filter-for-unblocked-tasks.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0001-Change-how-we-filter-for-unblocked-tasks.patch
-
 COPY images/assets/patches/0010-Added-ability-to-return-a-URL-for-a-blob.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0010-Added-ability-to-return-a-URL-for-a-blob.patch
 
