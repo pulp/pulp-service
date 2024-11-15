@@ -71,4 +71,3 @@ class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
     endpoint_name = "feature"
     queryset = FeatureContentGuard.objects.all()
     serializer_class = FeatureContentGuardSerializer
-    queryset_filtering_required_permission = "core.view_featurecontentguard"

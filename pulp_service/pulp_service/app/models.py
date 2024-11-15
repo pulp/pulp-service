@@ -42,18 +42,17 @@ class DomainOrg(models.Model):
 
 class FeatureContentGuardCache(Cache):
     default_base_key = "PULP_FEATURE_CONTENTGUARD_CACHE"
-    default_expires_ttl = 86400  # They key expires in one day.
+    default_expires_ttl = 86400  # The key expires in one day.
 
 
 class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
     features = ArrayField(models.TextField())
 
     def _check_for_feature(self, account_id):
-        SUBSCRIPTION_CERT = os.getenv("SUBSCRIPTION_CERT")
         cert_context = ssl.create_default_context()
-        cert_context.load_verify_locations(cadata=SUBSCRIPTION_CERT)
+        cert_context.load_verify_locations(cadata=settings.SUBSCRIPTION_API_CERT)
 
-        account_id_query_param = f"accountId{account_id}"
+        account_id_query_param = f"accountId={account_id}"
         features_query_param = "&".join(
             f"features={feature}" for feature in self.features
         )
@@ -62,14 +61,14 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         async def fetch_feature():
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    subscription_api_url, cert=cert_context, raise_for_status=True
+                    subscription_api_url, ssl=cert_context, raise_for_status=True
                 ) as response:
                     return await response.json()
 
         try:
             features = asyncio.run(fetch_feature())
         except aiohttp.ClientError as err:
-            _logger.err(
+            _logger.debug(
                 _("Failed to fetch the Subscription feature information for a user.")
             )
             raise PermissionError(_("Access denied."))
@@ -82,8 +81,9 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         return features_available == set(self.features)
 
     def permit(self, request):
-        header_content = request.headers.get(self.header_name)
-        if not header_content:
+        try:
+            header_content = request.headers[self.header_name]
+        except KeyError:
             _logger.debug(
                 "Access not allowed. Header {header_name} not found.".format(
                     header_name=self.header_name
@@ -108,18 +108,17 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             raise PermissionError(_("Access denied."))
 
         try:
-            cache_key = sha256(f"{header_value}{','.join(self.features)}")
+            cache_key = f"{header_value}-{','.join(self.features)}"
+            cache_key_digest = sha256(bytes(cache_key, "utf8")).hexdigest()
             feature_cache = FeatureContentGuardCache()
-            account_allowed = feature_cache.get(cache_key)
+            account_allowed = feature_cache.get(cache_key_digest)
 
             if not account_allowed:
                 account_allowed = self._check_for_feature(header_value)
                 account_allowed.raise_for_status()
-                feature_cache.set(cache_key, account_allowed)
-        except requests.HTTPError:
-            raise PermissionError(_("Access denied."))
-
-        if not account_allowed:
+                feature_cache.set(cache_key_digest, account_allowed, expires=feature_cache.DEFAULT_EXPIRES_TTL)
+        except aiohttp.ClientResponseError:
+            _logger.debug("Access not allowed - Failed to check for features.")
             raise PermissionError(_("Access denied."))
 
         return
