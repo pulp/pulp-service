@@ -51,7 +51,7 @@ index 54a21b504..4e7d1e6e4 100644
 -
          storage_class = data.get("storage_class") or self.instance.storage_class
 -        storage_settings = data.get("storage_settings") or self.instance.storage_settings
-+        storage_settings = data.get("storage_settings") # or self.instance.storage_settings
++        storage_settings = data.get("storage_settings") or self.instance.storage_settings # This line causes issue
          self._validate_storage_backend(storage_class, storage_settings)
  
          redirect = data.get("redirect_to_object_storage", True)
