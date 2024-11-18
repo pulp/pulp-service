@@ -49,8 +49,8 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
     features = ArrayField(models.TextField())
 
     def _check_for_feature(self, account_id):
-        cert_context = ssl.create_default_context()
-        cert_context.load_verify_locations(cadata=settings.SUBSCRIPTION_API_CERT)
+        cert_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        cert_context.load_cert_chain(certfile=settings.SUBSCRIPTION_API_CERT)
 
         account_id_query_param = f"accountId={account_id}"
         features_query_param = "&".join(
@@ -66,7 +66,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                     return await response.json()
 
         try:
-            features = asyncio.run(fetch_feature())
+            response = asyncio.run(fetch_feature())
         except aiohttp.ClientError as err:
             _logger.debug(
                 _("Failed to fetch the Subscription feature information for a user.")
@@ -115,8 +115,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
 
             if not account_allowed:
                 account_allowed = self._check_for_feature(header_value)
-                account_allowed.raise_for_status()
-                feature_cache.set(cache_key_digest, account_allowed, expires=feature_cache.DEFAULT_EXPIRES_TTL)
+                feature_cache.set(cache_key_digest, account_allowed, expires=feature_cache.default_expires_ttl)
         except aiohttp.ClientResponseError:
             _logger.debug("Access not allowed - Failed to check for features.")
             raise PermissionError(_("Access denied."))
