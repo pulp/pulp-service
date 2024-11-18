@@ -4,7 +4,6 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from pulpcore.app.publication import ContentGuardViewSet
 from pulpcore.app.viewsets import RolesMixin
 from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin
 

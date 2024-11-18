@@ -97,8 +97,9 @@ objects:
       openssl rand -base64 32 | tr -d '\n' > /tmp/password
       kubectl create secret generic pulp-content-sources-password --from-file /tmp/password
 
-      openssl rand -base64 32 > /tmp/subscription-api-cert.key
-      kubectl create secret generic subscription-api-cert --from-file /tmp/subscription-api-cert.key
+      # Generate a self-signed certificate to avoid errors with Subscriptions API cert
+      openssl req -x509 -newkey rsa:2048 -keyout /tmp/subscription-api-mock-cert.pem -out combined.pem -days 1 -nodes
+      kubectl create secret generic subscription-api-cert --from-file /tmp/subscription-api-mock-cert.pem
 
       # Create settings.py
       cat <<EOF > /tmp/settings.py
@@ -211,6 +212,8 @@ objects:
         - name: pulp-settings
           mountPath: "/etc/pulp/settings.py"
           subPath: "settings.py"
+        - name: subscription-api-cert-volume
+          mountPath: "/etc/pulp/keys"
         volumes:
           - name: secret-volume
             secret:
@@ -218,6 +221,9 @@ objects:
           - name: pulp-settings
             secret:
               secretName: pulp-settings
+          - name: subscription-api-cert-volume
+            secret:
+              secretName: subscription-api-cert
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -319,6 +325,8 @@ objects:
             value: ${{PULP_PYPI_API_HOSTNAME}}
           - name: PULP_USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN
             value: "true"
+          - name: PULP_SUBSCRIPTION_API_CERT
+            value: "/etc/pulp/keys/subscription-api-mock-cert.pem"
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -419,12 +427,12 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
-          - name: PULP_SUBSCRIPTION_API_CERT
-            valueFrom:
-              secretKeyRef:
-                name: subscription-api-cert
-                optional: true
-
+          # - name: PULP_SUBSCRIPTION_API_CERT
+          #   valueFrom:
+          #     secretKeyRef:
+          #       name: subscription-api-cert
+          #       optional: true
+          #
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
