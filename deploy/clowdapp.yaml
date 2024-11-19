@@ -376,6 +376,10 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
+          - name: OTEL_METRIC_EXPORT_INTERVAL
+            value: ${OTEL_METRIC_EXPORT_INTERVAL}
+          - name: OTEL_METRIC_EXPORT_TIMEOUT
+            value: ${OTEL_METRIC_EXPORT_TIMEOUT}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
           - name: PULP_REDIS_PORT
