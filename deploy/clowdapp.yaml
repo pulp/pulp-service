@@ -98,7 +98,8 @@ objects:
       kubectl create secret generic pulp-content-sources-password --from-file /tmp/password
 
       # Generate a self-signed certificate to avoid errors with Subscriptions API cert
-      openssl req -x509 -newkey rsa:2048 -keyout /tmp/subscription-api-mock-cert.pem -out combined.pem -days 1 -nodes
+      openssl req -x509 -newkey rsa:2048 -keyout /tmp/subscription-api-mock-cert.pem -out combined.pem -days 1 -nodes \
+        -subj "/O=pulpservices/OU=mockaccounts/UID=non-prod-subs-api-cert"
       kubectl create secret generic subscription-api-cert --from-file /tmp/subscription-api-mock-cert.pem
 
       # Create settings.py
