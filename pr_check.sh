@@ -19,7 +19,7 @@ CICD_URL=https://raw.githubusercontent.com/RedHatInsights/cicd-tools/main
 curl -s $CICD_URL/bootstrap.sh >.cicd_bootstrap.sh && source .cicd_bootstrap.sh
 
 # Include all impacted HMS apps for deployment
-EXTRA_DEPLOY_ARGS="--set-parameter pulp/PULP_API_MEMORY_LIMIT=4096Mi --set-parameter pulp/PULP_API_MEMORY_REQUEST=2048Mi --timeout=1400 content-sources"
+EXTRA_DEPLOY_ARGS="--set-parameter pulp/IMAGE=quay.io/cloudservices/pulp-ubi --set-parameter pulp/PULP_API_MEMORY_LIMIT=4096Mi --set-parameter pulp/PULP_API_MEMORY_REQUEST=2048Mi --timeout=1400 content-sources"
 
 source $CICD_ROOT/build.sh
 source $CICD_ROOT/deploy_ephemeral_env.sh
