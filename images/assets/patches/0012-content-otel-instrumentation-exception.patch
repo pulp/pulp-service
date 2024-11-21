@@ -1,0 +1,27 @@
+From 87968f44eeb91e4cd43ffa9ea56c3970f6c8c3d8 Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Thu, 21 Nov 2024 08:08:19 -0300
+Subject: [PATCH] content otel instrumentation exception
+
+---
+ pulpcore/content/instrumentation.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pulpcore/content/instrumentation.py b/pulpcore/content/instrumentation.py
+index 2755fe578..f3e65c6a9 100644
+--- a/pulpcore/content/instrumentation.py
++++ b/pulpcore/content/instrumentation.py
+@@ -21,8 +21,8 @@ def instrumentation(exporter=None, reader=None, provider=None):
+         try:
+             response = await handler(request)
+             status_code = response.status
+-        except web.HTTPException as exc:
+-            status_code = exc.status
++        except Exception as exc:
++            status_code = exc.status if hasattr(exc,'status') else 500
+             response = exc
+ 
+         duration_ms = (time.time() - start_time) * 1000
+-- 
+2.46.2
+
