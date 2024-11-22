@@ -1,4 +1,12 @@
+import json
+import logging
+
+from base64 import b64decode
+from binascii import Error as Base64DecodeError
+
+from django.conf import settings
 from django.shortcuts import redirect
+
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.response import Response
@@ -9,7 +17,9 @@ from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin
 
 from pulp_service.app.models import FeatureContentGuard
 from pulp_service.app.serializers import FeatureContentGuardSerializer
+from pulp_service.app.authentication import RHServiceAccountCertAuthentication
     
+_logger = logging.getLogger(__name__)
 
 class RedirectCheck(APIView):
     """
@@ -70,3 +80,32 @@ class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
     endpoint_name = "feature"
     queryset = FeatureContentGuard.objects.all()
     serializer_class = FeatureContentGuardSerializer
+
+
+class DebugAuthenticationHeadersView(APIView):
+    """
+    Returns the content of the authentication headers.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request=None, path=None, pk=None):
+        try:
+            header_content = request.headers["x-rh-identity"]
+        except KeyError:
+            _logger.error(
+                "Access not allowed. Header {header_name} not found.".format(
+                    header_name=settings.AUTHENTICATION_JSON_HEADER
+                )
+            )
+            raise PermissionError("Access denied.")
+
+        try:
+            header_decoded_content = b64decode(header_content)
+        except Base64DecodeError:
+            _logger.error("Access not allowed - Header content is not Base64 encoded.")
+            raise PermissionError("Access denied.")
+
+        json_header_value = json.loads(header_decoded_content)
+        return Response(data=json_header_value)
