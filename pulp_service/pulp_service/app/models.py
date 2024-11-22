@@ -68,7 +68,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         try:
             response = asyncio.run(fetch_feature())
         except aiohttp.ClientError as err:
-            _logger.debug(
+            _logger.warn(
                 _("Failed to fetch the Subscription feature information for a user.")
             )
             raise PermissionError(_("Access denied."))
@@ -84,7 +84,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         try:
             header_content = request.headers[self.header_name]
         except KeyError:
-            _logger.debug(
+            _logger.err(
                 "Access not allowed. Header {header_name} not found.".format(
                     header_name=self.header_name
                 )
@@ -94,7 +94,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         try:
             header_decoded_content = b64decode(header_content)
         except Base64DecodeError:
-            _logger.debug("Access not allowed - Header content is not Base64 encoded.")
+            _logger.err("Access not allowed - Header content is not Base64 encoded.")
             raise PermissionError(_("Access denied."))
 
         try:
@@ -104,7 +104,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             header_value = json_path.input_value(header_value).first()
 
         except json.JSONDecodeError:
-            _logger.debug("Access not allowed - Invalid JSON or Path not found.")
+            _logger.err("Access not allowed - Invalid JSON or Path not found.")
             raise PermissionError(_("Access denied."))
 
         try:
@@ -117,7 +117,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                 account_allowed = self._check_for_feature(header_value)
                 feature_cache.set(cache_key_digest, account_allowed, expires=feature_cache.default_expires_ttl)
         except aiohttp.ClientResponseError:
-            _logger.debug("Access not allowed - Failed to check for features.")
+            _logger.warn("Access not allowed - Failed to check for features.")
             raise PermissionError(_("Access denied."))
 
         return
