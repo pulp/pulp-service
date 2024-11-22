@@ -1,5 +1,7 @@
 from pulpcore.app.authentication import JSONHeaderRemoteAuthentication
 
+from django.conf import settings
+
 
 class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
 

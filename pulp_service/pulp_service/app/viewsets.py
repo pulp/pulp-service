@@ -4,6 +4,12 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pulpcore.app.viewsets import RolesMixin
+from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin
+
+from pulp_service.app.models import FeatureContentGuard
+from pulp_service.app.serializers import FeatureContentGuardSerializer
+    
 
 class RedirectCheck(APIView):
     """
@@ -54,3 +60,13 @@ class InternalServerErrorCheckWithException(APIView):
         """
         # the drf APIException returns a HTTP_500_INTERNAL_SERVER_ERROR
         raise APIException()
+
+
+class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
+    """
+    Content guard to protect the content guarded by Subscription Features.
+    """
+
+    endpoint_name = "feature"
+    queryset = FeatureContentGuard.objects.all()
+    serializer_class = FeatureContentGuardSerializer
