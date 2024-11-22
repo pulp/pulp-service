@@ -101,6 +101,9 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             header_value = json.loads(header_decoded_content)
             json_path = jq.compile(self.jq_filter)
 
+            if settings.AUTHENTICATION_HEADER_DEBUG:
+                _logger.info("Authentication Header Debug enabled: {header_value}".format(header_value=header_value))
+
             header_value = json_path.input_value(header_value).first()
 
         except json.JSONDecodeError:

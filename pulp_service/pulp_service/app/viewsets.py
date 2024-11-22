@@ -87,10 +87,12 @@ class DebugAuthenticationHeadersView(APIView):
     Returns the content of the authentication headers.
     """
 
-    authentication_classes = []
+    authentication_classes = [RHServiceAccountCertAuthentication]
     permission_classes = []
 
     def get(self, request=None, path=None, pk=None):
+        if not settings.AUTHENTICATION_HEADER_DEBUG:
+            raise PermissionError("Access denied.")
         try:
             header_content = request.headers["x-rh-identity"]
         except KeyError:
