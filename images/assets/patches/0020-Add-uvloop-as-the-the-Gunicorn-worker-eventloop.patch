@@ -1,0 +1,33 @@
+From c5eff869698b792044eeecafc23cea63da7160c3 Mon Sep 17 00:00:00 2001
+From: Pedro Brochado <pedropsb95@gmail.com>
+Date: Thu, 14 Nov 2024 03:53:56 -0300
+Subject: [PATCH] Add uvloop as the the Gunicorn worker eventloop
+
+---
+ pulpcore/content/entrypoint.py | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/pulpcore/content/entrypoint.py b/pulpcore/content/entrypoint.py
+index 1179f782f..a654d977d 100644
+--- a/pulpcore/content/entrypoint.py
++++ b/pulpcore/content/entrypoint.py
+@@ -1,11 +1,15 @@
+ import click
+ from pulpcore.app.pulpcore_gunicorn_application import PulpcoreGunicornApplication
++import os
+ 
+ 
+ class PulpcoreContentApplication(PulpcoreGunicornApplication):
+     def load_app_specific_config(self):
++        worker_class = "aiohttp.GunicornWebWorker"
++        if os.getenv("PULP_USE_UVLOOP"):
++            worker_class = "aiohttp.GunicornUVLoopWebWorker"
+         self.set_option("default_proc_name", "pulpcore-content", enforced=True)
+-        self.set_option("worker_class", "aiohttp.GunicornWebWorker", enforced=True)
++        self.set_option("worker_class", worker_class, enforced=True)
+ 
+     def load(self):
+         import pulpcore.content
+-- 
+2.48.1
+

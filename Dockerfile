@@ -143,6 +143,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0019-Adds-LabelsMixin-to-ReadOnlyContentViewSet.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0019-Adds-LabelsMixin-to-ReadOnlyContentViewSet.patch
 
+COPY images/assets/patches/0020-Add-uvloop-as-the-the-Gunicorn-worker-eventloop.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0020-Add-uvloop-as-the-the-Gunicorn-worker-eventloop.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
