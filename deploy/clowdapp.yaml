@@ -214,8 +214,8 @@ objects:
           mountPath: "/etc/pulp/settings.py"
           subPath: "settings.py"
         - name: subscription-api-cert-volume
-          mountPath: "/etc/pulp/certs/subscription-api-mock-cert.pem"
-          subPath: "subscription-api-mock-cert.pem"
+          mountPath: "/etc/pulp/certs"
+          readOnly: true
         volumes:
           - name: secret-volume
             secret:
@@ -226,6 +226,9 @@ objects:
           - name: subscription-api-cert-volume
             secret:
               secretName: subscription-api-cert
+              items:
+              - key: subscription-api-mock-cert.pem
+                path: subscription-api-mock-cert.pem
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -346,8 +349,8 @@ objects:
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
           - name: subscription-api-cert-volume
-            mountPath: "/etc/pulp/certs/subscription-api-mock-cert.pem"
-            subPath: "subscription-api-mock-cert.pem"
+            mountPath: "/etc/pulp/certs"
+            readOnly: true
         volumes:
           - name: secret-volume
             secret:
@@ -358,6 +361,9 @@ objects:
           - name: subscription-api-cert-volume
             secret:
               secretName: subscription-api-cert
+              items:
+              - key: subscription-api-mock-cert.pem
+                path: subscription-api-mock-cert.pem
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
