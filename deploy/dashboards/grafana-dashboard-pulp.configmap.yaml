@@ -1400,14 +1400,13 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like \"var.log.pods.pulp-stage_pulp-content\" | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /.*pulp-.*_pulp-content/ | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m)",
               "id": "",
               "label": "",
               "logGroups": [
                 {
-                  "accountId": "744086762512",
-                  "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*",
-                  "name": "crcs02ue1.pulp-stage"
+                  "arn": "$logsource",
+                  "name": "$logsource"
                 }
               ],
               "matchExact": true,
@@ -1417,7 +1416,7 @@ data:
               "namespace": "",
               "period": "",
               "queryMode": "Logs",
-              "refId": "A",
+              "refId": "rpm",
               "region": "default",
               "sqlExpression": "",
               "statistic": "Average",
@@ -1431,15 +1430,14 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like \"var.log.pods.pulp-stage_pulp-content\" | filter @message like \".xml\" | stats count(*) as xml by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /.*pulp-.*_pulp-content/ | filter @message like \".xml\" | stats count(*) as xml by bin(5m)",
               "hide": false,
               "id": "",
               "label": "",
               "logGroups": [
                 {
-                  "accountId": "744086762512",
-                  "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*",
-                  "name": "crcs02ue1.pulp-stage"
+                  "arn": "$logsource",
+                  "name": "$logsource"
                 }
               ],
               "matchExact": true,
@@ -1449,7 +1447,7 @@ data:
               "namespace": "",
               "period": "",
               "queryMode": "Logs",
-              "refId": "B",
+              "refId": "xml",
               "region": "default",
               "sqlExpression": "",
               "statistic": "Average",
@@ -1549,14 +1547,13 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like \"var.log.pods.pulp-stage_pulp-content\"\n| filter @message like \".rpm\"\n| parse @message 'HIT\\\" \\\"*\\\"' as rpm_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as rpm_size_miss\n| stats sum(coalesce(rpm_size_hit, 0) + coalesce(rpm_size_miss, 0)) as rpm by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /.*pulp-.*_pulp-content/\n| filter @message like \".rpm\"\n| parse @message 'HIT\\\" \\\"*\\\"' as rpm_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as rpm_size_miss\n| stats sum(coalesce(rpm_size_hit, 0) + coalesce(rpm_size_miss, 0)) as rpm by bin(5m)",
               "id": "",
               "label": "",
               "logGroups": [
                 {
-                  "accountId": "744086762512",
-                  "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*",
-                  "name": "crcs02ue1.pulp-stage"
+                  "arn": "$logsource",
+                  "name": "$logsource"
                 }
               ],
               "matchExact": true,
@@ -1566,7 +1563,7 @@ data:
               "namespace": "",
               "period": "",
               "queryMode": "Logs",
-              "refId": "A",
+              "refId": "rpm",
               "region": "default",
               "sqlExpression": "",
               "statistic": "Average",
@@ -1580,15 +1577,14 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like \"var.log.pods.pulp-stage_pulp-content\"\n| filter @message like \".xml\"\n| parse @message 'HIT\\\" \\\"*\\\"' as xml_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as xml_size_miss\n| stats sum(coalesce(xml_size_hit, 0) + coalesce(xml_size_miss, 0)) as xml by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /.*pulp-.*_pulp-content/\n| filter @message like \".xml\"\n| parse @message 'HIT\\\" \\\"*\\\"' as xml_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as xml_size_miss\n| stats sum(coalesce(xml_size_hit, 0) + coalesce(xml_size_miss, 0)) as xml by bin(5m)",
               "hide": false,
               "id": "",
               "label": "",
               "logGroups": [
                 {
-                  "accountId": "744086762512",
-                  "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*",
-                  "name": "crcs02ue1.pulp-stage"
+                  "arn": "$logsource",
+                  "name": "$logsource"
                 }
               ],
               "matchExact": true,
@@ -1598,7 +1594,7 @@ data:
               "namespace": "",
               "period": "",
               "queryMode": "Logs",
-              "refId": "B",
+              "refId": "xml",
               "region": "default",
               "sqlExpression": "",
               "statistic": "Average",
@@ -1618,6 +1614,34 @@ data:
         "list": [
           {
             "current": {
+              "selected": true,
+              "text": "stage",
+              "value": "s"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "label": "cluster",
+            "multi": false,
+            "name": "cluster",
+            "options": [
+              {
+                "selected": false,
+                "text": "prod",
+                "value": "p"
+              },
+              {
+                "selected": true,
+                "text": "stage",
+                "value": "s"
+              }
+            ],
+            "query": "prod : p,stage : s",
+            "queryValue": "",
+            "skipUrlSync": false,
+            "type": "custom"
+          },
+          {
+            "current": {
               "selected": false,
               "text": "crcs02ue1-prometheus",
               "value": "PDD8BE47D10408F45"
@@ -1628,11 +1652,40 @@ data:
             "name": "datasource",
             "options": [],
             "query": "prometheus",
-            "queryValue": "crcs",
+            "queryValue": "",
             "refresh": 1,
-            "regex": "",
+            "regex": "/crc${cluster}.*ue1-prometheus/",
             "skipUrlSync": false,
             "type": "datasource"
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "crcs02ue1.pulp-stage",
+              "value": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*"
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "definition": "",
+            "hide": 0,
+            "includeAll": false,
+            "label": "logsource",
+            "multi": false,
+            "name": "logsource",
+            "options": [],
+            "query": {
+              "logGroupPrefix": "",
+              "queryType": "logGroups",
+              "refId": "CloudWatchVariableQueryEditor-VariableQuery",
+              "region": "us-east-1"
+            },
+            "refresh": 1,
+            "regex": "/crc${cluster}.*pulp-${cluster:text}/",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
           }
         ]
       },
@@ -1644,6 +1697,6 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 5,
+      "version": 6,
       "weekStart": ""
     }
