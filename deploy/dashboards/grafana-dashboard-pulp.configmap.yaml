@@ -1400,7 +1400,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /.*pulp-.*_pulp-content/ | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-content/ | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m)",
               "id": "",
               "label": "",
               "logGroups": [
@@ -1430,7 +1430,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /.*pulp-.*_pulp-content/ | filter @message like \".xml\" | stats count(*) as xml by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-content/ | filter @message like \".xml\" | stats count(*) as xml by bin(5m)",
               "hide": false,
               "id": "",
               "label": "",
@@ -1547,7 +1547,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /.*pulp-.*_pulp-content/\n| filter @message like \".rpm\"\n| parse @message 'HIT\\\" \\\"*\\\"' as rpm_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as rpm_size_miss\n| stats sum(coalesce(rpm_size_hit, 0) + coalesce(rpm_size_miss, 0)) as rpm by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /pulp-${cluster:text}_pulp-content/\n| filter @message like \".rpm\"\n| parse @message 'HIT\\\" \\\"*\\\"' as rpm_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as rpm_size_miss\n| stats sum(coalesce(rpm_size_hit, 0) + coalesce(rpm_size_miss, 0)) as rpm by bin(5m)",
               "id": "",
               "label": "",
               "logGroups": [
@@ -1577,7 +1577,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /.*pulp-.*_pulp-content/\n| filter @message like \".xml\"\n| parse @message 'HIT\\\" \\\"*\\\"' as xml_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as xml_size_miss\n| stats sum(coalesce(xml_size_hit, 0) + coalesce(xml_size_miss, 0)) as xml by bin(5m)",
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /pulp-${cluster:text}_pulp-content/\n| filter @message like \".xml\"\n| parse @message 'HIT\\\" \\\"*\\\"' as xml_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as xml_size_miss\n| stats sum(coalesce(xml_size_hit, 0) + coalesce(xml_size_miss, 0)) as xml by bin(5m)",
               "hide": false,
               "id": "",
               "label": "",
@@ -1676,13 +1676,13 @@ data:
             "name": "logsource",
             "options": [],
             "query": {
-              "logGroupPrefix": "",
+              "logGroupPrefix": "crc",
               "queryType": "logGroups",
               "refId": "CloudWatchVariableQueryEditor-VariableQuery",
               "region": "us-east-1"
             },
             "refresh": 1,
-            "regex": "/crc${cluster}.*pulp-${cluster:text}/",
+            "regex": "/crc${cluster}0[12]ue1\\.pulp-${cluster:text}/",
             "skipUrlSync": false,
             "sort": 0,
             "type": "query"
@@ -1697,6 +1697,6 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 6,
+      "version": 7,
       "weekStart": ""
     }
