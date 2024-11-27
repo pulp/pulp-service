@@ -67,7 +67,13 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
 
         try:
             response = asyncio.run(fetch_feature())
-        except aiohttp.ClientError as err:
+        except aiohttp.ClientResponseError as err:
+            if err.status == 400:
+                _logger.error("Failed to request information for a user. BadRequest. URL: {}".format(err.request_info.url))
+
+            if err.status == 403:
+                _logger.error("Failed to request information for a user. Permission Denied. Verify if the certificate is still valid.")
+
             _logger.warn(
                 _("Failed to fetch the Subscription feature information for a user.")
             )
@@ -116,14 +122,18 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             feature_cache = FeatureContentGuardCache()
             account_allowed = feature_cache.get(cache_key_digest)
 
+            if isinstance(account_allowed, bytes):
+                account_allowed = json.loads(account_allowed)
+
             if not account_allowed:
                 account_allowed = self._check_for_feature(header_value)
-                feature_cache.set(cache_key_digest, account_allowed, expires=feature_cache.default_expires_ttl)
-        except aiohttp.ClientResponseError:
+                serialized_account_allowed = json.dumps(account_allowed)
+                feature_cache.set(cache_key_digest, serialized_account_allowed, expires=feature_cache.default_expires_ttl)
+        except aiohttp.ClientResponseError as err:
             _logger.warn("Access not allowed - Failed to check for features.")
             raise PermissionError(_("Access denied."))
 
-        return
+        return account_allowed
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
