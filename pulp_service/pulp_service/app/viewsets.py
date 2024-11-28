@@ -17,9 +17,13 @@ from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin
 
 from pulp_service.app.models import FeatureContentGuard
 from pulp_service.app.serializers import FeatureContentGuardSerializer
-from pulp_service.app.authentication import RHServiceAccountCertAuthentication
-    
+from pulp_service.app.authentication import (
+    RHServiceAccountCertAuthentication,
+    RHEntitlementCertAuthentication,
+)
+
 _logger = logging.getLogger(__name__)
+
 
 class RedirectCheck(APIView):
     """
