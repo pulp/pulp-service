@@ -69,10 +69,16 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             response = asyncio.run(fetch_feature())
         except aiohttp.ClientResponseError as err:
             if err.status == 400:
-                _logger.error("Failed to request information for a user. BadRequest. URL: {}".format(err.request_info.url))
+                _logger.error(
+                    "Failed to request information for a user. BadRequest. URL: {}".format(
+                        err.request_info.url
+                    )
+                )
 
             if err.status == 403:
-                _logger.error("Failed to request information for a user. Permission Denied. Verify if the certificate is still valid.")
+                _logger.error(
+                    "Failed to request information for a user. Permission Denied. Verify if the certificate is still valid."
+                )
 
             _logger.warn(
                 _("Failed to fetch the Subscription feature information for a user.")
@@ -108,7 +114,11 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             json_path = jq.compile(self.jq_filter)
 
             if settings.AUTHENTICATION_HEADER_DEBUG:
-                _logger.info("Authentication Header Debug enabled: {header_value}".format(header_value=header_value))
+                _logger.info(
+                    "Authentication Header Debug enabled: {header_value}".format(
+                        header_value=header_value
+                    )
+                )
 
             header_value = json_path.input_value(header_value).first()
 
@@ -122,18 +132,29 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             feature_cache = FeatureContentGuardCache()
             account_allowed = feature_cache.get(cache_key_digest)
 
+            if not account_allowed:
+                account_allowed = self._check_for_feature(header_value)
+                serialized_account_allowed = json.dumps(account_allowed)
+                feature_cache.set(
+                    cache_key_digest,
+                    serialized_account_allowed,
+                    expires=feature_cache.default_expires_ttl,
+                )
+
             if isinstance(account_allowed, bytes):
                 account_allowed = json.loads(account_allowed)
 
             if not account_allowed:
-                account_allowed = self._check_for_feature(header_value)
-                serialized_account_allowed = json.dumps(account_allowed)
-                feature_cache.set(cache_key_digest, serialized_account_allowed, expires=feature_cache.default_expires_ttl)
+                _logger.warn(
+                    "Access not allowed - Features not available for the user."
+                )
+                raise PermissionError(_("Access denied."))
+
         except aiohttp.ClientResponseError as err:
             _logger.warn("Access not allowed - Failed to check for features.")
             raise PermissionError(_("Access denied."))
 
-        return account_allowed
+        return
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
