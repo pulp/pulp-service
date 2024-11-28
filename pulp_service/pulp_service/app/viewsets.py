@@ -91,7 +91,7 @@ class DebugAuthenticationHeadersView(APIView):
     Returns the content of the authentication headers.
     """
 
-    authentication_classes = [RHServiceAccountCertAuthentication]
+    authentication_classes = [RHServiceAccountCertAuthentication, RHEntitlementCertAuthentication]
     permission_classes = []
 
     def get(self, request=None, path=None, pk=None):
@@ -100,11 +100,7 @@ class DebugAuthenticationHeadersView(APIView):
         try:
             header_content = request.headers["x-rh-identity"]
         except KeyError:
-            _logger.error(
-                "Access not allowed. Header {header_name} not found.".format(
-                    header_name=settings.AUTHENTICATION_JSON_HEADER
-                )
-            )
+            _logger.error("Access not allowed. Header x-rh-identity not found.")
             raise PermissionError("Access denied.")
 
         try:
