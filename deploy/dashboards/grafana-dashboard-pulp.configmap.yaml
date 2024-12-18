@@ -1110,6 +1110,128 @@ data:
         },
         {
           "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 20,
+            "x": 0,
+            "y": 35
+          },
+          "hideTimeOverride": false,
+          "id": 30,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "filter @logStream like /pulp-${cluster:text}_pulp-content/ |\nfilter message like /\\/api\\/pulp-content\\/.*?\\/.*?\\/.*? HTTP.*/ |\nparse message /(?<host>.*?) (?<date>\\[.*?\\]) \"(?<method>.*?) \\/api\\/pulp-content\\/(?<domain>.*?)\\/.*? (?<HttpVersion>.*?)\" \\d+ \\d+ \".*?\" \".*?\" \"(HIT|MISS)\" \"(?<ArtifactSize>\\d+)\"$/ | \nstats sum(ArtifactSize) as requested_artifact_size by domain,bin(5m)\n\n# limit defines the max number of events (in the bellow lines, at max 5 log messages will be queried)\n# since we cannot define a limit based on the number of different domains, doing a sort | limit would not be useful in this scenario and would just generate more load\n#|sort requested_artifact_size desc\n#|limit 5",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "bytes",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "domain",
+                "bin(5m)"
+              ]
+            }
+          ],
+          "timeFrom": "6h",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
@@ -1171,7 +1293,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 35
+            "y": 42
           },
           "id": 25,
           "options": {
@@ -1267,7 +1389,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 10,
-            "y": 35
+            "y": 42
           },
           "id": 26,
           "options": {
@@ -1305,7 +1427,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 42
+            "y": 49
           },
           "id": 28,
           "panels": [],
@@ -1377,7 +1499,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 0,
-            "y": 43
+            "y": 50
           },
           "id": 27,
           "options": {
@@ -1524,7 +1646,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 10,
-            "y": 43
+            "y": 50
           },
           "id": 29,
           "options": {
@@ -1697,6 +1819,6 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 7,
+      "version": 8,
       "weekStart": ""
     }
