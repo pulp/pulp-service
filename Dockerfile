@@ -129,6 +129,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0012-content-otel-instrumentation-exception.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0012-content-otel-instrumentation-exception.patch
 
+COPY images/assets/patches/0013-Adds-a-Task-API-filter-for-unblocked_at.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0013-Adds-a-Task-API-filter-for-unblocked_at.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
