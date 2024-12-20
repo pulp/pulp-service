@@ -5,6 +5,7 @@ from base64 import b64decode
 from binascii import Error as Base64DecodeError
 
 from django.conf import settings
+from django.db.models.query import QuerySet
 from django.shortcuts import redirect
 
 from rest_framework import status
@@ -13,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from pulpcore.app.viewsets import RolesMixin
-from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin
+from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin, TaskViewSet
 
 from pulp_service.app.models import FeatureContentGuard
 from pulp_service.app.serializers import FeatureContentGuardSerializer
@@ -115,3 +116,25 @@ class DebugAuthenticationHeadersView(APIView):
 
         json_header_value = json.loads(header_decoded_content)
         return Response(data=json_header_value)
+
+class TaskViewSet(TaskViewSet):
+
+    LOCKED_ROLES = {}
+
+    def get_queryset(self):
+        qs = self.queryset
+        if isinstance(qs, QuerySet):
+            # Ensure queryset is re-evaluated on each request.
+            qs = qs.all()
+
+        if self.parent_lookup_kwargs and self.kwargs:
+            filters = {}
+            for key, lookup in self.parent_lookup_kwargs.items():
+                filters[lookup] = self.kwargs[key]
+            qs = qs.filter(**filters)
+
+        return qs
+
+    @classmethod
+    def view_name(cls):
+        return "admintasks"
