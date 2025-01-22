@@ -120,6 +120,139 @@ data:
           "type": "gauge"
         },
         {
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
+          "id": 31,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PD4288CE6A02EB473"
+              },
+              "dimensions": {
+                "DBInstanceIdentifier": "pulp-${cluster:text}"
+              },
+              "expression": "",
+              "id": "",
+              "label": "prod",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "FreeStorageSpace",
+              "metricQueryType": 0,
+              "namespace": "AWS/RDS",
+              "period": "",
+              "queryMode": "Metrics",
+              "refId": "PROD",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PB2EEA3F591968575"
+              },
+              "dimensions": {
+                "DBInstanceIdentifier": "pulp-${cluster:text}"
+              },
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "stage",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "FreeStorageSpace",
+              "metricQueryType": 0,
+              "namespace": "AWS/RDS",
+              "period": "",
+              "queryMode": "Metrics",
+              "refId": "STAGE",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average"
+            }
+          ],
+          "title": "DB Free Storage Space",
+          "type": "timeseries"
+        },
+        {
           "collapsed": false,
           "gridPos": {
             "h": 1,
@@ -1819,6 +1952,6 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 8,
+      "version": 9,
       "weekStart": ""
     }
