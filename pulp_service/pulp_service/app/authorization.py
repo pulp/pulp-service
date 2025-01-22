@@ -25,7 +25,6 @@ class DomainBasedPermission(BasePermission):
 
     def has_permission(self, request, view):
         # Admins have all permissions
-
         if request.user.is_superuser:
             return True
 
