@@ -93,6 +93,10 @@ def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user):
     }
 
     with anonymous_user:
+        # Clear any authentication header
+        pulpcore_bindings.DomainsApi.api_client.default_headers.pop(
+            "x-rh-identity", None
+        )
         with pytest.raises(pulpcore_bindings.ApiException) as exp:
             pulpcore_bindings.DomainsApi.list()
 
