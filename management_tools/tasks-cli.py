@@ -1,23 +1,14 @@
 import argparse
-import json
-import os
 import requests
-import subprocess
 import sys
 
-from collections import defaultdict
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
-TASKS_ENDPOINT = "/api/pulp/admin/tasks/?fields=pulp_created&fields=started_at&fields=finished_at&fields=unblocked_at"
+TASKS_ENDPOINT = "/api/pulp/admin/tasks/?fields=pulp_created&fields=started_at&fields=finished_at&fields=unblocked_at&limit=1000"
 
-QUERY_TYPES = SimpleNamespace(
-    RUNNING="running",
-    WAITING_UNBLOCKED="waiting_unblocked",
-    WAITING_BLOCKED="waiting_blocked",
-)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -46,23 +37,9 @@ parser.add_argument(
 )
 parser.add_argument(
     "--bucket_size",
-    help="Bucket size, in seconds. For example, for a 30 seconds bucket: --bucket-size=30 [DEFAULT: 600]",
+    help="Bucket size, in seconds. For example, for a 30 seconds bucket: --bucket-size=30 [DEFAULT: 60]",
     type=int,
-    default=600,
-)
-parser.add_argument(
-    "-o",
-    "--output",
-    help="Output file with the metrics. [DEFAULT: /tmp/tasks-cli/pulp_tasks.out]",
-    type=str,
-    default="/tmp/tasks-cli/pulp_tasks.out",
-)
-parser.add_argument(
-    "-g",
-    "--graph_file",
-    help="Gnuplot output file. [DEFAULT: /tmp/tasks-cli/graph_tasks.ps]",
-    type=str,
-    default="/tmp/tasks-cli/graph_tasks.ps",
+    default=60,
 )
 
 args = parser.parse_args()
@@ -74,77 +51,77 @@ pulp_certificate = args.certificate
 pulp_cert_key = args.key
 period_in_hours = args.period
 bucket_size_in_seconds = args.bucket_size
-output_file = args.output
-graph_file = args.graph_file
 
 
-# running task, 6 situations:
-# 1- started and didn't finish yet (finished_at=null)
-# 2- started before the current bucket interval and didn't finish yet (finished_at=null)
-# 3- started and finished in between the current bucket interval
-# 4- started and not finished in between the current bucket interval
-# 5- started before the current bucket interval and finished in between the current bucket interval
-# 6- started before the current bucket interval and not finished in between the current bucket interval
+def generate_buckets(start_time, end_time, interval):
+    buckets = {}
 
-# waiting unblocked:
-# 1- unblocked_at is inside of bucket, but started_at not (meaning, the task is waiting)
+    # Calculate the total number of intervals
+    interval_duration = timedelta(seconds=interval)
+    current_start = start_time
+
+    while current_start < end_time:
+        current_end = current_start + interval_duration
+        midpoint = current_start + (interval_duration / 2)
+        buckets[midpoint] = 0
+        current_start = current_end
+
+    return buckets
 
 def run():
-    datetime_now = datetime.now() + timedelta(hours=3)
+    datetime_now = datetime.utcnow()
     query_date_time = datetime_now - timedelta(hours=period_in_hours)
-    data = defaultdict(lambda: {QUERY_TYPES.RUNNING:0,QUERY_TYPES.WAITING_UNBLOCKED:0})
 
-    tasks = get_all_tasks()
-    for task in tasks['results']:
+
+    data = generate_buckets(query_date_time, datetime_now, bucket_size_in_seconds)
+    bucket_times = sorted(data.keys())
+    interval_duration = timedelta(seconds=bucket_size_in_seconds)
+
+    tasks = get_all_tasks(start_datetime=query_date_time)
+    for task in tasks:
         unblocked_at=datetime.strptime(task['unblocked_at'],DATETIME_FORMAT)
         started_at=datetime.strptime(task['started_at'],DATETIME_FORMAT)
-        finished_at=datetime.strptime(task['finished_at'],DATETIME_FORMAT)
 
-        start_bucket_interval = query_date_time
-        end_bucket_interval = query_date_time + timedelta(seconds=bucket_size_in_seconds)
-        while end_bucket_interval < datetime_now:
-            # 1- unblocked_at is inside of bucket, but started_at not (meaning, the task is waiting)
-            if in_range(unblocked_at,start_bucket_interval,end_bucket_interval) and started_at >= end_bucket_interval:
-                data[start_bucket_interval.strftime(DATETIME_FORMAT)][QUERY_TYPES.WAITING_UNBLOCKED] += 1
+        if (started_at - unblocked_at).total_seconds() >= 5:
+            for midpoint in bucket_times:
+                bucket_start = midpoint - (interval_duration / 2)
+                bucket_end = midpoint + (interval_duration / 2)
+                if bucket_start <= unblocked_at < bucket_end:
+                    # The task was blocked during this interval
+                    data[midpoint] += 1
 
-            # 1- started and didn't finish yet (finished_at=null)
-            elif in_range(started_at,start_bucket_interval,end_bucket_interval) and finished_at == "null":
-                data[start_bucket_interval.strftime(DATETIME_FORMAT)][QUERY_TYPES.RUNNING] += 1
+                    if started_at < bucket_end:
+                        # The task started running during this interval
+                        break
+                if unblocked_at < bucket_start <= started_at < bucket_end:
+                    # The task got unblocked in a previous interval and started in this one
+                    data[midpoint] += 1
+                    break
+                if unblocked_at < bucket_start and started_at > bucket_end:
+                    # The task got unblocked in a previous interval and didn't start during this interval
+                    data[midpoint] += 1
 
-            # 2- started before the current bucket interval and didn't finish yet (finished_at=null)
-            elif started_at <= start_bucket_interval and finished_at == "null":
-                data[start_bucket_interval.strftime(DATETIME_FORMAT)][QUERY_TYPES.RUNNING] += 1
+    import matplotlib.pyplot as plt
 
-            # 3- started and finished in between the current bucket interval
-            elif in_range(started_at,start_bucket_interval,end_bucket_interval) and in_range(finished_at,start_bucket_interval,end_bucket_interval):
-                data[start_bucket_interval.strftime(DATETIME_FORMAT)][QUERY_TYPES.RUNNING] += 1
+    midpoints = list(data.keys())
+    counts = list(data.values())
 
-            # 4- started and not finished in between the current bucket interval
-            elif in_range(started_at,start_bucket_interval,end_bucket_interval) and finished_at >= end_bucket_interval:
-                data[start_bucket_interval.strftime(DATETIME_FORMAT)][QUERY_TYPES.RUNNING] += 1
+    # Create the plot
+    plt.figure(figsize=(12, 6))
+    plt.bar(midpoints, counts, width=0.03, color='lightblue', edgecolor='black')
 
-            # 5- started before the current bucket interval and finished in between the current bucket interval
-            elif started_at <= start_bucket_interval and in_range(finished_at,start_bucket_interval,end_bucket_interval):
-                data[start_bucket_interval.strftime(DATETIME_FORMAT)][QUERY_TYPES.RUNNING] += 1
+    # Format the x-axis for better readability
+    plt.xticks(rotation=45)
+    plt.xlabel('Time Buckets (Midpoints)')
+    plt.ylabel('Counts')
+    plt.title('Distribution of Counts Across Time Buckets')
 
-            # 6- started before the current bucket interval and not finished in between the current bucket interval
-            elif started_at <= start_bucket_interval and finished_at >= end_bucket_interval:
-                data[start_bucket_interval.strftime(DATETIME_FORMAT)][QUERY_TYPES.RUNNING] += 1
+    # Show grid for better readability
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
 
-            start_bucket_interval = end_bucket_interval
-            end_bucket_interval +=timedelta(seconds=bucket_size_in_seconds)
-    
-    #print(json.dumps(data, indent=2))
-    write_to_file(data)
-    p = subprocess.Popen(
-        "gnuplot -e \"data_file='"
-        + output_file
-        + "'\" -e \"graph_file='"
-        + graph_file
-        + "'\" -c gnuplot-script",
-        shell=True,
-    )
-    os.waitpid(p.pid, 0)
+    # Display the plot
+    plt.tight_layout()
+    plt.show()
 
 def in_range(query_time,start_time,end_time):
     return  start_time <= query_time <= end_time
@@ -154,43 +131,24 @@ def check_response(response):
         print("ERROR:", response.status_code, response.text)
         sys.exit(1)
 
-def get_all_tasks():
-    url = base_addr + TASKS_ENDPOINT
-    if pulp_certificate:
-        response = requests.get(url, cert=(pulp_certificate, pulp_cert_key))
-    else:
-        response = requests.get(url, auth=(username, password))
-    check_response(response)
-    return json.loads(response.text)
 
-def write_to_file(data):
-    try:
-        with open(output_file, "w") as f:
-            for key in sorted(data.keys()):
-                print(
-                    key,
-                    data[key][QUERY_TYPES.RUNNING],
-                    #data[key][QUERY_TYPES.WAITING_BLOCKED],
-                    data[key][QUERY_TYPES.WAITING_UNBLOCKED],
-                )
-                f.write(
-                    key
-                    + " "
-                    + str(data[key][QUERY_TYPES.RUNNING])
-                    + " "
-                    #+ str(data[key][QUERY_TYPES.WAITING_BLOCKED])
-                    #+ " "
-                    + str(data[key][QUERY_TYPES.WAITING_UNBLOCKED])
-                    + "\n"
-                )
-    except FileNotFoundError:
-        dirname = os.path.dirname(os.path.abspath(output_file))
-        print(dirname, "not found!")
-        print(
-            'Make sure',
-            dirname,
-            'exists or set a different path for the output (tasks-cli -o/--output <file>)',
-        )
-        sys.exit(2)
+def get_all_tasks(params=None, headers=None, start_datetime=None):
+
+    url = base_addr + TASKS_ENDPOINT
+    if start_datetime:
+        url = url + "&started_at__gte=" + start_datetime.strftime(DATETIME_FORMAT)
+    while url:
+        response = requests.get(url, params=params, headers=headers, cert=(pulp_certificate, pulp_cert_key))
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        data = response.json()  # Parse the JSON response
+
+        # Yield each item in the 'results' array
+        for result in data.get("results", []):
+            yield result
+
+        # Update the URL with the 'next' attribute from the response
+        url = data.get("next")
+        if url:
+            url = url.replace("http://internal", "https://mtls.internal")
 
 run()
