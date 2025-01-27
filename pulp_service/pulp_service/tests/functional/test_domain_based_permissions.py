@@ -77,3 +77,37 @@ def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_u
             )
 
         assert exp.value.status == 403
+
+
+def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user):
+
+    user1_orgid1 = {
+        "identity": {
+            "internal": {
+                "org_id": 1
+            },
+            "user": {
+                "username": "user1"
+            }
+        }
+    }
+
+    with anonymous_user:
+        # Clear any authentication header
+        pulpcore_bindings.DomainsApi.api_client.default_headers.pop(
+            "x-rh-identity", None
+        )
+        with pytest.raises(pulpcore_bindings.ApiException) as exp:
+            pulpcore_bindings.DomainsApi.list()
+
+        assert exp.value.status == 401
+
+    with anonymous_user:
+        header_user1_orgid1 = json.dumps(user1_orgid1)
+        auth_user1_orgid1 = b64encode(bytes(header_user1_orgid1, "ascii"))
+
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = (
+            auth_user1_orgid1
+        )
+
+        pulpcore_bindings.DomainsApi.list()
