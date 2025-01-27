@@ -29,6 +29,7 @@ class DomainBasedPermission(BasePermission):
             return True
 
         user = request.user
+        _logger.info(user)
 
         # Anonymous users have no permissions
         if not user.is_authenticated:
@@ -43,6 +44,7 @@ class DomainBasedPermission(BasePermission):
         # Get the Org ID from the Red Hat Identity header
         org_id = self.get_org_id(decoded_header_content)
 
+        _logger.info(action)
         # Anyone can create a domain
         if action == "domain_create":
             if decoded_header_content:
@@ -63,12 +65,14 @@ class DomainBasedPermission(BasePermission):
         return DomainOrg.objects.filter(Q(domain=get_domain(), org_id=org_id) | Q(domain=get_domain(), user=user)).exists()
 
     def get_user_action(self, request):
-        if request.META['PATH_INFO'].endswith('/default/api/v3/domains/'):
+        view_name = request.resolver_match.view_name
+        if view_name == "domains-list":
             if request.META['REQUEST_METHOD'] == 'POST':
                 return "domain_create"
             elif request.META['REQUEST_METHOD'] == 'GET':
                 return "domain_list"
-        elif request.META['PATH_INFO'].startswith('/api/pulp/default/api/v3/domains/'):
+        elif view_name == "domains-detail":
+            _logger.info("detail")
             if request.META['REQUEST_METHOD'] == 'PATCH':
                 return "domain_update"
             elif request.META['REQUEST_METHOD'] == 'DELETE':

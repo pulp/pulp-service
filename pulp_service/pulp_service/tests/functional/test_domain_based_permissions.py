@@ -122,10 +122,10 @@ def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user):
         }
     }
 
-    user2_orgid1 = {
+    user2_orgid2 = {
         "identity": {
             "internal": {
-                "org_id": 1
+                "org_id": 2
             },
             "user": {
                 "username": "user2"
@@ -155,11 +155,11 @@ def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user):
         })
 
         # User 2 tries to delete the domain
-        header_user2_orgid1 = json.dumps(user2_orgid1)
-        auth_user2_orgid1 = b64encode(bytes(header_user2_orgid1, "ascii"))
+        header_user2_orgid2 = json.dumps(user2_orgid2)
+        auth_user2_orgid2 = b64encode(bytes(header_user2_orgid2, "ascii"))
 
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = (
-            auth_user2_orgid1
+            auth_user2_orgid2
         )
 
         with pytest.raises(pulpcore_bindings.ApiException) as exp:
@@ -189,7 +189,10 @@ def test_user_permissions_without_orgId(pulpcore_bindings, file_bindings, anonym
         "identity": {
             "user": {
                 "username": "user1"
-            }
+            },
+            "internal": {
+                "org_id": 1
+            },
         }
     }
 
@@ -208,19 +211,13 @@ def test_user_permissions_without_orgId(pulpcore_bindings, file_bindings, anonym
 
         domain_name = str(uuid4())
 
-        # domain = gen_object_with_cleanup(
-        #     pulpcore_bindings.DomainsApi, {
-        #         "name": domain_name,
-        #         "storage_class": "pulpcore.app.models.storage.FileSystem",
-        #         "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-        #     }
-        # )
-
-        domain = pulpcore_bindings.DomainsApi.create({
-            "name": domain_name,
-            "storage_class": "pulpcore.app.models.storage.FileSystem",
-            "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-        })
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi, {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            }
+        )
 
         file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = (
             auth_user1
