@@ -38,11 +38,13 @@ def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_u
         )
 
         domain_name = str(uuid4())
-        pulpcore_bindings.DomainsApi.create({
-            "name": domain_name,
-            "storage_class": "pulpcore.app.models.storage.FileSystem",
-            "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-        })
+        gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi, {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            }
+        )
 
         # Use User1 OrgID1 auth credentials
         file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = (
@@ -110,7 +112,7 @@ def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user):
         pulpcore_bindings.DomainsApi.list()
 
 
-def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user):
+def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
     user1_orgid1 = {
         "identity": {
             "internal": {
@@ -148,11 +150,13 @@ def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user):
 
         # User 1 creates a domain
         domain_name = str(uuid4())
-        domain = pulpcore_bindings.DomainsApi.create({
-            "name": domain_name,
-            "storage_class": "pulpcore.app.models.storage.FileSystem",
-            "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-        })
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi, {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            }
+        )
 
         # User 2 tries to delete the domain
         header_user2_orgid2 = json.dumps(user2_orgid2)
