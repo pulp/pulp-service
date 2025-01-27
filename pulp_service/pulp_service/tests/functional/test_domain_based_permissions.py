@@ -171,6 +171,12 @@ def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_ob
 
         assert exp.value.status == 403
 
+        # Check if User 1 can delete his own domain
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = (
+            auth_user1_orgid1
+        )
+        pulpcore_bindings.DomainsApi.delete(domain.pulp_href)
+
 
 def test_operations_using_basic_auth(pulpcore_bindings, file_bindings, gen_user, gen_object_with_cleanup):
     somebody = gen_user(username="somebody")
