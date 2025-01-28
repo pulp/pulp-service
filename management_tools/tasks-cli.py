@@ -1,9 +1,9 @@
 import argparse
 import requests
 import sys
+import matplotlib.pyplot as plt
 
 from datetime import datetime, timedelta
-from types import SimpleNamespace
 
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -72,16 +72,32 @@ def run():
     datetime_now = datetime.utcnow()
     query_date_time = datetime_now - timedelta(hours=period_in_hours)
 
-
+    runtime_data = []
     data = generate_buckets(query_date_time, datetime_now, bucket_size_in_seconds)
     bucket_times = sorted(data.keys())
     interval_duration = timedelta(seconds=bucket_size_in_seconds)
 
     tasks = get_all_tasks(start_datetime=query_date_time)
     for task in tasks:
-        unblocked_at=datetime.strptime(task['unblocked_at'],DATETIME_FORMAT)
-        started_at=datetime.strptime(task['started_at'],DATETIME_FORMAT)
+        if task['unblocked_at']:
+            unblocked_at = datetime.strptime(task['unblocked_at'],DATETIME_FORMAT)
+        else:
+            unblocked_at = None
+        if task['started_at']:
+            started_at = datetime.strptime(task['started_at'],DATETIME_FORMAT)
+        else:
+            started_at = None
+        if task['finished_at']:
+            finished_at = datetime.strptime(task['finished_at'],DATETIME_FORMAT)
+        else:
+            finished_at = None
 
+        # Calculate runtime
+        if started_at and finished_at:
+            runtime = finished_at - started_at
+            runtime_data.append(runtime.total_seconds())
+
+        # Gather stats on unblocked and waiting tasks
         if (started_at - unblocked_at).total_seconds() >= 5:
             for midpoint in bucket_times:
                 bucket_start = midpoint - (interval_duration / 2)
@@ -101,8 +117,16 @@ def run():
                     # The task got unblocked in a previous interval and didn't start during this interval
                     data[midpoint] += 1
 
-    import matplotlib.pyplot as plt
+    # Plot runtime distribution
+    plt.figure(figsize=(8, 6))
+    plt.hist(runtime_data, bins='auto', density=True, color='skyblue', edgecolor='black', alpha=0.7)
+    plt.xlabel('Task Run Time (seconds)')
+    plt.ylabel('Probability')
+    plt.title('Probability Distribution of Task Run Time')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.show()
 
+    # Plot the number of unblocked tasks
     midpoints = list(data.keys())
     counts = list(data.values())
 
@@ -112,9 +136,9 @@ def run():
 
     # Format the x-axis for better readability
     plt.xticks(rotation=45)
-    plt.xlabel('Time Buckets (Midpoints)')
-    plt.ylabel('Counts')
-    plt.title('Distribution of Counts Across Time Buckets')
+    plt.xlabel('Date and Time')
+    plt.ylabel('Number of unblocked tasks waiting for 5 or more seconds')
+    plt.title('Unblocked and Waiting Tasks Over Time')
 
     # Show grid for better readability
     plt.grid(axis='y', linestyle='--', alpha=0.7)
