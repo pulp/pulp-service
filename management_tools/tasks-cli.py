@@ -130,6 +130,9 @@ def run():
     print(f"90th Percentile: { np.percentile(runtime_data, 90)} seconds")
     print(f"95th Percentile: { np.percentile(runtime_data, 95)} seconds")
     print(f"99th Percentile: { np.percentile(runtime_data, 99)} seconds")
+    print(f"99.9th Percentile: {np.percentile(runtime_data, 99.9)} seconds")
+    print(f"99.99th Percentile: {np.percentile(runtime_data, 99.99)} seconds")
+    print(f"99.999th Percentile: {np.percentile(runtime_data, 99.999)} seconds")
     print(f"100th Percentile: {np.percentile(runtime_data, 100)} seconds")
     print("\n\n")
 
@@ -149,6 +152,9 @@ def run():
     print(f"90th Percentile: { np.percentile(waittime_data, 90)} seconds")
     print(f"95th Percentile: { np.percentile(waittime_data, 95)} seconds")
     print(f"99th Percentile: { np.percentile(waittime_data, 99)} seconds")
+    print(f"99.9th Percentile: {np.percentile(waittime_data, 99.9)} seconds")
+    print(f"99.99th Percentile: {np.percentile(waittime_data, 99.99)} seconds")
+    print(f"99.999th Percentile: {np.percentile(waittime_data, 99.999)} seconds")
     print(f"100th Percentile: {np.percentile(waittime_data, 100)} seconds")
 
 
