@@ -105,7 +105,7 @@ def run():
             waittime_data.append(waittime.total_seconds())
 
         # Gather stats on unblocked and waiting tasks
-        if (started_at - unblocked_at).total_seconds() >= 5:
+        if waittime.total_seconds() >= 5:
             for midpoint in bucket_times:
                 bucket_start = midpoint - (interval_duration / 2)
                 bucket_end = midpoint + (interval_duration / 2)
@@ -130,6 +130,7 @@ def run():
     print(f"90th Percentile: { np.percentile(runtime_data, 90)} seconds")
     print(f"95th Percentile: { np.percentile(runtime_data, 95)} seconds")
     print(f"99th Percentile: { np.percentile(runtime_data, 99)} seconds")
+    print(f"100th Percentile: {np.percentile(runtime_data, 100)} seconds")
     print("\n\n")
 
     # Plot runtime distribution
@@ -148,7 +149,7 @@ def run():
     print(f"90th Percentile: { np.percentile(waittime_data, 90)} seconds")
     print(f"95th Percentile: { np.percentile(waittime_data, 95)} seconds")
     print(f"99th Percentile: { np.percentile(waittime_data, 99)} seconds")
-
+    print(f"100th Percentile: {np.percentile(waittime_data, 100)} seconds")
 
 
     # Plot the number of unblocked tasks
