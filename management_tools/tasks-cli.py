@@ -74,6 +74,7 @@ def run():
     query_date_time = datetime_now - timedelta(hours=period_in_hours)
 
     runtime_data = []
+    waittime_data = []
     data = generate_buckets(query_date_time, datetime_now, bucket_size_in_seconds)
     bucket_times = sorted(data.keys())
     interval_duration = timedelta(seconds=bucket_size_in_seconds)
@@ -97,6 +98,11 @@ def run():
         if started_at and finished_at:
             runtime = finished_at - started_at
             runtime_data.append(runtime.total_seconds())
+
+        # Calculate wait time
+        if started_at and unblocked_at:
+            waittime = started_at - unblocked_at
+            waittime_data.append(waittime.total_seconds())
 
         # Gather stats on unblocked and waiting tasks
         if (started_at - unblocked_at).total_seconds() >= 5:
@@ -124,6 +130,7 @@ def run():
     print(f"90th Percentile: { np.percentile(runtime_data, 90)} seconds")
     print(f"95th Percentile: { np.percentile(runtime_data, 95)} seconds")
     print(f"99th Percentile: { np.percentile(runtime_data, 99)} seconds")
+    print("\n\n")
 
     # Plot runtime distribution
     plt.figure(figsize=(8, 6))
@@ -134,6 +141,13 @@ def run():
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.show()
 
+
+    # Get percentiles for wait times
+    print("Task Wait Time Percentiles (seconds)")
+    print("-----------------------------------")
+    print(f"90th Percentile: { np.percentile(waittime_data, 90)} seconds")
+    print(f"95th Percentile: { np.percentile(waittime_data, 95)} seconds")
+    print(f"99th Percentile: { np.percentile(waittime_data, 99)} seconds")
 
 
 
