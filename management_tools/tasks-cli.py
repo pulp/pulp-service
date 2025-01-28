@@ -1,6 +1,7 @@
 import argparse
 import requests
 import sys
+import numpy as np
 import matplotlib.pyplot as plt
 
 from datetime import datetime, timedelta
@@ -117,6 +118,13 @@ def run():
                     # The task got unblocked in a previous interval and didn't start during this interval
                     data[midpoint] += 1
 
+    # Get percentiles for run times
+    print("Task Run Time Percentiles (seconds)")
+    print("-----------------------------------")
+    print(f"90th Percentile: { np.percentile(runtime_data, 90)} seconds")
+    print(f"95th Percentile: { np.percentile(runtime_data, 95)} seconds")
+    print(f"99th Percentile: { np.percentile(runtime_data, 99)} seconds")
+
     # Plot runtime distribution
     plt.figure(figsize=(8, 6))
     plt.hist(runtime_data, bins='auto', density=True, color='skyblue', edgecolor='black', alpha=0.7)
@@ -126,13 +134,16 @@ def run():
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.show()
 
+
+
+
     # Plot the number of unblocked tasks
     midpoints = list(data.keys())
     counts = list(data.values())
 
     # Create the plot
     plt.figure(figsize=(12, 6))
-    plt.bar(midpoints, counts, width=0.03, color='lightblue', edgecolor='black')
+    plt.scatter(midpoints, counts, color='blue', label='Counts')
 
     # Format the x-axis for better readability
     plt.xticks(rotation=45)
