@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -70,7 +70,7 @@ def generate_buckets(start_time, end_time, interval):
     return buckets
 
 def run():
-    datetime_now = datetime.utcnow()
+    datetime_now = datetime.now(UTC)
     query_date_time = datetime_now - timedelta(hours=period_in_hours)
 
     runtime_data = []
@@ -82,15 +82,15 @@ def run():
     tasks = get_all_tasks(start_datetime=query_date_time)
     for task in tasks:
         if task['unblocked_at']:
-            unblocked_at = datetime.strptime(task['unblocked_at'],DATETIME_FORMAT)
+            unblocked_at = datetime.fromisoformat(task['unblocked_at'])
         else:
             unblocked_at = None
         if task['started_at']:
-            started_at = datetime.strptime(task['started_at'],DATETIME_FORMAT)
+            started_at = datetime.fromisoformat(task['started_at'])
         else:
             started_at = None
         if task['finished_at']:
-            finished_at = datetime.strptime(task['finished_at'],DATETIME_FORMAT)
+            finished_at = datetime.fromisoformat(task['finished_at'])
         else:
             finished_at = None
 
