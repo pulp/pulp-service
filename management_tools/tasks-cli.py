@@ -104,25 +104,25 @@ def run():
             waittime = started_at - unblocked_at
             waittime_data.append(waittime.total_seconds())
 
-        # Gather stats on unblocked and waiting tasks
-        if waittime.total_seconds() >= 5:
-            for midpoint in bucket_times:
-                bucket_start = midpoint - (interval_duration / 2)
-                bucket_end = midpoint + (interval_duration / 2)
-                if bucket_start <= unblocked_at < bucket_end:
-                    # The task was blocked during this interval
-                    data[midpoint] += 1
+            # Gather stats on unblocked and waiting tasks
+            if waittime.total_seconds() >= 5:
+                for midpoint in bucket_times:
+                    bucket_start = midpoint - (interval_duration / 2)
+                    bucket_end = midpoint + (interval_duration / 2)
+                    if bucket_start <= unblocked_at < bucket_end:
+                        # The task was blocked during this interval
+                        data[midpoint] += 1
 
-                    if started_at < bucket_end:
-                        # The task started running during this interval
+                        if started_at < bucket_end:
+                            # The task started running during this interval
+                            break
+                    if unblocked_at < bucket_start <= started_at < bucket_end:
+                        # The task got unblocked in a previous interval and started in this one
+                        data[midpoint] += 1
                         break
-                if unblocked_at < bucket_start <= started_at < bucket_end:
-                    # The task got unblocked in a previous interval and started in this one
-                    data[midpoint] += 1
-                    break
-                if unblocked_at < bucket_start and started_at > bucket_end:
-                    # The task got unblocked in a previous interval and didn't start during this interval
-                    data[midpoint] += 1
+                    if unblocked_at < bucket_start and started_at > bucket_end:
+                        # The task got unblocked in a previous interval and didn't start during this interval
+                        data[midpoint] += 1
 
     # Get percentiles for run times
     print("Task Run Time Percentiles (seconds)")
