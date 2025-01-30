@@ -138,6 +138,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch
 
+COPY images/assets/patches/0016-Change-the-TASK_GRACE_INTERVAL-to-360-heartbeats-app.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0016-Change-the-TASK_GRACE_INTERVAL-to-360-heartbeats-app.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

@@ -477,6 +477,7 @@ objects:
           initialDelaySeconds: 3
           periodSeconds: 10
           timeoutSeconds: 10
+        terminationGracePeriodSeconds: 3660
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
