@@ -30,6 +30,7 @@ objects:
         prometheus:
           endpoint: "0.0.0.0:9000"
           namespace: pulp
+          metric_expiration: 60m
       service:
         pipelines:
           metrics:
