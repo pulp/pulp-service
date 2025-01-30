@@ -327,6 +327,10 @@ objects:
             value: "true"
           - name: PULP_SUBSCRIPTION_API_CERT
             value: "/etc/pulp/certs/subscription-api-mock-cert.pem"
+          - name: PULP_USE_X_FORWARDED_HOST
+            value: ${PULP_USE_X_FORWARDED_HOST}
+          - name: PULP_SECURE_PROXY_SSL_HEADER
+            value: ${PULP_SECURE_PROXY_SSL_HEADER}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -778,7 +782,7 @@ parameters:
     description: Amount of memory to request for OpenTelemetry Collector container
     value: "1024Mi"
   - name: OTEL_COLLECTOR_MEMORY_LIMIT
-    description: Limit of memory use by OpenTelemetry Collector contaienr
+    description: Limit of memory use by OpenTelemetry Collector container
     value: "2048Mi"
   - name: DB_SECRET_NAME
     description: Name of the secret with external database information for the operator.
@@ -793,7 +797,7 @@ parameters:
     description: The AUTHENTICATION_BACKENDS to be used by Pulp.
     value: "@merge django.contrib.auth.backends.RemoteUserBackend"
   - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
-    description: The defaul authentication classes for Pulp.
+    description: The default authentication classes for Pulp.
     value: "['pulp_service.app.authentication.RHServiceAccountCertAuthentication','pulpcore.app.authentication.JSONHeaderRemoteAuthentication','rest_framework.authentication.BasicAuthentication','rest_framework.authentication.SessionAuthentication']"
   - name: PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES
     description: The default permission classes for the REST API
@@ -860,7 +864,13 @@ parameters:
     value: "/api/pulp/assets/"
   - name: PULP_MIDDLEWARE
     description: List of Middleware
-    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.OCIStorageMiddleware']"
+    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.OCIStorageMiddleware', 'pulp_service.app.middleware.RhEdgeHostMiddleware']"
   - name: PULP_PYPI_API_HOSTNAME
     description: The hostname used to form the distribution's `base_url`.
     value: "http://pulp-content:8000"
+  - name: PULP_SECURE_PROXY_SSL_HEADER
+    description: Check for the correct url scheme to use when building URLs
+    value: "['HTTP_X_FORWARDED_PROTO', 'https']"
+  - name: PULP_USE_X_FORWARDED_HOST
+    description: Use the x-forwarded-host value to build absolute urls
+    value: "true"

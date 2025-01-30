@@ -5,11 +5,13 @@ import logging
 import marshal
 import tempfile
 
+from os import getenv
+
 from django.db import IntegrityError
 from django.utils.deprecation import MiddlewareMixin
 
 from pulpcore.app.models import Artifact
-from pulpcore.app.util import get_artifact_url, get_worker_name, resolve_prn
+from pulpcore.app.util import get_artifact_url, resolve_prn
 
 
 _logger = logging.getLogger(__name__)
@@ -31,6 +33,7 @@ class ProfilerMiddleware(MiddlewareMixin):
         if 'HTTP_X_PROFILE_REQUEST' in request.META:
             return True
         return False
+
     def process_view(self, request, callback, callback_args, callback_kwargs):
         if self.can(request):
             profiler = cProfile.Profile()
@@ -71,3 +74,9 @@ class OCIStorageMiddleware(MiddlewareMixin):
             repository_name_var.set(repository_name)
         if 'HTTP_X_QUAY_AUTH' in request.META:
             x_quay_auth_var.set(request.META['HTTP_X_QUAY_AUTH'])
+
+
+class RhEdgeHostMiddleware(MiddlewareMixin):
+    def process_view(self, request, *args, **kwargs):
+        if "HTTP_X_RH_EDGE_HOST" in request.META and request.META["HTTP_X_RH_EDGE_HOST"] is not None:
+            request.META["HTTP_X_FORWARDED_HOST"] = request.META["HTTP_X_RH_EDGE_HOST"]
