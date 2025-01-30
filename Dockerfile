@@ -135,6 +135,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0014-Add-Content-Sources-periodic-telemetry-task.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0014-Add-Content-Sources-periodic-telemetry-task.patch
 
+COPY images/assets/patches/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
