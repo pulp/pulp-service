@@ -134,7 +134,6 @@ objects:
       DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
       MEDIA_ROOT = ""
       SECRET_KEY = secrets.token_urlsafe(50)
-      CONTENT_ORIGIN = "https://$HOST"
       CONTENT_PATH_PREFIX = "/api/pulp-content/"
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
@@ -294,8 +293,6 @@ objects:
             value: ${{PULP_DEFAULT_FILE_STORAGE}}
           - name: PULP_MEDIA_ROOT
             value: ${{PULP_MEDIA_ROOT}}
-          - name: PULP_CONTENT_ORIGIN
-            value: ${{PULP_CONTENT_ORIGIN}}
           - name: PULP_CONTENT_PATH_PREFIX
             value: ${{PULP_CONTENT_PATH_PREFIX}}
           - name: PULP_DOMAIN_ENABLED
@@ -433,8 +430,6 @@ objects:
             value: ${{PULP_DEFAULT_FILE_STORAGE}}
           - name: PULP_MEDIA_ROOT
             value: ${{PULP_MEDIA_ROOT}}
-          - name: PULP_CONTENT_ORIGIN
-            value: ${{PULP_CONTENT_ORIGIN}}
           - name: PULP_CONTENT_PATH_PREFIX
             value: ${{PULP_CONTENT_PATH_PREFIX}}
           - name: PULP_DOMAIN_ENABLED
@@ -520,8 +515,6 @@ objects:
             value: ${{PULP_DEFAULT_FILE_STORAGE}}
           - name: PULP_MEDIA_ROOT
             value: ${{PULP_MEDIA_ROOT}}
-          - name: PULP_CONTENT_ORIGIN
-            value: ${{PULP_CONTENT_ORIGIN}}
           - name: PULP_CONTENT_PATH_PREFIX
             value: ${{PULP_CONTENT_PATH_PREFIX}}
           - name: PULP_DOMAIN_ENABLED
@@ -565,8 +558,6 @@ objects:
           periodSeconds: 2
           timeoutSeconds: 10
         env:
-          - name: PULP_CONTENT_ORIGIN
-            value: ${{PULP_CONTENT_ORIGIN}}
           - name: PULP_DB_ENCRYPTION_KEY
             value: ${{PULP_DB_ENCRYPTION_KEY}}
           - name: SENTRY_DSN
@@ -616,8 +607,6 @@ objects:
                   name: pulp-admin-password
                   key: password
                   optional: true
-            - name: PULP_CONTENT_ORIGIN
-              value: ${{PULP_CONTENT_ORIGIN}}
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
@@ -791,7 +780,6 @@ parameters:
     value: "pulp-external-database"
   - name: CONTENT_ORIGIN
     description: The value for the CONTENT_ORIGIN pulp setting
-    value: http://pulp-content.local
   - name: OBJECT_STORE_NAME
     description: The name of the S3 bucket.
     value: pulp-stage-default-domain-s3
@@ -843,7 +831,6 @@ parameters:
     value: ""
   - name: PULP_CONTENT_ORIGIN
     description: Content Origin
-    value: "http://pulp-content:8000"
   - name: PULP_CONTENT_PATH_PREFIX
     description: Content Path Prefix
     value: "/api/pulp-content/"
