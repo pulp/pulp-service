@@ -1,4 +1,4 @@
-FROM registry.fedoraproject.org/fedora-minimal:39
+FROM registry.fedoraproject.org/fedora-minimal:42
 
 RUN microdnf install -y pip  &&  microdnf clean all
 RUN pip install requests matplotlib && rm -rf /root/.cache/pip
