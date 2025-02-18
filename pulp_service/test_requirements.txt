@@ -1,2 +1,2 @@
-pytest
-pytest-django
+-r functest_requirements.txt
+-r unittest_requirements.txt
