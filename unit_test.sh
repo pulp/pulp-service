@@ -61,9 +61,12 @@ cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-b
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_maven-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_npm-client"
+<<<<<<< HEAD
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_gem-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_python-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_service-client"
+=======
+>>>>>>> 8b2e3a3 (Update the tests to use the new repo with new clients.)
 
 cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
 sed "s#password#${PASSWORD}#g" pulp-smash.json > pulp-smash.customized.json
