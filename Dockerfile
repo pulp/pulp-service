@@ -75,8 +75,11 @@ RUN pip install --upgrade pip setuptools wheel && \
 
 COPY pulp_service/ /tmp/pulp_service
 
-# Install from source to get the CONTENT_ORIGIN update
-RUN pip install git+https://github.com/pulp/pulpcore.git@main
+## Install from source to get the CONTENT_ORIGIN update
+#RUN pip install git+https://github.com/pulp/pulpcore.git@main
+
+# We didn't release a pulp_ostree version compatible with 3.70 yet
+RUN pip install git+https://github.com/pulp/pulp_ostree.git@main
 
 RUN pip install /tmp/pulp_service && \
   rm -rf /root/.cache/pip
@@ -132,14 +135,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0012-content-otel-instrumentation-exception.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0012-content-otel-instrumentation-exception.patch
 
-COPY images/assets/patches/0013-Adds-a-Task-API-filter-for-unblocked_at.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0013-Adds-a-Task-API-filter-for-unblocked_at.patch
-
 COPY images/assets/patches/0014-Add-Content-Sources-periodic-telemetry-task.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0014-Add-Content-Sources-periodic-telemetry-task.patch
-
-COPY images/assets/patches/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
