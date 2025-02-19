@@ -1,6 +1,5 @@
 import argparse
 import requests
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -17,13 +16,6 @@ parser.add_argument(
     "--base_address",
     help="Pulp hostname address. For example: http://pulp-service:5001",
 )
-parser.add_argument(
-    "-u",
-    "--username",
-    help="Pulp user to run the API requests. [DEFAULT: admin]",
-    default="admin",
-)
-parser.add_argument("-p", "--password", help="Password for Pulp user.")
 parser.add_argument(
     "-c", "--certificate", help="Certificate to authenticate to Pulp API."
 )
@@ -46,8 +38,6 @@ parser.add_argument(
 args = parser.parse_args()
 
 base_addr = args.base_address
-username = args.username
-password = args.password
 pulp_certificate = args.certificate
 pulp_cert_key = args.key
 period_in_hours = args.period
@@ -79,7 +69,7 @@ def run():
     bucket_times = sorted(data.keys())
     interval_duration = timedelta(seconds=bucket_size_in_seconds)
 
-    tasks = get_all_tasks(start_datetime=query_date_time)
+    tasks = get_all_tasks(pulp_created_datetime=query_date_time)
     for task in tasks:
         if task['unblocked_at']:
             unblocked_at = datetime.fromisoformat(task['unblocked_at'])
@@ -101,6 +91,9 @@ def run():
 
         # Calculate wait time
         if started_at and unblocked_at:
+            # We are calculating "started_at - unblocked_at" because "pulp_created - started_at"
+            # would also take into account the amount of time the task was still blocked (we want
+            # only waiting unblocked tasks)
             waittime = started_at - unblocked_at
             waittime_data.append(waittime.total_seconds())
 
@@ -123,6 +116,18 @@ def run():
                     if unblocked_at < bucket_start and started_at > bucket_end:
                         # The task got unblocked in a previous interval and didn't start during this interval
                         data[midpoint] += 1
+
+        # Calculate waiting unblocked tasks (tasks that didn't start yet even after being unblocked)
+        # Since the task didn't start, we cannot use it to calculate the waittime_data percentiles
+        elif not started_at and unblocked_at:
+            pulp_created = datetime.fromisoformat(task['pulp_created'])
+            for midpoint in bucket_times:
+                bucket_end = midpoint + (interval_duration / 2)
+                # any unblocked task created before current bucket_end that did not start yet
+                # is a waiting task
+                if pulp_created < bucket_end:
+                    data[midpoint] += 1
+
 
     # Get percentiles for run times
     print("Task Run Time Percentiles (seconds)")
@@ -179,20 +184,12 @@ def run():
     plt.tight_layout()
     plt.show()
 
-def in_range(query_time,start_time,end_time):
-    return  start_time <= query_time <= end_time
 
-def check_response(response):
-    if response.status_code // 100 != 2:
-        print("ERROR:", response.status_code, response.text)
-        sys.exit(1)
-
-
-def get_all_tasks(params=None, headers=None, start_datetime=None):
+def get_all_tasks(params=None, headers=None, pulp_created_datetime=None):
 
     url = base_addr + TASKS_ENDPOINT
-    if start_datetime:
-        url = url + "&started_at__gte=" + start_datetime.strftime(DATETIME_FORMAT)
+    if pulp_created_datetime:
+        url = url + "&pulp_created__gte=" + pulp_created_datetime.strftime(DATETIME_FORMAT)
     while url:
         response = requests.get(url, params=params, headers=headers, cert=(pulp_certificate, pulp_cert_key))
         response.raise_for_status()  # Raise an exception for HTTP errors
