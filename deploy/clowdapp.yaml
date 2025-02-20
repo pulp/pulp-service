@@ -332,6 +332,8 @@ objects:
             value: ${PULP_USE_X_FORWARDED_HOST}
           - name: PULP_SECURE_PROXY_SSL_HEADER
             value: ${PULP_SECURE_PROXY_SSL_HEADER}
+          - name: PULP_TOKEN_AUTH_DISABLED
+            value: ${PULP_TOKEN_AUTH_DISABLED}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -443,6 +445,8 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_SUBSCRIPTION_API_CERT
             value: "/etc/pulp/certs/subscription-api-mock-cert.pem"
+          - name: PULP_TOKEN_AUTH_DISABLED
+            value: ${PULP_TOKEN_AUTH_DISABLED}
 
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
@@ -875,4 +879,7 @@ parameters:
     value: "['HTTP_X_FORWARDED_PROTO', 'https']"
   - name: PULP_USE_X_FORWARDED_HOST
     description: Use the x-forwarded-host value to build absolute urls
+    value: "true"
+  - name: PULP_TOKEN_AUTH_DISABLED
+    description: Disable token authentication for the Container registry
     value: "true"
