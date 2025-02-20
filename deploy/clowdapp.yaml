@@ -8,7 +8,7 @@ objects:
   metadata:
     name: pulp-otel-config
   data:
-    otel-collector-config: |
+    config.yaml: |
       receivers:
         otlp:
           protocols:
