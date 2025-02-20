@@ -4,6 +4,7 @@ pulp-gem==0.6.1
 pulp-ostree==2.4.3
 pulp-python==3.12.5
 pulp-npm==0.1.0
+pulp-container==2.24.0
 pulp-cli
 pulp-cli-gem
 sentry-sdk
