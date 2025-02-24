@@ -1,0 +1,25 @@
+From 08b3e6773173a9893a8734d352368b1e736fe8ee Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Mon, 24 Feb 2025 16:17:38 -0300
+Subject: [PATCH] Fix pulp_content_origin_with_prefix fixture
+
+---
+ pulpcore/pytest_plugin.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/pulpcore/pytest_plugin.py b/pulpcore/pytest_plugin.py
+index 06875297f..1e65d35cb 100644
+--- a/pulpcore/pytest_plugin.py
++++ b/pulpcore/pytest_plugin.py
+@@ -756,6 +756,8 @@ def pulp_content_origin(pulp_settings):
+ 
+ @pytest.fixture(scope="session")
+ def pulp_content_origin_with_prefix(pulp_settings):
++    if not pulp_settings.CONTENT_ORIGIN:
++        return pulp_settings.CONTENT_PATH_PREFIX[:-1]
+     return pulp_settings.CONTENT_ORIGIN + pulp_settings.CONTENT_PATH_PREFIX[:-1]
+ 
+ 
+-- 
+2.46.2
+
