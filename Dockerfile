@@ -75,12 +75,6 @@ RUN pip install --upgrade pip setuptools wheel && \
 
 COPY pulp_service/ /tmp/pulp_service
 
-## Install from source to get the CONTENT_ORIGIN update
-#RUN pip install git+https://github.com/pulp/pulpcore.git@main
-
-# We didn't release a pulp_ostree version compatible with 3.70 yet
-RUN pip install git+https://github.com/pulp/pulp_ostree.git@main
-
 RUN pip install /tmp/pulp_service && \
   rm -rf /root/.cache/pip
 
