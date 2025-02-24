@@ -63,7 +63,8 @@ cat pulp-smash.customized.json
 
 ORIG_DIR=$PWD
 if [[ ! -e ../pulp_rpm ]]; then
-  git clone -b 3.27 --depth=1 https://github.com/pulp/pulp_rpm.git ../pulp_rpm
+  #git clone -b 3.27 --depth=1 https://github.com/pulp/pulp_rpm.git ../pulp_rpm
+  git clone --depth=1 https://github.com/pulp/pulp_rpm.git ../pulp_rpm
 fi
 cd ../pulp_rpm
 
