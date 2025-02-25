@@ -1,22 +1,25 @@
-From 08b3e6773173a9893a8734d352368b1e736fe8ee Mon Sep 17 00:00:00 2001
+From 98de1c4e5c59c43c159bfa95824729a77c853368 Mon Sep 17 00:00:00 2001
 From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
 Date: Mon, 24 Feb 2025 16:17:38 -0300
 Subject: [PATCH] Fix pulp_content_origin_with_prefix fixture
 
 ---
- pulpcore/pytest_plugin.py | 2 ++
- 1 file changed, 2 insertions(+)
+ pulpcore/pytest_plugin.py | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
 
 diff --git a/pulpcore/pytest_plugin.py b/pulpcore/pytest_plugin.py
-index 06875297f..1e65d35cb 100644
+index 06875297f..3be961790 100644
 --- a/pulpcore/pytest_plugin.py
 +++ b/pulpcore/pytest_plugin.py
-@@ -756,6 +756,8 @@ def pulp_content_origin(pulp_settings):
+@@ -755,7 +755,10 @@ def pulp_content_origin(pulp_settings):
+ 
  
  @pytest.fixture(scope="session")
- def pulp_content_origin_with_prefix(pulp_settings):
+-def pulp_content_origin_with_prefix(pulp_settings):
++def pulp_content_origin_with_prefix(pulp_settings, bindings_cfg):
 +    if not pulp_settings.CONTENT_ORIGIN:
-+        return pulp_settings.CONTENT_PATH_PREFIX[:-1]
++        custom_content_origin = os.getenv("CUSTOM_CONTENT_ORIGIN")
++        return custom_content_origin + pulp_settings.CONTENT_PATH_PREFIX[:-1]
      return pulp_settings.CONTENT_ORIGIN + pulp_settings.CONTENT_PATH_PREFIX[:-1]
  
  
