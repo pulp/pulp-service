@@ -134,6 +134,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0016-Fix-pulp_content_origin_with_prefix-fixture.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0016-Fix-pulp_content_origin_with_prefix-fixture.patch
 
+COPY images/assets/patches/0017-Rollback-test_download_policies-pydantic-changes.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0017-Rollback-test_download_policies-pydantic-changes.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
