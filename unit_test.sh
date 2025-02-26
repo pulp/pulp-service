@@ -51,12 +51,11 @@ debug_and_fail() {
 }
 
 cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
-cmd_prefix git clone https://github.com/mikedep333/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
-cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
-cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
-cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
-cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
-#cmd_prefix bash -c "HOME=/tmp/home pip3 install pulpcore-client pulp_file-client pulp_rpm-client pulp_ostree-client"
+cmd_prefix git clone https://github.com/pulp/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
+cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
 
 cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
 sed "s#password#${PASSWORD}#g" pulp-smash.json > pulp-smash.customized.json
