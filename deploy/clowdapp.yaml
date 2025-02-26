@@ -750,7 +750,7 @@ parameters:
     value: "http/protobuf"
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
     description: The collector endpoint used to receive telemetry data from the application.
-    value: "http://pulp-otel-collector:10000/"
+    value: "http://localhost:10000/"
   - name: OTEL_METRIC_EXPORT_INTERVAL
     description: The time interval (in milliseconds) between the start of two export attempts.
     value: "7000"
