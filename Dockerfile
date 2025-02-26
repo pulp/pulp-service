@@ -104,8 +104,7 @@ COPY images/assets/pulp-resource-manager /usr/bin/pulp-resource-manager
 COPY images/assets/pulp-worker /usr/bin/pulp-worker
 
 USER pulp:pulp
-RUN PULP_STATIC_ROOT=/var/lib/operator/static/ PULP_CONTENT_ORIGIN=localhost \
-       pulpcore-manager collectstatic --clear --noinput --link
+RUN PULP_STATIC_ROOT=/var/lib/operator/static/ pulpcore-manager collectstatic --clear --noinput --link
 USER root:root
 
 # This path seems to be hardcoded in tests
@@ -129,14 +128,14 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0012-content-otel-instrumentation-exception.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0012-content-otel-instrumentation-exception.patch
 
-COPY images/assets/patches/0013-Adds-a-Task-API-filter-for-unblocked_at.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0013-Adds-a-Task-API-filter-for-unblocked_at.patch
-
 COPY images/assets/patches/0014-Add-Content-Sources-periodic-telemetry-task.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0014-Add-Content-Sources-periodic-telemetry-task.patch
 
-COPY images/assets/patches/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0015-Add-a-filter-for-pulp_created-for-Tasks-API.patch
+COPY images/assets/patches/0016-Fix-pulp_content_origin_with_prefix-fixture.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0016-Fix-pulp_content_origin_with_prefix-fixture.patch
+
+#COPY images/assets/patches/0017-Rollback-test_download_policies-pydantic-changes.patch /tmp/
+#RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0017-Rollback-test_download_policies-pydantic-changes.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
