@@ -141,6 +141,48 @@ objects:
       EOF
       
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
+      kubectl apply -f-<<EOF
+      ---
+      apiVersion: route.openshift.io/v1
+      kind: Route
+      metadata:
+        labels:
+          app: pulp
+          pod: pulp-content
+        name: pulp-content
+      spec:
+        host: $HOST
+        path: /api/pulp-content
+        port:
+          targetPort: 8000
+        tls:
+          termination: edge
+        to:
+          kind: Service
+          name: pulp-content
+          weight: 100
+        wildcardPolicy: None
+      ---
+      apiVersion: route.openshift.io/v1
+      kind: Route
+      metadata:
+        labels:
+          app: pulp
+          pod: pulp-api
+        name: pulp-api
+      spec:
+        host: $HOST
+        path: /api/pulp
+        port:
+          targetPort: 8000
+        tls:
+          termination: edge
+        to:
+          kind: Service
+          name: pulp-api
+          weight: 100
+        wildcardPolicy: None
+      EOF
 
 
 
