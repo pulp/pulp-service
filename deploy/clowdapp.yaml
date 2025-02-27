@@ -461,6 +461,9 @@ objects:
           periodSeconds: 10
           timeoutSeconds: 10
         terminationGracePeriodSeconds: 3660
+        sidecars:
+          - name: otel-collector
+            enabled: true
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
