@@ -12,16 +12,21 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.viewsets import ViewSet
 
-from pulpcore.app.viewsets import RolesMixin
+from pulpcore.app.response import OperationPostponedResponse
 from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin, TaskViewSet
+from pulpcore.plugin.tasking import dispatch
 
+from pulp_service.app.authentication import RHServiceAccountCertAuthentication
 from pulp_service.app.models import FeatureContentGuard
-from pulp_service.app.serializers import FeatureContentGuardSerializer
-from pulp_service.app.authentication import (
-    RHServiceAccountCertAuthentication,
-    RHEntitlementCertAuthentication,
+from pulp_service.app.models import VulnerabilityReport as VulnReport
+from pulp_service.app.serializers import (
+    VulnerabilityReportSerializer,
+    ContentScanSerializer,
+    FeatureContentGuardSerializer,
 )
+from pulp_service.app.tasks.package_scan import check_content
 
 _logger = logging.getLogger(__name__)
 
@@ -117,6 +122,7 @@ class DebugAuthenticationHeadersView(APIView):
         json_header_value = json.loads(header_decoded_content)
         return Response(data=json_header_value)
 
+
 class TaskViewSet(TaskViewSet):
 
     LOCKED_ROLES = {}
@@ -138,3 +144,23 @@ class TaskViewSet(TaskViewSet):
     @classmethod
     def view_name(cls):
         return "admintasks"
+
+
+class VulnerabilityReport(ViewSet):
+
+    def list(self, request):
+        queryset = VulnReport.objects.all()
+        serializer = VulnerabilityReportSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def get(self, request, uuid):
+        queryset = VulnReport.objects.get(id=uuid)
+        serializer = VulnerabilityReportSerializer(queryset, many=False)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serialized_data = ContentScanSerializer(data=request.data)
+        serialized_data.is_valid(raise_exception=True)
+        repo_version_pk = serialized_data.data["repo_version"]
+        task = dispatch(check_content, kwargs={"repo_version_pk": repo_version_pk})
+        return OperationPostponedResponse(task, request)

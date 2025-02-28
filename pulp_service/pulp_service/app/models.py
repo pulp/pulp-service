@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import ssl
+import uuid
 
 import aiohttp
 import jq
@@ -164,3 +165,12 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                 "Can manage role assignments on Feature ContentGuard",
             ),
         )
+
+
+class VulnerabilityReport(models.Model):
+    """
+    Model used in vulnerability report.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vulns = models.JSONField()
