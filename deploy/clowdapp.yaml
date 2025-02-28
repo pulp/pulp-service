@@ -28,7 +28,7 @@ objects:
                 - set(description, "Number of active HTTP server requests.") where name == "http.server.active_requests"
       exporters:
         prometheus:
-          endpoint: "0.0.0.0:9000"
+          endpoint: "0.0.0.0:8000"
           namespace: pulp
           metric_expiration: 60m
       service:
