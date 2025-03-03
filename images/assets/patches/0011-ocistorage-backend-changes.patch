@@ -1,21 +1,35 @@
-From 5b0d9434be5eb4c2244cf7ba5a4b04164eb84446 Mon Sep 17 00:00:00 2001
+From 08fef16003ad8ee8735370c34b46b573c5a28a00 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Thu, 7 Nov 2024 15:39:12 -0500
 Subject: [PATCH] ocistorage backend changes
 
 ---
- pulpcore/app/serializers/domain.py | 11 +++++++++--
+ pulpcore/app/models/domain.py      |  2 +-
+ pulpcore/app/serializers/domain.py |  9 ++++++++-
  pulpcore/app/settings.py           |  1 +
  pulpcore/constants.py              |  1 +
  pulpcore/content/handler.py        |  7 +++++++
  pulpcore/tasking/tasks.py          | 20 +++++++++++++++++++-
- 5 files changed, 37 insertions(+), 3 deletions(-)
+ 6 files changed, 37 insertions(+), 3 deletions(-)
 
+diff --git a/pulpcore/app/models/domain.py b/pulpcore/app/models/domain.py
+index 18dd3e892..2fc79e09f 100644
+--- a/pulpcore/app/models/domain.py
++++ b/pulpcore/app/models/domain.py
+@@ -39,7 +39,7 @@ class Domain(BaseModel, AutoAddObjPermsMixin):
+     description = models.TextField(null=True)
+     # Storage class is required, optional settings are validated by serializer
+     storage_class = models.TextField(null=False)
+-    storage_settings = EncryptedJSONField(default=dict)
++    storage_settings = EncryptedJSONField(default=dict, blank=True)
+     # Pulp settings that are appropriate to be set on a "per domain" level
+     redirect_to_object_storage = models.BooleanField(default=True)
+     hide_guarded_distributions = models.BooleanField(default=False)
 diff --git a/pulpcore/app/serializers/domain.py b/pulpcore/app/serializers/domain.py
-index 54a21b504..4e7d1e6e4 100644
+index 2fff76bc6..9136dbdf0 100644
 --- a/pulpcore/app/serializers/domain.py
 +++ b/pulpcore/app/serializers/domain.py
-@@ -20,6 +20,7 @@ BACKEND_CHOICES = (
+@@ -25,6 +25,7 @@ BACKEND_CHOICES = (
      ("storages.backends.s3boto3.S3Boto3Storage", "Use Amazon S3 as storage"),
      ("storages.backends.azure_storage.AzureStorage", "Use Azure Blob as storage"),
      # ("storages.backends.gcloud.GoogleCloudStorage", "Use Google Cloud as storage"),
@@ -23,7 +37,7 @@ index 54a21b504..4e7d1e6e4 100644
  )
  
  DEFAULT_CONTENT_TYPES = [
-@@ -80,6 +81,12 @@ class BaseSettingsClass(HiddenFieldsMixin, serializers.Serializer):
+@@ -88,6 +89,12 @@ class BaseSettingsClass(HiddenFieldsMixin, serializers.Serializer):
          return storage_class(**validated_data)
  
  
@@ -36,7 +50,7 @@ index 54a21b504..4e7d1e6e4 100644
  class FileSystemSettingsSerializer(BaseSettingsClass):
      """A Serializer for FileSystem storage settings."""
  
-@@ -337,6 +344,7 @@ class StorageSettingsSerializer(serializers.Serializer):
+@@ -345,6 +352,7 @@ class StorageSettingsSerializer(serializers.Serializer):
          "storages.backends.s3boto3.S3Boto3Storage": AmazonS3SettingsSerializer,
          "storages.backends.azure_storage.AzureStorage": AzureSettingsSerializer,
          "storages.backends.gcloud.GoogleCloudStorage": GoogleSettingsSerializer,
@@ -44,17 +58,14 @@ index 54a21b504..4e7d1e6e4 100644
      }
  
      def to_representation(self, instance):
-@@ -457,9 +465,8 @@ class DomainSerializer(BackendSettingsValidator, ModelSerializer):
+@@ -466,7 +474,6 @@ class DomainSerializer(BackendSettingsValidator, ModelSerializer):
          # Validate for update gets called before ViewSet default check
          if self.instance and self.instance.name == "default":
              return data
 -
          storage_class = data.get("storage_class") or self.instance.storage_class
--        storage_settings = data.get("storage_settings") or self.instance.storage_settings
-+        storage_settings = data.get("storage_settings") or self.instance.storage_settings # This line causes issue
+         storage_settings = data.get("storage_settings") or self.instance.storage_settings
          self._validate_storage_backend(storage_class, storage_settings)
- 
-         redirect = data.get("redirect_to_object_storage", True)
 diff --git a/pulpcore/constants.py b/pulpcore/constants.py
 index 91b6b37d3..0bc6b98b2 100644
 --- a/pulpcore/constants.py
@@ -68,10 +79,10 @@ index 91b6b37d3..0bc6b98b2 100644
  
  # Message users receive when attempting to delete a protected repo version
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 651af1bc5..f8254b761 100644
+index e043b0b1c..3469adabe 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -23,6 +23,8 @@ import django
+@@ -27,6 +27,8 @@ from django.utils import timezone
  
  from pulpcore.constants import STORAGE_RESPONSE_MAP
  from pulpcore.responses import ArtifactResponse
@@ -80,7 +91,7 @@ index 651af1bc5..f8254b761 100644
  
  os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
  django.setup()
-@@ -257,6 +259,9 @@ class Handler:
+@@ -264,6 +266,9 @@ class Handler:
              [aiohttp.web.StreamResponse][] or [aiohttp.web.FileResponse][]: The response
                  back to the client.
          """
@@ -90,7 +101,7 @@ index 651af1bc5..f8254b761 100644
          path = request.match_info["path"]
          return await self._match_and_stream(path, request)
  
-@@ -1010,6 +1015,8 @@ class Handler:
+@@ -1026,6 +1031,8 @@ class Handler:
              "storages.backends.gcloud.GoogleCloudStorage",
          ):
              raise HTTPFound(_build_url(), headers=headers)
@@ -100,10 +111,10 @@ index 651af1bc5..f8254b761 100644
              raise NotImplementedError()
  
 diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
-index 2c5548696..0f7f18c1e 100644
+index 5018f96ca..02208a9d6 100644
 --- a/pulpcore/tasking/tasks.py
 +++ b/pulpcore/tasking/tasks.py
-@@ -13,7 +13,7 @@ from django.db.models import Model, Max
+@@ -16,7 +16,7 @@ from django.db.models import Model, Max
  from django_guid import get_guid
  from pulpcore.app.apps import MODULE_PLUGIN_VERSIONS
  from pulpcore.app.models import Task, TaskGroup
@@ -112,7 +123,7 @@ index 2c5548696..0f7f18c1e 100644
  from pulpcore.constants import (
      TASK_FINAL_STATES,
      TASK_INCOMPLETE_STATES,
-@@ -25,6 +25,8 @@ from pulpcore.tasking.kafka import send_task_notification
+@@ -28,6 +28,8 @@ from pulpcore.tasking.kafka import send_task_notification
  _logger = logging.getLogger(__name__)
  
  
@@ -121,7 +132,7 @@ index 2c5548696..0f7f18c1e 100644
  def _validate_and_get_resources(resources):
      resource_set = set()
      for r in resources:
-@@ -47,6 +49,11 @@ def wakeup_worker():
+@@ -50,6 +52,11 @@ def wakeup_worker():
  
  
  def execute_task(task):
@@ -133,7 +144,7 @@ index 2c5548696..0f7f18c1e 100644
      # This extra stack is needed to isolate the current_task ContextVar
      contextvars.copy_context().run(_execute_task, task)
  
-@@ -138,6 +145,17 @@ def dispatch(
+@@ -141,6 +148,17 @@ def dispatch(
          ValueError: When `resources` is an unsupported type.
      """
  
@@ -152,5 +163,5 @@ index 2c5548696..0f7f18c1e 100644
  
      if callable(func):
 -- 
-2.47.0
+2.48.1
 
