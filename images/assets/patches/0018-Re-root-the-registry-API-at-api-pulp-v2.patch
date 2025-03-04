@@ -1,0 +1,39 @@
+From e307b0ee96ae1ea4bbd75058a63a511d884629ae Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Tue, 4 Mar 2025 11:19:30 -0500
+Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
+
+---
+ pulp_container/app/urls.py | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/pulp_container/app/urls.py b/pulp_container/app/urls.py
+index 864f0b2e..b6054931 100644
+--- a/pulp_container/app/urls.py
++++ b/pulp_container/app/urls.py
+@@ -26,16 +26,16 @@ head_route = Route(
+ )
+ 
+ router.routes.append(head_route)
+-router.register(r"^v2/(?P<path>.+)/blobs/uploads\/?", BlobUploads, basename="docker-upload")
+-router.register(r"^v2/(?P<path>.+)/blobs", Blobs, basename="blobs")
+-router.register(r"^v2/(?P<path>.+)/manifests", Manifests, basename="manifests")
++router.register(r"^api/pulp/v2/(?P<path>.+)/blobs/uploads\/?", BlobUploads, basename="docker-upload")
++router.register(r"^api/pulp/v2/(?P<path>.+)/blobs", Blobs, basename="blobs")
++router.register(r"^api/pulp/v2/(?P<path>.+)/manifests", Manifests, basename="manifests")
+ router.register(r"^extensions/v2/(?P<path>.+)/signatures", Signatures, basename="signatures")
+ 
+ urlpatterns = [
+     path("token/", BearerTokenView.as_view()),
+-    path("v2/", VersionView.as_view()),
+-    path("v2/_catalog", CatalogView.as_view()),
+-    path("v2/<path:path>/tags/list", TagsListView.as_view()),
++    path("api/pulp/v2/", VersionView.as_view()),
++    path("api/pulp/v2/_catalog", CatalogView.as_view()),
++    path("api/pulp/v2/<path:path>/tags/list", TagsListView.as_view()),
+     path("", include(router.urls)),
+ ]
+ if settings.FLATPAK_INDEX:
+-- 
+2.48.1
+
