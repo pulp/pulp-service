@@ -138,6 +138,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0017-Fix-distribution.base_url-in-tests.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0017-Fix-distribution.base_url-in-tests.patch
 
+COPY images/assets/patches/0018-Re-root-the-registry-API-at-api-pulp-v2.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0018-Re-root-the-registry-API-at-api-pulp-v2.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
