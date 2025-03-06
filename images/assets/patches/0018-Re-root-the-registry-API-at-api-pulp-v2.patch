@@ -1,13 +1,27 @@
-From 034703df7e4001d0bd3a6c346743ad47af31ebfc Mon Sep 17 00:00:00 2001
+From 9a67a959aab1bb26cf37a9b5220567ad9c7d75d2 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 4 Mar 2025 11:19:30 -0500
 Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
 
 ---
+ pulp_container/app/redirects.py    |  2 +-
  pulp_container/app/registry_api.py |  4 +++-
  pulp_container/app/urls.py         | 12 ++++++------
- 2 files changed, 9 insertions(+), 7 deletions(-)
+ 3 files changed, 10 insertions(+), 8 deletions(-)
 
+diff --git a/pulp_container/app/redirects.py b/pulp_container/app/redirects.py
+index b431faee..a37d6567 100644
+--- a/pulp_container/app/redirects.py
++++ b/pulp_container/app/redirects.py
+@@ -34,7 +34,7 @@ class CommonRedirects:
+ 
+         return self.distribution.redirect_to_content_app(
+             urljoin(
+-                settings.CONTENT_ORIGIN,
++                "https://mtls.internal.console.redhat.com",
+                 f"/{self.path_prefix}/{self.path}/{content_type}/{content_id}",
+             )
+         )
 diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
 index 2a085786..ccf84495 100644
 --- a/pulp_container/app/registry_api.py
