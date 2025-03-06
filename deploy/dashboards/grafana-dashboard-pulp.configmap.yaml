@@ -35,6 +35,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 2,
+      "id": 763835,
       "links": [],
       "liveNow": false,
       "panels": [
@@ -101,7 +102,7 @@ data:
             "showThresholdMarkers": true,
             "sizing": "auto"
           },
-          "pluginVersion": "10.4.2",
+          "pluginVersion": "10.4.1",
           "targets": [
             {
               "datasource": {
@@ -1547,7 +1548,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "filter @logStream like /pulp-${cluster:text}_pulp-content/ |\nfilter message like /\\/api\\/pulp-content\\/.*?\\/.*?\\/.*? HTTP.*/ |\nparse message /(?<host>.*?) (?<date>\\[.*?\\]) \"(?<method>.*?) \\/api\\/pulp-content\\/(?<domain>.*?)\\/.*? (?<HttpVersion>.*?)\" \\d+ \\d+ \".*?\" \".*?\" \"(HIT|MISS)\" \"(?<ArtifactSize>\\d+)\"( \"(?<OrgId>.*?)\")?$/ |\nstats sum(ArtifactSize) as requested_artifact_size by domain,bin(5m)\n\n# limit defines the max number of events (in the bellow lines, at max 5 log messages will be queried)\n# since we cannot define a limit based on the number of different domains, doing a sort | limit would not be useful in this scenario and would just generate more load\n#|sort requested_artifact_size desc\n#|limit 5",
+              "expression": "filter @logStream like /pulp-${cluster:text}_pulp-content/ |\nfilter message like /\\/api\\/pulp-content\\/.*?\\/.*?\\/.*? HTTP.*/ |\nparse message /(?<host>.*?) (?<date>\\[.*?\\]) \"(?<method>.*?) \\/api\\/pulp-content\\/(?<domain>.*?)\\/.*? (?<HttpVersion>.*?)\" \\d+ \\d+ \".*?\" \".*?\" \"(HIT|MISS)\" \"(?<ArtifactSize>\\d+)\"( \"(?<OrgId>.*?)\")?$/ |\nstats sum(ArtifactSize) as requested_artifact_size by domain,bin(5m)\n\n# limit defines the max number of events (in the below lines, at max 5 log messages will be queried)\n# since we cannot define a limit based on the number of different domains, doing a sort | limit would not be useful in this scenario and would just generate more load\n#|sort requested_artifact_size desc\n#|limit 5",
               "hide": false,
               "id": "",
               "label": "",
@@ -2076,12 +2077,191 @@ data:
           "type": "timeseries"
         },
         {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              "mappings": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 10,
+            "x": 0,
+            "y": 65
+          },
+          "id": 36,
+          "options": {
+            "displayLabels": [
+              "percent"
+            ],
+            "legend": {
+              "calcs": [],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "values": [
+                "value",
+                "percent"
+              ]
+            },
+            "pieType": "pie",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| filter @message not like /fixtures.pulpproject.org/\n| parse @message /Task\\[(?<task_name>[^\\]]+)\\]/\n| filter ispresent(task_name)\n| stats count() as failed_tasks_by_name by task_name\n| sort task_name asc\n",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "task_name"
+              ]
+            }
+          ],
+          "timeFrom": "30d",
+          "title": "Failed tasks by task name",
+          "type": "piechart"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 12,
+            "w": 10,
+            "x": 10,
+            "y": 65
+          },
+          "id": 37,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| filter message like /Task completed/\n| stats count() as task_count",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": []
+            }
+          ],
+          "timeFrom": "30d",
+          "title": "Completed tasks",
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            }
+          ],
+          "type": "stat"
+        },
+        {
           "collapsed": false,
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 65
+            "y": 77
           },
           "id": 33,
           "panels": [],
@@ -2152,7 +2332,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 66
+            "y": 78
           },
           "id": 34,
           "options": {
@@ -2248,7 +2428,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 66
+            "y": 78
           },
           "id": 35,
           "options": {
@@ -2288,7 +2468,7 @@ data:
         "list": [
           {
             "current": {
-              "selected": true,
+              "selected": false,
               "text": "stage",
               "value": "s"
             },
@@ -2371,6 +2551,6 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 13,
+      "version": 2,
       "weekStart": ""
     }
