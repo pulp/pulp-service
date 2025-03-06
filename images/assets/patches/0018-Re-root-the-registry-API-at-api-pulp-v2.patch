@@ -1,12 +1,35 @@
-From e307b0ee96ae1ea4bbd75058a63a511d884629ae Mon Sep 17 00:00:00 2001
+From 034703df7e4001d0bd3a6c346743ad47af31ebfc Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 4 Mar 2025 11:19:30 -0500
 Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
 
 ---
- pulp_container/app/urls.py | 12 ++++++------
- 1 file changed, 6 insertions(+), 6 deletions(-)
+ pulp_container/app/registry_api.py |  4 +++-
+ pulp_container/app/urls.py         | 12 ++++++------
+ 2 files changed, 9 insertions(+), 7 deletions(-)
 
+diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
+index 2a085786..ccf84495 100644
+--- a/pulp_container/app/registry_api.py
++++ b/pulp_container/app/registry_api.py
+@@ -97,6 +97,8 @@ from pulp_container.constants import (
+     V2_ACCEPT_HEADERS,
+ )
+ 
++from pulp_service.app.authentication import RHServiceAccountCertAuthentication
++
+ log = logging.getLogger(__name__)
+ 
+ IGNORED_PULL_THROUGH_REMOTE_ATTRIBUTES = [
+@@ -233,7 +235,7 @@ class ContainerRegistryApiMixin:
+         List of authentication classes to check for this view.
+         """
+         if settings.get("TOKEN_AUTH_DISABLED", False):
+-            return [RegistryAuthentication]
++            return [RHServiceAccountCertAuthentication]
+         return [TokenAuthentication]
+ 
+     @property
 diff --git a/pulp_container/app/urls.py b/pulp_container/app/urls.py
 index 864f0b2e..b6054931 100644
 --- a/pulp_container/app/urls.py
