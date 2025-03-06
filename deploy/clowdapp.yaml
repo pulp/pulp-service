@@ -18,7 +18,7 @@ objects:
         batch:
         memory_limiter:
           check_interval: 1s
-          limit_mib: 2048
+          limit_mib: 768
         transform:
           error_mode: ignore
           metric_statements:
