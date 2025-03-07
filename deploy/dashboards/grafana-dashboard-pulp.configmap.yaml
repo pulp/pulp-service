@@ -2204,7 +2204,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-stage_pulp-(worker)/ \n| parse @message /Task\\[(?<task_name>[^\\]]+)\\]/\n| filter ispresent(task_name)\n| stats count() as failed_tasks by bin(1h)\n",
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| parse @message /Task\\[(?<task_name>[^\\]]+)\\]/\n| filter ispresent(task_name)\n| stats count() as failed_tasks by bin(1h)\n",
               "id": "",
               "label": "",
               "logGroups": [
