@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import ssl
+import uuid
 
 import aiohttp
 import jq
@@ -17,7 +18,7 @@ from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
 from pulpcore.plugin.models import Domain
-from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard
+from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard, Content
 from pulpcore.cache import Cache
 
 _logger = logging.getLogger(__name__)
@@ -164,3 +165,12 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                 "Can manage role assignments on Feature ContentGuard",
             ),
         )
+
+
+class ArtifactVulnerability(models.Model):
+    """
+    Model used in content vulnerability scan
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vulns = models.JSONField()
