@@ -1,18 +1,41 @@
-From 9a67a959aab1bb26cf37a9b5220567ad9c7d75d2 Mon Sep 17 00:00:00 2001
+From 27be6aafc1d2da69d1b22cca1e4103928c7990b0 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 4 Mar 2025 11:19:30 -0500
 Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
 
 ---
- pulp_container/app/redirects.py    |  2 +-
+ pulp_container/app/content.py      |  2 +-
+ pulp_container/app/redirects.py    |  4 ++--
  pulp_container/app/registry_api.py |  4 +++-
  pulp_container/app/urls.py         | 12 ++++++------
- 3 files changed, 10 insertions(+), 8 deletions(-)
+ 4 files changed, 12 insertions(+), 10 deletions(-)
 
+diff --git a/pulp_container/app/content.py b/pulp_container/app/content.py
+index dbe6418d..006e8afb 100644
+--- a/pulp_container/app/content.py
++++ b/pulp_container/app/content.py
+@@ -6,7 +6,7 @@ from pulp_container.app.registry import Registry
+ 
+ registry = Registry()
+ 
+-PREFIX = "/pulp/container/{pulp_domain}/" if settings.DOMAIN_ENABLED else "/pulp/container/"
++PREFIX = "/api/pulp-container/{pulp_domain}/" if settings.DOMAIN_ENABLED else "/pulp/container/"
+ 
+ app.add_routes(
+     [
 diff --git a/pulp_container/app/redirects.py b/pulp_container/app/redirects.py
-index b431faee..a37d6567 100644
+index b431faee..ca1cc9d7 100644
 --- a/pulp_container/app/redirects.py
 +++ b/pulp_container/app/redirects.py
+@@ -22,7 +22,7 @@ class CommonRedirects:
+         self.path = path
+         self.request = request
+         self.path_prefix = (
+-            f"pulp/container/{request.pulp_domain.name}"
++            f"api/pulp-container/{request.pulp_domain.name}"
+             if settings.DOMAIN_ENABLED
+             else "pulp/container"
+         )
 @@ -34,7 +34,7 @@ class CommonRedirects:
  
          return self.distribution.redirect_to_content_app(
