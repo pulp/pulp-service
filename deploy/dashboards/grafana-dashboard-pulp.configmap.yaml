@@ -2081,57 +2081,122 @@ data:
             "type": "cloudwatch",
             "uid": "P1A97A9592CB7F392"
           },
+          "description": "",
           "fieldConfig": {
             "defaults": {
               "color": {
                 "mode": "palette-classic"
               },
               "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
                 "hideFrom": {
                   "legend": false,
                   "tooltip": false,
                   "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
                 }
               },
-              "mappings": []
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "completed_tasks"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "semi-dark-green",
+                      "mode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Successful tasks"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "failed_tasks"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "semi-dark-red",
+                      "mode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Failed tasks"
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
-            "h": 12,
-            "w": 10,
+            "h": 9,
+            "w": 20,
             "x": 0,
             "y": 65
           },
-          "id": 36,
+          "id": 38,
           "options": {
-            "displayLabels": [
-              "percent"
-            ],
             "legend": {
               "calcs": [],
-              "displayMode": "table",
+              "displayMode": "list",
               "placement": "bottom",
-              "showLegend": true,
-              "values": [
-                "value",
-                "percent"
-              ]
-            },
-            "pieType": "pie",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": true
+              "showLegend": true
             },
             "tooltip": {
               "mode": "single",
               "sort": "none"
             }
           },
-          "pluginVersion": "10.4.1",
           "targets": [
             {
               "datasource": {
@@ -2139,7 +2204,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| filter @message not like /fixtures.pulpproject.org/\n| parse @message /Task\\[(?<task_name>[^\\]]+)\\]/\n| filter ispresent(task_name)\n| stats count() as failed_tasks_by_name by task_name\n| sort task_name asc\n",
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| parse @message /Task\\[(?<task_name>[^\\]]+)\\]/\n| filter ispresent(task_name)\n| stats count() as failed_tasks by bin(1h)\n",
               "id": "",
               "label": "",
               "logGroups": [
@@ -2160,13 +2225,50 @@ data:
               "sqlExpression": "",
               "statistic": "Average",
               "statsGroups": [
-                "task_name"
+                "bin(1h)"
+              ]
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter @message like /Task completed/\n| stats count() as completed_tasks by bin(1h)\n",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "B",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(1h)"
               ]
             }
           ],
-          "timeFrom": "30d",
-          "title": "Failed tasks by task name",
-          "type": "piechart"
+          "timeFrom": "5d",
+          "title": "Successful Tasks and Failed Tasks",
+          "transformations": [
+            {
+              "id": "joinByField",
+              "options": {}
+            }
+          ],
+          "type": "timeseries"
         },
         {
           "datasource": {
@@ -2192,10 +2294,10 @@ data:
             "overrides": []
           },
           "gridPos": {
-            "h": 12,
-            "w": 10,
-            "x": 10,
-            "y": 65
+            "h": 10,
+            "w": 8,
+            "x": 0,
+            "y": 74
           },
           "id": 37,
           "options": {
@@ -2245,8 +2347,8 @@ data:
               "statsGroups": []
             }
           ],
-          "timeFrom": "30d",
-          "title": "Completed tasks",
+          "timeFrom": "1d",
+          "title": "Successful tasks",
           "transformations": [
             {
               "id": "merge",
@@ -2261,7 +2363,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 77
+            "y": 84
           },
           "id": 33,
           "panels": [],
@@ -2332,7 +2434,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 78
+            "y": 85
           },
           "id": 34,
           "options": {
@@ -2428,7 +2530,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 78
+            "y": 85
           },
           "id": 35,
           "options": {
