@@ -2234,7 +2234,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-stage_pulp-(worker)/\n| filter @message like /Task completed/\n| stats count() as completed_tasks by bin(1h)\n",
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter @message like /Task completed/\n| stats count() as completed_tasks by bin(1h)\n",
               "hide": false,
               "id": "",
               "label": "",
