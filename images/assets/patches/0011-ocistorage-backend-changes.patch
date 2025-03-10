@@ -1,4 +1,4 @@
-From 08fef16003ad8ee8735370c34b46b573c5a28a00 Mon Sep 17 00:00:00 2001
+From 63ffa36a6eaf2c7cae84c91070228b6b1afd9bcf Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Thu, 7 Nov 2024 15:39:12 -0500
 Subject: [PATCH] ocistorage backend changes
@@ -9,8 +9,8 @@ Subject: [PATCH] ocistorage backend changes
  pulpcore/app/settings.py           |  1 +
  pulpcore/constants.py              |  1 +
  pulpcore/content/handler.py        |  7 +++++++
- pulpcore/tasking/tasks.py          | 20 +++++++++++++++++++-
- 6 files changed, 37 insertions(+), 3 deletions(-)
+ pulpcore/tasking/tasks.py          | 29 +++++++++++++++++++++++++++--
+ 6 files changed, 45 insertions(+), 4 deletions(-)
 
 diff --git a/pulpcore/app/models/domain.py b/pulpcore/app/models/domain.py
 index 18dd3e892..2fc79e09f 100644
@@ -111,15 +111,17 @@ index e043b0b1c..3469adabe 100644
              raise NotImplementedError()
  
 diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
-index 5018f96ca..02208a9d6 100644
+index 5018f96ca..4b89d9e84 100644
 --- a/pulpcore/tasking/tasks.py
 +++ b/pulpcore/tasking/tasks.py
-@@ -16,7 +16,7 @@ from django.db.models import Model, Max
+@@ -15,8 +15,8 @@ from django.db import connection, transaction
+ from django.db.models import Model, Max
  from django_guid import get_guid
  from pulpcore.app.apps import MODULE_PLUGIN_VERSIONS
- from pulpcore.app.models import Task, TaskGroup
+-from pulpcore.app.models import Task, TaskGroup
 -from pulpcore.app.util import current_task, get_domain, get_prn
-+from pulpcore.app.util import current_task, get_domain, get_prn, resolve_prn
++from pulpcore.app.models import Repository, RepositoryVersion, Task, TaskGroup
++from pulpcore.app.util import current_task, extract_pk, get_domain, get_prn, resolve_prn
  from pulpcore.constants import (
      TASK_FINAL_STATES,
      TASK_INCOMPLETE_STATES,
@@ -144,7 +146,7 @@ index 5018f96ca..02208a9d6 100644
      # This extra stack is needed to isolate the current_task ContextVar
      contextvars.copy_context().run(_execute_task, task)
  
-@@ -141,6 +148,17 @@ def dispatch(
+@@ -141,6 +148,24 @@ def dispatch(
          ValueError: When `resources` is an unsupported type.
      """
  
@@ -154,6 +156,13 @@ index 5018f96ca..02208a9d6 100644
 +            m, pk = resolve_prn(kwargs['data']['repository'])
 +            repository_name = m.objects.get(pk=pk).name
 +            kwargs['quay_repository_name'] = repository_name
++        elif repository:
++            pk = extract_pk(repository)
++            repository_name = Repository.objects.get(pk=pk).name
++            kwargs['quay_repository_name'] = repository_name
++    if kwargs and 'repository_version_pk' in kwargs:
++        repository_name = RepositoryVersion.objects.get(pk=kwargs['repository_version_pk']).repository.name
++        kwargs['quay_repository_name'] = repository_name
 +    x_quay_auth = x_quay_auth_var.get(None)
 +    x_quay_auth_var.set(None)
 +    if x_quay_auth:

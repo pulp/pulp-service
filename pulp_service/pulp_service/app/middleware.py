@@ -10,8 +10,8 @@ from os import getenv
 from django.db import IntegrityError
 from django.utils.deprecation import MiddlewareMixin
 
-from pulpcore.app.models import Artifact
-from pulpcore.app.util import get_artifact_url, resolve_prn
+from pulpcore.app.models import Artifact, Repository
+from pulpcore.app.util import extract_pk, get_artifact_url, resolve_prn
 
 
 _logger = logging.getLogger(__name__)
@@ -71,6 +71,10 @@ class OCIStorageMiddleware(MiddlewareMixin):
         if 'repository' in request.POST and request.POST['repository'].startswith('prn:'):
             m, pk = resolve_prn(request.POST['repository'])
             repository_name = m.objects.get(pk=pk).name
+            repository_name_var.set(repository_name)
+        elif 'repository' in request.POST:
+            pk = extract_pk(request.POST['repository'])
+            repository_name = Repository.objects.get(pk=pk).name
             repository_name_var.set(repository_name)
         if 'HTTP_X_QUAY_AUTH' in request.META:
             x_quay_auth_var.set(request.META['HTTP_X_QUAY_AUTH'])
