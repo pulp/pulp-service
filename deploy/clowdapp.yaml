@@ -27,6 +27,7 @@ objects:
                 - set(description, "Duration of HTTP server requests.") where name == "http.server.duration"
                 - set(description, "Number of active HTTP server requests.") where name == "http.server.active_requests"
       exporters:
+        debug:
         prometheus:
           endpoint: "0.0.0.0:9000"
           namespace: pulp
@@ -48,7 +49,7 @@ objects:
           metrics:
             receivers: [otlp]
             processors: [transform, memory_limiter, batch]
-            exporters: [prometheus]
+            exporters: [prometheus, debug]
 - apiVersion: v1
   kind: ConfigMap
   metadata:
