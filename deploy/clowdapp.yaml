@@ -8,7 +8,7 @@ objects:
   metadata:
     name: pulp-otel-config
   data:
-    config.yaml: |
+    otel-collector-config: |
       receivers:
         otlp:
           protocols:
@@ -37,6 +37,7 @@ objects:
             receivers: [otlp]
             processors: [transform, memory_limiter, batch]
             exporters: [prometheus]
+
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -46,6 +47,7 @@ objects:
       from django.conf import settings as s
       config = f"{{\"access_key\": \"{s.AWS_ACCESS_KEY_ID}\", \"secret_key\": \"{s.AWS_SECRET_ACCESS_KEY}\", \"bucket_name\": \"{s.AWS_STORAGE_BUCKET_NAME}\", \"region_name\": \"us-east-1\", \"default_acl\": \"private\"}}"
       print(config)
+
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -55,6 +57,14 @@ objects:
       #!/bin/bash
       export PATH=${PATH}:/tmp/bin
 
+      mkdir /tmp/bin
+      cd /tmp/bin
+      curl -L -O https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64
+      mv jq-linux-amd64 jq
+      chmod +x jq
+
+      kubectl create cm otel-exporter-cm  --from-literal=endpoint=$(cat /cdapp/cdappconfig.json | jq -r '.privateEndpoints[] | select(.app == "pulp-otel-collector") | "http://\(.hostname):\(.port)"')
+
       kubectl get secret
       retVal=$?
       echo $retVal
@@ -62,12 +72,6 @@ objects:
          echo "Stopping here because we are running on the staging environment or we cannot retrieve secrets"
          exit 0
       fi
-
-      mkdir /tmp/bin
-      cd /tmp/bin
-      curl -L -O https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
-      mv jq-linux64 jq
-      chmod +x jq
 
       # https://docs.pulpproject.org/pulp_operator/configuring/storage/#configuring-pulp-operator-to-use-object-storage
       S3_ACCESS_KEY_ID=$(cat /cdapp/cdappconfig.json | jq -r '.objectStore.buckets[0].accessKey')
@@ -203,8 +207,45 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdApp
   metadata:
+    name: pulp-otel-collector
+  spec:
+    envName: "${ENV_NAME}"
+    testing:
+      iqePlugin: content-sources
+    deployments:
+    - name: otel-collector
+      replicas: 1
+      webServices:
+        private:
+          enabled: true
+      podSpec:
+        image: "registry.redhat.io/rhosdt/opentelemetry-collector-rhel8"
+        args:
+         - "--config"
+         - "file:/etc/otelcol-contrib/otel-collector-config.yaml"
+        volumes:
+          - name: otel-config
+            configMap:
+              name: pulp-otel-config
+        volumeMounts:
+          - name: otel-config
+            mountPath: /etc/otelcol-contrib/otel-collector-config.yaml
+            subPath: otel-collector-config
+        resources:
+          requests:
+            cpu: ${{OTEL_COLLECTOR_CPU_REQUEST}}
+            memory: ${{OTEL_COLLECTOR_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
+            memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
+
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdApp
+  metadata:
     name: pulp
   spec:
+    dependencies:
+      - pulp-otel-collector
     envName: "${ENV_NAME}"
     testing:
       iqePlugin: content-sources
@@ -217,7 +258,11 @@ objects:
           apiPath: pulp
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
+        command: ["/bin/sh"]
+        args:
+        - "-c"
+        - |
+          exec pulpcore-api -b 0.0.0.0:8000 --timeout 90 --workers ${PULP_API_GUNICORN_WORKERS} --access-logfile - --access-logformat '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" %(M)s)'
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -240,6 +285,9 @@ objects:
               items:
               - key: subscription-api-mock-cert.pem
                 path: subscription-api-mock-cert.pem
+          - name: pulp-otel-expoter-otlp-endpoint
+            configMap:
+              name: pulp-otel-expoter-otlp-endpoint
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -263,9 +311,6 @@ objects:
           periodSeconds: 120
           timeoutSeconds: 120
         terminationGracePeriodSeconds: 120
-        sidecars:
-          - name: otel-collector
-            enabled: true
         resources:
           requests:
             cpu: ${{PULP_API_CPU_REQUEST}}
@@ -276,10 +321,13 @@ objects:
         env:
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            valueFrom:
+              configMapKeyRef:
+                name: otel-exporter-cm
+                key: endpoint
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
-          - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
           - name: OTEL_METRIC_EXPORT_INTERVAL
             value: ${OTEL_METRIC_EXPORT_INTERVAL}
           - name: OTEL_METRIC_EXPORT_TIMEOUT
@@ -359,7 +407,11 @@ objects:
           apiPath: pulp-content
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-', '--access-logformat', '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" "%{X-PULP-CACHE}o" "%{X-PULP-ARTIFACT-SIZE}o" "%{X-RH-ORG-ID}o"']
+        command: ["/bin/sh"]
+        args:
+        - "-c"
+        - |
+          exec pulpcore-content -b 0.0.0.0:8000 --access-logfile - --access-logformat '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" "%{X-PULP-CACHE}o" "%{X-PULP-ARTIFACT-SIZE}o" "%{X-RH-ORG-ID}o"'
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -405,9 +457,6 @@ objects:
           periodSeconds: 120
           timeoutSeconds: 120
         terminationGracePeriodSeconds: 120
-        sidecars:
-          - name: otel-collector
-            enabled: true
         resources:
           requests:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
@@ -418,10 +467,13 @@ objects:
         env:
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            valueFrom:
+              configMapKeyRef:
+                name: otel-exporter-cm
+                key: endpoint
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
-          - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
           - name: OTEL_METRIC_EXPORT_INTERVAL
             value: ${OTEL_METRIC_EXPORT_INTERVAL}
           - name: OTEL_METRIC_EXPORT_TIMEOUT
@@ -471,7 +523,12 @@ objects:
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-worker']
+        command: ["/bin/sh"]
+        args:
+        - "-c"
+        - |
+          exec pulpcore-worker
+
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -501,9 +558,6 @@ objects:
           periodSeconds: 10
           timeoutSeconds: 10
         terminationGracePeriodSeconds: 3660
-        sidecars:
-          - name: otel-collector
-            enabled: true
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
@@ -514,10 +568,13 @@ objects:
         env:
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            valueFrom:
+              configMapKeyRef:
+                name: otel-exporter-cm
+                key: endpoint
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
-          - name: OTEL_EXPORTER_OTLP_ENDPOINT
-            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
           - name: PULP_REDIS_PORT
@@ -697,45 +754,6 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
-      - name: create-pulp-services-admin-users
-        podSpec:
-          image: ${IMAGE}:${IMAGE_TAG}
-          command: [ 'pulpcore-manager' ]
-          args:
-            - "shell"
-            - "-c"
-            - |
-              from os import getenv
-              from django.contrib.auth import get_user_model
-              usernames=getenv("USER_LIST").split(',')
-              User = get_user_model()
-              for username in usernames:
-                user, created = User.objects.get_or_create(username=username)
-                if not user.is_superuser:
-                  user.is_superuser = True
-                  user.save()
-          env:
-            - name: XDG_CONFIG_HOME
-              value: "/tmp"
-            - name: XDG_CACHE_HOME
-              value: "/tmp"
-            - name: USER_LIST
-              value: "/O=rhds/OU=users/UID=ytrahnov,"
-            - name: PULP_DB_ENCRYPTION_KEY
-              value: ${{PULP_DB_ENCRYPTION_KEY}}
-          volumeMounts:
-            - name: secret-volume
-              mountPath: "/etc/pulp/keys"
-            - name: pulp-settings
-              mountPath: "/etc/pulp/settings.py"
-              subPath: "settings.py"
-          volumes:
-            - name: secret-volume
-              secret:
-                secretName: pulp-db-fields-encryption
-            - name: pulp-settings
-              secret:
-                secretName: pulp-settings
 
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
@@ -762,14 +780,6 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: create-pulp-services-admin-users-ytrahnov-4
-  spec:
-    appName: pulp
-    jobs:
-      - create-pulp-services-admin-users
 
 parameters:
   - name: ENV_NAME
@@ -838,9 +848,10 @@ parameters:
   - name: OTEL_EXPORTER_OTLP_PROTOCOL
     description: Defines the protocol used to feed the OpenTelemetry collector.
     value: "http/protobuf"
-  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-    description: The collector endpoint used to receive telemetry data from the application.
-    value: "http://localhost:10000/"
+    # This envvar needs to collect its data directly from cdappconfig.json and runs on every initialization
+    # - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    #   description: The collector endpoint used to receive telemetry data from the application.
+    #   value: "http://$(PULP_OTEL_COLLECTOR_OTEL_COLLECTOR_SERVICE_HOST):$(PULP_OTEL_COLLECTOR_OTEL_COLLECTOR_SERVICE_PORT)"
   - name: OTEL_METRIC_EXPORT_INTERVAL
     description: The time interval (in milliseconds) between the start of two export attempts.
     value: "7000"
