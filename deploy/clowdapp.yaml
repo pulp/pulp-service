@@ -723,6 +723,8 @@ objects:
               value: "/tmp"
             - name: USER_LIST
               value: "/O=rhds/OU=users/UID=stage-ytrahnov"
+            - name: PULP_DB_ENCRYPTION_KEY
+              value: ${{PULP_DB_ENCRYPTION_KEY}}
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
@@ -765,7 +767,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-pulp-services-admin-users-ytrahnov
+    name: create-pulp-services-admin-users-ytrahnov-1
   spec:
     appName: pulp
     jobs:
