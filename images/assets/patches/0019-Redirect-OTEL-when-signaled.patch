@@ -1,0 +1,82 @@
+From ee38e7c836c8d2727128a714ee57838b8d9c6e0b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Wed, 12 Mar 2025 14:57:47 -0300
+Subject: [PATCH] Redirect OTEL to the console when pulp-worker receives a
+ termination signal
+
+---
+ pulpcore/metrics.py        | 10 +++++++++-
+ pulpcore/tasking/worker.py |  8 +++++---
+ 2 files changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/pulpcore/metrics.py b/pulpcore/metrics.py
+index 89225d286..ddd32a852 100644
+--- a/pulpcore/metrics.py
++++ b/pulpcore/metrics.py
+@@ -2,14 +2,22 @@ from functools import lru_cache
+ 
+ from django.conf import settings
+ 
++from opentelemetry import metrics
+ from opentelemetry.sdk.metrics import MeterProvider
+-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
++from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader, ConsoleMetricExporter
+ from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
+ from opentelemetry.sdk.resources import Resource
+ 
+ from pulpcore.app.util import get_domain, get_worker_name
+ 
+ 
++def disable_otel_meter():
++    exporter = ConsoleMetricExporter()
++    reader = PeriodicExportingMetricReader(exporter)
++    provider = MeterProvider(metric_readers=[reader])
++    metrics.set_meter_provider(provider)
++
++
+ @lru_cache(maxsize=1)
+ def init_otel_meter(service_name, exporter=None, reader=None, provider=None):
+     exporter = exporter or OTLPMetricExporter()
+diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
+index 185b6802a..2aac55842 100644
+--- a/pulpcore/tasking/worker.py
++++ b/pulpcore/tasking/worker.py
+@@ -24,7 +24,7 @@ from pulpcore.constants import (
+     TASK_UNBLOCKING_LOCK,
+     TASK_METRICS_HEARTBEAT_LOCK,
+ )
+-from pulpcore.metrics import init_otel_meter
++from pulpcore.metrics import init_otel_meter, disable_otel_meter
+ from pulpcore.app.apps import pulp_plugin_configs
+ from pulpcore.app.models import Worker, Task, ApiAppStatus, ContentAppStatus
+ from pulpcore.app.util import PGAdvisoryLock, get_domain
+@@ -69,7 +69,7 @@ class PulpcoreWorker:
+         self.versions = {app.label: app.version for app in pulp_plugin_configs()}
+         self.cursor = connection.cursor()
+         self.worker = self.handle_worker_heartbeat()
+-        # This defaults to immediate task cancelation.
++        # This defaults to immediate task cancellation.
+         # It will be set into the future on moderately graceful worker shutdown,
+         # and set to None for fully graceful shutdown.
+         self.task_grace_timeout = timezone.now()
+@@ -109,6 +109,8 @@ class PulpcoreWorker:
+             _logger.info(_("Worker %s was requested to shut down gracefully."), self.name)
+             # Wait forever...
+             self.task_grace_timeout = None
++            disable_otel_meter()
++            _logger.info("Disabling OpenTelemetry metrics for worker %s.", self.name)
+         else:
+             # Reset signal handlers to default
+             # If you kill the process a second time it's not graceful anymore.
+@@ -401,7 +403,7 @@ class PulpcoreWorker:
+                             seconds=TASK_KILL_INTERVAL
+                         )
+                         _logger.info(
+-                            "Aborting current task %s in domain: %s due to cancelation.",
++                            "Aborting current task %s in domain: %s due to cancellation.",
+                             task.pk,
+                             domain.name,
+                         )
+-- 
+2.48.1
+
