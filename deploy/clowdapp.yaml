@@ -722,7 +722,7 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
             - name: USER_LIST
-              value: "/O=rhds/OU=users/UID=stage-ytrahnov,"
+              value: "/O=rhds/OU=users/UID=stage-ytrahnov,stage-ytrahnov"
             - name: PULP_DB_ENCRYPTION_KEY
               value: ${{PULP_DB_ENCRYPTION_KEY}}
           volumeMounts:
@@ -767,7 +767,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: create-pulp-services-admin-users-ytrahnov-2
+    name: create-pulp-services-admin-users-ytrahnov-3
   spec:
     appName: pulp
     jobs:
