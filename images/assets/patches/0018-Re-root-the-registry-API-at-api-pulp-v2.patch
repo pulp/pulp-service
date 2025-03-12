@@ -1,4 +1,4 @@
-From 35596b3cfdd45258f57ed0fa33dc0d1e32800fe3 Mon Sep 17 00:00:00 2001
+From 329d74c4783fdcc411568babd59c4c78997f0829 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 4 Mar 2025 11:19:30 -0500
 Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
@@ -7,8 +7,8 @@ Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
  pulp_container/app/content.py      |  2 +-
  pulp_container/app/redirects.py    |  4 ++--
  pulp_container/app/registry_api.py |  4 +++-
- pulp_container/app/urls.py         | 16 ++++++++--------
- 4 files changed, 14 insertions(+), 12 deletions(-)
+ pulp_container/app/urls.py         | 14 +++++++-------
+ 4 files changed, 13 insertions(+), 11 deletions(-)
 
 diff --git a/pulp_container/app/content.py b/pulp_container/app/content.py
 index dbe6418d..006e8afb 100644
@@ -68,18 +68,9 @@ index 2a085786..ccf84495 100644
  
      @property
 diff --git a/pulp_container/app/urls.py b/pulp_container/app/urls.py
-index 864f0b2e..b505a0ec 100644
+index 864f0b2e..7d701f3f 100644
 --- a/pulp_container/app/urls.py
 +++ b/pulp_container/app/urls.py
-@@ -18,7 +18,7 @@ from pulp_container.app.registry_api import (
- router = SimpleRouter(trailing_slash=False)
- 
- head_route = Route(
--    url=r"^{prefix}/{lookup}{trailing_slash}$",
-+    url=r"^api/pulp/{prefix}/{lookup}{trailing_slash}$",
-     mapping={"head": "head"},
-     name="{basename}-detail",
-     detail=True,
 @@ -26,16 +26,16 @@ head_route = Route(
  )
  
