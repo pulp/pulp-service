@@ -15,7 +15,6 @@ ENV PULP_WORKERS=2
 ENV PULP_HTTPS=false
 ENV PULP_STATIC_ROOT=/var/lib/operator/static/
 
-ENV PULP_INSTALLED_APPS='@merge django.contrib.admin.apps.SimpleAdminConfig'
 
 # Install updates & dnf plugins before disabling python36 to prevent errors
 # COPY images/repos.d/*.repo /etc/yum.repos.d/
