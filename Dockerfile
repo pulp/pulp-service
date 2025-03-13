@@ -44,11 +44,11 @@ RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography 
     dnf -y install glibc-langpack-en && \
     dnf -y install python${PYTHON_VERSION}-setuptools && \
     dnf -y install swig && \
-    dnf -y install xz && \
-    dnf -y install ninja-build && \
     dnf -y install ostree-libs ostree --allowerasing --nobest && \
     dnf -y install patch && \
+    dnf -y install jq && \
     dnf -y install zstd
+
 RUN dnf clean all
 
 RUN python${PYTHON_VERSION} -m venv --system-site-packages /usr/local/lib/pulp
