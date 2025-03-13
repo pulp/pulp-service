@@ -1,15 +1,69 @@
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.contrib import admin
 
+from django import forms
+from django.core.validators import RegexValidator 
+
 from .models import DomainOrg
+import re
 
 from pulpcore.app.models import Domain
+
+USERNAME_PATTERN = r'^[\w.@+=/-]+$'
+USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these special characters: @, ., +, -, =, /, _"
+USERNAME_HELP_TEXT = "Required. 150 characters or fewer. Letters, numbers, and these special characters: @, ., +, -, =, /, _"
+
+# Override Django's username validator
+custom_username_validator = RegexValidator(
+    USERNAME_PATTERN,
+    USERNAME_ERROR_MSG,
+    'invalid'
+)
+
+
+# Apply the new validator to the User model
+User._meta.get_field('username').validators = [custom_username_validator]
+# Update the help_text as well
+User._meta.get_field('username').help_text = USERNAME_HELP_TEXT
+
+# Custom forms to allow additional characters
+class CustomUserCreationForm(UserCreationForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Override help_text in the form field
+        self.fields['username'].help_text = USERNAME_HELP_TEXT
+
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        if not re.match(USERNAME_PATTERN, username):
+            raise forms.ValidationError(USERNAME_ERROR_MSG)
+        return username
+
+
+class CustomUserChangeForm(UserChangeForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Override help_text in the form field
+        self.fields['username'].help_text = USERNAME_HELP_TEXT
+        
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        if not re.match(r'^[\w.@+=/-]+$', username):
+            raise forms.ValidationError(
+                "Username can only contain letters, numbers, and the characters @/./+/-/=/_"
+            )
+        return username
+
+
+class CustomUserAdmin(UserAdmin):
+    form = CustomUserChangeForm
+    add_form = CustomUserCreationForm
 
 
 class PulpAdminSite(admin.AdminSite):
     site_header = "Pulp administration"
-
 
 class ContentSourceDomainFilter(admin.SimpleListFilter):
     title = 'ContentSource Domains'
@@ -47,5 +101,6 @@ class DomainAdmin(admin.ModelAdmin):
 admin_site = PulpAdminSite(name="myadmin")
 
 admin_site.register(DomainOrg, DomainOrgAdmin)
-admin_site.register(User, UserAdmin)
+#We are replacing the default UserAdmin with our CustomUserAdmin
+admin_site.register(User, CustomUserAdmin) 
 admin_site.register(Domain, DomainAdmin)
