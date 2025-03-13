@@ -16,7 +16,7 @@ USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these spec
 USERNAME_HELP_TEXT = "Required. 150 characters or fewer. Letters, numbers, and these special characters: @, ., +, -, =, /, _"
 
 # Override Django's username validator
-custom_username_validator = RegexValidator(
+pulp_username_validator = RegexValidator(
     USERNAME_PATTERN,
     USERNAME_ERROR_MSG,
     'invalid'
@@ -24,12 +24,12 @@ custom_username_validator = RegexValidator(
 
 
 # Apply the new validator to the User model
-User._meta.get_field('username').validators = [custom_username_validator]
+User._meta.get_field('username').validators = [pulp_username_validator]
 # Update the help_text as well
 User._meta.get_field('username').help_text = USERNAME_HELP_TEXT
 
-# Custom forms to allow additional characters
-class CustomUserCreationForm(UserCreationForm):
+# Custom/Pulp forms to allow additional characters
+class PulpUserCreationForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Override help_text in the form field
@@ -42,7 +42,7 @@ class CustomUserCreationForm(UserCreationForm):
         return username
 
 
-class CustomUserChangeForm(UserChangeForm):
+class PulpUserChangeForm(UserChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Override help_text in the form field
@@ -57,9 +57,9 @@ class CustomUserChangeForm(UserChangeForm):
         return username
 
 
-class CustomUserAdmin(UserAdmin):
-    form = CustomUserChangeForm
-    add_form = CustomUserCreationForm
+class PulpUserAdmin(UserAdmin):
+    form = PulpUserChangeForm
+    add_form = PulpUserCreationForm
 
 
 class PulpAdminSite(admin.AdminSite):
@@ -101,6 +101,6 @@ class DomainAdmin(admin.ModelAdmin):
 admin_site = PulpAdminSite(name="myadmin")
 
 admin_site.register(DomainOrg, DomainOrgAdmin)
-#We are replacing the default UserAdmin with our CustomUserAdmin
-admin_site.register(User, CustomUserAdmin) 
+#We are replacing the default UserAdmin with our PulpUserAdmin
+admin_site.register(User, PulpUserAdmin) 
 admin_site.register(Domain, DomainAdmin)
