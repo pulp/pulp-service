@@ -44,11 +44,11 @@ RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography 
     dnf -y install glibc-langpack-en && \
     dnf -y install python${PYTHON_VERSION}-setuptools && \
     dnf -y install swig && \
-    dnf -y install xz && \
-    dnf -y install ninja-build && \
     dnf -y install ostree-libs ostree --allowerasing --nobest && \
     dnf -y install patch && \
+    dnf -y install jq && \
     dnf -y install zstd
+
 RUN dnf clean all
 
 RUN python${PYTHON_VERSION} -m venv --system-site-packages /usr/local/lib/pulp
@@ -142,6 +142,10 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 
 COPY images/assets/patches/0019-Allow-extra-logging-for-requests.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0020-Allow-extra-logging-for-requests.patch
+
+COPY images/assets/patches/0019-Adds-LabelsMixin-to-ReadOnlyContentViewSet.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0019-Adds-LabelsMixin-to-ReadOnlyContentViewSet.patch
+
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
