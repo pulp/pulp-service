@@ -140,7 +140,7 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0018-Re-root-the-registry-API-at-api-pulp-v2.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0018-Re-root-the-registry-API-at-api-pulp-v2.patch
 
-COPY images/assets/patches/0019-Allow-extra-logging-for-requests.patch /tmp/
+COPY images/assets/patches/0020-Allow-extra-logging-for-requests.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0020-Allow-extra-logging-for-requests.patch
 
 RUN mkdir /licenses
