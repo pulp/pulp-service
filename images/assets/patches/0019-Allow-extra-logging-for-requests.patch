@@ -4,13 +4,13 @@ index abcd123..efgh456 100644
 +++ b/pulpcore/app/views/status.py
 @@ -61,6 +61,11 @@ class StatusView(APIView):
           * disk usage information
-        """
-        versions = []
+         """
+         versions = []
 +        _logger.info(f"REQUEST META X_FORWARDED_HOST: {request.META.get('HTTP_X_FORWARDED_HOST', 'Not present')}")
 +        _logger.info(f"REQUEST META HTTP_HOST: {request.META.get('HTTP_HOST', 'Not present')}")
 +        _logger.info(f"REQUEST META X_RH_EDGE_HOST: {request.META.get('HTTP_X_RH_EDGE_HOST', 'Not present')}")
 +        _logger.info("REQUEST HOST: "+request.get_host())
 +        _logger.info("REQUEST URL: "+request.build_absolute_uri())
-        for app in pulp_plugin_configs():
-            versions.append(
-                {
+         for app in pulp_plugin_configs():
+             versions.append(
+                 {
