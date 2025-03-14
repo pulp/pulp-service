@@ -19,6 +19,7 @@ from django.contrib.postgres.fields import ArrayField
 
 from pulpcore.plugin.models import Domain
 from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard
+from pulpcore.app.util import get_domain_pk
 from pulpcore.cache import Cache
 
 _logger = logging.getLogger(__name__)
@@ -174,3 +175,4 @@ class VulnerabilityReport(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vulns = models.JSONField()
+    pulp_domain = models.ForeignKey("core.Domain", default=get_domain_pk, on_delete=models.PROTECT)
