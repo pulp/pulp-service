@@ -74,6 +74,9 @@ objects:
             memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
 
 parameters:
+  - name: ENV_NAME
+    description: Specify your (ephemeral) namespace
+    required: true
   - name: OTEL_COLLECTOR_CPU_REQUEST
     description: Amount of CPU to request for OpenTelemetry Collector container
     value: "250m"
