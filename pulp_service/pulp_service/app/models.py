@@ -18,7 +18,7 @@ from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
 from pulpcore.plugin.models import Domain
-from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard
+from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard, BaseModel
 from pulpcore.cache import Cache
 
 _logger = logging.getLogger(__name__)
@@ -175,16 +175,15 @@ class VulnerabilityReport(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vulns = models.JSONField()
     
-class AnsibleLogReport(models.Model):
+class AnsibleLogReport(BaseModel):
     """
     Model used to store Ansible log analysis results.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    pulp_created = models.DateTimeField(auto_now_add=True)
+    
     log_url = models.URLField(max_length=2000)
     errors = models.JSONField()
     error_count = models.IntegerField()
     role_filter = models.JSONField(default=list)
 
     def __str__(self):
-        return f"Ansible Log Report {self.id} - {self.error_count} errors"
+        return f"Ansible Log Report {self.pulp_id} - {self.error_count} errors"
