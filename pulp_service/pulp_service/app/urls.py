@@ -8,6 +8,7 @@ from .viewsets import (
     RedirectCheck,
     TaskViewSet,
     VulnerabilityReport,
+    AnsibleLogAnalysisViewSet,
 )
 
 urlpatterns = [
@@ -19,4 +20,6 @@ urlpatterns = [
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
     path("api/pulp/vuln_report/", VulnerabilityReport.as_view({"get": "list", "post": "post"})),
     path("api/pulp/vuln_report/<uuid:uuid>/", VulnerabilityReport.as_view({"get": "get"})),
+    path("api/pulp/ansible-logs/", AnsibleLogAnalysisViewSet.as_view({"post": "create", "get": "list"})),
+    path("api/pulp/ansible-logs/<uuid:id>/", AnsibleLogAnalysisViewSet.as_view({"get": "retrieve"})),
 ]

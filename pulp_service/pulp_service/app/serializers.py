@@ -8,7 +8,7 @@ from pulpcore.app.serializers import (
 )
 from pulpcore.app.viewsets.custom_filters import RepoVersionHrefPrnFilter
 
-from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport
+from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport, AnsibleLogReport
 
 
 class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerializerMixin):
@@ -52,3 +52,30 @@ class ContentScanSerializer(serializers.Serializer):
         except:
             raise serializers.ValidationError(_("No matching RepositoryVersion instance found."))
         return repo_version.pk
+class AnsibleLogAnalysisSerializer(serializers.Serializer):
+    """
+    A serializer for Ansible log analysis requests.
+    """
+    url = serializers.URLField(
+        help_text=_("URL to the Ansible log file to be analyzed")
+    )
+    role = serializers.ListField(
+        child=serializers.CharField(),
+        help_text=_("List of roles to filter by, or ['ALL'] for all roles"),
+        default=["ALL"]
+    )
+
+class AnsibleLogReportSerializer(ModelSerializer):
+    """
+    A serializer for the AnsibleLogReport model.
+    """
+    id = serializers.UUIDField(read_only=True)
+    pulp_created = serializers.DateTimeField(read_only=True)
+    log_url = serializers.URLField(read_only=True)
+    errors = serializers.JSONField(read_only=True)
+    error_count = serializers.IntegerField(read_only=True)
+    role_filter = serializers.JSONField(read_only=True)
+
+    class Meta:
+        model = AnsibleLogReport
+        fields = ['id', 'pulp_created', 'log_url', 'errors', 'error_count', 'role_filter']

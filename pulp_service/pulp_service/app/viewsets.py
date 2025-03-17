@@ -19,14 +19,18 @@ from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin, TaskViewSet
 from pulpcore.plugin.tasking import dispatch
 
 from pulp_service.app.authentication import RHServiceAccountCertAuthentication
-from pulp_service.app.models import FeatureContentGuard
+from pulp_service.app.models import FeatureContentGuard, AnsibleLogReport
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     VulnerabilityReportSerializer,
     ContentScanSerializer,
     FeatureContentGuardSerializer,
+    AnsibleLogAnalysisSerializer,
+    AnsibleLogReportSerializer,
+    
 )
 from pulp_service.app.tasks.package_scan import check_content
+from pulp_service.app.tasks.ansible_log_parser import dispatch_ansible_log_analysis
 
 _logger = logging.getLogger(__name__)
 
@@ -164,3 +168,46 @@ class VulnerabilityReport(ViewSet):
         repo_version_pk = serialized_data.data["repo_version"]
         task = dispatch(check_content, kwargs={"repo_version_pk": repo_version_pk})
         return OperationPostponedResponse(task, request)
+
+class AnsibleLogAnalysisViewSet(ViewSet):
+    """
+    ViewSet for analyzing Ansible logs for errors.
+    """
+
+    def create(self, request):
+        """
+        Analyze an Ansible log file for errors asynchronously.
+        
+        Expects JSON with 'url' field.
+        Returns a task that can be used to retrieve results.
+        """
+        serializer = AnsibleLogAnalysisSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        log_url = serializer.validated_data['url']
+        role_filter = serializer.validated_data.get('role', ["ALL"])
+        
+        try:
+            task = dispatch_ansible_log_analysis(log_url, role_filter)
+            return OperationPostponedResponse(task, request)
+        except Exception as e:
+            _logger.exception("Failed to dispatch log analysis task")
+            return Response(
+                {"error": f"Failed to analyze log: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    def list(self, request):
+        """List all reports."""
+        queryset = AnsibleLogReport.objects.all().order_by('-pulp_created')
+        serializer = AnsibleLogReportSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def retrieve(self, request, id=None):
+        """Get a specific report."""
+        try:
+            report = AnsibleLogReport.objects.get(id=id)
+        except AnsibleLogReport.DoesNotExist:
+            return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AnsibleLogReportSerializer(report)
+        return Response(serializer.data)
