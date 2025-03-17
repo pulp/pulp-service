@@ -213,9 +213,6 @@ objects:
               items:
               - key: subscription-api-mock-cert.pem
                 path: subscription-api-mock-cert.pem
-          - name: pulp-otel-expoter-otlp-endpoint
-            configMap:
-              name: pulp-otel-expoter-otlp-endpoint
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
