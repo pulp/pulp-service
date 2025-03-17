@@ -71,6 +71,8 @@ class DomainBasedPermission(BasePermission):
                 return "domain_create"
             elif request.META['REQUEST_METHOD'] == 'GET':
                 return "domain_list"
+        elif view_name in ["domains-set-label", "domains-unset-label"]:
+            return "domain_update"
         elif view_name == "domains-detail":
             _logger.info("detail")
             if request.META['REQUEST_METHOD'] == 'PATCH':
