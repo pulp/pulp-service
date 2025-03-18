@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
                 ('errors', models.JSONField()),
                 ('error_count', models.IntegerField()),
                 ('role_filter', models.JSONField(default=list)),
-                ('domain', models.ForeignKey(default=pulpcore.app.util.get_domain_pk, on_delete=django.db.models.deletion.CASCADE, to='core.domain')),
+                ('pulp_domain', models.ForeignKey(default=pulpcore.app.util.get_domain_pk, on_delete=django.db.models.deletion.CASCADE, to='core.domain')),
             ],
             options={
                 'abstract': False,

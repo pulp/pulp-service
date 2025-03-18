@@ -14,6 +14,9 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
+from pulpcore.app.util import get_domain
+
 
 from pulpcore.app.models import Domain
 from pulpcore.app.response import OperationPostponedResponse
@@ -179,26 +182,15 @@ class VulnerabilityReport(ViewSet):
         task = dispatch(check_content, kwargs={"repo_version_pk": repo_version_pk})
         return OperationPostponedResponse(task, request)
 
-class AnsibleLogReport(NamedModelViewSet):
+class AnsibleLogReportViewset(NamedModelViewSet, ListModelMixin, RetrieveModelMixin):
     """
     ViewSet for analyzing Ansible logs for errors.
     """
     queryset = AnsibleLogReport.objects.all()
     endpoint_name = 'ansible-logs'
-
-    def get_domain(self):
-        """
-        Get the domain from the URL parameters, if provided.
-        """
-        domain_name = self.kwargs.get('domain_name', None)
-        if domain_name:
-            try:
-                return Domain.objects.get(name=domain_name)
-            except Domain.DoesNotExist:
-                raise Http404(_("Domain not found."))
-        return None
+    serializer_class = AnsibleLogReportSerializer
     
-    def create(self, request, domain_name=None):
+    def create(self, request):
         """
         Analyze an Ansible log file for errors asynchronously.
         
@@ -210,10 +202,10 @@ class AnsibleLogReport(NamedModelViewSet):
         
         log_url = serializer.validated_data['url']
         role_filter = serializer.validated_data.get('role')
-        domain = self.get_domain()
-        set_domain(domain)        
+        domain = get_domain()
+    
         try:
-            task = dispatch_ansible_log_analysis(log_url, role_filter, domain_id=domain.pulp_id if domain else None)
+            task = dispatch_ansible_log_analysis(log_url, role_filter)
             return OperationPostponedResponse(task, request)
         except Exception as e:
             _logger.exception("Failed to dispatch log analysis task")
@@ -222,29 +214,35 @@ class AnsibleLogReport(NamedModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    def list(self, request, domain_name=None):
+    def list(self, request):
         """List all reports in the domain."""
-        domain = self.get_domain()
-        set_domain(domain)
+        domain = get_domain()
+        
         if domain:
-            queryset = AnsibleLogReport.objects.filter(domain=domain).order_by('-pulp_created')
+            queryset = AnsibleLogReport.objects.filter(pulp_domain=domain).order_by('-pulp_created')
         else:
-            queryset = AnsibleLogReport.objects.filter(domain__isnull=True).order_by('-pulp_created')
-            
+            return Response(
+                {"error": _("Missing domain information.")},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         serializer = AnsibleLogReportSerializer(queryset, many=True)
         return Response(serializer.data)
 
-    def retrieve(self, request, id, domain_name=None):
+    def retrieve(self, request, pk):
         """Get a specific report within the domain."""
-        domain = self.get_domain()
-        set_domain(domain)
+        domain = get_domain()
+        
         try:
             if domain:
-                report = AnsibleLogReport.objects.get(pulp_id=id, domain=domain)
+                report = AnsibleLogReport.objects.get(pulp_id=pk, pulp_domain=domain)
             else:
-                report = AnsibleLogReport.objects.get(pulp_id=id, domain__isnull=True)
+                return Response(
+                    {"error": _("Missing domain information.")},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            serializer = AnsibleLogReportSerializer(report)
+            return Response(serializer.data)
         except AnsibleLogReport.DoesNotExist:
+            _logger.warning(f"Report {pk} not found")
             return Response({"error": _("Report not found")}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = AnsibleLogReportSerializer(report)
-        return Response(serializer.data)

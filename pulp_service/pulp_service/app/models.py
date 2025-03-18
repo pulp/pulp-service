@@ -180,11 +180,11 @@ class AnsibleLogReport(BaseModel):
     """
     Model used to store Ansible log analysis results.
     """
-    domain = models.ForeignKey("core.Domain", default=get_domain_pk, on_delete=models.CASCADE)
     log_url = models.URLField(max_length=2000)
     errors = models.JSONField()
     error_count = models.IntegerField()
     role_filter = models.JSONField(default=list)
+    pulp_domain = models.ForeignKey("core.Domain", default=get_domain_pk, on_delete=models.CASCADE)
 
     def __str__(self):
         return f"Ansible Log Report {self.pulp_id} - {self.error_count} errors"
