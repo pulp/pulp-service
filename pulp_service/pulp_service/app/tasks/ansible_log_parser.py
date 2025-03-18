@@ -3,7 +3,9 @@ import copy
 import logging
 import aiohttp
 from asgiref.sync import sync_to_async
-from pulp_service.app.models import AnsibleLogReport  # Add this import
+from pulp_service.app.models import AnsibleLogReport
+from pulpcore.app.models import Domain
+from pulpcore.app.models import CreatedResource
 from pulpcore.plugin.tasking import dispatch
 
 _logger = logging.getLogger(__name__)
@@ -33,28 +35,40 @@ async def get_file_data(log_url, timeout=30):
         raise ValueError(f"Error fetching log file: {str(e)}")
 
 
-async def analyze_ansible_log(log_url, role_filter=["ALL"]):
+async def analyze_ansible_log(log_url, role_filter, domain_id=None):
     """
     Async task to analyze an Ansible log file for errors.
-
+    
     Args:
         log_url (str): URL of the Ansible log file
-        role_filter (list): List of roles to filter by, or ["ALL"] for all roles
-
-    Returns:
-        dict: Information about the stored report
+        role_filter (list): List of roles to filter by
+        domain_id (UUID, optional): ID of the domain the report should be associated with
     """
     errors = await get_errors_from_ansible_log(role_filter, log_url)
-
+    
+    # Prepare report data
+    report_data = {
+        "log_url": log_url,
+        "errors": errors,
+        "error_count": len(errors),
+        "role_filter": role_filter,
+    }
+    
+    # Only explicitly set domain if provided, otherwise let the model use get_domain_pk
+    if domain_id:
+        # Use pulp_id instead of id - this is the key fix!
+        domain = await sync_to_async(Domain.objects.get)(pulp_id=domain_id)
+        report_data["domain"] = domain
+    
     # Store results in database
-    report = await sync_to_async(AnsibleLogReport.objects.create)(
-        log_url=log_url,
-        errors=errors,
-        error_count=len(errors),
-        role_filter=role_filter
-    )
-
-
+    
+    report = await sync_to_async(AnsibleLogReport.objects.create)(**report_data)
+    
+    # Register the created resource
+    await sync_to_async(CreatedResource.objects.create)(content_object=report)
+    
+    # Return the report ID for reference
+    #return {"report_id": str(report.pulp_id)}
 
 async def get_errors_from_ansible_log(role_filter, log_url):
     """
@@ -182,15 +196,34 @@ async def get_errors_from_ansible_log(role_filter, log_url):
 
 
 # Function to be used for dispatching the task
-def dispatch_ansible_log_analysis(log_url, role_filter=["ALL"]):
+def dispatch_ansible_log_analysis(log_url, role_filter, domain_id=None):
     """
     Dispatch an async task to analyze an Ansible log file.
-
+    
     Args:
         log_url (str): URL of the Ansible log file
-        role_filter (list): List of roles to filter by, or ["ALL"] for all roles
-
+        role_filter (list): List of roles to filter by
+        domain_id (UUID, optional): ID of the domain the report should be associated with
+    
     Returns:
         Task: The dispatched task object
     """
-    return dispatch(analyze_ansible_log, kwargs={"log_url": log_url, "role_filter": role_filter})
+    # Create resources list for domain isolation
+    exclusive_resources = []
+    
+    # If domain_id is provided, establish the domain context for the task
+    if domain_id:
+        try:
+            # Get the domain to add to reserved resources
+            domain = Domain.objects.get(pulp_id=domain_id)
+            logging.error(domain.name)
+            # Add as a exclusive_resources
+            exclusive_resources.append(domain)
+        except Domain.DoesNotExist:
+            pass
+    
+    return dispatch(
+        analyze_ansible_log,
+        kwargs={"log_url": log_url, "role_filter": role_filter, "domain_id": domain_id},
+        exclusive_resources=exclusive_resources
+    )

@@ -1,5 +1,4 @@
 from django.urls import path
-
 from .admin import admin_site
 from .viewsets import (
     DebugAuthenticationHeadersView,
@@ -8,7 +7,7 @@ from .viewsets import (
     RedirectCheck,
     TaskViewSet,
     VulnerabilityReport,
-    AnsibleLogAnalysisViewSet,
+    AnsibleLogReport,
 )
 
 urlpatterns = [
@@ -20,6 +19,6 @@ urlpatterns = [
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
     path("api/pulp/vuln_report/", VulnerabilityReport.as_view({"get": "list", "post": "post"})),
     path("api/pulp/vuln_report/<uuid:uuid>/", VulnerabilityReport.as_view({"get": "get"})),
-    path("api/pulp/ansible-logs/", AnsibleLogAnalysisViewSet.as_view({"post": "create", "get": "list"})),
-    path("api/pulp/ansible-logs/<uuid:id>/", AnsibleLogAnalysisViewSet.as_view({"get": "retrieve"})),
+    path("api/pulp/<slug:domain_name>/ansible-logs/<uuid:id>/",AnsibleLogReport.as_view({"get": "retrieve"})),
+    path("api/pulp/<slug:domain_name>/ansible-logs/",AnsibleLogReport.as_view({"post": "create", "get": "list"})),
 ]

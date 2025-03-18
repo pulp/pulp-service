@@ -1,11 +1,12 @@
 import json
 import logging
-
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
+from gettext import gettext as _
 
 from django.conf import settings
 from django.db.models.query import QuerySet
+from django.http import Http404
 from django.shortcuts import redirect
 
 from rest_framework import status
@@ -14,23 +15,32 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
+from pulpcore.app.models import Domain
 from pulpcore.app.response import OperationPostponedResponse
-from pulpcore.app.viewsets import ContentGuardViewSet, RolesMixin, TaskViewSet
+from pulpcore.app.util import set_domain
+from pulpcore.app.viewsets import (
+    ContentGuardViewSet,
+    NamedModelViewSet,
+    RolesMixin,
+    TaskViewSet,
+)
 from pulpcore.plugin.tasking import dispatch
 
 from pulp_service.app.authentication import RHServiceAccountCertAuthentication
-from pulp_service.app.models import FeatureContentGuard, AnsibleLogReport
-from pulp_service.app.models import VulnerabilityReport as VulnReport
+from pulp_service.app.models import (
+    AnsibleLogReport,
+    FeatureContentGuard,
+    VulnerabilityReport as VulnReport,
+)
 from pulp_service.app.serializers import (
-    VulnerabilityReportSerializer,
-    ContentScanSerializer,
-    FeatureContentGuardSerializer,
     AnsibleLogAnalysisSerializer,
     AnsibleLogReportSerializer,
-    
+    ContentScanSerializer,
+    FeatureContentGuardSerializer,
+    VulnerabilityReportSerializer,
 )
-from pulp_service.app.tasks.package_scan import check_content
 from pulp_service.app.tasks.ansible_log_parser import dispatch_ansible_log_analysis
+from pulp_service.app.tasks.package_scan import check_content
 
 _logger = logging.getLogger(__name__)
 
@@ -169,12 +179,26 @@ class VulnerabilityReport(ViewSet):
         task = dispatch(check_content, kwargs={"repo_version_pk": repo_version_pk})
         return OperationPostponedResponse(task, request)
 
-class AnsibleLogAnalysisViewSet(ViewSet):
+class AnsibleLogReport(NamedModelViewSet):
     """
     ViewSet for analyzing Ansible logs for errors.
     """
+    queryset = AnsibleLogReport.objects.all()
+    endpoint_name = 'ansible-logs'
 
-    def create(self, request):
+    def get_domain(self):
+        """
+        Get the domain from the URL parameters, if provided.
+        """
+        domain_name = self.kwargs.get('domain_name', None)
+        if domain_name:
+            try:
+                return Domain.objects.get(name=domain_name)
+            except Domain.DoesNotExist:
+                raise Http404(_("Domain not found."))
+        return None
+    
+    def create(self, request, domain_name=None):
         """
         Analyze an Ansible log file for errors asynchronously.
         
@@ -185,29 +209,42 @@ class AnsibleLogAnalysisViewSet(ViewSet):
         serializer.is_valid(raise_exception=True)
         
         log_url = serializer.validated_data['url']
-        role_filter = serializer.validated_data.get('role', ["ALL"])
-        
+        role_filter = serializer.validated_data.get('role')
+        domain = self.get_domain()
+        set_domain(domain)        
         try:
-            task = dispatch_ansible_log_analysis(log_url, role_filter)
+            task = dispatch_ansible_log_analysis(log_url, role_filter, domain_id=domain.pulp_id if domain else None)
             return OperationPostponedResponse(task, request)
         except Exception as e:
             _logger.exception("Failed to dispatch log analysis task")
             return Response(
-                {"error": f"Failed to analyze log: {str(e)}"},
+                {"error": _("Failed to analyze log: %(error)s") % {"error": str(e)}},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    def list(self, request):
-        """List all reports."""
-        queryset = AnsibleLogReport.objects.all().order_by('-pulp_created')
+    
+    def list(self, request, domain_name=None):
+        """List all reports in the domain."""
+        domain = self.get_domain()
+        set_domain(domain)
+        if domain:
+            queryset = AnsibleLogReport.objects.filter(domain=domain).order_by('-pulp_created')
+        else:
+            queryset = AnsibleLogReport.objects.filter(domain__isnull=True).order_by('-pulp_created')
+            
         serializer = AnsibleLogReportSerializer(queryset, many=True)
         return Response(serializer.data)
 
-    def retrieve(self, request, id=None):
-        """Get a specific report."""
+    def retrieve(self, request, id, domain_name=None):
+        """Get a specific report within the domain."""
+        domain = self.get_domain()
+        set_domain(domain)
         try:
-            report = AnsibleLogReport.objects.get(id=id)
+            if domain:
+                report = AnsibleLogReport.objects.get(pulp_id=id, domain=domain)
+            else:
+                report = AnsibleLogReport.objects.get(pulp_id=id, domain__isnull=True)
         except AnsibleLogReport.DoesNotExist:
-            return Response({"error": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": _("Report not found")}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = AnsibleLogReportSerializer(report)
         return Response(serializer.data)

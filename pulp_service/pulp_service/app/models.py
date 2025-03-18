@@ -19,6 +19,7 @@ from django.contrib.postgres.fields import ArrayField
 
 from pulpcore.plugin.models import Domain
 from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard, BaseModel
+from pulpcore.app.util import get_domain_pk
 from pulpcore.cache import Cache
 
 _logger = logging.getLogger(__name__)
@@ -179,7 +180,7 @@ class AnsibleLogReport(BaseModel):
     """
     Model used to store Ansible log analysis results.
     """
-    
+    domain = models.ForeignKey("core.Domain", default=get_domain_pk, on_delete=models.CASCADE)
     log_url = models.URLField(max_length=2000)
     errors = models.JSONField()
     error_count = models.IntegerField()
