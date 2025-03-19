@@ -52,6 +52,8 @@ class ContentScanSerializer(serializers.Serializer):
         except:
             raise serializers.ValidationError(_("No matching RepositoryVersion instance found."))
         return repo_version.pk
+
+
 class AnsibleLogAnalysisSerializer(serializers.Serializer):
     """
     A serializer for Ansible log analysis requests.
