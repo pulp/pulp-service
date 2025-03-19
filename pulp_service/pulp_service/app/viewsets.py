@@ -20,7 +20,6 @@ from pulpcore.app.util import get_domain
 
 from pulpcore.app.models import Domain
 from pulpcore.app.response import OperationPostponedResponse
-from pulpcore.app.util import set_domain
 from pulpcore.app.viewsets import (
     ContentGuardViewSet,
     NamedModelViewSet,
