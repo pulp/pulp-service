@@ -42,7 +42,6 @@ from pulp_service.app.serializers import (
 )
 
 from pulp_service.app.tasks.ansible_log_parser import dispatch_ansible_log_analysis
-from pulp_service.app.tasks.package_scan import check_content
 from pulp_service.app.tasks.package_scan import check_npm_package, check_content_from_repo_version
 
 _logger = logging.getLogger(__name__)
