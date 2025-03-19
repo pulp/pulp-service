@@ -79,4 +79,4 @@ class AnsibleLogReportSerializer(ModelSerializer):
 
     class Meta:
         model = AnsibleLogReport
-        fields = ModelSerializer.Meta.fields + ('pulp_domain', 'log_url', 'errors', 'error_count', 'role_filter')
+        fields = ModelSerializer.Meta.fields + ('log_url', 'errors', 'error_count', 'role_filter')
