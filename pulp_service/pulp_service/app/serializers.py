@@ -69,7 +69,6 @@ class AnsibleLogReportSerializer(ModelSerializer):
     """
     A serializer for the AnsibleLogReport model.
     """
-    pulp_domain = serializers.StringRelatedField(read_only=True)
     log_url = serializers.URLField(read_only=True)
     errors = serializers.JSONField(read_only=True)
     error_count = serializers.IntegerField(read_only=True)
@@ -77,4 +76,4 @@ class AnsibleLogReportSerializer(ModelSerializer):
 
     class Meta:
         model = AnsibleLogReport
-        fields = ['pulp_id', 'pulp_domain', 'pulp_created', 'log_url', 'errors', 'error_count', 'role_filter']
+        fields = ModelSerializer.Meta.fields + ('pulp_domain', 'log_url', 'errors', 'error_count', 'role_filter')
