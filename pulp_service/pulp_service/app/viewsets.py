@@ -6,7 +6,6 @@ from gettext import gettext as _
 
 from django.conf import settings
 from django.db.models.query import QuerySet
-from django.http import Http404
 from django.shortcuts import redirect
 
 from rest_framework import status
@@ -15,12 +14,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
-from pulpcore.app.util import get_domain
 
 
-from pulpcore.app.models import Domain
 from pulpcore.app.response import OperationPostponedResponse
-from pulpcore.app.util import set_domain
 from pulpcore.app.viewsets import (
     ContentGuardViewSet,
     NamedModelViewSet,
@@ -202,7 +198,6 @@ class AnsibleLogReportViewset(NamedModelViewSet, ListModelMixin, RetrieveModelMi
         
         log_url = serializer.validated_data['url']
         role_filter = serializer.validated_data.get('role')
-        domain = get_domain()
     
         try:
             task = dispatch_ansible_log_analysis(log_url, role_filter)
@@ -213,36 +208,3 @@ class AnsibleLogReportViewset(NamedModelViewSet, ListModelMixin, RetrieveModelMi
                 {"error": _("Failed to analyze log: %(error)s") % {"error": str(e)}},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    
-    def list(self, request):
-        """List all reports in the domain."""
-        domain = get_domain()
-        
-        if domain:
-            queryset = AnsibleLogReport.objects.filter(pulp_domain=domain).order_by('-pulp_created')
-        else:
-            return Response(
-                {"error": _("Missing domain information.")},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        serializer = AnsibleLogReportSerializer(queryset, many=True)
-        return Response(serializer.data)
-
-    def retrieve(self, request, pk):
-        """Get a specific report within the domain."""
-        domain = get_domain()
-        
-        try:
-            if domain:
-                report = AnsibleLogReport.objects.get(pulp_id=pk, pulp_domain=domain)
-            else:
-                return Response(
-                    {"error": _("Missing domain information.")},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            serializer = AnsibleLogReportSerializer(report)
-            return Response(serializer.data)
-        except AnsibleLogReport.DoesNotExist:
-            _logger.warning(f"Report {pk} not found")
-            return Response({"error": _("Report not found")}, status=status.HTTP_404_NOT_FOUND)

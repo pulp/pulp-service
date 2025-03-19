@@ -4,7 +4,6 @@ import logging
 import aiohttp
 from asgiref.sync import sync_to_async
 from pulp_service.app.models import AnsibleLogReport
-from pulpcore.app.models import Domain
 from pulpcore.app.models import CreatedResource
 from pulpcore.plugin.tasking import dispatch
 from pulpcore.app.util import get_domain
@@ -199,18 +198,8 @@ def dispatch_ansible_log_analysis(log_url, role_filter):
     Returns:
         Task: The dispatched task object
     """
-    # Create resources list for domain isolation
-    exclusive_resources = []
-    
-    try:
-        domain = get_domain()
-        # Add as a exclusive_resources
-        exclusive_resources.append(domain)
-    except Domain.DoesNotExist:
-        pass
     
     return dispatch(
         analyze_ansible_log,
-        kwargs={"log_url": log_url, "role_filter": role_filter},
-        exclusive_resources=exclusive_resources
+        kwargs={"log_url": log_url, "role_filter": role_filter}
     )
