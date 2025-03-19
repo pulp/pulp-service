@@ -69,6 +69,7 @@ class AnsibleLogReportSerializer(ModelSerializer):
     """
     A serializer for the AnsibleLogReport model.
     """
+    pulp_href = IdentityField(view_name="ansible-logs-detail")
     log_url = serializers.URLField(read_only=True)
     errors = serializers.JSONField(read_only=True)
     error_count = serializers.IntegerField(read_only=True)
