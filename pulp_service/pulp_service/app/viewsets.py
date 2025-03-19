@@ -199,12 +199,5 @@ class AnsibleLogReportViewset(NamedModelViewSet, ListModelMixin, RetrieveModelMi
         log_url = serializer.validated_data['url']
         role_filter = serializer.validated_data.get('role')
     
-        try:
-            task = dispatch_ansible_log_analysis(log_url, role_filter)
-            return OperationPostponedResponse(task, request)
-        except Exception as e:
-            _logger.exception("Failed to dispatch log analysis task")
-            return Response(
-                {"error": _("Failed to analyze log: %(error)s") % {"error": str(e)}},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        task = dispatch_ansible_log_analysis(log_url, role_filter)
+        return OperationPostponedResponse(task, request)
