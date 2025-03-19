@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0130_upstreampulp_policy'),
-        ('service', '0006_vulnerabilityreport'),
+        ('service', '0007_alter_vulnerabilityreport_options_and_more.py'),
     ]
 
     operations = [
