@@ -66,7 +66,7 @@ async def get_errors_from_ansible_log(role_filter, log_url):
     Parse Ansible log file for errors asynchronously.
 
     Args:
-        role_filter (list): List of roles to filter by, or ["ALL"] for all roles
+        role_filter (list): List of roles to filter by, or ["*"] for all roles
         log_url (str): URL of the Ansible log file
 
     Returns:
@@ -101,7 +101,7 @@ async def get_errors_from_ansible_log(role_filter, log_url):
         match = SYSTEM_ROLE_LOG_RE.search(log_url)
         if match:
             role = match.group("role")
-            if role_filter != ["ALL"] and role not in role_filter:
+            if "*" not in role_filter and role not in role_filter:
                 _logger.info(
                     "Skipping log - role [%s] not in role_filter [%s]: [%s]",
                     role,
@@ -115,7 +115,7 @@ async def get_errors_from_ansible_log(role_filter, log_url):
             match = SYSTEM_ROLE_TF_LOG_RE.search(log_url)
             if match:
                 role = match.group("role")
-                if role_filter != ["ALL"] and role not in role_filter:
+                if "*" not in role_filter and role not in role_filter:
                     _logger.info(
                         "Skipping log - role [%s] not in role_filter [%s]: [%s]",
                         role,

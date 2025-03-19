@@ -93,7 +93,7 @@ class AnsibleLogAnalysisSerializer(serializers.Serializer):
     )
     role = serializers.ListField(
         child=serializers.CharField(),
-        help_text=_("List of roles to filter by, or ['ALL'] for all roles"),
+        help_text=_("List of roles to filter by, or ['*'] for all roles"),
         default=["*"]
     )
 
