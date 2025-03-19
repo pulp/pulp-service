@@ -7,7 +7,7 @@ from .viewsets import (
     RedirectCheck,
     TaskViewSet,
     VulnerabilityReport,
-    )
+)
 
 urlpatterns = [
     path("api/pulp-admin/", admin_site.urls),
