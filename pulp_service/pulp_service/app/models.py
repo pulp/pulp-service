@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import ssl
-import uuid
 
 import aiohttp
 import jq
@@ -17,8 +16,10 @@ from django.db import models
 
 from django.contrib.postgres.fields import ArrayField
 
-from pulpcore.plugin.models import Domain
-from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard, BaseModel
+
+from pulpcore.plugin.models import BaseModel, Domain
+from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard
+
 from pulpcore.app.util import get_domain_pk
 from pulpcore.cache import Cache
 
@@ -168,12 +169,11 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         )
 
 
-class VulnerabilityReport(models.Model):
+class VulnerabilityReport(BaseModel):
     """
     Model used in vulnerability report.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vulns = models.JSONField()
     
 class AnsibleLogReport(BaseModel):

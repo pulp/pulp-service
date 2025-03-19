@@ -12,6 +12,7 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
 from rest_framework.viewsets import ViewSet
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 
@@ -23,6 +24,7 @@ from pulpcore.app.viewsets import (
     RolesMixin,
     TaskViewSet,
 )
+
 from pulpcore.plugin.tasking import dispatch
 
 from pulp_service.app.authentication import RHServiceAccountCertAuthentication
@@ -38,8 +40,10 @@ from pulp_service.app.serializers import (
     FeatureContentGuardSerializer,
     VulnerabilityReportSerializer,
 )
+
 from pulp_service.app.tasks.ansible_log_parser import dispatch_ansible_log_analysis
 from pulp_service.app.tasks.package_scan import check_content
+from pulp_service.app.tasks.package_scan import check_npm_package, check_content_from_repo_version
 
 _logger = logging.getLogger(__name__)
 
@@ -159,23 +163,30 @@ class TaskViewSet(TaskViewSet):
         return "admintasks"
 
 
-class VulnerabilityReport(ViewSet):
+class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin):
 
-    def list(self, request):
-        queryset = VulnReport.objects.all()
-        serializer = VulnerabilityReportSerializer(queryset, many=True)
-        return Response(serializer.data)
+    endpoint_name = "vuln_report"
+    queryset = VulnReport.objects.all()
+    serializer_class = VulnerabilityReportSerializer
 
-    def get(self, request, uuid):
-        queryset = VulnReport.objects.get(id=uuid)
-        serializer = VulnerabilityReportSerializer(queryset, many=False)
-        return Response(serializer.data)
+    def create(self, request):
+        serializer = ContentScanSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
 
-    def post(self, request):
-        serialized_data = ContentScanSerializer(data=request.data)
-        serialized_data.is_valid(raise_exception=True)
-        repo_version_pk = serialized_data.data["repo_version"]
-        task = dispatch(check_content, kwargs={"repo_version_pk": repo_version_pk})
+        shared_resources = None
+        """Dispatch a task to scan the Content Units from a Repository"""
+        if repo_version := serializer.validated_data.get("repo_version", None):
+            shared_resources = [repo_version.repository]
+            dispatch_task, kwargs = check_content_from_repo_version, {
+                "repo_version_pk": repo_version.pk
+            }
+
+        """Dispatch a task to scan the npm dependencies' vulnerabilities"""
+        if serializer.validated_data.get("package_json", None):
+            temp_file_pk = serializer.verify_file()
+            dispatch_task, kwargs = check_npm_package, {"npm_package": temp_file_pk}
+
+        task = dispatch(dispatch_task, shared_resources=shared_resources, kwargs=kwargs)
         return OperationPostponedResponse(task, request)
 
 class AnsibleLogReportViewset(NamedModelViewSet, ListModelMixin, RetrieveModelMixin):

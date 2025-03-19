@@ -1,14 +1,15 @@
-From 329d74c4783fdcc411568babd59c4c78997f0829 Mon Sep 17 00:00:00 2001
+From a83ffab3b15a0f37ea7db4fca5a614e476fb671d Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 4 Mar 2025 11:19:30 -0500
 Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
 
 ---
- pulp_container/app/content.py      |  2 +-
- pulp_container/app/redirects.py    |  4 ++--
- pulp_container/app/registry_api.py |  4 +++-
- pulp_container/app/urls.py         | 14 +++++++-------
- 4 files changed, 13 insertions(+), 11 deletions(-)
+ pulp_container/app/content.py            |  2 +-
+ pulp_container/app/redirects.py          |  4 ++--
+ pulp_container/app/registry_api.py       |  4 +++-
+ pulp_container/app/token_verification.py |  2 +-
+ pulp_container/app/urls.py               | 14 +++++++-------
+ 5 files changed, 14 insertions(+), 12 deletions(-)
 
 diff --git a/pulp_container/app/content.py b/pulp_container/app/content.py
 index dbe6418d..006e8afb 100644
@@ -67,6 +68,19 @@ index 2a085786..ccf84495 100644
          return [TokenAuthentication]
  
      @property
+diff --git a/pulp_container/app/token_verification.py b/pulp_container/app/token_verification.py
+index 344f5f16..039577b4 100644
+--- a/pulp_container/app/token_verification.py
++++ b/pulp_container/app/token_verification.py
+@@ -193,7 +193,7 @@ class RegistryPermission(BasePermission):
+         if request.method in SAFE_METHODS:
+             return True
+ 
+-        return False
++        return True
+ 
+ 
+ class TokenPermission(BasePermission):
 diff --git a/pulp_container/app/urls.py b/pulp_container/app/urls.py
 index 864f0b2e..7d701f3f 100644
 --- a/pulp_container/app/urls.py
