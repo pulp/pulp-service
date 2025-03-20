@@ -352,6 +352,8 @@ objects:
             value: ${PULP_SECURE_PROXY_SSL_HEADER}
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
+          - name: PULP_USE_UVLOOP
+            value: ${PULP_USE_UVLOOP}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -468,6 +470,8 @@ objects:
             value: "/etc/pulp/certs/subscription-api-mock-cert.pem"
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
+          - name: PULP_USE_UVLOOP
+            value: ${PULP_USE_UVLOOP}
 
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
@@ -699,6 +703,7 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -903,3 +908,6 @@ parameters:
   - name: PULP_TOKEN_AUTH_DISABLED
     description: Disable token authentication for the Container registry
     value: "true"
+  - name: PULP_USE_UVLOOP
+    description: Enable the UVLoopWorker for gunicorn.
+    value: "false"
