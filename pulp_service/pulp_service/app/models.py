@@ -17,8 +17,11 @@ from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
 from pulpcore.plugin.models import BaseModel, Domain
-from pulpcore.app.models import AutoAddObjPermsMixin, HeaderContentGuard
-from pulpcore.app.util import get_domain_pk
+from pulpcore.plugin.models import AutoAddObjPermsMixin
+from pulpcore.plugin.util import get_domain_pk
+
+from pulpcore.app.models import HeaderContentGuard
+
 from pulpcore.cache import Cache
 
 _logger = logging.getLogger(__name__)

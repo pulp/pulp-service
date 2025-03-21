@@ -4,7 +4,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 
-from pulpcore.app.models import Domain, Repository
+from pulpcore.plugin.models import Domain, Repository
 
 
 CONTENT_SOURCE_DESCRIPTION = "content-sources"

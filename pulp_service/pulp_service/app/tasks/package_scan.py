@@ -5,7 +5,7 @@ import threading
 from asgiref.sync import sync_to_async
 from queue import Queue
 
-from pulpcore.app.util import get_domain
+from pulpcore.plugin.util import get_domain
 from pulpcore.plugin.models import CreatedResource, RepositoryVersion, PulpTemporaryFile
 from pulp_npm.app.models import Package as NPMPackage
 from pulp_service.app.constants import PKG_ECOSYSTEM, OSV_QUERY_URL

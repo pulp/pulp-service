@@ -4,7 +4,7 @@ from gettext import gettext as _
 from jsonschema import validate, ValidationError
 from rest_framework import serializers
 
-from pulpcore.app.serializers import (
+from pulpcore.plugin.serializers import (
     ContentGuardSerializer,
     GetOrCreateSerializerMixin,
     ModelSerializer,

@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 
 from pulpcore.app.response import OperationPostponedResponse
-from pulpcore.app.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
+from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
 from pulpcore.plugin.tasking import dispatch
 
 from pulp_service.app.authentication import RHServiceAccountCertAuthentication

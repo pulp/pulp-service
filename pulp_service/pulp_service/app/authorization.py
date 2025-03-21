@@ -4,8 +4,7 @@ from binascii import Error as Base64DecodeError
 from django.db.models import Q
 import json
 import jq
-from pulpcore.app.util import get_domain
-from pulpcore.plugin.util import extract_pk
+from pulpcore.plugin.util import extract_pk, get_domain
 from pulp_service.app.models import DomainOrg
 from rest_framework.permissions import BasePermission
 import logging
