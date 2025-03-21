@@ -30,5 +30,5 @@ NPM_PACKAGE_LOCK_SCHEMA = {
             },
         },
     },
-    "required": ["name", "version", "lockfileVersion", "packages"],
+    "required": ["name", "lockfileVersion", "packages"],
 }
