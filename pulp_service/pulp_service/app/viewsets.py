@@ -13,7 +13,7 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
+from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 
 from pulpcore.app.response import OperationPostponedResponse
 from pulpcore.app.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
@@ -147,14 +147,14 @@ class TaskViewSet(TaskViewSet):
         return "admintasks"
 
 
-class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin):
+class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
 
     endpoint_name = "vuln_report"
     queryset = VulnReport.objects.all()
     serializer_class = VulnerabilityReportSerializer
 
     def create(self, request):
-        serializer = ContentScanSerializer(data=request.data, context={'request': request})
+        serializer = ContentScanSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
         shared_resources = None
