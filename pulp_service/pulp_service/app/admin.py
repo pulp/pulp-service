@@ -9,7 +9,7 @@ from django.core.validators import RegexValidator
 from .models import DomainOrg
 import re
 
-from pulpcore.app.models import Domain
+from pulpcore.plugin.models import Domain
 
 USERNAME_PATTERN = r'^[\w.@+=/-]+$'
 USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these special characters: @, ., +, -, =, /, _"

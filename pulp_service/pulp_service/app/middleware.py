@@ -10,8 +10,8 @@ from os import getenv
 from django.db import IntegrityError
 from django.utils.deprecation import MiddlewareMixin
 
-from pulpcore.app.models import Artifact, Repository
-from pulpcore.app.util import extract_pk, get_artifact_url, resolve_prn
+from pulpcore.plugin.models import Artifact, Repository
+from pulpcore.plugin.util import extract_pk, get_artifact_url, resolve_prn
 
 
 _logger = logging.getLogger(__name__)
