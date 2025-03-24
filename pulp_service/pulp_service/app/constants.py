@@ -32,3 +32,6 @@ NPM_PACKAGE_LOCK_SCHEMA = {
     },
     "required": ["name", "lockfileVersion", "packages"],
 }
+
+# timeout when waiting on tasks scan thread queue to avoid indefinite blocking.
+VULNERABILITY_TASK_THREAD_TIMEOUT = 60
