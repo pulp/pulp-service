@@ -3,13 +3,18 @@ import json
 import threading
 
 from asgiref.sync import sync_to_async
-from queue import Queue
+from queue import Empty, Queue
 
 from pulpcore.plugin.util import get_domain
 from pulpcore.plugin.models import CreatedResource, RepositoryVersion, PulpTemporaryFile
 from pulp_npm.app.models import Package as NPMPackage
-from pulp_service.app.constants import PKG_ECOSYSTEM, OSV_QUERY_URL
+from pulp_service.app.constants import (
+    PKG_ECOSYSTEM,
+    OSV_QUERY_URL,
+    VULNERABILITY_TASK_THREAD_TIMEOUT,
+)
 from pulp_service.app.models import VulnerabilityReport
+from pulp_service.app.tasks.util import except_catch_and_raise
 
 # Create a thread-safe queue to share Content units between threads
 content_queue = Queue()
@@ -43,27 +48,38 @@ async def _start_thread_and_run_scan(background_thread):
     from Queue
     """
     background_thread.start()
-    await _scan_packages()
+    await _scan_packages(background_thread)
     background_thread.join()
 
 
-async def _scan_packages():
+async def _scan_packages(background_thread):
     """
     Makes a request to the osv.dev API and store the results in VulnerabilityReport model.
     """
     scanned_packages = {}
     async with aiohttp.ClientSession() as session:
-        for osv_data in iter(content_queue.get, None):
-            data = json.dumps(osv_data)
-            async with session.post(url=OSV_QUERY_URL, data=data) as response:
-                response_body = await response.text()
-                json_body = json.loads(response_body)
-                if json_body.get("vulns"):
-                    package_name = "{package}-{version}".format(
-                        package=osv_data["package"]["name"],
-                        version=osv_data["version"],
-                    )
-                    scanned_packages[package_name] = json_body["vulns"]
+        try:
+            for osv_data in iter(
+                lambda: content_queue.get(timeout=VULNERABILITY_TASK_THREAD_TIMEOUT), None
+            ):
+                if isinstance(osv_data, Exception):
+                    raise RuntimeError(f"Background vuln report task failed to execute: {osv_data}")
+                data = json.dumps(osv_data)
+                async with session.post(url=OSV_QUERY_URL, data=data) as response:
+                    response_body = await response.text()
+                    json_body = json.loads(response_body)
+                    if json_body.get("vulns"):
+                        package_name = "{package}-{version}".format(
+                            package=osv_data["package"]["name"],
+                            version=osv_data["version"],
+                        )
+                        scanned_packages[package_name] = json_body["vulns"]
+        except Empty:
+            if not background_thread.is_alive():
+                raise RuntimeError("Vuln report task thread died unexpectedly.")
+            else:
+                raise RuntimeError("Background vuln report thread took too long.")
+
     vuln_report, created = await sync_to_async(VulnerabilityReport.objects.get_or_create)(
         vulns=scanned_packages, pulp_domain=get_domain()
     )
@@ -71,6 +87,7 @@ async def _scan_packages():
         await CreatedResource.objects.acreate(content_object=vuln_report)
 
 
+@except_catch_and_raise(content_queue)
 def _get_content_from_repo_version(repo_version_pk: str):
     """
     Populate content_queue Queue with the content_units found in RepositoryVersion
@@ -84,6 +101,7 @@ def _get_content_from_repo_version(repo_version_pk: str):
     content_queue.put(None)  # signal that there is no more content_units
 
 
+@except_catch_and_raise(content_queue)
 def _parse_npm_pkg_dependencies(package_lock_content):
     """
     Parse the package-lock.json file to extract the packages[name][dependencies] and
