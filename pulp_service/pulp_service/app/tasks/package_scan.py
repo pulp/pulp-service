@@ -144,7 +144,7 @@ def _identify_package_ecosystem(content: any) -> str:
     """
     if isinstance(content, NPMPackage):
         return getattr(PKG_ECOSYSTEM, "npm", None)
-    elif content.TYPE == "python":
+    elif content.TYPE in ["python", "gem"]:
         return getattr(PKG_ECOSYSTEM, content.TYPE, None)
     else:
         raise RuntimeError("Package type not supported!")
