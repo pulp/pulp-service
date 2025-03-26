@@ -68,12 +68,22 @@ async def _scan_packages(background_thread):
                 async with session.post(url=OSV_QUERY_URL, data=data) as response:
                     response_body = await response.text()
                     json_body = json.loads(response_body)
+                    osv_package_name = osv_data["package"]["name"]
+                    osv_package_version = osv_data["version"]
+                    package_name = "{package}-{version}".format(
+                        package=osv_package_name,
+                        version=osv_package_version,
+                    )
                     if json_body.get("vulns"):
-                        package_name = "{package}-{version}".format(
-                            package=osv_data["package"]["name"],
-                            version=osv_data["version"],
-                        )
                         scanned_packages[package_name] = json_body["vulns"]
+                    if next_page_token := json_body.get("next_page_token"):
+                        next_page_request = _build_osv_data(
+                            osv_package_name,
+                            osv_data["package"]["ecosystem"],
+                            osv_package_version,
+                            next_page_token,
+                        )
+                        content_queue.put(next_page_request)
         except Empty:
             if not background_thread.is_alive():
                 raise RuntimeError("Vuln report task thread died unexpectedly.")
@@ -128,13 +138,15 @@ def _parse_npm_pkg_dependencies(package_lock_content):
     content_queue.put(None)  # signal that there is no more content_units
 
 
-def _build_osv_data(name, ecosystem, version=None):
+def _build_osv_data(name, ecosystem, version=None, next_page_token=None):
     """
     Helper function to build the osv.dev request data based on content object
     """
     osv_data = {"package": {"name": name, "ecosystem": ecosystem}}
     if version:
         osv_data["version"] = version
+    if next_page_token:
+        osv_data["page_token"] = next_page_token
     return osv_data
 
 
