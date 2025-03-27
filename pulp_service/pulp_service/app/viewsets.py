@@ -9,6 +9,8 @@ from django.conf import settings
 from django.db.models.query import QuerySet
 from django.shortcuts import redirect
 
+from drf_spectacular.utils import extend_schema
+
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.response import Response
@@ -17,6 +19,7 @@ from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveMod
 
 from pulpcore.plugin.viewsets import OperationPostponedResponse
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
+from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
 
 from pulp_service.app.authentication import RHServiceAccountCertAuthentication
@@ -153,6 +156,12 @@ class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin,
     queryset = VulnReport.objects.all()
     serializer_class = VulnerabilityReportSerializer
 
+    @extend_schema(
+        request=ContentScanSerializer,
+        description="Trigger a task to generate the package vulnerability report",
+        summary="Generate vulnerability report",
+        responses={202: AsyncOperationResponseSerializer},
+    )
     def create(self, request):
         serializer = ContentScanSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
