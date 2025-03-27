@@ -1,3 +1,6 @@
+NPM_REMOTE_REGISTRY= "https://registry.npmjs.org/"
+PYTHON_REMOTE_REPO= "https://pypi.org/"
+
 # Sample npm package-json.lock file
 NPM_PACKAGE_LOCK_FILE = {
     "name": "sample_file",
