@@ -10,9 +10,11 @@ from pulpcore.plugin.content import app
 async def add_rh_org_id_resp_header(request, handler):
     try:
         response = await handler(request)
+        if not isinstance(response, web.Response):
+            raise web.HTTPException
     except web.HTTPException as exc:
         return exc
-    
+
     if not request.headers.get("x-rh-identity"):
         return response
 
