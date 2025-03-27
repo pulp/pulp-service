@@ -56,6 +56,7 @@ cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-b
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
 cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_maven-client"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_npm-client"
 
 cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
 sed "s#password#${PASSWORD}#g" pulp-smash.json > pulp-smash.customized.json
@@ -103,7 +104,7 @@ cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/sit
 cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=https API_HOST=$API_HOST API_PORT=443 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_maven.tests.functional.api.test_download_content --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
 # Run pulp_npm functional tests
-# cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_npm.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_npm.tests.functional -k 'test_pull_through_install' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
 # Run pulp_service functional tests
 cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=https API_HOST=$API_HOST API_PORT=443 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_service.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
