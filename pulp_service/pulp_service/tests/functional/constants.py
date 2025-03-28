@@ -1,4 +1,4 @@
-NPM_REMOTE_REGISTRY= "https://registry.npmjs.org/"
+NPM_REMOTE_REGISTRY= "https://registry.npmjs.org/cookie/0.5.0"
 PYTHON_REMOTE_REPO= "https://pypi.org/"
 
 # Sample npm package-json.lock file
