@@ -1,5 +1,14 @@
-NPM_REMOTE_REGISTRY= "https://registry.npmjs.org/cookie/0.5.0"
+# NPM
+NPM_REMOTE_REGISTRY= "https://registry.npmjs.org/"
+NPM_SAMPLE_PACKAGE= "cookie/0.5.0"
+
+# PYTHON
 PYTHON_REMOTE_REPO= "https://pypi.org/"
+PYTHON_REMOTE_INCLUDE=["django>=5.1"]
+
+# GEM
+GEM_REMOTE_REGISTRY="https://index.rubygems.org/"
+GEM_REMOTE_INCLUDE={"rails": "= 7.0.1"}
 
 # Sample npm package-json.lock file
 NPM_PACKAGE_LOCK_FILE = {
