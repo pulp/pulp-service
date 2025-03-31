@@ -113,38 +113,41 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
-COPY images/assets/patches/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch
+# COPY images/assets/patches/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0005-Add-a-configurable_route-for-the-pypi-endpoint.patch
+#
+# COPY images/assets/patches/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch
+#
+# COPY images/assets/patches/0010-Added-ability-to-return-a-URL-for-a-blob.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0010-Added-ability-to-return-a-URL-for-a-blob.patch
+#
+# COPY images/assets/patches/0011-ocistorage-backend-changes.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0011-ocistorage-backend-changes.patch
+#
+# COPY images/assets/patches/0012-content-otel-instrumentation-exception.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0012-content-otel-instrumentation-exception.patch
+#
+# COPY images/assets/patches/0014-Add-Content-Sources-periodic-telemetry-task.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0014-Add-Content-Sources-periodic-telemetry-task.patch
+#
+# COPY images/assets/patches/0016-Fix-pulp_content_origin_with_prefix-fixture.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0016-Fix-pulp_content_origin_with_prefix-fixture.patch
+#
+# COPY images/assets/patches/0017-Fix-distribution.base_url-in-tests.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0017-Fix-distribution.base_url-in-tests.patch
+#
+# COPY images/assets/patches/0018-Re-root-the-registry-API-at-api-pulp-v2.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0018-Re-root-the-registry-API-at-api-pulp-v2.patch
+#
+# COPY images/assets/patches/0020-Add-uvloop-as-the-the-Gunicorn-worker-eventloop.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0020-Add-uvloop-as-the-the-Gunicorn-worker-eventloop.patch
+#
+# COPY images/assets/patches/0021-Fix-handler-code-when-content-length-is-not-known.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0021-Fix-handler-code-when-content-length-is-not-known.patch
 
-COPY images/assets/patches/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0007-Add-a-new-setting-to-use-a-different-BASE_CONTENT_UR.patch
-
-COPY images/assets/patches/0010-Added-ability-to-return-a-URL-for-a-blob.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0010-Added-ability-to-return-a-URL-for-a-blob.patch
-
-COPY images/assets/patches/0011-ocistorage-backend-changes.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0011-ocistorage-backend-changes.patch
-
-COPY images/assets/patches/0012-content-otel-instrumentation-exception.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0012-content-otel-instrumentation-exception.patch
-
-COPY images/assets/patches/0014-Add-Content-Sources-periodic-telemetry-task.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0014-Add-Content-Sources-periodic-telemetry-task.patch
-
-COPY images/assets/patches/0016-Fix-pulp_content_origin_with_prefix-fixture.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0016-Fix-pulp_content_origin_with_prefix-fixture.patch
-
-COPY images/assets/patches/0017-Fix-distribution.base_url-in-tests.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0017-Fix-distribution.base_url-in-tests.patch
-
-COPY images/assets/patches/0018-Re-root-the-registry-API-at-api-pulp-v2.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0018-Re-root-the-registry-API-at-api-pulp-v2.patch
-
-COPY images/assets/patches/0020-Add-uvloop-as-the-the-Gunicorn-worker-eventloop.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0020-Add-uvloop-as-the-the-Gunicorn-worker-eventloop.patch
-
-COPY images/assets/patches/0021-Fix-handler-code-when-content-length-is-not-known.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0021-Fix-handler-code-when-content-length-is-not-known.patch
+COPY images/assets/patches /tmp/
+RUN for patch in /tmp/patches/*.patch; do patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < "$patch"; done
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
