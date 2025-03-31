@@ -146,8 +146,8 @@ RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 # COPY images/assets/patches/0021-Fix-handler-code-when-content-length-is-not-known.patch /tmp/
 # RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0021-Fix-handler-code-when-content-length-is-not-known.patch
 
-COPY images/assets/patches /tmp/
-RUN for patch in /tmp/patches/*.patch; do patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < "$patch"; done
+COPY images/assets/patches /tmp/patches
+RUN for patch in /tmp/patches/*.patch; do echo "Applying patch $patch."; patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < "$patch"; done
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
