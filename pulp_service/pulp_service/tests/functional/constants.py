@@ -1,14 +1,20 @@
 # NPM
-NPM_REMOTE_REGISTRY= "https://registry.npmjs.org/"
-NPM_SAMPLE_PACKAGE= "cookie/0.5.0"
+NPM_REMOTE_REGISTRY = "https://registry.npmjs.org/"
+NPM_SAMPLE_PACKAGE = "cookie/0.5.0"
 
 # PYTHON
-PYTHON_REMOTE_REPO= "https://pypi.org/"
-PYTHON_REMOTE_INCLUDE=["django>=5.1"]
+PYTHON_REMOTE_REPO = "https://pypi.org/"
+PYTHON_REMOTE_INCLUDE = ["django>=5.1"]
 
 # GEM
-GEM_REMOTE_REGISTRY="https://index.rubygems.org/"
-GEM_REMOTE_INCLUDE={"rails": "= 7.0.1"}
+GEM_REMOTE_REGISTRY = "https://index.rubygems.org/"
+GEM_REMOTE_INCLUDE = {"rails": "= 7.0.1"}
+
+# RPM
+RPM_SAMPLE_PACKAGE_URL = (
+    "https://vault.centos.org/7.0.1406/os/x86_64/Packages/kernel-3.10.0-123.el7.x86_64.rpm"
+)
+RPM_SAMPLE_RH_CPE = '["cpe:/o:redhat:enterprise_linux:7::workstation"]'
 
 # Sample npm package-json.lock file
 NPM_PACKAGE_LOCK_FILE = {
