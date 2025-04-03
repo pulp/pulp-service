@@ -1,5 +1,6 @@
 import aiohttp
 import json
+import re
 import threading
 
 from asgiref.sync import sync_to_async
@@ -9,8 +10,10 @@ from pulpcore.plugin.util import get_domain
 from pulpcore.plugin.models import CreatedResource, RepositoryVersion, PulpTemporaryFile
 from pulp_npm.app.models import Package as NPMPackage
 from pulp_service.app.constants import (
-    PKG_ECOSYSTEM,
+    OSV_RH_ECOSYSTEM_CPES_LABEL,
+    OSV_RH_ECOSYSTEM_LABEL,
     OSV_QUERY_URL,
+    PKG_ECOSYSTEM,
     VULNERABILITY_TASK_THREAD_TIMEOUT,
 )
 from pulp_service.app.models import VulnerabilityReport
@@ -18,6 +21,9 @@ from pulp_service.app.tasks.util import except_catch_and_raise
 
 # Create a thread-safe queue to share Content units between threads
 content_queue = Queue()
+
+# CPE prefix from Red Hat packages
+cpe_prefix = re.compile(r"^cpe:\/[oa]:redhat")
 
 
 async def check_content_from_repo_version(repo_version_pk):
@@ -105,9 +111,10 @@ def _get_content_from_repo_version(repo_version_pk: str):
     repo_version = RepositoryVersion.objects.get(pk=repo_version_pk)
     for content_unit in repo_version.content:
         content = content_unit.cast()
-        ecosystem = _identify_package_ecosystem(content)
-        osv_data = _build_osv_data(content.name, ecosystem, content.version)
-        content_queue.put(osv_data)
+        ecosystems = _identify_package_ecosystem(content, repo_version.repository)
+        for ecosystem in ecosystems:
+            osv_data = _build_osv_data(content.name, ecosystem, content.version)
+            content_queue.put(osv_data)
     content_queue.put(None)  # signal that there is no more content_units
 
 
@@ -150,13 +157,29 @@ def _build_osv_data(name, ecosystem, version=None, next_page_token=None):
     return osv_data
 
 
-def _identify_package_ecosystem(content: any) -> str:
+def _identify_package_ecosystem(content: any, repository=None) -> str:
     """
     Returns an osv.dev ecosystem (string) based on the content_type
     """
     if isinstance(content, NPMPackage):
-        return getattr(PKG_ECOSYSTEM, "npm", None)
+        return [getattr(PKG_ECOSYSTEM, "npm", None)]
     elif content.TYPE in ["python", "gem"]:
-        return getattr(PKG_ECOSYSTEM, content.TYPE, None)
+        return [getattr(PKG_ECOSYSTEM, content.TYPE, None)]
+    elif repository and repository.pulp_type == "rpm.rpm":
+        if content.pulp_type == "rpm.package":
+            return _convert_rhel_repo_cpe(repository)
+        else:
+            # ignore non rpm packages (advisory, packagecategory, packagelangpacks)
+            return []
     else:
         raise RuntimeError("Package type not supported!")
+
+
+def _convert_rhel_repo_cpe(repo):
+    """
+    Convert the CPE into osv.dev expected format
+    """
+    ecosystem = []
+    for cpe in json.loads(repo.pulp_labels[OSV_RH_ECOSYSTEM_CPES_LABEL]):
+        ecosystem.append(cpe_prefix.sub(repo.pulp_labels[OSV_RH_ECOSYSTEM_LABEL], cpe))
+    return ecosystem

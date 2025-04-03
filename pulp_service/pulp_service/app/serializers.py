@@ -14,7 +14,11 @@ from pulpcore.plugin.models import PulpTemporaryFile
 from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
 
 from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport
-from pulp_service.app.constants import NPM_PACKAGE_LOCK_SCHEMA
+from pulp_service.app.constants import (
+    NPM_PACKAGE_LOCK_SCHEMA,
+    OSV_RH_ECOSYSTEM_CPES_LABEL,
+    OSV_RH_ECOSYSTEM_LABEL,
+)
 
 
 class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerializerMixin):
@@ -63,11 +67,35 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
 
     def validate(self, data):
         data = super().validate(data)
-        if bool(data.get("repo_version", None)) == bool(data.get("package_json", None)):
+        if bool(repo_ver := data.get("repo_version")) == bool(pkg_json := data.get("package_json")):
             raise serializers.ValidationError(
                 _("Exactly one of 'repo_version' or 'package_json' must be specified.")
             )
+
+        # no more validations needed for pkg_json
+        if pkg_json:
+            return data
+
+        # for rpm repositories we need to verify the repository labels
+        if repo_ver.repository.pulp_type == "rpm.rpm":
+            if not self._validate_rpm_repo_expected_fields(repo_ver.repository):
+                raise serializers.ValidationError(
+                    _("Repository ecosystem not supported or does not contain the expected labels.")
+                )
+
         return data
+
+    def _validate_rpm_repo_expected_fields(self, repo):
+        """
+        verify if the label 'osv.dev ecosystem' == 'Red Hat'
+        verify if len(label['osv.dev cpe']) > 0
+        """
+        # for now, we are only supporting 'Red Hat' for rpms
+        if repo.pulp_labels.get(OSV_RH_ECOSYSTEM_LABEL) == "Red Hat":
+            # 'osv.dev cpe' must be provided for Red Hat ecosystem
+            if cpes := repo.pulp_labels.get(OSV_RH_ECOSYSTEM_CPES_LABEL):
+                return len(cpes) > 0
+        return False
 
     def verify_file(self):
         uploaded_file = self.validated_data["package_json"]
