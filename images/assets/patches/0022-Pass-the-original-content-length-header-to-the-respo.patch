@@ -1,0 +1,26 @@
+From e4ab84f39e69d561bdc138fec167254d0539b033 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Mon, 31 Mar 2025 15:22:20 -0300
+Subject: [PATCH] Pass the original content-length header to the response's
+ header.
+
+---
+ pulpcore/content/handler.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index 7f49c88ae..2fe9cc186 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -177,7 +177,7 @@ class Handler:
+     hop_by_hop_headers = [
+         "connection",
+         "content-encoding",
+-        "content-length",
++        # "content-length",
+         "keep-alive",
+         "public",
+         "proxy-authenticate",
+-- 
+2.49.0
+
