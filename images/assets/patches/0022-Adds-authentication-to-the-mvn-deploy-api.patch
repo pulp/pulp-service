@@ -1,0 +1,27 @@
+From 561a218c2071dbe0936599e0e42ba5dab46ca780 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Fri, 4 Apr 2025 14:33:08 -0400
+Subject: [PATCH] Adds authentication to the mvn deploy api.
+
+---
+ pulp_maven/app/maven_deploy_api.py | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/pulp_maven/app/maven_deploy_api.py b/pulp_maven/app/maven_deploy_api.py
+index af8a32b..461e29e 100644
+--- a/pulp_maven/app/maven_deploy_api.py
++++ b/pulp_maven/app/maven_deploy_api.py
+@@ -73,10 +73,6 @@ class MavenApiViewSet(APIView):
+ 
+     lookup_field = "name"
+ 
+-    # Authentication disabled for now
+-    authentication_classes = []
+-    permission_classes = []
+-
+     def redirect_to_content_app(self, distribution, relative_path):
+         return redirect(
+             f"{settings.CONTENT_ORIGIN}{settings.CONTENT_PATH_PREFIX}"
+-- 
+2.49.0
+
