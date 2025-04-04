@@ -22,6 +22,9 @@ from pulp_service.app.tasks.util import except_catch_and_raise
 # Create a thread-safe queue to share Content units between threads
 content_queue = Queue()
 
+# CPE prefix from Red Hat packages
+cpe_prefix = re.compile(r"^cpe:\/[oa]:redhat")
+
 
 async def check_content_from_repo_version(repo_version_pk):
     """
@@ -176,7 +179,6 @@ def _convert_rhel_repo_cpe(repo):
     """
     Convert the CPE into osv.dev expected format
     """
-    cpe_prefix = r"^cpe:\/[oa]:redhat"
     ecosystem = []
     for cpe in json.loads(repo.pulp_labels[OSV_RH_ECOSYSTEM_CPES_LABEL]):
         ecosystem.append(
