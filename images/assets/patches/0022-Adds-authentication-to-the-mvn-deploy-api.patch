@@ -1,11 +1,13 @@
-From 561a218c2071dbe0936599e0e42ba5dab46ca780 Mon Sep 17 00:00:00 2001
+From 4f63df8b0b80daebc1929a4609fc6d19826ce439 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 4 Apr 2025 14:33:08 -0400
 Subject: [PATCH] Adds authentication to the mvn deploy api.
 
+Also re-roots the mvn deploy API to match console.redhat.com deployment
 ---
  pulp_maven/app/maven_deploy_api.py | 4 ----
- 1 file changed, 4 deletions(-)
+ pulp_maven/app/urls.py             | 2 +-
+ 2 files changed, 1 insertion(+), 5 deletions(-)
 
 diff --git a/pulp_maven/app/maven_deploy_api.py b/pulp_maven/app/maven_deploy_api.py
 index af8a32b..461e29e 100644
@@ -22,6 +24,17 @@ index af8a32b..461e29e 100644
      def redirect_to_content_app(self, distribution, relative_path):
          return redirect(
              f"{settings.CONTENT_ORIGIN}{settings.CONTENT_PATH_PREFIX}"
+diff --git a/pulp_maven/app/urls.py b/pulp_maven/app/urls.py
+index e3da821..5c6750b 100644
+--- a/pulp_maven/app/urls.py
++++ b/pulp_maven/app/urls.py
+@@ -8,5 +8,5 @@ else:
+     path_re = r"(?P<name>[\w-]+)/(?P<path>.*)"
+ 
+ urlpatterns = [
+-    re_path(rf"^pulp/maven/{path_re}$", MavenApiViewSet.as_view()),
++    re_path(rf"^api/pulp/maven/{path_re}$", MavenApiViewSet.as_view()),
+ ]
 -- 
 2.49.0
 
