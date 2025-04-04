@@ -1,14 +1,49 @@
 # NPM
-NPM_REMOTE_REGISTRY= "https://registry.npmjs.org/"
-NPM_SAMPLE_PACKAGE= "cookie/0.5.0"
+NPM_REMOTE_REGISTRY = "https://registry.npmjs.org/"
+NPM_SAMPLE_PACKAGE = "cookie/0.5.0"
+NPM_VULNERABILITY_PACKAGE = "cookie-0.5.0"
+NPM_VULNERABILITY_IDS = ["GHSA-pxg6-pf52-xh8x"]
 
 # PYTHON
-PYTHON_REMOTE_REPO= "https://pypi.org/"
-PYTHON_REMOTE_INCLUDE=["django>=5.1"]
+PYTHON_REMOTE_REPO = "https://pypi.org/"
+PYTHON_REMOTE_INCLUDE = ["django>=5.1"]
+PYTHON_VULNERABILITY_PACKAGE = "Django-5.1"
+PYTHON_VULNERABILITY_IDS = [
+    "GHSA-5hgc-2vfp-mqvc",
+    "GHSA-8498-2h75-472j",
+    "GHSA-m9g8-fxxm-xg86",
+    "GHSA-p3fp-8748-vqfq",
+    "GHSA-qcgg-j2x8-h9g8",
+    "GHSA-rrqc-c2jx-6jgv",
+    "GHSA-wqfg-m96j-85vm",
+    "PYSEC-2024-102",
+    "PYSEC-2024-156",
+    "PYSEC-2024-157",
+    "PYSEC-2025-1",
+]
 
 # GEM
-GEM_REMOTE_REGISTRY="https://index.rubygems.org/"
-GEM_REMOTE_INCLUDE={"rails": "= 7.0.1"}
+GEM_REMOTE_REGISTRY = "https://index.rubygems.org/"
+GEM_REMOTE_INCLUDE = {"rails": "= 7.0.1"}
+GEM_VULNERABILITY_PACKAGE = "rails-7.0.1"
+GEM_VULNERABILITY_IDS = ["GHSA-9822-6m93-xqf4"]
+
+# RPM
+RPM_SAMPLE_PACKAGE_URL = (
+    "https://vault.centos.org/7.0.1406/os/x86_64/Packages/kernel-3.10.0-123.el7.x86_64.rpm"
+)
+RPM_SAMPLE_RH_CPE = '["cpe:/o:redhat:enterprise_linux:7::workstation"]'
+RPM_VULNERABILITY_PACKAGE = "kernel-3.10.0"
+RPM_VULNERABILITY_IDS = [
+    "RHSA-2014:0678",
+    "RHSA-2014:0786",
+    "RHSA-2014:0923",
+    "RHSA-2014:1023",
+    "RHSA-2014:1281",
+    "RHSA-2014:1724",
+    "RHSA-2014:1971",
+    "RHSA-2014:2010",
+]
 
 # Sample npm package-json.lock file
 NPM_PACKAGE_LOCK_FILE = {
