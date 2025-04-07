@@ -7,6 +7,10 @@ PKG_ECOSYSTEM = SimpleNamespace(
     rpm="Red Hat", npm="npm", maven="Maven", python="PyPI", gem="RubyGems"
 )
 
+# Labels used in RPM repositories for vulnerability report tasks
+OSV_RH_ECOSYSTEM_LABEL = "osv_dev ecosystem"
+OSV_RH_ECOSYSTEM_CPES_LABEL = "osv_dev cpes"
+
 # Define a basic schema for package-lock.json
 # https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json#file-format
 NPM_PACKAGE_LOCK_SCHEMA = {
