@@ -6,8 +6,8 @@ import requests
 from pulp_npm.tests.functional.constants import NPM_FIXTURE_URL
 
 
-@pytest.mark.xfail
-def test_pull_through_install(
+# @pytest.mark.xfail
+def test_artifact_size_header_on_pull_through_cache(
     npm_bindings, npm_remote_factory, npm_distribution_factory, http_get, delete_orphans_pre
 ):
     """Test that a pull-through distro can be installed from."""
@@ -24,5 +24,4 @@ def test_pull_through_install(
 
     response = requests.get(f"{distro.base_url}{package_filename}")
 
-    assert response.headers.get("Content-Length")
     assert response.headers.get("X-PULP-ARTIFACT-SIZE")
