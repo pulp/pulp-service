@@ -3,7 +3,7 @@ pulp-rpm==3.29.1
 pulp-gem==0.7.1
 pulp-ostree==2.4.6
 pulp-python==3.13.1
-pulp-npm==0.3.2
+pulp-npm==0.3.3
 pulp-container==2.24.0
 pulp-maven==0.10.0
 pulp-cli
