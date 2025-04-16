@@ -1,0 +1,116 @@
+From a672a057d52689512f7ac680714d48a7956b650f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Tue, 15 Apr 2025 11:16:12 -0300
+Subject: [PATCH] Add the task name to the task log.
+
+Close #6482
+---
+ CHANGES/6482.feature       |  1 +
+ pulpcore/tasking/tasks.py  | 25 +++++++++++++++++++------
+ pulpcore/tasking/worker.py |  4 ++--
+ 3 files changed, 22 insertions(+), 8 deletions(-)
+ create mode 100644 CHANGES/6482.feature
+
+diff --git a/CHANGES/6482.feature b/CHANGES/6482.feature
+new file mode 100644
+index 000000000..a700a8761
+--- /dev/null
++++ b/CHANGES/6482.feature
+@@ -0,0 +1 @@
++Added the `task_name` and if it's a `task.immediate` to the `Starting task ...` log entry.
+diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
+index 5018f96ca..b9dc53855 100644
+--- a/pulpcore/tasking/tasks.py
++++ b/pulpcore/tasking/tasks.py
+@@ -60,7 +60,20 @@ def _execute_task(task):
+     task.set_running()
+     domain = get_domain()
+     try:
+-        _logger.info(_("Starting task %s in domain: %s"), task.pk, domain.name)
++        if task.immediate:
++            _logger.info(
++                "Starting immediate task id: %s task_type: %s in domain: %s",
++                task.pk,
++                task.name,
++                domain.name,
++            )
++        else:
++            _logger.info(
++                "Starting task id: %s task_type: %s in domain: %s",
++                task.pk,
++                task.name,
++                domain.name,
++            )
+ 
+         # Execute task
+         module_name, function_name = task.name.rsplit(".", 1)
+@@ -70,7 +83,7 @@ def _execute_task(task):
+         kwargs = task.enc_kwargs or {}
+         result = func(*args, **kwargs)
+         if asyncio.iscoroutine(result):
+-            _logger.debug(_("Task is coroutine %s"), task.pk)
++            _logger.debug("Task is coroutine %s", task.pk)
+             loop = asyncio.get_event_loop()
+             loop.run_until_complete(result)
+ 
+@@ -78,7 +91,7 @@ def _execute_task(task):
+         exc_type, exc, tb = sys.exc_info()
+         task.set_failed(exc, tb)
+         _logger.info(
+-            _("Task[{task_type}] {task_pk} failed ({exc_type}: {exc}) in domain: {domain}").format(
++            "Task[{task_type}] {task_pk} failed ({exc_type}: {exc}) in domain: {domain}".format(
+                 task_type=task.name,
+                 task_pk=task.pk,
+                 exc_type=exc_type.__name__,
+@@ -90,7 +103,7 @@ def _execute_task(task):
+         send_task_notification(task)
+     else:
+         task.set_completed()
+-        _logger.info(_("Task completed %s in domain: %s"), task.pk, domain.name)
++        _logger.info("Task completed %s in domain: %s", task.pk, domain.name)
+         send_task_notification(task)
+ 
+ 
+@@ -170,7 +183,7 @@ def dispatch(
+     with contextlib.ExitStack() as stack:
+         with transaction.atomic():
+             # Task creation need to be serialized so that pulp_created will provide a stable order
+-            # at every time. We specifically need to ensure that each task, when commited to the
++            # at every time. We specifically need to ensure that each task, when committed to the
+             # task table will be the newest with respect to `pulp_created`.
+             with connection.cursor() as cursor:
+                 # Wait for exclusive access and release automatically after transaction.
+@@ -275,7 +288,7 @@ def cancel_task(task_id):
+         )
+         return task
+     _logger.info(
+-        _("Canceling task: {id} in domain: {name}").format(id=task_id, name=task.pulp_domain.name)
++        "Canceling task: {id} in domain: {name}".format(id=task_id, name=task.pulp_domain.name)
+     )
+ 
+     # This is the only valid transition without holding the task lock
+diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
+index 185b6802a..6a938f9c8 100644
+--- a/pulpcore/tasking/worker.py
++++ b/pulpcore/tasking/worker.py
+@@ -69,7 +69,7 @@ class PulpcoreWorker:
+         self.versions = {app.label: app.version for app in pulp_plugin_configs()}
+         self.cursor = connection.cursor()
+         self.worker = self.handle_worker_heartbeat()
+-        # This defaults to immediate task cancelation.
++        # This defaults to immediate task cancellation.
+         # It will be set into the future on moderately graceful worker shutdown,
+         # and set to None for fully graceful shutdown.
+         self.task_grace_timeout = timezone.now()
+@@ -401,7 +401,7 @@ class PulpcoreWorker:
+                             seconds=TASK_KILL_INTERVAL
+                         )
+                         _logger.info(
+-                            "Aborting current task %s in domain: %s due to cancelation.",
++                            "Aborting current task %s in domain: %s due to cancellation.",
+                             task.pk,
+                             domain.name,
+                         )
+-- 
+2.49.0
+
