@@ -1,28 +1,26 @@
 import base64
 from storages.base import BaseStorage
-from pulpcore.tasking.tasks import repository_name_var, x_quay_auth_var
+from storages.utils import setting
 import oras.client
 from django.core.files import File
 
 
 class OCIStorage(BaseStorage):
 
+    def get_default_settings(self):
+        return {"username": setting("username"),
+                "password": setting("password"),
+                "repository": setting("repository"),
+        }
+
     @property
     def username_password(self):
-        header = x_quay_auth_var.get(None)
-        base64_credentials = header.split(" ")[1]
+        return {"username": self.username, "password": self.password, "config_path": "/tmp/.docker/config.json"}
 
-        # Decode the Base64 string to get the original 'username:password' string
-        credentials = base64.b64decode(base64_credentials).decode("utf-8")
-
-        # Split the string to separate username and password
-        username, password = credentials.split(":", 1)
-        return {"username": username, "password": password, "config_path": "/tmp/.docker/config.json"}
     def _save(self, name, content):
         client = oras.client.OrasClient()
         client.login(**self.username_password)
-        repository_name = repository_name_var.get("dkliban/testrepo")
-        target = f"quay.io/{repository_name}:{content.name}"
+        target = f"quay.io/{self.repository}:{content.hashers['sha256'].hexdigest()}"
         client.push(files=[content.file.name], target=target, disable_path_validation=True, config_path="/tmp/.docker/config.json")
         return target
 
