@@ -1,4 +1,4 @@
-import base64
+from aiohttp.web_exceptions import HTTPFailedDependency
 from storages.base import BaseStorage
 from storages.utils import setting
 import oras.client
@@ -40,8 +40,10 @@ class OCIStorage(BaseStorage):
 
     def url(self, artifact_name, parameters={}, **kwargs):
         client = oras.client.OrasClient()
-        client.login(**self.username_password)
-
-        # Pull
-        res = client.pull(target=artifact_name, return_blob_url=True, config_path="/tmp/.docker/config.json")
+        try:
+            client.login(**self.username_password)
+            # Pull
+            res = client.pull(target=artifact_name, return_blob_url=True, config_path="/tmp/.docker/config.json")
+        except ValueError as e:
+            raise HTTPFailedDependency(body=" ".join(e.args))
         return res.headers["Location"]
