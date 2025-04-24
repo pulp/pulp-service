@@ -146,6 +146,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
+COPY images/assets/patches/0023-Revert-PULP-270-Validate-and-clean-comments-from-Rem.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0023-Revert-PULP-270-Validate-and-clean-comments-from-Rem.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
