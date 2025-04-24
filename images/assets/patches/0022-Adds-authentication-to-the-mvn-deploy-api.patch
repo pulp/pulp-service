@@ -1,4 +1,4 @@
-From 4f63df8b0b80daebc1929a4609fc6d19826ce439 Mon Sep 17 00:00:00 2001
+From 6aa08023114dd69f35eff9f9adeee5d14342c21d Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 4 Apr 2025 14:33:08 -0400
 Subject: [PATCH] Adds authentication to the mvn deploy api.
@@ -10,7 +10,7 @@ Also re-roots the mvn deploy API to match console.redhat.com deployment
  2 files changed, 1 insertion(+), 5 deletions(-)
 
 diff --git a/pulp_maven/app/maven_deploy_api.py b/pulp_maven/app/maven_deploy_api.py
-index af8a32b..461e29e 100644
+index ffa9b46..c32581b 100644
 --- a/pulp_maven/app/maven_deploy_api.py
 +++ b/pulp_maven/app/maven_deploy_api.py
 @@ -73,10 +73,6 @@ class MavenApiViewSet(APIView):
@@ -21,9 +21,9 @@ index af8a32b..461e29e 100644
 -    authentication_classes = []
 -    permission_classes = []
 -
-     def redirect_to_content_app(self, distribution, relative_path):
-         return redirect(
-             f"{settings.CONTENT_ORIGIN}{settings.CONTENT_PATH_PREFIX}"
+     def redirect_to_content_app(self, distribution, relative_path, request):
+         scheme = request.META.get("HTTP_X_FORWARDED_PROTO", request.scheme)
+         hostname = request.META.get("HTTP_X_FORWARDED_HOST", request.get_host())
 diff --git a/pulp_maven/app/urls.py b/pulp_maven/app/urls.py
 index e3da821..5c6750b 100644
 --- a/pulp_maven/app/urls.py
