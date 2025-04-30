@@ -2417,7 +2417,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message | filter @logStream like /pulp-stage_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'task_type: *,' as task_type\n| parse @message 'immediate: *,' as immediate\n| filter immediate=\"False\"\n| stats count(*) by task_type as task_type_count",
+    "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'task_type: *,' as task_type\n| parse @message 'immediate: *,' as immediate\n| filter immediate=\"False\"\n| stats count(*) by task_type as task_type_count",
               "id": "",
               "label": "",
               "logGroups": [
