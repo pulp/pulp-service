@@ -509,7 +509,7 @@ objects:
         terminationGracePeriodSeconds: 3660
         sidecars:
           - name: otel-collector
-            enabled: true
+            enabled: false
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
@@ -519,7 +519,8 @@ objects:
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
         env:
           - name: PULP_OTEL_ENABLED
-            value: ${TELEMETRY_ENABLED}
+            # value: ${TELEMETRY_ENABLED}
+            value: False
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
             value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
           - name: OTEL_EXPORTER_OTLP_ENDPOINT
