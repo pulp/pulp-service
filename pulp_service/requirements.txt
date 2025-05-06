@@ -10,6 +10,6 @@ pulp-cli
 pulp-cli-gem
 sentry-sdk
 app-common-python
-oras==0.2.24
+oras==0.2.31
 uvloop==0.21.0
 jsonschema
