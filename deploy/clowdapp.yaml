@@ -509,7 +509,7 @@ objects:
         terminationGracePeriodSeconds: 3660
         sidecars:
           - name: otel-collector
-            enabled: true
+            enabled: ${{PULP_WORKER_OTEL_COLLECTOR_SIDECAR_ENABLED}}
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
@@ -791,6 +791,9 @@ parameters:
   - name: PULP_WORKER_MEMORY_LIMIT
     description: Limit of memory use by Worker pods
     value: "2048Mi"
+  - name: PULP_WORKER_OTEL_COLLECTOR_SIDECAR_ENABLED
+    description: Enable the OTel collector sidecar
+    value: "true"
   - name: TELEMETRY_ENABLED
     description: Enables the application to send telemetry data.
     value: "true"
