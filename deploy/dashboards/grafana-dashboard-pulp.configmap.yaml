@@ -35,7 +35,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 2,
-      "id": 765683,
+      "id": 1007865,
       "links": [],
       "liveNow": false,
       "panels": [
@@ -123,3091 +123,3044 @@ data:
         {
           "datasource": {
             "type": "datasource",
-          "uid": "-- Mixed --"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
+            "uid": "-- Mixed --"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
               },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
                 },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "bytes"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 5,
-          "w": 6,
-          "x": 6,
-          "y": 1
-        },
-        "id": 31,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": false
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "PD4288CE6A02EB473"
-            },
-            "dimensions": {
-              "DBInstanceIdentifier": "pulp-${cluster:text}"
-            },
-            "expression": "",
-            "id": "",
-            "label": "prod",
-            "logGroups": [],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "FreeStorageSpace",
-            "metricQueryType": 0,
-            "namespace": "AWS/RDS",
-            "period": "",
-            "queryMode": "Metrics",
-            "refId": "PROD",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average"
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "PB2EEA3F591968575"
-            },
-            "dimensions": {
-              "DBInstanceIdentifier": "pulp-${cluster:text}"
-            },
-            "expression": "",
-            "hide": false,
-            "id": "",
-            "label": "stage",
-            "logGroups": [],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "FreeStorageSpace",
-            "metricQueryType": 0,
-            "namespace": "AWS/RDS",
-            "period": "",
-            "queryMode": "Metrics",
-            "refId": "STAGE",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average"
-          }
-        ],
-        "title": "DB Free Storage Space",
-        "type": "timeseries"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 6
-        },
-        "id": 13,
-        "panels": [],
-        "title": "Latency",
-        "type": "row"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 5,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineStyle": {
-                "fill": "solid"
-              },
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
                 },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 10,
-          "x": 0,
-          "y": 7
-        },
-        "id": 6,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "histogram_quantile(0.99, sum by(le) (rate(pulp_api_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
-            "fullMetaSearch": false,
-            "includeNullMetadata": false,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "P99",
-            "range": true,
-            "refId": "A",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "histogram_quantile(0.95, sum by(le) (rate(pulp_api_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": false,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "P95",
-            "range": true,
-            "refId": "B",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "histogram_quantile(0.90, sum by(le) (rate(pulp_api_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": false,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "P90",
-            "range": true,
-            "refId": "C",
-            "useBackend": false
-          }
-        ],
-        "title": "[API] Latency Percentiles",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 5,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineStyle": {
-                "fill": "solid"
-              },
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
                 },
-                {
-                  "color": "red",
-                  "value": 80
+                "thresholdsStyle": {
+                  "mode": "off"
                 }
-              ]
-            },
-            "unit": "ms"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 10,
-          "x": 10,
-          "y": 7
-        },
-        "id": 9,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "histogram_quantile(0.99, sum by(le) (rate(pulp_content_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
-            "fullMetaSearch": false,
-            "includeNullMetadata": false,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "P99",
-            "range": true,
-            "refId": "A",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "histogram_quantile(0.95, sum by(le) (rate(pulp_content_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": false,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "P95",
-            "range": true,
-            "refId": "B",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "histogram_quantile(0.90, sum by(le) (rate(pulp_content_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": false,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "P90",
-            "range": true,
-            "refId": "C",
-            "useBackend": false
-          }
-        ],
-        "title": "[Content] Latency Percentiles",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 5,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
               },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "noValue": "No content uploads during this time range",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "ms"
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "pct(response_time, 99)"
-              },
-              "properties": [
-                {
-                  "id": "displayName",
-                  "value": "P99"
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "pct(response_time, 95)"
-              },
-              "properties": [
-                {
-                  "id": "displayName",
-                  "value": "P95"
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "pct(response_time, 90)"
-              },
-              "properties": [
-                {
-                  "id": "displayName",
-                  "value": "P90"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 20,
-          "x": 0,
-          "y": 15
-        },
-        "id": 32,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "filter @logStream like /pulp-${cluster:text}_pulp-api/ \n| filter message =~ /\\/api\\/pulp\\/.*?\\/api\\/v3\\/uploads\\/.*?\\//\n| parse message /\\('?pulp \\[(?<correlation_id>.*?)\\]: (?<host>.*?) - (?<remote_user>.*?) \\[(?<date>.*)\\] \"(?<method>.*?) \\/api\\/pulp\\/(?<domain>.*?)\\/api\\/v3\\/uploads\\/(?<uuid>.*?)\\/ (?<HttpVersion>.*?)\" (?<status_code>\\d+) (?<response_length>\\d+) (?<referrer>.*?) (?<user_agent>.*?)(',\\s)?(?<response_time>\\d+)?\\)/\n| filter method IN ['POST', 'PATCH', 'PUT']\n| stats pct(response_time, 99) by bin(5m)\n",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "99",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(5m)"
-            ]
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "filter @logStream like /pulp-${cluster:text}_pulp-api/ \n| filter message =~ /\\/api\\/pulp\\/.*?\\/api\\/v3\\/uploads\\/.*?\\//\n| parse message /\\('?pulp \\[(?<correlation_id>.*?)\\]: (?<host>.*?) - (?<remote_user>.*?) \\[(?<date>.*)\\] \"(?<method>.*?) \\/api\\/pulp\\/(?<domain>.*?)\\/api\\/v3\\/uploads\\/(?<uuid>.*?)\\/ (?<HttpVersion>.*?)\" (?<status_code>\\d+) (?<response_length>\\d+) (?<referrer>.*?) (?<user_agent>.*?)(',\\s)?(?<response_time>\\d+)?\\)/\n| filter method IN ['POST', 'PATCH', 'PUT']\n| stats pct(response_time, 95) by bin(5m)\n",
-            "hide": false,
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "95",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(5m)"
-            ]
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "filter @logStream like /pulp-${cluster:text}_pulp-api/ \n| filter message =~ /\\/api\\/pulp\\/.*?\\/api\\/v3\\/uploads\\/.*?\\//\n| parse message /\\('?pulp \\[(?<correlation_id>.*?)\\]: (?<host>.*?) - (?<remote_user>.*?) \\[(?<date>.*)\\] \"(?<method>.*?) \\/api\\/pulp\\/(?<domain>.*?)\\/api\\/v3\\/uploads\\/(?<uuid>.*?)\\/ (?<HttpVersion>.*?)\" (?<status_code>\\d+) (?<response_length>\\d+) (?<referrer>.*?) (?<user_agent>.*?)(',\\s)?(?<response_time>\\d+)?\\)/\n| filter method IN ['POST', 'PATCH', 'PUT']\n| stats pct(response_time, 90) by bin(5m)\n",
-            "hide": false,
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "90",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(5m)"
-            ]
-          }
-        ],
-        "title": "Content Upload Response Time",
-        "type": "timeseries"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 22
-        },
-        "id": 12,
-        "panels": [],
-        "title": "Request rate",
-        "type": "row"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "RPS",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 10,
-              "gradientMode": "scheme",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "normal"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "decimals": 0,
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "none"
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "2xx"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "dark-green",
-                    "mode": "fixed"
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
                   }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "4xx"
+                ]
               },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "dark-red",
-                    "mode": "fixed"
-                  }
-                }
-              ]
+              "unit": "bytes"
             },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "3xx"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "semi-dark-blue",
-                    "mode": "fixed"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "5xx"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "semi-dark-orange",
-                    "mode": "fixed"
-                  }
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 10,
-          "w": 10,
-          "x": 0,
-          "y": 23
-        },
-        "id": 16,
-        "options": {
-          "legend": {
-            "calcs": [
-              "max",
-              "mean",
-              "lastNotNull"
-            ],
-            "displayMode": "table",
-            "placement": "bottom",
-            "showLegend": true
+            "overrides": []
           },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_target!~\"api/pulp/api/v3/livez/|api/pulp/api/v3/status/\",http_status_code=\"2xx\"}[$__rate_interval]))",
-            "hide": false,
-            "instant": false,
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "2xx"
+          "gridPos": {
+            "h": 5,
+            "w": 6,
+            "x": 6,
+            "y": 1
           },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
+          "id": 31,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
             },
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_status_code=\"4xx\"}[$__rate_interval]))",
-            "hide": false,
-            "instant": false,
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "4xx"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_status_code!~\"4xx|2xx\"}[$__rate_interval]))",
-            "hide": false,
-            "instant": false,
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "3xx and 5xx"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count[$__rate_interval]) * $__interval_ms / 1000)",
-            "fullMetaSearch": false,
-            "hide": true,
-            "includeNullMetadata": true,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "old",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_method=\"GET\",http_target=\"api/pulp/api/v3/status/\"}[$__rate_interval]))",
-            "hide": true,
-            "instant": false,
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "tmp-status"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_method=\"GET\",http_target=\"api/not-found\"}[$__rate_interval]))",
-            "hide": true,
-            "instant": false,
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "tmp-not-found"
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "pulp_api_request_duration_milliseconds_count{http_status_code=\"4xx\"}",
-            "fullMetaSearch": false,
-            "hide": true,
-            "includeNullMetadata": true,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "tmp-4xx",
-            "useBackend": false
-          }
-        ],
-        "title": "[API] Request rate of [2xx, 3xx, 4xx, 5xx]",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "RPS",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 10,
-              "gradientMode": "opacity",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "normal"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "decimals": 0,
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
             }
           },
-          "overrides": [
+          "targets": [
             {
-              "matcher": {
-                "id": "byName",
-                "options": "3xx"
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PD4288CE6A02EB473"
               },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "semi-dark-blue",
-                    "mode": "fixed"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "2xx"
+              "dimensions": {
+                "DBInstanceIdentifier": "pulp-${cluster:text}"
               },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "dark-green",
-                    "mode": "fixed"
-                  }
-                }
-              ]
+              "expression": "",
+              "id": "",
+              "label": "prod",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "FreeStorageSpace",
+              "metricQueryType": 0,
+              "namespace": "AWS/RDS",
+              "period": "",
+              "queryMode": "Metrics",
+              "refId": "PROD",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average"
             },
             {
-              "matcher": {
-                "id": "byName",
-                "options": "4xx"
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PB2EEA3F591968575"
               },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "dark-red",
-                    "mode": "fixed"
-                  }
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 10,
-          "w": 10,
-          "x": 10,
-          "y": 23
-        },
-        "id": 17,
-        "options": {
-          "legend": {
-            "calcs": [
-              "max",
-              "mean",
-              "lastNotNull"
-            ],
-            "displayMode": "table",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "multi",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"2xx\"}[$__rate_interval]))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": true,
-            "instant": false,
-            "interval": "",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "2xx",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"3xx\"}[$__rate_interval]))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": true,
-            "instant": false,
-            "interval": "",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "3xx",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"4xx\"}[$__rate_interval]))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": true,
-            "instant": false,
-            "interval": "",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "4xx",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"5xx\"}[$__rate_interval]))",
-            "fullMetaSearch": false,
-            "hide": false,
-            "includeNullMetadata": true,
-            "instant": false,
-            "interval": "",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "5xx",
-            "useBackend": false
-          },
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "disableTextWrap": false,
-            "editorMode": "code",
-            "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count[$__rate_interval]) * $__interval_ms / 1000)",
-            "fullMetaSearch": false,
-            "hide": true,
-            "includeNullMetadata": true,
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "old",
-            "useBackend": false
-          }
-        ],
-        "title": "[Content] Request rate of [2xx, 3xx, 4xx, 5xx]",
-        "type": "timeseries"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 33
-        },
-        "id": 19,
-        "panels": [],
-        "title": "Application Utilization",
-        "type": "row"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
+              "dimensions": {
+                "DBInstanceIdentifier": "pulp-${cluster:text}"
               },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "decbytes"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 10,
-          "x": 0,
-          "y": 34
-        },
-        "id": 23,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "topk(5, sum by (domain_name) (rate(pulp_artifacts_size_counter_Bytes_total[$__rate_interval]) * $__interval_ms / 1000))",
-            "instant": false,
-            "interval": "1m",
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "A"
-          }
-        ],
-        "title": "Size of Served Data",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "bytes"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 10,
-          "x": 10,
-          "y": 34
-        },
-        "id": 21,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "topk(5, sum by (domain_name) (pulp_space_usage_bytes))",
-            "interval": "",
-            "legendFormat": "{{domain_name}}",
-            "range": true,
-            "refId": "A"
-          }
-        ],
-        "title": "Disk Usage by Domain",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "bars",
-              "fillOpacity": 100,
-              "gradientMode": "hue",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "percent"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "fieldMinMax": false,
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "HIT cache_hit"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "green",
-                    "mode": "fixed"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "MISS cache_hit"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "yellow",
-                    "mode": "fixed"
-                  }
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 9,
-          "w": 20,
-          "x": 0,
-          "y": 42
-        },
-        "id": 42,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "table",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(content)/\n| filter @message not like /GET \\/api\\/pulp-content\\/default/\n| filter @message like /GET \\/api\\/pulp-content/\n| filter @message like /cache:/\n| parse @message 'cache:\\\"*\\\" ' as cache\n| stats count(*) as cache_hit by bin(1h), cache\n",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "A",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(1h)",
-              "cache"
-            ]
-          }
-        ],
-        "timeFrom": "now/d",
-        "title": "Content Cache Hit Ratio",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineStyle": {
-                "fill": "solid"
-              },
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "bytes"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 20,
-          "x": 0,
-          "y": 51
-        },
-        "hideTimeOverride": false,
-        "id": 30,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "10.4.1",
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "filter @logStream like /pulp-${cluster:text}_pulp-content/ |\nfilter message like /\\/api\\/pulp-content\\/.*?\\/.*?\\/.*? HTTP.*/ |\nparse message /(?<host>.*?) (?<date>\\[.*?\\]) \"(?<method>.*?) \\/api\\/pulp-content\\/(?<domain>.*?)\\/.*? (?<HttpVersion>.*?)\" \\d+ \\d+ \".*?\" \".*?\" \"(HIT|MISS)\" \"(?<ArtifactSize>\\d+)\"( \"(?<OrgId>.*?)\")?$/ |\nstats sum(ArtifactSize) as requested_artifact_size by domain,bin(5m)\n\n# limit defines the max number of events (in the below lines, at max 5 log messages will be queried)\n# since we cannot define a limit based on the number of different domains, doing a sort | limit would not be useful in this scenario and would just generate more load\n#|sort requested_artifact_size desc\n#|limit 5",
-            "hide": false,
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 1,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "bytes",
-            "region": "default",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "domain",
-              "bin(5m)"
-            ]
-          }
-        ],
-        "timeFrom": "6h",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 10,
-          "x": 0,
-          "y": 58
-        },
-        "id": 25,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "sum(pulp_tasks_longest_unblocked_time_seconds)",
-            "instant": false,
-            "interval": "",
-            "legendFormat": "task",
-            "range": true,
-            "refId": "A"
-          }
-        ],
-        "title": "Longest Unblocked Task Wait Time",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 10,
-          "x": 10,
-          "y": 58
-        },
-        "id": 26,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "${datasource}"
-            },
-            "editorMode": "code",
-            "expr": "sum(pulp_tasks_unblocked_queue)",
-            "instant": false,
-            "legendFormat": "tasks",
-            "range": true,
-            "refId": "A"
-          }
-        ],
-        "title": "Unblocked Tasks Waiting in the Queue",
-        "type": "timeseries"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 65
-        },
-        "id": 28,
-        "panels": [],
-        "title": "Log Data",
-        "type": "row"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "none"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 10,
-          "x": 0,
-          "y": 66
-        },
-        "id": 27,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "10.4.1",
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-content/ | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m)",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 1,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "rpm",
-            "region": "default",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(5m)"
-            ]
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-content/ | filter @message like \".xml\" | stats count(*) as xml by bin(5m)",
-            "hide": false,
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 1,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "xml",
-            "region": "default",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(5m)"
-            ]
-          }
-        ],
-        "title": "Number of XML/RPM Requests",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            },
-            "unit": "decbytes"
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 8,
-          "w": 10,
-          "x": 10,
-          "y": 66
-        },
-        "id": 29,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "pluginVersion": "10.4.1",
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /pulp-${cluster:text}_pulp-content/\n| filter @message like \".rpm\"\n| parse @message 'HIT\\\" \\\"*\\\"' as rpm_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as rpm_size_miss\n| stats sum(coalesce(rpm_size_hit, 0) + coalesce(rpm_size_miss, 0)) as rpm by bin(5m)",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 1,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "rpm",
-            "region": "default",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(5m)"
-            ]
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /pulp-${cluster:text}_pulp-content/\n| filter @message like \".xml\"\n| parse @message 'HIT\\\" \\\"*\\\"' as xml_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as xml_size_miss\n| stats sum(coalesce(xml_size_hit, 0) + coalesce(xml_size_miss, 0)) as xml by bin(5m)",
-            "hide": false,
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 1,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "xml",
-            "region": "default",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(5m)"
-            ]
-          }
-        ],
-        "title": "Size of served XML/RPM Artifacts",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineStyle": {
-                "fill": "solid"
-              },
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "normal"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "completed_tasks"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "semi-dark-green",
-                    "mode": "fixed"
-                  }
-                },
-                {
-                  "id": "displayName",
-                  "value": "Successful tasks"
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "failed_tasks"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "semi-dark-red",
-                    "mode": "fixed"
-                  }
-                },
-                {
-                  "id": "displayName",
-                  "value": "Failed tasks"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 9,
-          "w": 20,
-          "x": 0,
-          "y": 74
-        },
-        "id": 38,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| parse @message /Task\\[(?<task_name>[^\\]]+)\\]/\n| filter ispresent(task_name)\n| stats count() as failed_tasks by bin(1h)\n",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "A",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(1h)"
-            ]
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter @message like /Task completed/\n| stats count() as completed_tasks by bin(1h)\n",
-            "hide": false,
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "B",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(1h)"
-            ]
-          }
-        ],
-        "timeFrom": "5d",
-        "title": "Successful Tasks and Failed Tasks",
-        "transformations": [
-          {
-            "id": "joinByField",
-            "options": {}
-          }
-        ],
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "thresholds"
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                }
-              ]
-            }
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 10,
-          "w": 8,
-          "x": 0,
-          "y": 83
-        },
-        "id": 37,
-        "options": {
-          "colorMode": "value",
-          "graphMode": "area",
-          "justifyMode": "auto",
-          "orientation": "auto",
-          "reduceOptions": {
-            "calcs": [
-              "lastNotNull"
-            ],
-            "fields": "",
-            "values": false
-          },
-          "showPercentChange": false,
-          "textMode": "auto",
-          "wideLayout": true
-        },
-        "pluginVersion": "10.4.1",
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| filter message like /Task completed/\n| stats count() as task_count",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "A",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": []
-          }
-        ],
-        "timeFrom": "now/d",
-        "title": "Successful tasks",
-        "transformations": [
-          {
-            "id": "merge",
-            "options": {}
-          }
-        ],
-        "type": "stat"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "description": "",
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              }
-            },
-            "mappings": []
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 10,
-          "w": 12,
-          "x": 8,
-          "y": 83
-        },
-        "id": 40,
-        "options": {
-          "displayLabels": [
-            "percent"
-          ],
-          "legend": {
-            "calcs": [],
-            "displayMode": "table",
-            "placement": "right",
-            "showLegend": true,
-            "values": []
-          },
-          "pieType": "pie",
-          "reduceOptions": {
-            "calcs": [
-              "lastNotNull"
-            ],
-            "fields": "",
-            "values": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'task_type: *,' as task_type\n| parse @message 'immediate: *,' as immediate\n| filter immediate=\"False\"\n| stats count(*) by task_type as task_type_count",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "A",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "task_type_count"
-            ]
-          }
-        ],
-        "timeFrom": "now/d",
-        "title": "Pulp-worker non-immediate tasks by task type",
-        "type": "piechart"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "bars",
-              "fillOpacity": 100,
-              "gradientMode": "hue",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "percent"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "True task_count"
-              },
-              "properties": [
-                {
-                  "id": "color",
-                  "value": {
-                    "fixedColor": "#73BF69",
-                    "mode": "fixed"
-                  }
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "True task_count"
-              },
-              "properties": [
-                {
-                  "id": "displayName",
-                  "value": "Immediate Tasks"
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "False task_count"
-              },
-              "properties": [
-                {
-                  "id": "displayName",
-                  "value": "Non Immediate Tasks"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 10,
-          "w": 20,
-          "x": 0,
-          "y": 93
-        },
-        "id": 39,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "table",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'task_type: *,' as task_type\n| parse @message 'immediate: *,' as immediate\n| parse @message 'deferred: *\"' as deferred\n| filter immediate=\"True\"\n| stats count(*) as task_count by bin(1h), immediate",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "A",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(1h)",
-              "immediate"
-            ]
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'task_type: *,' as task_type\n| parse @message 'immediate: *,' as immediate\n| parse @message 'deferred: *\"' as deferred\n| filter immediate=\"False\"\n| stats count(*) as task_count by bin(1h), immediate",
-            "hide": false,
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "B",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(1h)",
-              "immediate"
-            ]
-          }
-        ],
-        "timeFrom": "now/d",
-        "title": "Pulp-Worker Immediate/Non Immediate Tasks",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "cloudwatch",
-          "uid": "P1A97A9592CB7F392"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "bars",
-              "fillOpacity": 100,
-              "gradientMode": "hue",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "percent"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": [
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "pulp-api count(*)"
-              },
-              "properties": [
-                {
-                  "id": "displayName",
-                  "value": "Tasks executed by pulp-api"
-                }
-              ]
-            },
-            {
-              "matcher": {
-                "id": "byName",
-                "options": "pulp-worker count(*)"
-              },
-              "properties": [
-                {
-                  "id": "displayName",
-                  "value": "Tasks executed by pulp-worker"
-                }
-              ]
-            }
-          ]
-        },
-        "gridPos": {
-          "h": 10,
-          "w": 20,
-          "x": 0,
-          "y": 103
-        },
-        "id": 41,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "table",
-            "placement": "bottom",
-            "showLegend": true
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "dimensions": {},
-            "expression": "fields @logStream, @message, kubernetes.labels.pod as pod | filter @logStream like /pulp-${cluster:text}_pulp-(api|content|worker)/\n| filter message like /Task completed/\n| stats count(*) by bin(1h), pod\n\n\n\n",
-            "id": "",
-            "label": "",
-            "logGroups": [
-              {
-                "arn": "$logsource",
-                "name": "$logsource"
-              }
-            ],
-            "matchExact": true,
-            "metricEditorMode": 0,
-            "metricName": "",
-            "metricQueryType": 0,
-            "namespace": "",
-            "period": "",
-            "queryMode": "Logs",
-            "refId": "A",
-            "region": "us-east-1",
-            "sqlExpression": "",
-            "statistic": "Average",
-            "statsGroups": [
-              "bin(1h)",
-              "pod"
-            ]
-          }
-        ],
-        "timeFrom": "now/d",
-        "title": "Tasks per type of worker",
-        "type": "timeseries"
-      },
-      {
-        "collapsed": false,
-        "gridPos": {
-          "h": 1,
-          "w": 24,
-          "x": 0,
-          "y": 113
-        },
-        "id": 33,
-        "panels": [],
-        "title": "Stakeholders resources",
-        "type": "row"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "count",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "decimals": 0,
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 6,
-          "x": 0,
-          "y": 114
-        },
-        "id": 34,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": false
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "PDD8BE47D10408F45"
-            },
-            "editorMode": "code",
-            "expr": "pulp_rhel_ai_repositories_count",
-            "instant": false,
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "A"
-          }
-        ],
-        "title": "RHEL-AI repositories",
-        "type": "timeseries"
-      },
-      {
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "color": {
-              "mode": "palette-classic"
-            },
-            "custom": {
-              "axisBorderShow": false,
-              "axisCenteredZero": false,
-              "axisColorMode": "text",
-              "axisLabel": "count",
-              "axisPlacement": "auto",
-              "barAlignment": 0,
-              "drawStyle": "line",
-              "fillOpacity": 0,
-              "gradientMode": "none",
-              "hideFrom": {
-                "legend": false,
-                "tooltip": false,
-                "viz": false
-              },
-              "insertNulls": false,
-              "lineInterpolation": "linear",
-              "lineWidth": 1,
-              "pointSize": 5,
-              "scaleDistribution": {
-                "type": "linear"
-              },
-              "showPoints": "auto",
-              "spanNulls": false,
-              "stacking": {
-                "group": "A",
-                "mode": "none"
-              },
-              "thresholdsStyle": {
-                "mode": "off"
-              }
-            },
-            "decimals": 0,
-            "mappings": [],
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": null
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          },
-          "overrides": []
-        },
-        "gridPos": {
-          "h": 7,
-          "w": 6,
-          "x": 6,
-          "y": 114
-        },
-        "id": 35,
-        "options": {
-          "legend": {
-            "calcs": [],
-            "displayMode": "list",
-            "placement": "bottom",
-            "showLegend": false
-          },
-          "tooltip": {
-            "mode": "single",
-            "sort": "none"
-          }
-        },
-        "targets": [
-          {
-            "datasource": {
-              "type": "prometheus",
-              "uid": "PDD8BE47D10408F45"
-            },
-            "editorMode": "code",
-            "expr": "pulp_content_sources_domains_count",
-            "instant": false,
-            "legendFormat": "__auto",
-            "range": true,
-            "refId": "A"
-          }
-        ],
-        "title": "Content-Sources domains",
-        "type": "timeseries"
-      }
-    ],
-    "refresh": "30s",
-    "schemaVersion": 39,
-    "tags": [],
-    "templating": {
-      "list": [
-        {
-          "current": {
-            "selected": false,
-            "text": "stage",
-            "value": "s"
-          },
-          "hide": 0,
-          "includeAll": false,
-          "label": "cluster",
-          "multi": false,
-          "name": "cluster",
-          "options": [
-            {
-              "selected": false,
-              "text": "prod",
-              "value": "p"
-            },
-            {
-              "selected": true,
-              "text": "stage",
-              "value": "s"
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "stage",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "FreeStorageSpace",
+              "metricQueryType": 0,
+              "namespace": "AWS/RDS",
+              "period": "",
+              "queryMode": "Metrics",
+              "refId": "STAGE",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average"
             }
           ],
-          "query": "prod : p,stage : s",
-          "queryValue": "",
-          "skipUrlSync": false,
-          "type": "custom"
+          "title": "DB Free Storage Space",
+          "type": "timeseries"
         },
         {
-          "current": {
-            "selected": false,
-            "text": "crcs02ue1-prometheus",
-            "value": "PDD8BE47D10408F45"
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 6
           },
-          "hide": 0,
-          "includeAll": false,
-          "multi": false,
-          "name": "datasource",
-          "options": [],
-          "query": "prometheus",
-          "queryValue": "",
-          "refresh": 1,
-          "regex": "/crc${cluster}.*ue1-prometheus/",
-          "skipUrlSync": false,
-          "type": "datasource"
+          "id": 13,
+          "panels": [],
+          "title": "Latency",
+          "type": "row"
         },
         {
-          "current": {
-            "selected": false,
-            "text": "crcs02ue1.pulp-stage",
-            "value": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
           },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 5,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "ms"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 0,
+            "y": 7
+          },
+          "id": 6,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by(le) (rate(pulp_api_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
+              "fullMetaSearch": false,
+              "includeNullMetadata": false,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "P99",
+              "range": true,
+              "refId": "A",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by(le) (rate(pulp_api_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": false,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "P95",
+              "range": true,
+              "refId": "B",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.90, sum by(le) (rate(pulp_api_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": false,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "P90",
+              "range": true,
+              "refId": "C",
+              "useBackend": false
+            }
+          ],
+          "title": "[API] Latency Percentiles",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 5,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "ms"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 10,
+            "y": 7
+          },
+          "id": 9,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by(le) (rate(pulp_content_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
+              "fullMetaSearch": false,
+              "includeNullMetadata": false,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "P99",
+              "range": true,
+              "refId": "A",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by(le) (rate(pulp_content_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": false,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "P95",
+              "range": true,
+              "refId": "B",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.90, sum by(le) (rate(pulp_content_request_duration_milliseconds_bucket[$__rate_interval]) * $__interval_ms / 1000))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": false,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "P90",
+              "range": true,
+              "refId": "C",
+              "useBackend": false
+            }
+          ],
+          "title": "[Content] Latency Percentiles",
+          "type": "timeseries"
+        },
+        {
           "datasource": {
             "type": "cloudwatch",
             "uid": "P1A97A9592CB7F392"
           },
-          "definition": "",
-          "hide": 0,
-          "includeAll": false,
-          "label": "logsource",
-          "multi": false,
-          "name": "logsource",
-          "options": [],
-          "query": {
-            "logGroupPrefix": "crc",
-            "queryType": "logGroups",
-            "refId": "CloudWatchVariableQueryEditor-VariableQuery",
-            "region": "us-east-1"
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 5,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "noValue": "No content uploads during this time range",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "ms"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pct(response_time, 99)"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "P99"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pct(response_time, 95)"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "P95"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pct(response_time, 90)"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "P90"
+                  }
+                ]
+              }
+            ]
           },
-          "refresh": 1,
-          "regex": "/crc${cluster}0[12]ue1\\.pulp-${cluster:text}/",
-          "skipUrlSync": false,
-          "sort": 0,
-          "type": "query"
+          "gridPos": {
+            "h": 7,
+            "w": 20,
+            "x": 0,
+            "y": 15
+          },
+          "id": 32,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "filter @logStream like /pulp-${cluster:text}_pulp-api/ \n| filter message =~ /\\/api\\/pulp\\/.*?\\/api\\/v3\\/uploads\\/.*?\\//\n| parse message /\\('?pulp \\[(?<correlation_id>.*?)\\]: (?<host>.*?) - (?<remote_user>.*?) \\[(?<date>.*)\\] \"(?<method>.*?) \\/api\\/pulp\\/(?<domain>.*?)\\/api\\/v3\\/uploads\\/(?<uuid>.*?)\\/ (?<HttpVersion>.*?)\" (?<status_code>\\d+) (?<response_length>\\d+) (?<referrer>.*?) (?<user_agent>.*?)(',\\s)?(?<response_time>\\d+)?\\)/\n| filter method IN ['POST', 'PATCH', 'PUT']\n| stats pct(response_time, 99) by bin(5m)\n",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "99",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "filter @logStream like /pulp-${cluster:text}_pulp-api/ \n| filter message =~ /\\/api\\/pulp\\/.*?\\/api\\/v3\\/uploads\\/.*?\\//\n| parse message /\\('?pulp \\[(?<correlation_id>.*?)\\]: (?<host>.*?) - (?<remote_user>.*?) \\[(?<date>.*)\\] \"(?<method>.*?) \\/api\\/pulp\\/(?<domain>.*?)\\/api\\/v3\\/uploads\\/(?<uuid>.*?)\\/ (?<HttpVersion>.*?)\" (?<status_code>\\d+) (?<response_length>\\d+) (?<referrer>.*?) (?<user_agent>.*?)(',\\s)?(?<response_time>\\d+)?\\)/\n| filter method IN ['POST', 'PATCH', 'PUT']\n| stats pct(response_time, 95) by bin(5m)\n",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "95",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "filter @logStream like /pulp-${cluster:text}_pulp-api/ \n| filter message =~ /\\/api\\/pulp\\/.*?\\/api\\/v3\\/uploads\\/.*?\\//\n| parse message /\\('?pulp \\[(?<correlation_id>.*?)\\]: (?<host>.*?) - (?<remote_user>.*?) \\[(?<date>.*)\\] \"(?<method>.*?) \\/api\\/pulp\\/(?<domain>.*?)\\/api\\/v3\\/uploads\\/(?<uuid>.*?)\\/ (?<HttpVersion>.*?)\" (?<status_code>\\d+) (?<response_length>\\d+) (?<referrer>.*?) (?<user_agent>.*?)(',\\s)?(?<response_time>\\d+)?\\)/\n| filter method IN ['POST', 'PATCH', 'PUT']\n| stats pct(response_time, 90) by bin(5m)\n",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "90",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            }
+          ],
+          "title": "Content Upload Response Time",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 22
+          },
+          "id": 12,
+          "panels": [],
+          "title": "Request rate",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "RPS",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "scheme",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "decimals": 0,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "2xx"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "4xx"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "3xx"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "semi-dark-blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "5xx"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "semi-dark-orange",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 10,
+            "x": 0,
+            "y": 23
+          },
+          "id": 16,
+          "options": {
+            "legend": {
+              "calcs": [
+                "max",
+                "mean",
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_target!~\"api/pulp/api/v3/livez/|api/pulp/api/v3/status/\",http_status_code=\"2xx\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "2xx"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_status_code=\"4xx\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "4xx"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_status_code!~\"4xx|2xx\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "3xx and 5xx"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count[$__rate_interval]) * $__interval_ms / 1000)",
+              "fullMetaSearch": false,
+              "hide": true,
+              "includeNullMetadata": true,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "old",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_method=\"GET\",http_target=\"api/pulp/api/v3/status/\"}[$__rate_interval]))",
+              "hide": true,
+              "instant": false,
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "tmp-status"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_api_request_duration_milliseconds_count{http_method=\"GET\",http_target=\"api/not-found\"}[$__rate_interval]))",
+              "hide": true,
+              "instant": false,
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "tmp-not-found"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "pulp_api_request_duration_milliseconds_count{http_status_code=\"4xx\"}",
+              "fullMetaSearch": false,
+              "hide": true,
+              "includeNullMetadata": true,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "tmp-4xx",
+              "useBackend": false
+            }
+          ],
+          "title": "[API] Request rate of [2xx, 3xx, 4xx, 5xx]",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "RPS",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "decimals": 0,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "3xx"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "semi-dark-blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "2xx"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "4xx"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 10,
+            "x": 10,
+            "y": 23
+          },
+          "id": 17,
+          "options": {
+            "legend": {
+              "calcs": [
+                "max",
+                "mean",
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"2xx\"}[$__rate_interval]))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": true,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "2xx",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"3xx\"}[$__rate_interval]))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": true,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "3xx",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"4xx\"}[$__rate_interval]))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": true,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "4xx",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count{http_status_code=\"5xx\"}[$__rate_interval]))",
+              "fullMetaSearch": false,
+              "hide": false,
+              "includeNullMetadata": true,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "5xx",
+              "useBackend": false
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "disableTextWrap": false,
+              "editorMode": "code",
+              "expr": "sum by (http_status_code)(rate(pulp_content_request_duration_milliseconds_count[$__rate_interval]) * $__interval_ms / 1000)",
+              "fullMetaSearch": false,
+              "hide": true,
+              "includeNullMetadata": true,
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "old",
+              "useBackend": false
+            }
+          ],
+          "title": "[Content] Request rate of [2xx, 3xx, 4xx, 5xx]",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 33
+          },
+          "id": 19,
+          "panels": [],
+          "title": "Application Utilization",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "decbytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 0,
+            "y": 34
+          },
+          "id": 23,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "topk(5, sum by (domain_name) (rate(pulp_artifacts_size_counter_Bytes_total[$__rate_interval]) * $__interval_ms / 1000))",
+              "instant": false,
+              "interval": "1m",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Size of Served Data",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 10,
+            "y": 34
+          },
+          "id": 21,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "topk(5, sum by (domain_name) (pulp_space_usage_bytes))",
+              "interval": "",
+              "legendFormat": "{{domain_name}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Disk Usage by Domain",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "bars",
+                "fillOpacity": 100,
+                "gradientMode": "hue",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "percent"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "fieldMinMax": false,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "HIT cache_hit"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "MISS cache_hit"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "yellow",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 20,
+            "x": 0,
+            "y": 42
+          },
+          "id": 42,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(content)/\n| filter @message not like /GET \\/api\\/pulp-content\\/default/\n| filter @message like /GET \\/api\\/pulp-content/\n| filter @message like /cache:/\n| parse @message 'cache:\\\"*\\\" ' as cache\n| stats count(*) as cache_hit by bin(1h), cache\n",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(1h)",
+                "cache"
+              ]
+            }
+          ],
+          "timeFrom": "now/d",
+          "title": "Content Cache Hit Ratio",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 20,
+            "x": 0,
+            "y": 51
+          },
+          "hideTimeOverride": false,
+          "id": 30,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "filter @logStream like /pulp-${cluster:text}_pulp-content/ |\nfilter message like /\\/api\\/pulp-content\\/.*?\\/.*?\\/.*? HTTP.*/ |\nparse message /(?<host>.*?) (?<date>\\[.*?\\]) \"(?<method>.*?) \\/api\\/pulp-content\\/(?<domain>.*?)\\/.*? (?<HttpVersion>.*?)\" \\d+ \\d+ \".*?\" \".*?\" \"(HIT|MISS)\" \"(?<ArtifactSize>\\d+)\"( \"(?<OrgId>.*?)\")?$/ |\nstats sum(ArtifactSize) as requested_artifact_size by domain,bin(5m)\n\n# limit defines the max number of events (in the below lines, at max 5 log messages will be queried)\n# since we cannot define a limit based on the number of different domains, doing a sort | limit would not be useful in this scenario and would just generate more load\n#|sort requested_artifact_size desc\n#|limit 5",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "bytes",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "domain",
+                "bin(5m)"
+              ]
+            }
+          ],
+          "timeFrom": "6h",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 10,
+            "x": 0,
+            "y": 58
+          },
+          "id": 25,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "sum(pulp_tasks_longest_unblocked_time_seconds)",
+              "instant": false,
+              "interval": "",
+              "legendFormat": "task",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Longest Unblocked Task Wait Time",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 10,
+            "x": 10,
+            "y": 58
+          },
+          "id": 26,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "sum(pulp_tasks_unblocked_queue)",
+              "instant": false,
+              "legendFormat": "tasks",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Unblocked Tasks Waiting in the Queue",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 65
+          },
+          "id": 28,
+          "panels": [],
+          "title": "Log Data",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 0,
+            "y": 66
+          },
+          "id": 27,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-content/ | filter @message like \".rpm\" | stats count(*) as rpm by bin(5m)",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "rpm",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-content/ | filter @message like \".xml\" | stats count(*) as xml by bin(5m)",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "xml",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            }
+          ],
+          "title": "Number of XML/RPM Requests",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "decbytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 10,
+            "x": 10,
+            "y": 66
+          },
+          "id": 29,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /pulp-${cluster:text}_pulp-content/\n| filter @message like \".rpm\"\n| parse @message 'HIT\\\" \\\"*\\\"' as rpm_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as rpm_size_miss\n| stats sum(coalesce(rpm_size_hit, 0) + coalesce(rpm_size_miss, 0)) as rpm by bin(5m)",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "rpm",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @timestamp, @logStream, @message,  kubernetes.namespace_name\n| filter @logStream like /pulp-${cluster:text}_pulp-content/\n| filter @message like \".xml\"\n| parse @message 'HIT\\\" \\\"*\\\"' as xml_size_hit\n| parse @message 'MISS\\\" \\\"*\\\"' as xml_size_miss\n| stats sum(coalesce(xml_size_hit, 0) + coalesce(xml_size_miss, 0)) as xml by bin(5m)",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 1,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "xml",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(5m)"
+              ]
+            }
+          ],
+          "title": "Size of served XML/RPM Artifacts",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "completed_tasks"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "semi-dark-green",
+                      "mode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Successful tasks"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "failed_tasks"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "semi-dark-red",
+                      "mode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "displayName",
+                    "value": "Failed tasks"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 20,
+            "x": 0,
+            "y": 74
+          },
+          "id": 38,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| parse @message /Task\\[(?<task_name>[^\\]]+)\\]/\n| filter ispresent(task_name)\n| stats count() as failed_tasks by bin(1h)\n",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(1h)"
+              ]
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter @message like /Task completed/\n| stats count() as completed_tasks by bin(1h)\n",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "B",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(1h)"
+              ]
+            }
+          ],
+          "timeFrom": "5d",
+          "title": "Successful Tasks and Failed Tasks",
+          "transformations": [
+            {
+              "id": "joinByField",
+              "options": {}
+            }
+          ],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 8,
+            "x": 0,
+            "y": 83
+          },
+          "id": 37,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "10.4.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| filter message like /Task completed/\n| stats count() as task_count",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": []
+            }
+          ],
+          "timeFrom": "now/d",
+          "title": "Successful tasks",
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            }
+          ],
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                }
+              },
+              "mappings": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 8,
+            "y": 83
+          },
+          "id": 40,
+          "options": {
+            "displayLabels": [
+              "percent"
+            ],
+            "legend": {
+              "calcs": [],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "values": []
+            },
+            "pieType": "pie",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'task_type: *,' as task_type\n| parse @message 'immediate: *,' as immediate\n| filter immediate=\"False\"\n| stats count(*) by task_type as task_type_count",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "task_type_count"
+              ]
+            }
+          ],
+          "timeFrom": "now/d",
+          "title": "Pulp-worker non-immediate tasks by task type",
+          "type": "piechart"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "bars",
+                "fillOpacity": 100,
+                "gradientMode": "hue",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "percent"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "True task_count"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Immediate Tasks"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "False task_count"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Non-Immediate Tasks"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 20,
+            "x": 0,
+            "y": 93
+          },
+          "id": 39,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'immediate: *,' as immediate\n| stats count(*) as task_count by bin(1h), immediate",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(1h)",
+                "immediate"
+              ]
+            }
+          ],
+          "timeFrom": "now/d",
+          "title": "Pulp-Worker Immediate/Non Immediate Tasks",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "bars",
+                "fillOpacity": 100,
+                "gradientMode": "hue",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "percent"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pulp-api count(*)"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Tasks executed by pulp-api"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pulp-worker count(*)"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Tasks executed by pulp-worker"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 20,
+            "x": 0,
+            "y": 103
+          },
+          "id": 41,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message, kubernetes.labels.pod as pod | filter @logStream like /pulp-${cluster:text}_pulp-(api|content|worker)/\n| filter message like /Task completed/\n| stats count(*) by bin(1h), pod\n\n\n\n",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(1h)",
+                "pod"
+              ]
+            }
+          ],
+          "timeFrom": "now/d",
+          "title": "Tasks per type of worker",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 113
+          },
+          "id": 33,
+          "panels": [],
+          "title": "Stakeholders resources",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "count",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "decimals": 0,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 0,
+            "y": 114
+          },
+          "id": 34,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PDD8BE47D10408F45"
+              },
+              "editorMode": "code",
+              "expr": "pulp_rhel_ai_repositories_count",
+              "instant": false,
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "RHEL-AI repositories",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "count",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "decimals": 0,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 6,
+            "x": 6,
+            "y": 114
+          },
+          "id": 35,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PDD8BE47D10408F45"
+              },
+              "editorMode": "code",
+              "expr": "pulp_content_sources_domains_count",
+              "instant": false,
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Content-Sources domains",
+          "type": "timeseries"
         }
-      ]
-    },
-    "time": {
-      "from": "now-30m",
-      "to": "now"
-    },
-    "timepicker": {},
-    "timezone": "",
-    "title": "Pulp Metrics",
-    "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-    "version": 64565,
-    "weekStart": ""
-  }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "tags": [],
+      "templating": {
+        "list": [
+          {
+            "current": {
+              "selected": false,
+              "text": "stage",
+              "value": "s"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "label": "cluster",
+            "multi": false,
+            "name": "cluster",
+            "options": [
+              {
+                "selected": false,
+                "text": "prod",
+                "value": "p"
+              },
+              {
+                "selected": true,
+                "text": "stage",
+                "value": "s"
+              }
+            ],
+            "query": "prod : p,stage : s",
+            "queryValue": "",
+            "skipUrlSync": false,
+            "type": "custom"
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "crcs02ue1-prometheus",
+              "value": "PDD8BE47D10408F45"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "name": "datasource",
+            "options": [],
+            "query": "prometheus",
+            "queryValue": "",
+            "refresh": 1,
+            "regex": "/crc${cluster}.*ue1-prometheus/",
+            "skipUrlSync": false,
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "crcs02ue1.pulp-stage",
+              "value": "arn:aws:logs:us-east-1:744086762512:log-group:crcs02ue1.pulp-stage:*"
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "definition": "",
+            "hide": 0,
+            "includeAll": false,
+            "label": "logsource",
+            "multi": false,
+            "name": "logsource",
+            "options": [],
+            "query": {
+              "logGroupPrefix": "crc",
+              "queryType": "logGroups",
+              "refId": "CloudWatchVariableQueryEditor-VariableQuery",
+              "region": "us-east-1"
+            },
+            "refresh": 1,
+            "regex": "/crc${cluster}0[12]ue1\\.pulp-${cluster:text}/",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "Pulp Metrics",
+      "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
+      "version": 1,
+      "weekStart": ""
+    }
