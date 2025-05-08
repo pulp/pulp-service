@@ -1,4 +1,4 @@
-From 216357d83b3061a2fbbea04a4110199e5a75e98b Mon Sep 17 00:00:00 2001
+From 6d2e41e05f7df24afb95d1cbe51759f75b72a891 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Thu, 7 Nov 2024 15:39:12 -0500
 Subject: [PATCH] ocistorage backend changes
@@ -59,10 +59,10 @@ index 2fff76bc6..8a8e7699d 100644
          storage_settings = data.get("storage_settings") or self.instance.storage_settings
          self._validate_storage_backend(storage_class, storage_settings)
 diff --git a/pulpcore/constants.py b/pulpcore/constants.py
-index 89bf87789..344137dcb 100644
+index 57a1bd130..5064f6233 100644
 --- a/pulpcore/constants.py
 +++ b/pulpcore/constants.py
-@@ -110,6 +110,7 @@ STORAGE_RESPONSE_MAP = {
+@@ -112,6 +112,7 @@ STORAGE_RESPONSE_MAP = {
      "storages.backends.s3boto3.S3Boto3Storage": S3_RESPONSE_HEADER_MAP,
      "storages.backends.azure_storage.AzureStorage": AZURE_RESPONSE_HEADER_MAP,
      "storages.backends.gcloud.GoogleCloudStorage": GCS_RESPONSE_HEADER_MAP,
@@ -71,15 +71,15 @@ index 89bf87789..344137dcb 100644
  
  # Message users receive when attempting to delete a protected repo version
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 23a3b0711..407796f48 100644
+index 134db4eaa..d4498a068 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -1169,6 +1169,8 @@ class Handler:
+@@ -1135,6 +1135,8 @@ class Handler:
              "storages.backends.gcloud.GoogleCloudStorage",
          ):
-             raise HTTPFound(_build_url(), headers=headers)
+             return HTTPFound(_build_url(), headers=headers)
 +        elif domain.storage_class == "pulp_service.app.storage.OCIStorage":
-+            raise HTTPFound(_build_url(http_method=request.method), headers=headers)
++            return HTTPFound(_build_url(http_method=request.method), headers=headers)
          else:
              raise NotImplementedError()
  
