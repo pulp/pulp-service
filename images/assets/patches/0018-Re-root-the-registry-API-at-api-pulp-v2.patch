@@ -1,4 +1,4 @@
-From a83ffab3b15a0f37ea7db4fca5a614e476fb671d Mon Sep 17 00:00:00 2001
+From ad565cd57a1d1f643d1fc2757965f22bbb164624 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 4 Mar 2025 11:19:30 -0500
 Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
@@ -25,10 +25,10 @@ index dbe6418d..006e8afb 100644
  app.add_routes(
      [
 diff --git a/pulp_container/app/redirects.py b/pulp_container/app/redirects.py
-index b431faee..ca1cc9d7 100644
+index 0c7a5898..fa4808cb 100644
 --- a/pulp_container/app/redirects.py
 +++ b/pulp_container/app/redirects.py
-@@ -22,7 +22,7 @@ class CommonRedirects:
+@@ -21,7 +21,7 @@ class CommonRedirects:
          self.path = path
          self.request = request
          self.path_prefix = (
@@ -37,7 +37,7 @@ index b431faee..ca1cc9d7 100644
              if settings.DOMAIN_ENABLED
              else "pulp/container"
          )
-@@ -34,7 +34,7 @@ class CommonRedirects:
+@@ -33,7 +33,7 @@ class CommonRedirects:
  
          return self.distribution.redirect_to_content_app(
              urljoin(
@@ -47,10 +47,10 @@ index b431faee..ca1cc9d7 100644
              )
          )
 diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
-index 2a085786..ccf84495 100644
+index e3b0766c..4e9114be 100644
 --- a/pulp_container/app/registry_api.py
 +++ b/pulp_container/app/registry_api.py
-@@ -97,6 +97,8 @@ from pulp_container.constants import (
+@@ -98,6 +98,8 @@ from pulp_container.constants import (
      V2_ACCEPT_HEADERS,
  )
  
@@ -59,7 +59,7 @@ index 2a085786..ccf84495 100644
  log = logging.getLogger(__name__)
  
  IGNORED_PULL_THROUGH_REMOTE_ATTRIBUTES = [
-@@ -233,7 +235,7 @@ class ContainerRegistryApiMixin:
+@@ -232,7 +234,7 @@ class ContainerRegistryApiMixin:
          List of authentication classes to check for this view.
          """
          if settings.get("TOKEN_AUTH_DISABLED", False):
@@ -69,10 +69,10 @@ index 2a085786..ccf84495 100644
  
      @property
 diff --git a/pulp_container/app/token_verification.py b/pulp_container/app/token_verification.py
-index 344f5f16..039577b4 100644
+index d78738a4..f80929a7 100644
 --- a/pulp_container/app/token_verification.py
 +++ b/pulp_container/app/token_verification.py
-@@ -193,7 +193,7 @@ class RegistryPermission(BasePermission):
+@@ -194,7 +194,7 @@ class RegistryPermission(BasePermission):
          if request.method in SAFE_METHODS:
              return True
  
@@ -82,33 +82,33 @@ index 344f5f16..039577b4 100644
  
  class TokenPermission(BasePermission):
 diff --git a/pulp_container/app/urls.py b/pulp_container/app/urls.py
-index 864f0b2e..7d701f3f 100644
+index 47c4342a..6c93b927 100644
 --- a/pulp_container/app/urls.py
 +++ b/pulp_container/app/urls.py
-@@ -26,16 +26,16 @@ head_route = Route(
+@@ -32,16 +32,16 @@ head_route = Route(
  )
  
  router.routes.append(head_route)
--router.register(r"^v2/(?P<path>.+)/blobs/uploads\/?", BlobUploads, basename="docker-upload")
--router.register(r"^v2/(?P<path>.+)/blobs", Blobs, basename="blobs")
--router.register(r"^v2/(?P<path>.+)/manifests", Manifests, basename="manifests")
--router.register(r"^extensions/v2/(?P<path>.+)/signatures", Signatures, basename="signatures")
-+router.register(r"^api/pulp/v2/(?P<path>.+)/blobs/uploads\/?", BlobUploads, basename="docker-upload")
-+router.register(r"^api/pulp/v2/(?P<path>.+)/blobs", Blobs, basename="blobs")
-+router.register(r"^api/pulp/v2/(?P<path>.+)/manifests", Manifests, basename="manifests")
-+router.register(r"^api/pulp/extensions/v2/(?P<path>.+)/signatures", Signatures, basename="signatures")
+-router.register(rf"v2/{re_path}/blobs/uploads\/?", BlobUploads, basename="docker-upload")
+-router.register(rf"v2/{re_path}/blobs", Blobs, basename="blobs")
+-router.register(rf"v2/{re_path}/manifests", Manifests, basename="manifests")
+-router.register(rf"extensions/v2/{re_path}/signatures", Signatures, basename="signatures")
++router.register(rf"api/pulp/v2/{re_path}/blobs/uploads\/?", BlobUploads, basename="docker-upload")
++router.register(rf"api/pulp/v2/{re_path}/blobs", Blobs, basename="blobs")
++router.register(rf"api/pulp/v2/{re_path}/manifests", Manifests, basename="manifests")
++router.register(rf"api/pulp/extensions/v2/{re_path}/signatures", Signatures, basename="signatures")
  
  urlpatterns = [
      path("token/", BearerTokenView.as_view()),
 -    path("v2/", VersionView.as_view()),
 -    path("v2/_catalog", CatalogView.as_view()),
--    path("v2/<path:path>/tags/list", TagsListView.as_view()),
+-    path(f"v2/{da_path}/tags/list", TagsListView.as_view()),
 +    path("api/pulp/v2/", VersionView.as_view()),
 +    path("api/pulp/v2/_catalog", CatalogView.as_view()),
-+    path("api/pulp/v2/<path:path>/tags/list", TagsListView.as_view()),
++    path(f"api/pulp/v2/{da_path}/tags/list", TagsListView.as_view()),
      path("", include(router.urls)),
  ]
- if settings.FLATPAK_INDEX:
+ # print(router.urls)
 -- 
-2.48.1
+2.49.0
 
