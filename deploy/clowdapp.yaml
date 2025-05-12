@@ -829,7 +829,7 @@ parameters:
     value: http://pulp-content.local
   - name: OBJECT_STORE_NAME
     description: The name of the S3 bucket.
-    value: pulp-stage-default-domain-s3
+    value: pulp-default-domain-s3
   - name: PULP_AUTHENTICATION_BACKENDS
     description: The AUTHENTICATION_BACKENDS to be used by Pulp.
     value: "@merge django.contrib.auth.backends.RemoteUserBackend"
