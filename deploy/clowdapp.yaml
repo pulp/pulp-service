@@ -504,7 +504,7 @@ objects:
             command:
               - "/usr/bin/wait_on_postgres.py"
           initialDelaySeconds: 10 
-          periodSeconds: 15
+          periodSeconds: 25
           timeoutSeconds: 20
           failureThreshold: 5
         terminationGracePeriodSeconds: 3660
