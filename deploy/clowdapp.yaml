@@ -503,9 +503,10 @@ objects:
           exec:
             command:
               - "/usr/bin/wait_on_postgres.py"
-          initialDelaySeconds: 3
-          periodSeconds: 10
-          timeoutSeconds: 10
+          initialDelaySeconds: 10 
+          periodSeconds: 15
+          timeoutSeconds: 20
+          failureThreshold: 5
         terminationGracePeriodSeconds: 3660
         sidecars:
           - name: otel-collector
