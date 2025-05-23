@@ -92,6 +92,10 @@ class DomainOrgAdmin(admin.ModelAdmin):
     list_editable = ["user", "org_id"]
     list_filter = ["user", "org_id"]
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "domain":
+            kwargs["queryset"] = Domain.objects.order_by("name")
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 class DomainAdmin(admin.ModelAdmin):
     list_display = ["name", "description", "storage_class"]
