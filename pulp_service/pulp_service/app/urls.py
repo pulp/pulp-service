@@ -7,6 +7,7 @@ from .viewsets import (
     InternalServerErrorCheckWithException,
     RedirectCheck,
     TaskViewSet,
+    TaskIngestionDispatcherView,
 )
 
 
@@ -17,4 +18,5 @@ urlpatterns = [
     path("api/pulp/raise-exception-check/", InternalServerErrorCheckWithException.as_view()),
     path("api/pulp/debug_auth_header/", DebugAuthenticationHeadersView.as_view()),
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
+    path("api/pulp/test/tasks/", TaskIngestionDispatcherView.as_view()),
 ]
