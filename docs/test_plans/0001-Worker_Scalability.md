@@ -55,10 +55,10 @@ A possible template for the table could be:
 
 | Instance Count | Timeout(Yes/No) | Bottleneck Identified |
 |----------------|-----------------|-----------------------|
-| 100            | {{value}}       | `None`                |
-| 250            | {{value}}       | `...`                 |
-| 500            | {{value}}       | `...`                 |
-| 1000           | {{value}}       | `...`                 |
+| 100            | `No`            | `None`                |
+| 250            | `No`            | `None`                 |
+| 500            | `Yes`           | `We saw spikes in CPU and memory usage for some containers, and also a huge CPU spike on the database. The system was able to recover after sometime, yet the spikes keep occurring.` |
+| 1000           | `Yes`           | `We saw spikes in CPU and memory usage for some containers, and also a huge CPU spike on the database. The system was able to recover after 30 min approx., yet the spikes keep occurring.`                 |`...`                 |
 
 **Key:**
 - Use `-` for unavailable metrics.
@@ -67,15 +67,27 @@ A possible template for the table could be:
 ```bash
 #!/bin/bash
 
-# Extract the current list
-pulp status | jq '.online_workers.[].name' | sort > current_list.txt
-
-# Compare with the previous list (if it exists)
-if [ -f previous_list.txt ]; then
-    echo "Differences since last check:"
-    comm -3 previous_list.txt current_list.txt
-fi
-
-# Update the previous list
-mv current_list.txt previous_list.txt
+while true; do
+    # Get current worker count
+    curl -s -u admin:password http://pulp-api:8000/pulp/default/api/v3/workers/?online=true\&limit=1100 | \
+        jq '.results | map(.name) | length'
+    
+    # Get first worker list
+    export LIST1=$(curl -s -u admin:password \
+        http://pulp-api:8000/api/pulp/default/api/v3/workers/?online=true\&limit=1100 | \
+        jq '.results | map(.name) | sort')
+    
+    # Wait for any possible change
+    sleep 20
+    
+    # Get second worker list
+    export LIST2=$(curl -s -u admin:password \
+        http://pulp-api:8000/api/pulp/default/api/v3/workers/?online=true\&limit=1100 | \
+        jq '.results | map(.name) | sort')
+    
+    # Compare the two lists
+    jq -n --argjson l1 "$LIST1" --argjson l2 "$LIST2" '($l1 | sort) == ($l2 | sort)'
+    
+    sleep 20
+done
 ```
