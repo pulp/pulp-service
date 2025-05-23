@@ -3,7 +3,9 @@ import logging
 
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
+from datetime import datetime, timedelta
 from gettext import gettext as _
+from uuid import uuid4
 
 from django.conf import settings
 from django.db.models.query import QuerySet
@@ -17,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 
+from pulpcore.plugin.models import Distribution
 from pulpcore.plugin.viewsets import OperationPostponedResponse
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
 from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
@@ -181,3 +184,28 @@ class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin,
 
         task = dispatch(dispatch_task, shared_resources=shared_resources, kwargs=kwargs)
         return OperationPostponedResponse(task, request)
+
+
+class TaskIngestionDispatcherView(APIView):
+
+    authentication_classes = []
+    permission_classes = []
+
+
+    def get(self, request=None, path=None, task_num=1):
+        if not settings.TEST_TASK_INGESTION:
+            raise PermissionError("Access denied.")
+
+        task_count = 0
+        start_time = datetime.now()
+        timeout = timedelta(seconds=25)
+
+        while datetime.now() < start_time + timeout:
+            dispatch(
+                'pulp_service.app.tasks.util.create_pass_task',
+                exclusive_resources=str(uuid4())
+            )
+                
+            task_count = task_count + 1
+
+        return Response({"tasks_executed": task_count})

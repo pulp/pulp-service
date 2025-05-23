@@ -915,3 +915,6 @@ parameters:
   - name: PULP_USE_UVLOOP
     description: Enable the UVLoopWorker for gunicorn.
     value: "false"
+  - name: PULP_TEST_TASK_INGESTION 
+    description: Enable the Task Ingestion test endpoint
+    value: "false"

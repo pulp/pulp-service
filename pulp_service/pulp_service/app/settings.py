@@ -9,3 +9,4 @@ SUBSCRIPTION_API_URL = "https://subscription.stage.api.redhat.com/svcrest/subscr
 SUBSCRIPTION_API_CERT = ""
 AUTHENTICATION_HEADER_DEBUG = False
 INSTALLED_APPS = "@merge django.contrib.admin.apps.SimpleAdminConfig"
+TEST_TASK_INGESTION = False
