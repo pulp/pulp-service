@@ -192,7 +192,7 @@ class TaskIngestionDispatcherView(APIView):
     permission_classes = []
 
 
-    def get(self, request=None, path=None, timeout=25):
+    def get(self, request=None, timeout=25):
         if not settings.TEST_TASK_INGESTION:
             raise PermissionError("Access denied.")
 
