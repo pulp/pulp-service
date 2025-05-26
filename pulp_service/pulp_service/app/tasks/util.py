@@ -41,5 +41,5 @@ def except_catch_and_raise(queue):
     return decorator
 
 
-def create_pass_task():
+def no_op_task():
     pass
