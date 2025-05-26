@@ -1,12 +1,12 @@
 # Task Ingestion Test Plan
 
 <!--toc:start-->
-- [Worker Scalability Test Plan](#worker-scalability-test-plan)
+- [Task Ingestion Test Plan](#task-ingestion-test-plan)
   - [Current State](#current-state)
   - [Metrics to follow](#metrics-to-follow)
   - [Test Plan](#test-plan)
   - [Results](#results)
-  - [An example to verify different worker names from time to time](#an-example-to-verify-different-worker-names-from-time-to-time)
+  - [An example to calculate the number of tasks ingested](#an-example-to-calculate-the-number-of-tasks-ingested)
 <!--toc:end-->
 
 Some operations on Pulp API triggers an immediate task, which should be executed in the
@@ -36,9 +36,9 @@ You can start [here](https://grafana.app-sre.devshift.net/explore?schemaVersion=
 
 ## Test Plan
 
-1. Add a new endpoint where the body should contain the number of tasks.
-2. Open an MR to app-interface setting the same CPU request and limit. Do the same to the memory parameter.
-3. After got it merged, check the pulp-perf namespace and see if the new deployment happened [here](https://console-openshift-console.apps.rhperfcluster.ptjz.p1.openshiftapps.com/k8s/ns/pulp-perf/apps~v1~Deployment)
+1. Open a PR adding new endpoint where the body should contain the timeout as number of seconds. [here](https://github.com/pulp/pulp-service/pull/523)
+2. Open an MR to app-interface setting the same CPU request and limit. Do the same to the memory parameter. It also should increase the number of pulp-workers to 5.[here](https://gitlab.cee.redhat.com/service/app-interface/-/merge_requests/143656)
+3. After got it merged, check the pulp-perf namespace and see if the new deployment happened. [here](https://console-openshift-console.apps.rhperfcluster.ptjz.p1.openshiftapps.com/k8s/ns/pulp-perf/apps~v1~Deployment)
 4. You will need to access a pod with shell permissions to run the test. Check with @pablomh or @jsmejkal on #pulp-perf-experiment
 5. The response from the API should contain the number of tasks that the api process were able to run.
 
