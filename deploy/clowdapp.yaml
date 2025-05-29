@@ -589,7 +589,7 @@ objects:
             secret:
               secretName: pulp-settings
         initContainers:
-          - name: wait-on-migrations
+          - name: wait-on-postgres
             image: ${IMAGE}:${IMAGE_TAG}
             command: [ "/usr/bin/wait_on_postgres.py" ]
             inheritEnv: True
