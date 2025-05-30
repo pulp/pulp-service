@@ -593,6 +593,10 @@ objects:
             image: ${IMAGE}:${IMAGE_TAG}
             command: [ "/usr/bin/wait_on_postgres.py" ]
             inheritEnv: True
+          - name: debug
+            image: ${IMAGE}:${IMAGE_TAG}
+            command: [ "tail -f /dev/null" ]
+            inheritEnv: True
         readinessProbe:
           exec:
             command: ["stat", "/tmp/migrated"]
