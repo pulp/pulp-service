@@ -55,10 +55,10 @@ class DomainBasedPermission(BasePermission):
             return True
         elif action == "domain_update":
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(Q(domain__pk=domain_pk, org_id=org_id) | Q(domain__pk=domain_pk, user=user)).exists()
+            return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
         elif action == "domain_delete":
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(Q(domain__pk=domain_pk, org_id=org_id) | Q(domain__pk=domain_pk, user=user)).exists()
+            return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
         # User has permission if the org_id matches the domain's org_id
         # The user that created the domain has permission to access that domain
         return DomainOrg.objects.filter(Q(domain=get_domain(), org_id=org_id) | Q(domain=get_domain(), user=user)).exists()
