@@ -44,51 +44,58 @@ You can start [here](https://grafana.app-sre.devshift.net/explore?schemaVersion=
 
 
 ## Results
-Date of the test: YYYY/mm/dd
+Date of the test: 2025/06/02
 
-A possible template for the table could be:
+| Simultaneous workers   | Tasks           | Observations          |
+|------------------------|-----------------|-----------------------|
+| 1                      | ~ 2720          | `None`                |
+| 2                      | ~ 3660          | `None`                 |
+| 3                      | ~ 3580          | `None`                 |
+| 4                      | ~ 3600          | `None`                 |
+| 5                      | ~ 3460          | `None`                 |
+| 6                      | ~ 3290          | `None`                 |
+| 7                      | ~ 3390          | `None`                 |
+| 8                      | ~ 3400          | `None`                 |
+| 9                      | ~ 3380          | `None`                 |
+| 10                     | ~ 3360          | `None`                 |
 
-| Run            | Tasks           | Observations          |
-|----------------|-----------------|-----------------------|
-| 1              | {{value}}       | `None`                |
-| 2              | {{value}}       | `...`                 |
-| 3              | {{value}}       | `...`                 |
-| 4              | {{value}}       | `...`                 |
+We had 10 runs on two configurations:
+- 5 API pods with 5 gunicorn workers each.
+- 5 API pods with 10 gunicorn workers each.
 
-**Key:**
-- Use `-` for unavailable metrics.
+And the results were basically the same.
 
 ## An example to calculate the number of tasks ingested
 ```python
+import argparse
 import requests
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import concurrent.futures
 
-def send_request_and_process_tasks(url):
+def send_request_and_process_tasks(url, timeout):
     """
     Sends a request to the specified URL and calculates the number of tasks processed
-    within a 25-second timeout based on the response.
-    
+
     Args:
         url (str): The endpoint to send the request to.
-    
+
     Returns:
         int: Number of tasks processed, or None if the request fails or times out.
     """
     try:
         start_time = time.time()
-        
+
         # Send the request (adjust method, headers, or data as needed)
-        response = requests.get(url)
+        response = requests.get(url, params={"timeout": timeout})
         response.raise_for_status()  # Raise an error for bad status codes
-        
-        tasks = response.json().get('tasks')
-        
+
+        tasks = response.json().get('tasks_executed')
+
         elapsed_time = time.time() - start_time
-        
+
         print(f"Processed {tasks} tasks in {elapsed_time:.2f} seconds.")
         return tasks
-    
+
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
         return None
@@ -96,31 +103,52 @@ def send_request_and_process_tasks(url):
         print(f"Error processing tasks: {e}")
         return None
 
-def run_with_timeout(url, timeout=25):
+def run_with_timeout(url, timeout=25, max_workers=1):
     """
     Runs the request and task processing with a timeout.
-    
-    Args:
-        url (str): The endpoint to send the request to.
-    
+
     Returns:
         int: Number of tasks processed, or None if timeout or error occurs.
     """
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(send_request_and_process_tasks, url)
-        try:
-            result = future.result()
-            return result
-        except TimeoutError:
-            print("Operation timed out after 25 seconds.")
-            return None
+    data = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(send_request_and_process_tasks, url, timeout) for _ in range(max_workers)]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                data += future.result()
+            except Exception as exp:
+                print("%s" % (exp))
 
-# Example usage:
+    return data
+
 if __name__ == "__main__":
-    # Replace with your actual endpoint
-    endpoint_url = "https://api.example.com/tasks"
-    tasks_processed = run_with_timeout(endpoint_url)
-    
+    parser = argparse.ArgumentParser(description="Run a task with configurable timeout and executors.")
+
+    # Add arguments
+    parser.add_argument(
+        "--url",
+        type=str,
+        default="https://api.example.com/tasks",
+        help="The API endpoint URL to send the request to. (default: https://api.example.com/tasks)"
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=25,
+        help="The maximum time in seconds to wait for the operation to complete. (default: 25)"
+    )
+    parser.add_argument(
+        "--max_workers",
+        type=int,
+        default=1,
+        help="The number of worker threads to use for concurrent tasks. (default: 1)"
+    )
+
+    args = parser.parse_args()
+
+    print(f"Running with URL: {args.url}, Timeout: {args.timeout}s, Workers: {args.max_workers}")
+    tasks_processed = run_with_timeout(args.url, args.timeout, args.max_workers)
+
     if tasks_processed is not None:
         print(f"Total tasks processed: {tasks_processed}")
     else:
