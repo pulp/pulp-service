@@ -191,7 +191,6 @@ class TaskIngestionDispatcherView(APIView):
     authentication_classes = []
     permission_classes = []
 
-
     def get(self, request=None, timeout=25):
         if not settings.TEST_TASK_INGESTION:
             raise PermissionError("Access denied.")
@@ -202,8 +201,34 @@ class TaskIngestionDispatcherView(APIView):
 
         while datetime.now() < start_time + timeout:
             dispatch(
-                'pulp_service.app.tasks.util.no_op_task',
+                'pulp_service.app.tasks.testing.no_op_task',
                 exclusive_resources=str(uuid4())
+            )
+                
+            task_count = task_count + 1
+
+        return Response({"tasks_executed": task_count})
+
+
+class TaskThroughputDispatcherView(APIView):
+    
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request=None, timeout=25):
+        if not settings.TEST_TASK_THROUGHPUT:
+            raise PermissionError("Access denied.")
+
+        task_count = 0
+        start_time = datetime.now()
+        timeout = timedelta(seconds=timeout)
+
+        while datetime.now() < start_time + timeout:
+            distribution_name = str(uuid4())
+            dispatch(
+                'pulp_service.app.tasks.util.create_distribution_task',
+                args=(distribution_name),
+                exclusive_resources=distribution_name
             )
                 
             task_count = task_count + 1

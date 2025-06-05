@@ -2,7 +2,6 @@ from datetime import timedelta
 from functools import wraps
 
 from pulpcore.app.models import TaskSchedule
-from pulpcore.plugin.models import Distribution
 
 
 def content_sources_periodic_telemetry():
@@ -39,7 +38,3 @@ def except_catch_and_raise(queue):
                 raise
         return wrapper
     return decorator
-
-
-def no_op_task():
-    pass
