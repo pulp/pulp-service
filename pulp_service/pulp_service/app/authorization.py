@@ -4,7 +4,7 @@ from binascii import Error as Base64DecodeError
 from django.db.models import Q
 import json
 import jq
-from pulpcore.plugin.util import extract_pk, get_domain
+from pulpcore.plugin.util import extract_pk, get_domain_pk
 from pulp_service.app.models import DomainOrg
 from rest_framework.permissions import BasePermission
 import logging
@@ -43,6 +43,8 @@ class DomainBasedPermission(BasePermission):
         # Get the Org ID from the Red Hat Identity header
         org_id = self.get_org_id(decoded_header_content)
 
+        domain_pk = get_domain_pk()
+
         _logger.info(action)
         # Anyone can create a domain
         if action == "domain_create":
@@ -54,14 +56,12 @@ class DomainBasedPermission(BasePermission):
         elif action == "domain_list":
             return True
         elif action == "domain_update":
-            domain_pk = extract_pk(request.META['PATH_INFO'])
             return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
         elif action == "domain_delete":
-            domain_pk = extract_pk(request.META['PATH_INFO'])
             return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
         # User has permission if the org_id matches the domain's org_id
         # The user that created the domain has permission to access that domain
-        return DomainOrg.objects.filter(Q(domain=get_domain(), org_id=org_id) | Q(domain=get_domain(), user=user)).exists()
+        return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
 
     def get_user_action(self, request):
         view_name = request.resolver_match.view_name
