@@ -356,6 +356,8 @@ objects:
             value: ${PULP_USE_UVLOOP}
           - name: PULP_TEST_TASK_INGESTION 
             value: ${PULP_TEST_TASK_INGESTION}
+          - name: PULP_TEST_TASK_THROUGHPUT 
+            value: ${PULP_TEST_TASK_THROUGHPUT}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -919,4 +921,7 @@ parameters:
     value: "false"
   - name: PULP_TEST_TASK_INGESTION 
     description: Enable the Task Ingestion test endpoint
+    value: "false"
+  - name: PULP_TEST_TASK_THROUGHPUT
+    description: Enable the Task Throughput test endpoint
     value: "false"
