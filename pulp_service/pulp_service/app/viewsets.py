@@ -226,8 +226,8 @@ class TaskThroughputDispatcherView(APIView):
         while datetime.now() < start_time + timeout:
             distribution_name = str(uuid4())
             dispatch(
-                'pulp_service.app.tasks.util.create_distribution_task',
-                args=(distribution_name),
+                'pulp_service.app.tasks.testing.create_distribution_task',
+                args=(distribution_name,),
                 exclusive_resources=distribution_name
             )
                 
