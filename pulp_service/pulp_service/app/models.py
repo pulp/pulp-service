@@ -33,9 +33,6 @@ class DomainOrg(models.Model):
     """
 
     org_id = models.CharField(null=True, db_index=True)
-    domain = models.OneToOneField(
-        Domain, related_name="domain_org", on_delete=models.CASCADE, null=True
-    )
     domains = models.ManyToManyField(
         Domain, related_name="domain_orgs"
     )
