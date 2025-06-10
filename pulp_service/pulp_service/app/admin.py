@@ -88,14 +88,14 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
 
 
 class DomainOrgAdmin(admin.ModelAdmin):
-    list_display = ["domain", "user", "org_id"]
-    list_editable = ["user", "org_id"]
+    list_display = ["user", "org_id"]
     list_filter = ["user", "org_id"]
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == "domain":
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "domains":
             kwargs["queryset"] = Domain.objects.order_by("name")
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
 
 class DomainAdmin(admin.ModelAdmin):
     list_display = ["name", "description", "storage_class"]
