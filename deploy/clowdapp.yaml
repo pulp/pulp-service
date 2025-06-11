@@ -745,7 +745,7 @@ parameters:
     required: true
   - name: IMAGE
     description: Specify which container image the operator will deploy as Pulp services.
-    value: quay.io/cloudservices/pulp-ubi
+    value: quay.io/redhat-services-prod/pulp-services-tenant/pulp
   - name: IMAGE_TAG
     description: Specify the tag or hash for the image deployed by the operator.
     value: latest
