@@ -1,6 +1,7 @@
 # pulp_benchmark/plugins/task_analysis.py
 import asyncio
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -42,9 +43,51 @@ def task_analysis(ctx, since: datetime):
             logging.warning("No tasks found for analysis.")
             return
 
-        logging.info(f"Analyzing {len(all_tasks)} tasks...")
+        # --- NEW: Task Summary Section ---
+        click.echo("\n--- Task Summary ---")
+        click.echo(f"Total tasks fetched: {len(all_tasks)}")
+        
+        # Count tasks by their state using collections.Counter
+        state_counts = Counter(t.get("state") for t in all_tasks)
+        
+        for state, count in state_counts.most_common():
+            click.echo(f"- {state.capitalize()}: {count}")
+        # --- END: New Section ---
+
+        # Filter for completed tasks for throughput and wait-time analysis
+        completed_tasks = [
+            t for t in all_tasks 
+            if t.get("state") == "completed" and t.get("started_at") and t.get("finished_at")
+        ]
+
+        if not completed_tasks:
+            logging.warning("No completed tasks with start/finish times found for further analysis.")
+            return
+
+        logging.info(f"Analyzing {len(completed_tasks)} completed tasks for performance metrics...")
+        
+        # --- Throughput Analysis Section ---
+        start_times = [datetime.fromisoformat(t["started_at"]) for t in completed_tasks]
+        finish_times = [datetime.fromisoformat(t["finished_at"]) for t in completed_tasks]
+
+        if start_times and finish_times:
+            first_task_started = min(start_times)
+            last_task_finished = max(finish_times)
+            
+            total_duration = last_task_finished - first_task_started
+            total_seconds = total_duration.total_seconds()
+
+            click.echo("\n--- Throughput Analysis ---")
+            if total_seconds > 0:
+                throughput = len(completed_tasks) / total_seconds
+                click.echo(f"Processed {len(completed_tasks)} completed tasks over a {total_seconds:.2f} second window.")
+                click.echo(f"Average throughput: {throughput:.2f} tasks/sec.")
+            else:
+                click.echo("Not enough task duration to calculate throughput.")
+
+        # --- Queue Wait Time Analysis ---
         wait_times = []
-        for task in all_tasks:
+        for task in completed_tasks:
             try:
                 created = datetime.fromisoformat(task["pulp_created"])
                 started = datetime.fromisoformat(task["started_at"])
@@ -53,7 +96,7 @@ def task_analysis(ctx, since: datetime):
                 logging.warning(f"Could not process task {task.get('pulp_href')}: {e}")
 
         if not wait_times:
-            logging.warning("No valid task timings found to analyze.")
+            logging.warning("No valid task timings found for wait-time analysis.")
             return
 
         click.echo("\n--- Queue Wait Time Analysis ---")
