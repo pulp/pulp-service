@@ -6,7 +6,7 @@
   - [Metrics to follow](#metrics-to-follow)
   - [Test Plan](#test-plan)
   - [Results](#results)
-  - [An example to calculate the number of tasks ingested](#an-example-to-calculate-the-number-of-tasks-ingested)
+  - [An example to calculate the number of tasks processed](#an-example-to-calculate-the-number-of-tasks-processed)
 <!--toc:end-->
 
 The idea of this test is to understand the load that Pulp imposes on hardware and database 
@@ -52,11 +52,13 @@ A possible template for the table could be:
 
 | Run  | Pulp-Workers | Tasks Submitted | Tasks / Sec Processed | Avg. Wait time | Observations  |
 |------|--------------|-----------------|-----------------------|----------------|---------------|
-| 1    | 10           | 11546           |                       | 16678s         |               | 
-| 2    | 20           | 12986           | {{value}}             | {{value}}      | Database got a huge load and topped 97% of CPU usage for most of the time processing tasks.     | 
+| 1    | 10           | 11546           | 0.76 tasks/sec        | 16743.42s      | |
+| 2    | 20           | 12986           | 0.60 tasks/sec        | 14137.70s      | Database got a huge load and topped 97% of CPU usage for most of the time processing tasks. | 
 
 
 **Key:**
 - Use `-` for unavailable metrics.
 
 ## An example to calculate the number of tasks processed
+You can use the new `pulp_benchmark` for task analysis. For ex:
+`python -m pulp_benchmark.main --api-root http://localhost:8000/api task-analysis --since "2025-06-11T13:00:00" --until "2025-06-11T20:00:00"`
