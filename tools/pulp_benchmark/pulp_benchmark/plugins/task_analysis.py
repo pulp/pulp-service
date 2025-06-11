@@ -12,8 +12,9 @@ import pandas as pd
 
 @click.command()
 @click.option('--since', type=click.DateTime(), default=datetime.now(timezone.utc).isoformat(), help='Analyze tasks created since this ISO 8601 timestamp.')
+@click.option('--until', type=click.DateTime(), default=None, help='Analyze tasks created until this ISO 8601 timestamp.')
 @click.pass_context
-def task_analysis(ctx, since: datetime):
+def task_analysis(ctx, since: datetime, until: Optional[datetime]):
     """Perform an async wait-time analysis of completed tasks."""
     api_root = ctx.obj['api_root']
     user = ctx.obj['user']
@@ -22,39 +23,49 @@ def task_analysis(ctx, since: datetime):
     async def run_logic():
         logging.info("\nStarting task analysis...")
         auth = aiohttp.BasicAuth(user, password)
-        tasks_url: Optional[str] = f"{api_root}/pulp/default/api/v3/tasks/?pulp_created__gte={since.isoformat()}"
         
+        base_url = f"{api_root}/pulp/default/api/v3/tasks/"
+        params = {
+            "pulp_created__gte": since.isoformat()
+        }
+        if until:
+            params["pulp_created__lte"] = until.isoformat()
+            logging.info(f"Filtering tasks created between {since.date()} and {until.date()}")
+        else:
+            logging.info(f"Filtering tasks created since {since.date()}")
+
         all_tasks: List[Dict[str, Any]] = []
+        
+        # FIX: Create the session outside the loop for efficiency
         async with aiohttp.ClientSession(auth=auth) as session:
+            tasks_url: Optional[str] = base_url
+            first_request = True
             while tasks_url:
                 try:
-                    async with session.get(tasks_url) as response:
+                    # Pass params only on the first request, then use the 'next' URL
+                    request_params = params if first_request else None
+                    async with session.get(tasks_url, params=request_params) as response:
                         response.raise_for_status()
                         data = await response.json()
                         all_tasks.extend(data.get("results", []))
                         tasks_url = data.get("next")
+                        first_request = False
                         if tasks_url:
-                            logging.info("Fetching next page of results...")
+                            logging.info(f"Fetching next page of results...")
                 except aiohttp.ClientError as e:
                     logging.error(f"Failed to fetch tasks: {e}")
                     return
         
         if not all_tasks:
-            logging.warning("No tasks found for analysis.")
+            logging.warning("No tasks found for the specified date range.")
             return
 
-        # --- NEW: Task Summary Section ---
         click.echo("\n--- Task Summary ---")
         click.echo(f"Total tasks fetched: {len(all_tasks)}")
-        
-        # Count tasks by their state using collections.Counter
         state_counts = Counter(t.get("state") for t in all_tasks)
-        
         for state, count in state_counts.most_common():
             click.echo(f"- {state.capitalize()}: {count}")
-        # --- END: New Section ---
 
-        # Filter for completed tasks for throughput and wait-time analysis
         completed_tasks = [
             t for t in all_tasks 
             if t.get("state") == "completed" and t.get("started_at") and t.get("finished_at")
@@ -66,14 +77,13 @@ def task_analysis(ctx, since: datetime):
 
         logging.info(f"Analyzing {len(completed_tasks)} completed tasks for performance metrics...")
         
-        # --- Throughput Analysis Section ---
+        # --- FIX: All analysis and print logic is now present ---
         start_times = [datetime.fromisoformat(t["started_at"]) for t in completed_tasks]
         finish_times = [datetime.fromisoformat(t["finished_at"]) for t in completed_tasks]
 
         if start_times and finish_times:
             first_task_started = min(start_times)
             last_task_finished = max(finish_times)
-            
             total_duration = last_task_finished - first_task_started
             total_seconds = total_duration.total_seconds()
 
@@ -85,7 +95,6 @@ def task_analysis(ctx, since: datetime):
             else:
                 click.echo("Not enough task duration to calculate throughput.")
 
-        # --- Queue Wait Time Analysis ---
         wait_times = []
         for task in completed_tasks:
             try:
