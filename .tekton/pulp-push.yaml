@@ -6,8 +6,8 @@ metadata:
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main"
+    pipelinesascode.tekton.dev/on-target-branch: "[main, internal]"
+    pipelinesascode.tekton.dev/on-event: "[push]"
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: pulp
@@ -451,6 +451,9 @@ spec:
       params:
       - name: IMAGE
         value: $(tasks.build-container.results.IMAGE_URL)
+      - name: ADDITIONAL_TAGS
+        value: 
+          - $(tasks.clone-repository.results.short-commit)
       runAfter:
       - build-container
       taskRef:
