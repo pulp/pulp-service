@@ -748,7 +748,7 @@ parameters:
     value: quay.io/redhat-services-prod/pulp-services-tenant/pulp
   - name: IMAGE_TAG
     description: Specify the tag or hash for the image deployed by the operator.
-    value: latest
+    value: pulp-on-pull-request-vp8lt-build-container
   - name: DOMAIN_ENABLED
     description: Pulp setting that determines if domains are enabled.
     value: "false"
