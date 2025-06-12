@@ -6,34 +6,44 @@ from typing import Optional
 
 import click
 
-# Note the relative import '..' to access the client module from the parent package
-from ..client import run_concurrent_requests
+# Import both async and sync logic
+from ..client_async import run_concurrent_requests as run_concurrent_async
+from ..client_sync import run_concurrent_requests_sync
 
 @click.command()
 @click.option("--timeout", type=int, default=30, show_default=True, help="Timeout for each task-creation request.")
-@click.option("--max-workers", type=int, default=50, show_default=True, help="Number of concurrent async requests.")
+@click.option("--max-workers", type=int, default=50, show_default=True, help="Number of concurrent requests/threads.")
 @click.option("--run-until", type=int, help="Keep creating tasks until this total is reached.")
 @click.pass_context
 def test_task_insertion(ctx, timeout: int, max_workers: int, run_until: Optional[int]):
-    """Run the async task insertion load test."""
+    """Run the task insertion load test."""
+    client_type = ctx.obj['client_type']
     api_root = ctx.obj['api_root']
     test_url = f"{api_root}/pulp/test/tasks/"
     
-    logging.info(f"Starting async task insertion test on {test_url} with {max_workers} concurrent requests.")
+    logging.info(f"Starting task insertion test on {test_url} using '{client_type}' client with {max_workers} workers.")
     
     start_time = time.monotonic()
     tasks_processed = 0
     
-    async def run_logic():
-        nonlocal tasks_processed
+    # --- Logic to choose client ---
+    if client_type == 'async':
+        async def run_logic():
+            nonlocal tasks_processed
+            if run_until:
+                while tasks_processed < run_until:
+                    tasks_processed += await run_concurrent_async(test_url, timeout, max_workers)
+                    logging.info(f"Total tasks processed so far: {tasks_processed}")
+            else:
+                tasks_processed = await run_concurrent_async(test_url, timeout, max_workers)
+        asyncio.run(run_logic())
+    else: # 'sync' client
         if run_until:
             while tasks_processed < run_until:
-                tasks_processed += await run_concurrent_requests(test_url, timeout, max_workers)
+                tasks_processed += run_concurrent_requests_sync(test_url, timeout, max_workers)
                 logging.info(f"Total tasks processed so far: {tasks_processed}")
         else:
-            tasks_processed = await run_concurrent_requests(test_url, timeout, max_workers)
-
-    asyncio.run(run_logic())
+            tasks_processed = run_concurrent_requests_sync(test_url, timeout, max_workers)
 
     elapsed_time = time.monotonic() - start_time
     
