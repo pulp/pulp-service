@@ -221,7 +221,7 @@ objects:
         metadata:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-api
-        image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+        image: ${IMAGE}:${IMAGE_TAG}
         command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
         volumeMounts:
         - name: secret-volume
@@ -247,7 +247,7 @@ objects:
                 path: subscription-api-mock-cert.pem
         initContainers:
           - name: wait-on-migrations
-            image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+            image: ${IMAGE}:${IMAGE_TAG}
             command: ["/bin/sh"]
             args:
               - "-c"
@@ -370,7 +370,7 @@ objects:
         metadata:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-content
-        image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+        image: ${IMAGE}:${IMAGE_TAG}
         command: ['pulpcore-content', '-b', '0.0.0.0:8000', '--access-logfile', '-', '--access-logformat', '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" cache:"%{X-PULP-CACHE}o" artifact_size:"%{X-PULP-ARTIFACT-SIZE}o" rh_org_id:"%{X-RH-ORG-ID}o"']
         volumeMounts:
           - name: secret-volume
@@ -396,7 +396,7 @@ objects:
                 path: subscription-api-mock-cert.pem
         initContainers:
           - name: wait-on-migrations
-            image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+            image: ${IMAGE}:${IMAGE_TAG}
             command: [ "/bin/sh" ]
             args:
               - "-c"
@@ -484,7 +484,7 @@ objects:
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
-        image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+        image: ${IMAGE}:${IMAGE_TAG}
         command: ['pulpcore-worker']
         volumeMounts:
           - name: secret-volume
@@ -501,7 +501,7 @@ objects:
               secretName: pulp-settings
         initContainers:
           - name: wait-on-migrations
-            image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+            image: ${IMAGE}:${IMAGE_TAG}
             command: [ "/bin/sh" ]
             args:
               - "-c"
@@ -573,7 +573,7 @@ objects:
     - name: migrate-db
       replicas: 1
       podSpec:
-        image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+        image: ${IMAGE}:${IMAGE_TAG}
         command: [ 'bash', '-x', '/tmp/migrate.sh' ]
         volumeMounts:
           - name: migrate-sh
@@ -596,7 +596,7 @@ objects:
               secretName: pulp-settings
         initContainers:
           - name: wait-on-postgres
-            image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+            image: ${IMAGE}:${IMAGE_TAG}
             command: [ "/usr/bin/wait_on_postgres.py" ]
             inheritEnv: True
         readinessProbe:
@@ -647,7 +647,7 @@ objects:
               cpu: 500m
       - name: reset-admin-password
         podSpec:
-          image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+          image: ${IMAGE}:${IMAGE_TAG}
           command: [ '/bin/sh' ]
           args: ['-c', '/usr/local/lib/pulp/bin/pulpcore-manager reset-admin-password --password "$PULP_ADMIN_PASSWORD"' ]
           env:
@@ -674,7 +674,7 @@ objects:
                 secretName: pulp-settings
       - name: create-contentsources-user
         podSpec:
-          image: quay.io/redhat-user-workloads/pulp-services-tenant/pulp/pulp@sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+          image: ${IMAGE}:${IMAGE_TAG}
           command: [ 'pulpcore-manager' ]
           args:
             - "shell"
@@ -748,7 +748,7 @@ parameters:
     value: quay.io/redhat-services-prod/pulp-services-tenant/pulp
   - name: IMAGE_TAG
     description: Specify the tag or hash for the image deployed by the operator.
-    value: sha256:624ea54f926617eef153505d90574e79eb24a94dbffba13a8f183f5ec25074a8
+    value: latest
   - name: DOMAIN_ENABLED
     description: Pulp setting that determines if domains are enabled.
     value: "false"
