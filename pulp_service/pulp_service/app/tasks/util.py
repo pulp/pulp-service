@@ -1,5 +1,8 @@
+import time
 from datetime import timedelta
 from functools import wraps
+
+from django.db import connections
 
 from pulpcore.app.models import TaskSchedule
 from pulpcore.plugin.models import Distribution
@@ -42,4 +45,6 @@ def except_catch_and_raise(queue):
 
 
 def no_op_task():
-    pass
+    with connections["default"].cursor() as cursor:
+        cursor.execute("SELECT 1")
+    time.sleep(0.3) # This task will not take less than 300ms to execute
