@@ -455,8 +455,7 @@ spec:
       - name: IMAGE
         value: $(tasks.build-container.results.IMAGE_URL)
       - name: ADDITIONAL_TAGS
-        value:
-            - "on-pr-{{pull_request_number}}"
+        value: ["on-pr-{{pull_request_number}}"]
       runAfter:
       - build-container
       taskRef:
