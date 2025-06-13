@@ -33,17 +33,17 @@ Most of those metrics can be checked [here](https://us-east-1.console.aws.amazon
 For the application, we need to follow the timeouts using the logs.
 - Tasks Completed per Second (TPS)
 - Task Success Rate
-- Task Latency/Completion Time
-- Error Rates
-- Queue Lengths
+- Average Wait time
 You can start [here](https://grafana.app-sre.devshift.net/explore?schemaVersion=1&panes=%7B%22vse%22%3A%7B%22datasource%22%3A%22P1A97A9592CB7F392%22%2C%22queries%22%3A%5B%7B%22id%22%3A%22%22%2C%22region%22%3A%22us-east-1%22%2C%22namespace%22%3A%22%22%2C%22refId%22%3A%22A%22%2C%22queryMode%22%3A%22Logs%22%2C%22expression%22%3A%22fields+%40logStream%2C+%40message%2C++kubernetes.namespace_name+%7C+filter+%40logStream+like+%2Fpulp-stage_pulp-%28worker%7Capi%7Ccontent%29%2F%5Cn%5Cn%5Cn%5Cn%22%2C%22statsGroups%22%3A%5B%5D%2C%22datasource%22%3A%7B%22type%22%3A%22cloudwatch%22%2C%22uid%22%3A%22P1A97A9592CB7F392%22%7D%2C%22logGroups%22%3A%5B%7B%22arn%22%3A%22arn%3Aaws%3Alogs%3Aus-east-1%3A744086762512%3Alog-group%3Acrcs02ue1.pulp-stage%3A*%22%2C%22name%22%3A%22crcs02ue1.pulp-stage%22%2C%22accountId%22%3A%22744086762512%22%7D%5D%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-30m%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1)
 
 ## Test Plan
 
 1. Open a PR adding a new View that will dispatch 100 tasks that create a distribution. [here](https://github.com/pulp/pulp-service/pull/535)
-2. Execute the test script that will trigger 10k tasks. It needs to request the API until it achieves that number.
-2. Check the API to calculate the number of successful tasks, and the number of tasks completed per second.
-3. Calculate the Task Latency using task data from the API.
+2. Reduce workers replica to 0.
+3. Execute the test script that will trigger 10k tasks.
+4. Create a new MR setting the API replicas to 0 and the pulp-worker numbers to the desired one.
+5. Check the RDS dashboard and wait for all tasks to be finished
+6. Check the API to calculate the number of successful tasks, and the number of tasks completed per second.
 
 ## Results
 Date of the test: YYYY/mm/dd
