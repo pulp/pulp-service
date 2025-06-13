@@ -4,6 +4,8 @@ from functools import wraps
 from pulpcore.app.models import TaskSchedule
 from pulpcore.plugin.models import Distribution
 
+from django.db import connections
+
 
 def content_sources_periodic_telemetry():
     task_name = "pulp_service.app.tasks.domain_metrics.content_sources_domains_count"
@@ -42,4 +44,5 @@ def except_catch_and_raise(queue):
 
 
 def no_op_task():
-    pass
+    with connections["default"].cursor() as cursor:
+        cursor.execute("SELECT 1")
