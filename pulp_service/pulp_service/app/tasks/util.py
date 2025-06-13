@@ -1,3 +1,5 @@
+import time
+
 from datetime import timedelta
 from functools import wraps
 
@@ -46,3 +48,4 @@ def except_catch_and_raise(queue):
 def no_op_task():
     with connections["default"].cursor() as cursor:
         cursor.execute("SELECT 1")
+    time.sleep(0.3)
