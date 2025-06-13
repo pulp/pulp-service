@@ -199,7 +199,6 @@ class TaskIngestionDispatcherView(APIView):
     authentication_classes = []
     permission_classes = []
 
-
     def get(self, request=None, timeout=25):
         if not settings.TEST_TASK_INGESTION:
             raise PermissionError("Access denied.")
@@ -211,7 +210,7 @@ class TaskIngestionDispatcherView(APIView):
         while datetime.now() < start_time + timeout:
             dispatch(
                 'pulp_service.app.tasks.util.no_op_task',
-                exclusive_resources=str(uuid4())
+                exclusive_resources=[str(uuid4())]
             )
                 
             task_count = task_count + 1
