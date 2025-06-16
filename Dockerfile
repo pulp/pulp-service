@@ -143,11 +143,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
-COPY images/assets/patches/0023-Log-the-execution-plan-for-the-Task-select-query.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0023-Log-the-execution-plan-for-the-Task-select-query.patch
-
-COPY images/assets/patches/0024-Try-a-different-approach-to-get-a-task-and-lock-it.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Try-a-different-approach-to-get-a-task-and-lock-it.patch
+COPY images/assets/patches/0023-Try-a-different-approach-to-get-a-task-and-lock-it.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0023-Try-a-different-approach-to-get-a-task-and-lock-it.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE

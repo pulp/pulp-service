@@ -3,10 +3,10 @@ import time
 from datetime import timedelta
 from functools import wraps
 
+from django.db import connections
+
 from pulpcore.app.models import TaskSchedule
 from pulpcore.plugin.models import Distribution
-
-from django.db import connections
 
 
 def content_sources_periodic_telemetry():
