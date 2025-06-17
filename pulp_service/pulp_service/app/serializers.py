@@ -1,8 +1,13 @@
+import createrepo_c as cr
 import json
+import logging
+import traceback
 
+from django.conf import settings
 from gettext import gettext as _
 from jsonschema import validate, ValidationError
 from rest_framework import serializers
+from rest_framework.exceptions import NotAcceptable
 
 from pulpcore.plugin.serializers import (
     ContentGuardSerializer,
@@ -13,12 +18,20 @@ from pulpcore.plugin.serializers import (
 from pulpcore.plugin.models import PulpTemporaryFile
 from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
 
+from pulp_rpm.app.models import Package
+from pulp_rpm.app.shared_utils import format_nvra
+
 from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport
 from pulp_service.app.constants import (
     NPM_PACKAGE_LOCK_SCHEMA,
     OSV_RH_ECOSYSTEM_CPES_LABEL,
     OSV_RH_ECOSYSTEM_LABEL,
 )
+
+from pulp_rpm.app.serializers import PackageSerializer
+
+
+_logger = logging.getLogger(__name__)
 
 
 class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerializerMixin):
@@ -110,3 +123,40 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             raise serializers.ValidationError(_("Invalid JSON format."))
 
         return temp_file.pk
+
+
+class RPMPackageSerializer(PackageSerializer):
+
+    def validate(self, data):
+        uploaded_file = data.get('file')
+        # export META from rpm and prepare dict as saveable format
+        try:
+            cr_object = cr.package_from_rpm(
+                uploaded_file.file.name, changelog_limit=settings.KEEP_CHANGELOG_LIMIT
+            )
+            new_pkg = Package.createrepo_to_dict(cr_object)
+        except OSError:
+            _logger.info(traceback.format_exc())
+            raise NotAcceptable(detail="RPM file cannot be parsed for metadata")
+
+        # Create the Artifact
+        data = super().deferred_validate(data)
+
+        filename = (
+                format_nvra(
+                    new_pkg["name"],
+                    new_pkg["version"],
+                    new_pkg["release"],
+                    new_pkg["arch"],
+                )
+                + ".rpm"
+        )
+
+        if not data.get("relative_path"):
+            data["relative_path"] = filename
+            new_pkg["location_href"] = filename
+        else:
+            new_pkg["location_href"] = data["relative_path"]
+
+        data.update(new_pkg)
+        return data

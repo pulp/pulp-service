@@ -1,11 +1,13 @@
 import json
 import logging
+import os
 
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from datetime import datetime, timedelta
 from gettext import gettext as _
 from uuid import uuid4
+from tempfile import TemporaryDirectory
 
 from django.conf import settings
 from django.db.models.query import QuerySet
@@ -19,8 +21,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 
-from pulpcore.plugin.models import Distribution
-from pulpcore.plugin.viewsets import OperationPostponedResponse
+from pulpcore.plugin.viewsets import OperationPostponedResponse, SingleArtifactContentUploadViewSet
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
 from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
@@ -31,9 +32,12 @@ from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     ContentScanSerializer,
     FeatureContentGuardSerializer,
+    RPMPackageSerializer,
     VulnerabilityReportSerializer,
 )
 from pulp_service.app.tasks.package_scan import check_npm_package, check_content_from_repo_version
+from pulp_rpm.app.models import Package
+
 
 _logger = logging.getLogger(__name__)
 
@@ -209,3 +213,25 @@ class TaskIngestionDispatcherView(APIView):
             task_count = task_count + 1
 
         return Response({"tasks_executed": task_count})
+
+
+class RPMUploadViewSet(SingleArtifactContentUploadViewSet):
+
+    endpoint_name = "rpmpackage"
+    queryset = Package.objects.all()
+    serializer_class = RPMPackageSerializer
+
+    def create(self, request):
+        """Create a content unit."""
+        with TemporaryDirectory(dir="/tmp") as upload_working_dir_rel_path:
+            os.chdir(upload_working_dir_rel_path)
+
+            # Create the artifact
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            # Create the Package
+            serializer.save()
+
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
