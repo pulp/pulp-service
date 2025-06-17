@@ -362,7 +362,7 @@ spec:
       - name: ARGS
         value: "--project-name=pulp --report --org=b5ca2a21-93e1-465b-bb4a-5a0b42f60297"
       runAfter:
-      - clone-repository
+      - build-container
       taskRef:
         params:
         - name: name
