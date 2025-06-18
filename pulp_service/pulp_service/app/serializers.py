@@ -4,6 +4,7 @@ import logging
 import traceback
 
 from django.conf import settings
+from django.db import DatabaseError
 from gettext import gettext as _
 from jsonschema import validate, ValidationError
 from rest_framework import serializers
@@ -15,8 +16,9 @@ from pulpcore.plugin.serializers import (
     ModelSerializer,
     ValidateFieldsMixin,
 )
-from pulpcore.plugin.models import PulpTemporaryFile
-from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
+from pulpcore.plugin.models import Artifact, PulpTemporaryFile
+from pulpcore.plugin.serializers import ArtifactSerializer, IdentityField, RepositoryVersionRelatedField
+from pulpcore.app.util import get_domain_pk
 
 from pulp_rpm.app.models import Package
 from pulp_rpm.app.shared_utils import format_nvra
@@ -135,12 +137,29 @@ class RPMPackageSerializer(PackageSerializer):
                 uploaded_file.file.name, changelog_limit=settings.KEEP_CHANGELOG_LIMIT
             )
             new_pkg = Package.createrepo_to_dict(cr_object)
-        except OSError:
+        except OSError as e:
             _logger.info(traceback.format_exc())
-            raise NotAcceptable(detail="RPM file cannot be parsed for metadata")
+            raise NotAcceptable(detail="RPM file cannot be parsed for metadata") from e
 
-        # Create the Artifact
-        data = super().deferred_validate(data)
+        # Get or create the Artifact
+        if "file" in data:
+            file = data.pop("file")
+            # if artifact already exists, let's use it
+            try:
+                artifact = Artifact.objects.get(
+                    sha256=file.hashers["sha256"].hexdigest(), pulp_domain=get_domain_pk()
+                )
+                if not artifact.pulp_domain.get_storage().exists(artifact.file.name):
+                    artifact.file = file
+                    artifact.save()
+                else:
+                    artifact.touch()
+            except (Artifact.DoesNotExist, DatabaseError):
+                artifact_data = {"file": file}
+                serializer = ArtifactSerializer(data=artifact_data)
+                serializer.is_valid(raise_exception=True)
+                artifact = serializer.save()
+            data["artifact"] = artifact
 
         filename = (
                 format_nvra(

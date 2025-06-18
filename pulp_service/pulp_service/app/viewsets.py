@@ -1,15 +1,13 @@
 import json
 import logging
-import os
 
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from datetime import datetime, timedelta
-from gettext import gettext as _
 from uuid import uuid4
-from tempfile import TemporaryDirectory
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models.query import QuerySet
 from django.shortcuts import redirect
 
@@ -22,7 +20,7 @@ from rest_framework.views import APIView
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 
 from pulpcore.plugin.viewsets import OperationPostponedResponse, SingleArtifactContentUploadViewSet
-from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
+from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet, LabelsMixin
 from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
 
@@ -215,23 +213,20 @@ class TaskIngestionDispatcherView(APIView):
         return Response({"tasks_executed": task_count})
 
 
-class RPMUploadViewSet(SingleArtifactContentUploadViewSet):
+class RPMUploadViewSet(SingleArtifactContentUploadViewSet, LabelsMixin):
 
-    endpoint_name = "rpmpackage"
+    endpoint_name = "rpmpackages"
     queryset = Package.objects.all()
     serializer_class = RPMPackageSerializer
 
     def create(self, request):
         """Create a content unit."""
-        with TemporaryDirectory(dir="/tmp") as upload_working_dir_rel_path:
-            os.chdir(upload_working_dir_rel_path)
-
+        serializer = self.get_serializer(data=request.data)
+        with transaction.atomic():
             # Create the artifact
-            serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-
             # Create the Package
             serializer.save()
 
-            headers = self.get_success_headers(serializer.data)
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
