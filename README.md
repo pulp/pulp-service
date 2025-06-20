@@ -9,4 +9,3 @@ bonfire deploy-env -n $(oc project | grep -oE 'ephemeral-......') --template-fil
 
 pulp-clowdenv.yaml is not used and not tested at this time.
 
-
