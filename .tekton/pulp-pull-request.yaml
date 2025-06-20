@@ -361,6 +361,8 @@ spec:
         value: $(tasks.build-container.results.IMAGE_URL)
       - name: ARGS
         value: "--project-name=pulp --report --org=b5ca2a21-93e1-465b-bb4a-5a0b42f60297"
+      - name: IMP_FINDINGS_ONLY
+        value: "false"
       runAfter:
       - build-container
       taskRef:
