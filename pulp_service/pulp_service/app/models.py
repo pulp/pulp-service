@@ -54,20 +54,18 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
 
     def _check_for_feature(self, account_id):
         cert_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-        cert_context.load_cert_chain(certfile=settings.FEATURE_SERVICE_API_CERT)
+        cert_context.load_cert_chain(certfile=settings.SUBSCRIPTION_API_CERT)
 
         account_id_query_param = f"accountId={account_id}"
         features_query_param = "&".join(
             f"features={feature}" for feature in self.features
         )
-        feature_service_api_url = (
-            f"{settings.FEATURE_SERVICE_API_URL}?{account_id_query_param}&{features_query_param}"
-        )
+        subscription_api_url = f"{settings.SUBSCRIPTION_API_URL}?{account_id_query_param}&{features_query_param}"
 
         async def fetch_feature():
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    feature_service_api_url, ssl=cert_context, raise_for_status=True
+                    subscription_api_url, ssl=cert_context, raise_for_status=True
                 ) as response:
                     return await response.json()
 
@@ -94,7 +92,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         features_available = {
             feature["name"]
             for feature in response["features"]
-            if feature["isEntitled"] is True
+            if feature["entitled"] is True
         }
         return features_available == set(self.features)
 
