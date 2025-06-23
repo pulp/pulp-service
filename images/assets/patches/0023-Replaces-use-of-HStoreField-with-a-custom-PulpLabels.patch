@@ -1,0 +1,53 @@
+From a9896a4ce17bff9b869f1d94649ac03522d448bf Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Mon, 23 Jun 2025 08:20:19 -0400
+Subject: [PATCH] Replaces use of HStoreField with a custom PulpLabelsField
+
+fixes: #6713
+---
+ CHANGES/plugin_api/6713.bugfix      | 1 +
+ pulpcore/app/serializers/content.py | 2 +-
+ pulpcore/app/serializers/fields.py  | 9 +++++++++
+ 3 files changed, 11 insertions(+), 1 deletion(-)
+ create mode 100644 CHANGES/plugin_api/6713.bugfix
+
+diff --git a/CHANGES/plugin_api/6713.bugfix b/CHANGES/plugin_api/6713.bugfix
+new file mode 100644
+index 000000000..be1ec43f4
+--- /dev/null
++++ b/CHANGES/plugin_api/6713.bugfix
+@@ -0,0 +1 @@
++Fixed the `pulp_labels` field on the NoArtifactContentSerializer to work inside ViewSets for multipart/form uploads.
+diff --git a/pulpcore/app/serializers/content.py b/pulpcore/app/serializers/content.py
+index f8e2981dc..fa2c68cf3 100644
+--- a/pulpcore/app/serializers/content.py
++++ b/pulpcore/app/serializers/content.py
+@@ -11,7 +11,7 @@ from pulpcore.app.util import get_domain
+ 
+ class NoArtifactContentSerializer(base.ModelSerializer):
+     pulp_href = base.DetailIdentityField(view_name_pattern=r"contents(-.*/.*)-detail")
+-    pulp_labels = serializers.HStoreField(
++    pulp_labels = fields.PulpLabelsField(
+         help_text=_(
+             "A dictionary of arbitrary key/value pairs used to describe a specific "
+             "Content instance."
+diff --git a/pulpcore/app/serializers/fields.py b/pulpcore/app/serializers/fields.py
+index ac156dbd0..2bc3f5137 100644
+--- a/pulpcore/app/serializers/fields.py
++++ b/pulpcore/app/serializers/fields.py
+@@ -435,3 +435,12 @@ def pulp_labels_validator(value):
+             )
+ 
+     return value
++
++
++class PulpLabelsField(serializers.HStoreField):
++    """
++    Custom field for handling pulp labels that ensures proper dictionary format.
++    Converts JSON strings to dictionaries during validation.
++    """
++    def get_value(self, dictionary):
++        return dictionary.get(self.field_name, empty)
+-- 
+2.49.0
+
