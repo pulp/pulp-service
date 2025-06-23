@@ -150,7 +150,7 @@ if __name__ == "__main__":
     tasks_processed = run_with_timeout(args.url, args.timeout, args.max_workers)
 
     if tasks_processed is not None:
-        print(f"Total tasks processed: {tasks_processed}")
+        print(f"Total tasks processed: {tasks_processed}. Request rate: {tasks_processed/args.timeout}/s")
     else:
         print("No tasks processed due to timeout or error.")
 ```
