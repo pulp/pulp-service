@@ -243,8 +243,8 @@ objects:
             secret:
               secretName: subscription-api-cert
               items:
-              - key: subscription-api-mock-cert.pem
-                path: subscription-api-mock-cert.pem
+              - key: pulp-services-non-prod.pem
+                path: pulp-services-non-prod.pem
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -348,7 +348,7 @@ objects:
           - name: PULP_USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN
             value: "true"
           - name: PULP_FEATURE_SERVICE_API_CERT
-            value: "/etc/pulp/certs/subscription-api-mock-cert.pem"
+            value: "/etc/pulp/certs/pulp-services-non-prod.pem"
           - name: PULP_USE_X_FORWARDED_HOST
             value: ${PULP_USE_X_FORWARDED_HOST}
           - name: PULP_SECURE_PROXY_SSL_HEADER
@@ -392,8 +392,8 @@ objects:
             secret:
               secretName: subscription-api-cert
               items:
-              - key: subscription-api-mock-cert.pem
-                path: subscription-api-mock-cert.pem
+              - key: pulp-services-non-prod.pem
+                path: pulp-services-non-prod.pem
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -475,7 +475,7 @@ objects:
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_FEATURE_SERVICE_API_CERT
-            value: "/etc/pulp/certs/subscription-api-mock-cert.pem"
+            value: "/etc/pulp/certs/pulp-services-non-prod.pem"
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
           - name: PULP_USE_UVLOOP
