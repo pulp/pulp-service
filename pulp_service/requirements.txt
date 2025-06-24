@@ -1,4 +1,4 @@
-pulpcore==3.80.0
+pulpcore==3.80.1
 pulp-rpm==3.30.0
 pulp-gem==0.7.1
 pulp-ostree==2.4.6
@@ -13,3 +13,5 @@ app-common-python
 oras==0.2.24
 uvloop==0.21.0
 jsonschema
+memray
+pyinstrument

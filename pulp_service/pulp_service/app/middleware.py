@@ -17,6 +17,7 @@ from pulpcore.plugin.util import extract_pk, get_artifact_url, resolve_prn
 _logger = logging.getLogger(__name__)
 repository_name_var = ContextVar('repository_name')
 x_quay_auth_var = ContextVar('x_quay_auth')
+x_task_diagnostics_var = ContextVar('x_profile_task')
 
 
 class ProfilerMiddleware(MiddlewareMixin):
@@ -64,6 +65,15 @@ class ProfilerMiddleware(MiddlewareMixin):
 
         return response
 
+
+class TaskProfilerMiddleware(MiddlewareMixin):
+    def process_view(self, request, callback, callback_args, callback_kwargs):
+        if 'HTTP_X_TASK_DIAGNOSTICS' in request.META:
+            x_task_diagnostics_var.set(request.META['HTTP_X_TASK_DIAGNOSTICS'])
+
+    def process_response(self, request, response):
+        x_task_diagnostics_var.set(None)
+        return response
 
 class OCIStorageMiddleware(MiddlewareMixin):
     def process_view(self, request, callback, callback_args, callback_kwargs):
