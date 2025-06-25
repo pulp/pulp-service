@@ -347,7 +347,7 @@ objects:
             value: ${{PULP_PYPI_API_HOSTNAME}}
           - name: PULP_USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN
             value: "true"
-          - name: PULP_SUBSCRIPTION_API_CERT
+          - name: PULP_FEATURE_SERVICE_API_CERT
             value: "/etc/pulp/certs/subscription-api-mock-cert.pem"
           - name: PULP_USE_X_FORWARDED_HOST
             value: ${PULP_USE_X_FORWARDED_HOST}
@@ -474,7 +474,7 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
-          - name: PULP_SUBSCRIPTION_API_CERT
+          - name: PULP_FEATURE_SERVICE_API_CERT
             value: "/etc/pulp/certs/subscription-api-mock-cert.pem"
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
