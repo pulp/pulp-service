@@ -7,7 +7,7 @@ from opentelemetry.sdk.resources import Resource
 from pulpcore.plugin.models import Domain, Repository
 
 
-CONTENT_SOURCE_DESCRIPTION = "content-sources"
+CONTENT_SOURCES_LABEL_NAME = "contentsources"
 RHEL_AI_DOMAIN_NAME = "rhel-ai"
 
 
@@ -31,7 +31,7 @@ def content_sources_domains_count():
 
 def _get_content_sources_domains_count(options):
     content_sources_domains = Domain.objects.filter(
-        description__contains=CONTENT_SOURCE_DESCRIPTION
+        pulp_labels__contains={CONTENT_SOURCES_LABEL_NAME: "true"},
     )
     content_sources_domains_count = content_sources_domains.count()
     yield Observation(content_sources_domains_count)
