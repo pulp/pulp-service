@@ -143,12 +143,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
-COPY images/assets/patches/0023-Replaces-use-of-HStoreField-with-a-custom-PulpLabels.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0023-Replaces-use-of-HStoreField-with-a-custom-PulpLabels.patch
-
-COPY images/assets/patches/0024-Add-X-TASK-DIAGNOSTICS-header-support.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Add-X-TASK-DIAGNOSTICS-header-support.patch
-
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
