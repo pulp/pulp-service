@@ -11,7 +11,7 @@ from django.db import transaction
 from django.db.models.query import QuerySet
 from django.shortcuts import redirect
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from rest_framework import status
 from rest_framework.exceptions import APIException
@@ -132,6 +132,10 @@ class DebugAuthenticationHeadersView(APIView):
         return Response(data=json_header_value)
 
 
+@extend_schema_view(
+    get=extend_schema(operation_id="admin_tasks"),
+    list=extend_schema(operation_id="admin_tasks"),
+)
 class TaskViewSet(TaskViewSet):
 
     LOCKED_ROLES = {}
