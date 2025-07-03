@@ -5,10 +5,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 
 from pulpcore.plugin.models import Domain, Repository
-
-
-CONTENT_SOURCES_LABEL_NAME = "contentsources"
-RHEL_AI_DOMAIN_NAME = "rhel-ai"
+from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME, RHEL_AI_DOMAIN_NAME
 
 
 def _create_meter(service_name):

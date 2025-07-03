@@ -39,3 +39,6 @@ NPM_PACKAGE_LOCK_SCHEMA = {
 
 # timeout when waiting on tasks scan thread queue to avoid indefinite blocking.
 VULNERABILITY_TASK_THREAD_TIMEOUT = 60
+
+CONTENT_SOURCES_LABEL_NAME = "contentsources"
+RHEL_AI_DOMAIN_NAME = "rhel-ai"

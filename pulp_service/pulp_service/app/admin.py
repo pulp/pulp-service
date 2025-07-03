@@ -10,6 +10,7 @@ from .models import DomainOrg
 import re
 
 from pulpcore.plugin.models import Domain
+from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
 
 USERNAME_PATTERN = r'^[\w.@+=/-]+$'
 USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these special characters: @, ., +, -, =, /, _"
@@ -78,11 +79,11 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         if self.value() == "cs-domains":
             return queryset.filter(
-                description__contains="content-sources"
+                pulp_labels__contains={CONTENT_SOURCES_LABEL_NAME: "true"},
             )
         if self.value() == "non-cs-domains":
             return queryset.exclude(
-                description__contains="content-sources"
+                pulp_labels__contains={CONTENT_SOURCES_LABEL_NAME: "true"},
             )
         return queryset
 
