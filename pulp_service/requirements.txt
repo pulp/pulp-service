@@ -1,5 +1,5 @@
 pulpcore==3.82.0
-pulp-rpm==3.31.0
+pulp-rpm==3.31.1
 pulp-gem==0.7.1
 pulp-ostree==2.4.6
 pulp-python==3.13.1
