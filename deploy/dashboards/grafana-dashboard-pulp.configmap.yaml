@@ -35,7 +35,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 2,
-      "id": 886202,
+      "id": 1026001,
       "links": [],
       "panels": [
         {
@@ -3073,12 +3073,129 @@ data:
           "type": "timeseries"
         },
         {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "P1A97A9592CB7F392"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "bars",
+                "fillOpacity": 100,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 122
+          },
+          "id": 44,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "P1A97A9592CB7F392"
+              },
+              "dimensions": {},
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-worker/\n| filter message like /is back online./\n| stats count(*) as worker_reconnection by bin(1h)",
+              "id": "",
+              "label": "",
+              "logGroups": [
+                {
+                  "arn": "$logsource",
+                  "name": "$logsource"
+                }
+              ],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "",
+              "metricQueryType": 0,
+              "namespace": "",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Logs",
+              "refId": "A",
+              "region": "us-east-1",
+              "sqlExpression": "",
+              "statistic": "Average",
+              "statsGroups": [
+                "bin(1h)"
+              ]
+            }
+          ],
+          "timeFrom": "2d",
+          "title": "Pulp Worker reconnections by hour",
+          "type": "timeseries"
+        },
+        {
           "collapsed": false,
           "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 122
+            "y": 130
           },
           "id": 33,
           "panels": [],
@@ -3149,7 +3266,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 123
+            "y": 131
           },
           "id": 34,
           "options": {
@@ -3247,7 +3364,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 123
+            "y": 131
           },
           "id": 35,
           "options": {
@@ -3283,7 +3400,7 @@ data:
         }
       ],
       "preload": false,
-      "refresh": "1m",
+      "refresh": "5m",
       "schemaVersion": 41,
       "tags": [],
       "templating": {
@@ -3358,5 +3475,5 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 1
-    }
+      "version": 2
+    }   
