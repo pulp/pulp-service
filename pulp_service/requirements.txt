@@ -6,6 +6,7 @@ pulp-python==3.13.1
 pulp-npm==0.3.3
 pulp-container==2.25.0
 pulp-maven==0.10.1
+pulp-hugging-face==0.0.1
 pulp-cli
 pulp-cli-gem
 sentry-sdk
