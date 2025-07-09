@@ -853,7 +853,7 @@ data:
               "showLegend": false
             },
             "orientation": "auto",
-            "showValue": "auto",
+            "showValue": "never",
             "stacking": "none",
             "text": {
               "valueSize": 25
@@ -874,7 +874,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(api)/\n| filter message like /POST/ \n| filter @message like /rpmpackages/\n| stats count(*) as upload_per_hour by bin(1h)",
+              "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(api)/\n| filter message like /POST/ \n| filter (@message like /rpmpackages/ or @message like /api\\/v3\\/content\\/rpm\\/packages\\/upload/)\n| stats count(*) as old_endpoint_upload_per_hour by bin(1h)",
               "id": "",
               "label": "",
               "logGroups": [
@@ -904,7 +904,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(api)/\n| filter message like /POST/ \n| filter message like /rpmpackages/\n| stats count() as total_rpm_upload\n",
+              "expression": "fields @logStream, @message | filter @logStream like /pulp-${cluster:text}_pulp-(api)/\n| filter message like /POST/ \n| filter (@message like /rpmpackages/ or @message like /api\\/v3\\/content\\/rpm\\/packages\\/upload/)\n| stats count() as total_rpm_upload\n",
               "hide": false,
               "id": "",
               "label": "",
@@ -3475,5 +3475,5 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 2
-    }   
+      "version": 3
+    }
