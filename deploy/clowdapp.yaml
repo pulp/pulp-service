@@ -243,8 +243,8 @@ objects:
             secret:
               secretName: subscription-api-cert
               items:
-              - key: pulp-services-non-prod.pem
-                path: pulp-services-non-prod.pem
+              - key: ${{PULP_FEATURE_SERVICE_API_CERT}}
+                path: ${{PULP_FEATURE_SERVICE_API_CERT}}
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -347,8 +347,8 @@ objects:
             value: ${{PULP_PYPI_API_HOSTNAME}}
           - name: PULP_USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN
             value: "true"
-          - name: PULP_FEATURE_SERVICE_API_CERT
-            value: "/etc/pulp/certs/pulp-services-non-prod.pem"
+          - name: PULP_FEATURE_SERVICE_API_CERT_PATH
+            value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_USE_X_FORWARDED_HOST
             value: ${PULP_USE_X_FORWARDED_HOST}
           - name: PULP_SECURE_PROXY_SSL_HEADER
@@ -392,8 +392,8 @@ objects:
             secret:
               secretName: subscription-api-cert
               items:
-              - key: pulp-services-non-prod.pem
-                path: pulp-services-non-prod.pem
+              - key: ${{PULP_FEATURE_SERVICE_API_CERT}}
+                path: ${{PULP_FEATURE_SERVICE_API_CERT}}
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -474,8 +474,8 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
-          - name: PULP_FEATURE_SERVICE_API_CERT
-            value: "/etc/pulp/certs/pulp-services-non-prod.pem"
+          - name: PULP_FEATURE_SERVICE_API_CERT_PATH
+            value:  ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
           - name: PULP_USE_UVLOOP
@@ -926,3 +926,7 @@ parameters:
   - name: PULP_TEST_TASK_INGESTION 
     description: Enable the Task Ingestion test endpoint
     value: "false"
+  - name: PULP_FEATURE_SERVICE_API_CERT_PATH
+    value: "/etc/pulp/certs/pulp-services-non-prod.pem"
+  - name: PULP_FEATURE_SERVICE_API_CERT
+    value: "pulp-services-non-prod.pem"

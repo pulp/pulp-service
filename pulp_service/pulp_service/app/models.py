@@ -54,7 +54,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
 
     def _check_for_feature(self, account_id):
         cert_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-        cert_context.load_cert_chain(certfile=settings.FEATURE_SERVICE_API_CERT)
+        cert_context.load_cert_chain(certfile=settings.FEATURE_SERVICE_API_CERT_PATH)
 
         account_id_query_param = f"accountId={account_id}"
         features_query_param = "&".join(
