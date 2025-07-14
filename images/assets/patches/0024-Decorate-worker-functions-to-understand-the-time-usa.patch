@@ -1,0 +1,94 @@
+From 09fbc7276fe1dd59183889b1be1c4cf468f6cc06 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Mon, 14 Jul 2025 12:38:18 -0300
+Subject: [PATCH] Decorate worker functions to understand the time usage for
+ each.
+
+---
+ pulpcore/tasking/worker.py | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
+index dd61cd6ff..610e72059 100644
+--- a/pulpcore/tasking/worker.py
++++ b/pulpcore/tasking/worker.py
+@@ -7,6 +7,8 @@ import select
+ import signal
+ import socket
+ import contextlib
++import time
++import functools
+ from datetime import datetime, timedelta
+ from multiprocessing import Process
+ from tempfile import TemporaryDirectory
+@@ -41,6 +43,19 @@ from pulpcore.tasking._util import (
+ _logger = logging.getLogger(__name__)
+ random.seed()
+ 
++
++def log_execution_time(func):
++    """A decorator to log the execution time of a function."""
++    @functools.wraps(func)
++    def wrapper(*args, **kwargs):
++        start_time = time.monotonic()
++        result = func(*args, **kwargs)
++        end_time = time.monotonic()
++        _logger.info(f"pulpcore-worker-perf: {func.__name__} took {end_time - start_time:.4f}s")
++        return result
++    return wrapper
++
++
+ # The following four constants are current "best guesses".
+ # Unless/until we can provide reasonable ways to decide to change their values,
+ # they will live as constants instead of "proper" settings.
+@@ -131,6 +146,7 @@ class PulpcoreWorker:
+             if notification.payload == str(self.task.pk):
+                 self.cancel_task = True
+ 
++    @log_execution_time
+     def handle_worker_heartbeat(self):
+         """
+         Create or update worker heartbeat records.
+@@ -176,6 +192,7 @@ class PulpcoreWorker:
+                     _logger.info(_("Clean missing %s worker %s."), cls_name, app_worker.name)
+                 qs.delete()
+ 
++    @log_execution_time
+     def beat(self):
+         if self.worker.last_heartbeat < timezone.now() - self.heartbeat_period:
+             self.worker = self.handle_worker_heartbeat()
+@@ -192,6 +209,7 @@ class PulpcoreWorker:
+     def notify_workers(self):
+         self.cursor.execute("NOTIFY pulp_worker_wakeup")
+ 
++    @log_execution_time
+     def cancel_abandoned_task(self, task, final_state, reason=None):
+         """Cancel and clean up an abandoned task.
+ 
+@@ -246,6 +264,7 @@ class PulpcoreWorker:
+             return False
+         return True
+ 
++    @log_execution_time
+     def unblock_tasks(self):
+         """Iterate over waiting tasks and mark them unblocked accordingly.
+ 
+@@ -320,6 +339,7 @@ class PulpcoreWorker:
+ 
+         return changed
+ 
++    @log_execution_time
+     def iter_tasks(self):
+         """Iterate over ready tasks and yield each task while holding the lock."""
+         while not self.shutdown_requested:
+@@ -492,6 +512,7 @@ class PulpcoreWorker:
+                 keep_looping = True
+                 self.supervise_task(task)
+ 
++    @log_execution_time
+     def _record_unblocked_waiting_tasks_metric(self):
+         now = timezone.now()
+         if now > self.last_metric_heartbeat + self.heartbeat_period:
+-- 
+2.50.1
+
