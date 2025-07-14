@@ -1,0 +1,43 @@
+From 231fad6b6f65d41edab4fdc9134ae139a43b7aac Mon Sep 17 00:00:00 2001
+From: Gerrod Ubben <gerrodubben@gmail.com>
+Date: Mon, 14 Jul 2025 03:39:57 -0400
+Subject: [PATCH] Fix RepositoryVersion.content query failing when >65K units
+
+fixes: #6772
+---
+ CHANGES/6772.bugfix               |  1 +
+ pulpcore/app/models/repository.py | 10 +++++++++-
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+ create mode 100644 CHANGES/6772.bugfix
+
+diff --git a/CHANGES/6772.bugfix b/CHANGES/6772.bugfix
+new file mode 100644
+index 000000000..d68f13b89
+--- /dev/null
++++ b/CHANGES/6772.bugfix
+@@ -0,0 +1 @@
++Fixed the new content set optimization failing when the RepositoryVersion grew larger than 65K content units.
+diff --git a/pulpcore/app/models/repository.py b/pulpcore/app/models/repository.py
+index 0dc3ad50c..fdbfb12c3 100644
+--- a/pulpcore/app/models/repository.py
++++ b/pulpcore/app/models/repository.py
+@@ -890,7 +890,15 @@ class RepositoryVersion(BaseModel):
+         if content_qs is None:
+             content_qs = Content.objects
+ 
+-        return content_qs.filter(pk__in=self._get_content_ids())
++        content_ids = self._get_content_ids()
++        if isinstance(content_ids, list) and len(content_ids) >= 65535:
++            # Workaround for PostgreSQL's limit on the number of parameters in a query
++            content_ids = (
++                RepositoryVersion.objects.filter(pk=self.pk)
++                .annotate(cids=Func(F("content_ids"), function="unnest"))
++                .values_list("cids", flat=True)
++            )
++        return content_qs.filter(pk__in=content_ids)
+ 
+     @property
+     def content(self):
+-- 
+2.46.2
+
