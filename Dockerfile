@@ -146,6 +146,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0023-Fix-RepositoryVersion.content-query-failing-when-65K.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0023-Fix-RepositoryVersion.content-query-failing-when-65K.patch
 
+COPY images/assets/patches/0024-Decorate-worker-functions-to-understand-the-time-usa.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Decorate-worker-functions-to-understand-the-time-usa.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
