@@ -30,10 +30,10 @@ index dd61cd6ff..610e72059 100644
 +    """A decorator to log the execution time of a function."""
 +    @functools.wraps(func)
 +    def wrapper(*args, **kwargs):
-+        start_time = time.monotonic()
++        start_time = time.perf_counter()
 +        result = func(*args, **kwargs)
-+        end_time = time.monotonic()
-+        _logger.info(f"pulpcore-worker-perf: {func.__name__} took {end_time - start_time:.4f}s")
++        end_time = time.perf_counter()
++        _logger.info(f"pulpcore-worker-perf: {func.__name__} took {end_time - start_time}s")
 +        return result
 +    return wrapper
 +
