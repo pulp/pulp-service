@@ -232,6 +232,108 @@ objects:
         wildcardPolicy: None
       EOF
 
+      ###### BINDINGS
+      ## Create a ConfigMap with the openapi-generator templates
+      TEMPLATE_LANG="python"
+      TEMPLATE_VERSION="v7.10.0"
+      TEMPLATES=(configuration partial_api_args requirements setup)
+      for TEMPLATE in ${TEMPLATES[@]} ; do
+        curl -O https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/${TEMPLATE_LANG}/${TEMPLATE_VERSION}/${TEMPLATE}.mustache
+      done
+      kubectl create configmap templates $(printf -- '--from-file=%s.mustache ' "${TEMPLATES[@]}")
+
+      ## It is not possible to create a ConfigMap to store the bindings because it exceeds
+      ## the maximum CM size, so we will store them in a k8s volume
+      kubectl apply -f-<<EOF
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: bindings
+      spec:
+        storageClassName: gp3
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 100Mi
+      EOF
+
+      ## Store the api.json doc for pulpcore and each pulp plugin and then generate the bindings
+      PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service)
+      PULP_API_HOST=$(oc get routes pulp-api -ojsonpath='{.spec.host}')
+      for PACKAGE in "${PACKAGES[@]}" ; do
+      if [ "$PACKAGE" = "pulpcore" ]; then COMPONENT="core" ; else COMPONENT=${PACKAGE#"pulp_"} ; fi
+      kubectl apply -f-<<EOF
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: ${PACKAGE//_/-}-bindings
+      spec:
+        template:
+          metadata:
+            labels:
+              pod: bindings
+          spec:
+            affinity:
+              podAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                    - key: pod
+                      operator: In
+                      values:
+                      - bindings
+                  topologyKey: kubernetes.io/hostname
+            containers:
+            - args:
+              - generate
+              - -i
+              - /home/store/api-${PACKAGE//_/-}.json
+              - -g
+              - python
+              - -o
+              - /home/store/${PACKAGE//_/-}
+              - --additional-properties=packageName=pulpcore.client.${PACKAGE},projectName=${PACKAGE}-client,packageVersion=1.0,domainEnabled=true
+              - -t
+              - /tmp/templates
+              - --skip-validate-spec
+              - --strict-spec=false
+              image: docker.io/openapitools/openapi-generator-cli:v7.10.0
+              name: pulp-openapi-generator
+              volumeMounts:
+              - mountPath: /home/store
+                name: store
+              - name: templates
+                mountPath: /tmp/templates
+            initContainers:
+            - name: wait-for-api-schema
+              image: quay.io/curl/curl
+              command: ["/bin/sh", "-c"]
+              args:
+              - >
+                curl --retry-all-errors --fail --retry-delay 15 --retry 30 --retry-max-time 900 https://${HOST}/api/pulp/api/v3/docs/api.json
+            - name: get-pulp-api-schema
+              args:
+              - -k
+              - -o
+              - /data/api-${PACKAGE//_/-}.json
+              - https://${HOST}/api/pulp/api/v3/docs/api.json?bindings&component=${COMPONENT}
+              image: quay.io/curl/curl
+              volumeMounts:
+              - mountPath: /data
+                name: store
+            restartPolicy: Never
+            volumes:
+            - name: store
+              persistentVolumeClaim:
+                claimName: bindings
+            - name: templates
+              configMap:
+                name: templates
+      EOF
+      done
+      ###### END OF BINDINGS
+
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -308,7 +410,7 @@ objects:
           httpGet:
             path: /api/pulp/api/v3/livez/
             port: 8000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 10
           periodSeconds: 120
           timeoutSeconds: 120
         terminationGracePeriodSeconds: 120
