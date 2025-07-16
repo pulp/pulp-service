@@ -257,12 +257,12 @@ spec:
               ### Adapted from ./.github/workflows/scripts/utils.sh
               # Run a command
               cmd_prefix() {
-                oc_wrapper exec "$POD" -- "$@"
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- "$@"
               }
 
               # Run a command, and pass STDIN
               cmd_stdin_prefix() {
-                oc_wrapper exec -i "$POD" -- "$@"
+                oc_wrapper exec -c pulp-api -i deployment/pulp-api -- "$@"
               }
               ### END Adapted from ./.github/workflows/scripts/utils.sh
 
@@ -276,18 +276,64 @@ spec:
                 exit 1
               }
 
+              #sleep 5
+
+              # Workaround to be able to mount the volume with the bindings
+              oc apply -f-<<EOF
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: python-path
+              spec:
+                storageClassName: gp3
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 2Gi
+              EOF
+              oc_wrapper patch clowdapp pulp --type=merge -p '{"spec": {"disabled": true}}'
+              PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_ostree pulp_file pulp_service)
+              #PACKAGES=(pulpcore pulp_rpm pulp_file pulp_gem)
+              for PACKAGE in "${PACKAGES[@]}" ; do
+              oc_wrapper patch deployment pulp-api --type=strategic -p "$(cat<<EOF
+              {
+                "spec": {
+                  "strategy": { "rollingUpdate": null, "type": "Recreate" },
+                  "template": {
+                    "spec": {
+                      "volumes": [
+                        { "name": "bindings", "persistentVolumeClaim": { "claimName": "${PACKAGE//_/-}-bindings"}},
+                        { "name": "python-path", "persistentVolumeClaim": { "claimName": "python-path"}}
+                      ],
+                      "containers": [
+                        {
+                          "name": "pulp-api",
+                          "volumeMounts": [
+                            {"mountPath": "/data","name": "bindings"},
+                            {"mountPath": "/tmp/home/","name": "python-path"}
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              EOF
+              )"
+              oc_wrapper rollout status deployment/pulp-api --timeout=4m
+              cmd_prefix bash -c "HOME=/tmp/home pip3 install /data/pulp/"
+              done
+
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pulp-smash@git+https://github.com/pulp/pulp-smash.git@2ded6671e0f32c51e70681467199e8a195f7f5fe"
-              cmd_prefix git clone https://github.com/pulp/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_maven-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_npm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_gem-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_python-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_service-client"
+
+              cat<<EOF > __tmp_init__.py
+              from pkgutil import extend_path
+              __path__ = extend_path(__path__, __name__)
+              EOF
+              cat __tmp_init__.py | cmd_stdin_prefix bash -c "cat > /tmp/home/.local/lib/python3.9/site-packages/pulpcore/__init__.py"
+              cat __tmp_init__.py | cmd_stdin_prefix bash -c "cat > /tmp/home/.local/lib/python3.9/site-packages/pulpcore/client/__init__.py"
 
               cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
               cat << EOF >> pulp-smash.json
