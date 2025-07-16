@@ -369,3 +369,102 @@ spec:
 
               # Run pulp_service functional tests
               cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_service.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+
+    - name: build-and-publish-pulp-bindings
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
+      runAfter:
+        - deploy-application
+      params:
+        - name: BONFIRE_IMAGE
+          value: "$(params.BONFIRE_IMAGE)"
+        - name: NS
+          value: "$(tasks.reserve-namespace.results.NS)"
+        - name: EPHEMERAL_ENV_PROVIDER_SECRET
+          value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
+      taskSpec:
+        params:
+          - name: BONFIRE_IMAGE
+            type: string
+            description: The container Bonfire image to use for the tekton tasks
+            default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
+          - name: EPHEMERAL_ENV_PROVIDER_SECRET
+            type: string
+            default: ephemeral-env-provider
+          - name: NS
+            type: string
+            description: Namespace name to deploy the application to
+        steps:
+          - name: functional-tests
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+            script: |
+              oc apply -f- <<EOF
+              {
+                "apiVersion": "batch/v1",
+                "kind": "Job",
+                "metadata": {
+                  "name": "test"
+                },
+                "spec": {
+                  "template": {
+                    "spec": {
+                      "restartPolicy": "Never",
+                      "containers": [
+                        {
+                          "name": "pulp-openapi-generator",
+                          "image": "docker.io/openapitools/openapi-generator-cli:latest-release",
+                          "args": [
+                            "generate",
+                            "-i", "/home/store/api.json",
+                            "-g", "python",
+                            "-o", "/home/store/pulp",
+                            "--additional-properties=packageName=pulpcore.client.pulp,projectName=pulp-client,packageVersion=1.0,domainEnabled=true",
+                            "-t", "${VOLUME_DIR}/templates/python/${IMAGE_TAG}",
+                            "--skip-validate-spec",
+                            "--strict-spec=false"
+                          ],
+                          "stdin": true,
+                          "stdinOnce": true,
+                          "tty": true,
+                          "volumeMounts": [{
+                            "mountPath": "/home/store",
+                            "name": "store"
+                          }]
+                        }
+                      ],
+                      "initContainers": [
+                        {
+                          "name": "init-container",
+                          "image": "docker.io/curlimages/curl",
+                          "args": ["-k", "-o", "/data/api.json", "https://env-ephemeral-xz0kxn.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp/api/v3/docs/api.json"],
+                          "volumeMounts": [{
+                            "mountPath": "/data",
+                            "name": "store"
+                          }]
+                        }
+                      ],
+                      "volumes": [{
+                        "name":"store",
+                        "emptyDir":{}
+                      }]
+                    }
+                  }
+                }
+              }
+              EOF
+
