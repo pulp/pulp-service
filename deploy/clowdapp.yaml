@@ -308,7 +308,7 @@ objects:
           httpGet:
             path: /api/pulp/api/v3/livez/
             port: 8000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 10
           periodSeconds: 120
           timeoutSeconds: 120
         terminationGracePeriodSeconds: 120

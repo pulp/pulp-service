@@ -83,6 +83,10 @@ spec:
       type: string
       description: "Deploy frontend in the env or not"
       default: ""
+    - name: PULP_CREDENTIALS
+      type: string
+      default: pulp-python-bindings
+      description: "Secret for connecting to python-bindings domain in prod pulp."
 
   results:
     - name: ARTIFACTS_URL
@@ -190,13 +194,416 @@ spec:
             value: "$(params.REVISION_ORIG)"
           - name: pathInRepo
             value: tasks/deploy.yaml
+    
+    - name: build-bindings
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
+      params:
+        - name: BONFIRE_IMAGE
+          value: "$(params.BONFIRE_IMAGE)"
+        - name: NS
+          value: "$(tasks.reserve-namespace.results.NS)"
+        - name: EPHEMERAL_ENV_PROVIDER_SECRET
+          value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
+      runAfter:
+        - deploy-application
+      taskSpec:
+        params:
+          - name: BONFIRE_IMAGE
+            type: string
+            description: The container Bonfire image to use for the tekton tasks
+            default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
+          - name: EPHEMERAL_ENV_PROVIDER_SECRET
+            type: string
+            default: ephemeral-env-provider
+          - name: NS
+            type: string
+            description: Namespace name to deploy the application to
+          - name: BINDINGS_PVC
+            type: string
+            description: Name of the PVC to store the generated bindings
+            default: bindings
+          - name: TEMPLATE_VERSION
+            type: string
+            default: "v7.10.0"
+        steps:
+          - name: get-templates
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+              - name: TEMPLATE_LANG
+                value: "python"
+              - name: TEMPLATE_VERSION
+                value: $(params.TEMPLATE_VERSION)
+            script: |
+              set -ex
+              login.sh
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+              TEMPLATES=(configuration partial_api_args requirements setup)
+              for TEMPLATE in ${TEMPLATES[@]} ; do
+                curl -s -O https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/${TEMPLATE_LANG}/${TEMPLATE_VERSION}/${TEMPLATE}.mustache
+                if [ $? -ne 0 ]; then
+                  echo "Error: Failed to download template ${TEMPLATE}.mustache"
+                  exit 1
+                fi
+              done
+              oc_wrapper create configmap templates $(printf -- '--from-file=%s.mustache ' "${TEMPLATES[@]}")
+          - name: create-bindings-pvc
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+              - name: PVC_NAME
+                value: $(params.BINDINGS_PVC)
+              - name: PVC_SIZE
+                value: 100Mi
+              - name: SC_NAME
+                value: gp3
+            script: |
+              set -ex
+              login.sh
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              oc_wrapper apply -f-<<EOF
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: $PVC_NAME
+              spec:
+                storageClassName: $SC_NAME
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: $PVC_SIZE
+              EOF
+          - name: generate-bindings
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+              - name: BINDINGS_PVC
+                value: $(params.BINDINGS_PVC)
+              - name: TEMPLATE_VERSION
+                value: $(params.TEMPLATE_VERSION)
+            script: |
+              set -ex
+              login.sh
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service)
+              PULP_API_HOST=$(oc_wrapper get routes pulp-api -ojsonpath='{.spec.host}')
+              for PACKAGE in "${PACKAGES[@]}" ; do
+              if [ "$PACKAGE" = "pulpcore" ]; then COMPONENT="core" ; else COMPONENT=${PACKAGE#"pulp_"} ; fi
+              oc_wrapper apply -f-<<EOF
+              apiVersion: batch/v1
+              kind: Job
+              metadata:
+                name: ${PACKAGE//_/-}-bindings
+              spec:
+                template:
+                  metadata:
+                    labels:
+                      pod: bindings
+                  spec:
+                    affinity:
+                      podAffinity:
+                        requiredDuringSchedulingIgnoredDuringExecution:
+                        - labelSelector:
+                            matchExpressions:
+                            - key: pod
+                              operator: In
+                              values:
+                              - bindings
+                          topologyKey: kubernetes.io/hostname
+                    containers:
+                    - args:
+                      - generate
+                      - -i
+                      - /home/store/api-${PACKAGE//_/-}.json
+                      - -g
+                      - python
+                      - -o
+                      - /home/store/${PACKAGE//_/-}
+                      - --additional-properties=packageName=pulpcore.client.${PACKAGE},projectName=${PACKAGE}-client,packageVersion=1.0,domainEnabled=true
+                      - -t
+                      - /tmp/templates
+                      - --skip-validate-spec
+                      - --strict-spec=false
+                      image: docker.io/openapitools/openapi-generator-cli:${TEMPLATE_VERSION}
+                      name: pulp-openapi-generator
+                      volumeMounts:
+                      - mountPath: /home/store
+                        name: store
+                      - name: templates
+                        mountPath: /tmp/templates
+                    initContainers:
+                    - name: wait-for-api-schema
+                      image: quay.io/curl/curl
+                      command: ["/bin/sh", "-c"]
+                      args:
+                      - >
+                        curl --retry-all-errors --fail --retry-delay 15 --retry 30 --retry-max-time 900 https://${PULP_API_HOST}/api/pulp/api/v3/docs/api.json
+                    - name: get-pulp-api-schema
+                      args:
+                      - -k
+                      - -o
+                      - /data/api-${PACKAGE//_/-}.json
+                      - https://${PULP_API_HOST}/api/pulp/api/v3/docs/api.json?bindings&component=${COMPONENT}
+                      image: quay.io/curl/curl
+                      volumeMounts:
+                      - mountPath: /data
+                        name: store
+                    restartPolicy: Never
+                    volumes:
+                    - name: store
+                      persistentVolumeClaim:
+                        claimName: $BINDINGS_PVC
+                    - name: templates
+                      configMap:
+                        name: templates
+              EOF
+              done
+
+              # make sure all jobs finished before proceeding to the next step
+              PACKAGES=(pulpcore pulp-python pulp-npm pulp-gem pulp-rpm pulp-maven pulp-file pulp-service)
+              for PACKAGE in "${PACKAGES[@]}" ; do
+              oc_wrapper wait --for=condition=complete --timeout=600s job/${PACKAGE}-bindings
+              done
+
+    - name: install-bindings
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
+      params:
+        - name: BONFIRE_IMAGE
+          value: "$(params.BONFIRE_IMAGE)"
+        - name: NS
+          value: "$(tasks.reserve-namespace.results.NS)"
+        - name: EPHEMERAL_ENV_PROVIDER_SECRET
+          value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
+      runAfter:
+        - build-bindings
+      taskSpec:
+        params:
+          - name: BONFIRE_IMAGE
+            type: string
+            description: The container Bonfire image to use for the tekton tasks
+            default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
+          - name: EPHEMERAL_ENV_PROVIDER_SECRET
+            type: string
+            default: ephemeral-env-provider
+          - name: NS
+            type: string
+            description: Namespace name to deploy the application to
+          - name: BINDINGS_PVC
+            type: string
+            description: Name of the PVC with the generated bindings
+            default: bindings
+        steps:
+          - name: create-pvc
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+            script: |
+              set -ex
+
+              login.sh
+
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              # Create a new volume that will be used as python modules path
+              oc_wrapper apply -f-<<EOF
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: python-path
+              spec:
+                storageClassName: gp3
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 2Gi
+              EOF
+
+          - name: update-deployment-with-the-pvc
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+              - name: BINDINGS_PVC
+                value: $(params.BINDINGS_PVC)
+            script: |
+              set -ex
+
+              login.sh
+
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              # Disable clowder to be able to apply our configs
+              oc_wrapper patch clowdapp pulp --type=merge -p '{"spec": {"disabled": true}}'
+
+              # Update the deployment to mount the volume with the bindings and install them
+              oc_wrapper patch deployment pulp-api --type=strategic -p "$(cat<<EOF
+              {
+                "spec": {
+                  "strategy": { "rollingUpdate": null, "type": "Recreate" },
+                  "template": { 
+                    "spec": {
+                      "volumes": [  
+                        { "name": "bindings", "persistentVolumeClaim": { "claimName": "$BINDINGS_PVC"}},
+                        { "name": "python-path", "persistentVolumeClaim": { "claimName": "python-path"}}
+                      ],
+                      "containers": [
+                        {
+                          "name": "pulp-api",
+                          "volumeMounts": [
+                            {"mountPath": "/data","name": "bindings"},
+                            {"mountPath": "/tmp/home/","name": "python-path"}
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              EOF
+              )"
+              oc_wrapper rollout status deployment/pulp-api --timeout=4m
+
+          - name: install-pulp-clients
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+            script: |
+              set -ex
+
+              login.sh
+
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              # Run a command
+              cmd_stdin_prefix() {
+                oc_wrapper exec -c pulp-api -i deployment/pulp-api -- "$@"
+              }
+
+              # INSTALL CLIENTS
+              PACKAGES=(pulpcore pulp-python pulp-npm pulp-gem pulp-rpm pulp-maven pulp-file pulp-service) 
+              for PACKAGE in "${PACKAGES[@]}" ; do
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "HOME=/tmp/home pip3 install /data/${PACKAGE}"
+              done
+
+              cat<<EOF > __tmp_init__.py
+              from pkgutil import extend_path
+              __path__ = extend_path(__path__, __name__)
+              EOF
+              cat __tmp_init__.py | cmd_stdin_prefix bash -c "cat > /tmp/home/.local/lib/python3.9/site-packages/pulpcore/__init__.py"
+              cat __tmp_init__.py | cmd_stdin_prefix bash -c "cat > /tmp/home/.local/lib/python3.9/site-packages/pulpcore/client/__init__.py"
+
     - name: pulp-functional-tests
       when:
         - input: '$(tasks.test-metadata.results.test-event-type)'
           operator: in
           values: ["pull_request"]
       runAfter:
-        - deploy-application
+        - install-bindings
       params:
         - name: BONFIRE_IMAGE
           value: "$(params.BONFIRE_IMAGE)"
@@ -257,12 +664,12 @@ spec:
               ### Adapted from ./.github/workflows/scripts/utils.sh
               # Run a command
               cmd_prefix() {
-                oc_wrapper exec "$POD" -- "$@"
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- "$@"
               }
 
               # Run a command, and pass STDIN
               cmd_stdin_prefix() {
-                oc_wrapper exec -i "$POD" -- "$@"
+                oc_wrapper exec -c pulp-api -i deployment/pulp-api -- "$@"
               }
               ### END Adapted from ./.github/workflows/scripts/utils.sh
 
@@ -278,16 +685,6 @@ spec:
 
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pulp-smash@git+https://github.com/pulp/pulp-smash.git@2ded6671e0f32c51e70681467199e8a195f7f5fe"
-              cmd_prefix git clone https://github.com/pulp/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_maven-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_npm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_gem-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_python-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_service-client"
 
               cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
               cat << EOF >> pulp-smash.json
@@ -358,9 +755,6 @@ spec:
 
               ### END Adapted from ./.github/workflows/scripts/script.sh
 
-              # cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_ostree.tests.functional -m parallel -n 16 --junitxml=/tmp/home/junit-pulp-parallel.xml" || debug_and_fail
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_ostree.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
-
               # Run pulp_maven functional tests
               cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_maven.tests.functional.api.test_download_content --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
@@ -369,3 +763,128 @@ spec:
 
               # Run pulp_service functional tests
               cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_service.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+
+    - name: push-api-json-files-to-pulp
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
+      params:
+        - name: BONFIRE_IMAGE
+          value: "$(params.BONFIRE_IMAGE)"
+        - name: NS
+          value: "$(tasks.reserve-namespace.results.NS)"
+        - name: EPHEMERAL_ENV_PROVIDER_SECRET
+          value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
+        - name: SNAPSHOT
+          value: "$(params.SNAPSHOT)"
+      runAfter:
+        - pulp-functional-tests
+      taskSpec:
+        params:
+          - name: BONFIRE_IMAGE
+            type: string
+            description: The container Bonfire image to use for the tekton tasks
+            default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
+          - name: EPHEMERAL_ENV_PROVIDER_SECRET
+            type: string
+            default: ephemeral-env-provider
+          - name: NS
+            type: string
+            description: Namespace name to deploy the application to
+          - name: PULP_CREDENTIALS
+            type: string
+            default: pulp-python-bindings
+          - name: PULP_DOMAIN
+            type: string
+            default: python-bindings
+          - name: PULP_FILE_REPO_NAME
+            type: string
+            default: python-bindings
+        steps:
+          - name: get-token
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: PULP_CLIENT_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: client-id
+              - name: PULP_CLIENT_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: client-secret
+            script: |
+              curl -s -XPOST -H 'content-type: application/x-www-form-urlencoded' -u "${PULP_CLIENT_ID}:${PULP_CLIENT_SECRET}" https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token/ -d 'grant_type=client_credentials&scope=api.console' |python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])" > /workspace/token
+          - name: get-file-repo
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: PULP_DOMAIN
+                value: $(params.PULP_DOMAIN)
+            script: |
+              PULP_TOKEN=$(cat /workspace/token)
+              curl -s -H "Authorization: Bearer $PULP_TOKEN" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/repositories/file/file/?name=${PULP_FILE_REPO_NAME}|python3 -c "import json,sys;print(json.load(sys.stdin)['results'][0]['pulp_href'])" | tee /workspace/file_repo
+          - name: get-current-postn-and-increment-it
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: PULP_DOMAIN
+                value: $(params.PULP_DOMAIN)
+            script: |
+              CUR_DATE=$(date +%Y%m%d)
+              PULP_TOKEN=$(cat /workspace/token)
+              postN=$(curl -sH "Authorization: Bearer $PULP_TOKEN" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/?relative_path__contains="pulpcore-$CUR_DATE" |python3 -c "import json,sys;results=json.load(sys.stdin)['results'];print(len(results))")
+              postN=$((postN + 1))
+              echo $postN | tee /workspace/postN
+          - name: get-commit-hash
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              python3 <<EOF | tee /workspace/commit_sha
+              import json,os
+              snapshot=os.getenv("SNAPSHOT", "")
+              snapshotComponent=json.loads(snapshot)['components'][0]
+              commit_sha=snapshotComponent['source']['git']['revision'].removeprefix('sha256:')
+              print(commit_sha[:7])
+              EOF
+          - name: push-api-json-files-to-pulp
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+              - name: PULP_DOMAIN
+                value: $(params.PULP_DOMAIN)
+            script: |
+              set -ex
+              login.sh
+
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              CUR_DATE=$(date +%Y%m%d)
+              PULP_TOKEN=$(cat /workspace/token)
+              POSTN=$(cat /workspace/postN)
+              SHORT_COMMIT_SHA=$(cat /workspace/commit_sha)
+              PULP_FILE_REPO=$(cat /workspace/file_repo)
+              
+              # UPLOAD FILES TO PULP
+              PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service)
+              for PACKAGE in "${PACKAGES[@]}" ; do
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "curl -s -XPOST -H \"Authorization: Bearer $PULP_TOKEN\" -F \"file=@/data/api-${PACKAGE//_/-}.json\" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/  -F \"relative_path=${PACKAGE}-${CUR_DATE}.${POSTN}+${SHORT_COMMIT_SHA}\" -F \"repository=${PULP_FILE_REPO}\""
+              done
