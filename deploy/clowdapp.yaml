@@ -349,6 +349,8 @@ objects:
             value: "true"
           - name: PULP_FEATURE_SERVICE_API_CERT_PATH
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
+          - name: PULP_FEATURE_SERVICE_API_URL
+            value: ${{PULP_FEATURE_SERVICE_API_URL}}
           - name: PULP_USE_X_FORWARDED_HOST
             value: ${PULP_USE_X_FORWARDED_HOST}
           - name: PULP_SECURE_PROXY_SSL_HEADER
@@ -475,7 +477,9 @@ objects:
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_FEATURE_SERVICE_API_CERT_PATH
-            value:  ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
+            value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
+          - name: PULP_FEATURE_SERVICE_API_URL
+            value: ${{PULP_FEATURE_SERVICE_API_URL}}
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
           - name: PULP_USE_UVLOOP
@@ -930,3 +934,6 @@ parameters:
     value: "/etc/pulp/certs/pulp-services-non-prod.pem"
   - name: PULP_FEATURE_SERVICE_API_CERT
     value: "pulp-services-non-prod.pem"
+  - name: PULP_FEATURE_SERVICE_API_URL
+    description: FeatureServices API URL to list the features from an owner
+    value: "https://feature.stage.api.redhat.com/features/v1/featureStatus"
