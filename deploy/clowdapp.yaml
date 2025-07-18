@@ -511,6 +511,14 @@ objects:
               - "-c"
               - "/usr/bin/wait_on_postgres.py && /usr/bin/wait_on_database_migrations.sh"
             inheritEnv: True
+        readinessProbe:
+          exec:
+            command:
+              - "/bin/true"
+          initialDelaySeconds: 10
+          periodSeconds: 25
+          timeoutSeconds: 20
+          failureThreshold: 5
         terminationGracePeriodSeconds: 3660
         sidecars:
           - name: otel-collector
