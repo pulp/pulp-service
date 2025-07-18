@@ -271,7 +271,7 @@ class CreateDomainView(APIView):
             _logger.error("Model domain 'template-domain-s3' not found")
             return Response(
                 {"error": "Model domain 'template-domain-s3' not found. Please create it first with correct storage settings."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
         serializer = DomainSerializer(data=data)
