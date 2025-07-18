@@ -2,6 +2,7 @@ from django.urls import path
 
 from .admin import admin_site
 from .viewsets import (
+    CreateDomainView,
     DebugAuthenticationHeadersView,
     InternalServerErrorCheck,
     InternalServerErrorCheckWithException,
@@ -19,4 +20,5 @@ urlpatterns = [
     path("api/pulp/debug_auth_header/", DebugAuthenticationHeadersView.as_view()),
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
     path("api/pulp/test/tasks/", TaskIngestionDispatcherView.as_view()),
+    path("api/pulp/create-domain/", CreateDomainView.as_view()),
 ]

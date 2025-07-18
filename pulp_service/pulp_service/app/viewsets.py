@@ -23,6 +23,8 @@ from pulpcore.plugin.viewsets import OperationPostponedResponse, SingleArtifactC
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet, LabelsMixin
 from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
+from pulpcore.app.models import Domain
+from pulpcore.app.serializers import DomainSerializer
 
 from pulp_service.app.authentication import RHServiceAccountCertAuthentication
 from pulp_service.app.models import FeatureContentGuard
@@ -234,3 +236,51 @@ class RPMUploadViewSet(SingleArtifactContentUploadViewSet, LabelsMixin):
 
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class CreateDomainView(APIView):
+    """
+    Custom endpoint to create domains with service-specific logic.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        request=DomainSerializer,
+        description="Create a new domain for from S3 template domain, self-service path",
+        summary="Create domain",
+        responses={201: DomainSerializer},
+    )
+    def post(self, request):
+        """
+        Self-service endpoint to create a new domain.
+        This endpoint uses the model domain's storage settings and class,
+        """
+        
+        # Prepare data with defaults from default domain if needed
+        data = request.data.copy()
+        
+        # Always get storage settings from model domain (ignore user input)
+        try:
+            model_domain = Domain.objects.get(name='template-domain-s3')
+            data['storage_settings'] = model_domain.storage_settings
+            data['storage_class'] = model_domain.storage_class
+            data['pulp_labels'] = model_domain.pulp_labels
+        except Domain.DoesNotExist:
+            _logger.error("Model domain 'template-domain-s3' not found")
+            return Response(
+                {"error": "Model domain 'template-domain-s3' not found. Please create it first with correct storage settings."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        serializer = DomainSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+                
+        # Perform the creation with validated data
+        with transaction.atomic():
+            domain = serializer.save()
+            
+        response_data = DomainSerializer(domain, context={'request': request}).data
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
