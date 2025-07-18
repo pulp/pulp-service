@@ -263,13 +263,14 @@ class CreateDomainView(APIView):
         
         # Always get storage settings from model domain (ignore user input)
         try:
-            model_domain = Domain.objects.get(name='model-domain')
+            model_domain = Domain.objects.get(name='template-domain-s3')
             data['storage_settings'] = model_domain.storage_settings
             data['storage_class'] = model_domain.storage_class
+            data['pulp_labels'] = model_domain.pulp_labels
         except Domain.DoesNotExist:
-            _logger.error("Model domain 'model-domain' not found")
+            _logger.error("Model domain 'template-domain-s3' not found")
             return Response(
-                {"error": "Model domain 'model-domain' not found. Please create it first with correct storage settings."},
+                {"error": "Model domain 'template-domain-s3' not found. Please create it first with correct storage settings."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
