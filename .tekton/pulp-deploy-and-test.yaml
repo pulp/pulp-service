@@ -254,18 +254,6 @@ spec:
 
               oc_wrapper get clowdapp pulp -o yaml
 
-              ### Adapted from ./.github/workflows/scripts/utils.sh
-              # Run a command
-              cmd_prefix() {
-                oc_wrapper exec "$POD" -- "$@"
-              }
-
-              # Run a command, and pass STDIN
-              cmd_stdin_prefix() {
-                oc_wrapper exec -i "$POD" -- "$@"
-              }
-              ### END Adapted from ./.github/workflows/scripts/utils.sh
-
               debug_and_fail() {
                 oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-content\S*")
                 oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-api\S*")
@@ -276,18 +264,63 @@ spec:
                 exit 1
               }
 
+              # Workaround to be able to mount the volume with the bindings
+              oc_wrapper patch clowdapp pulp --type=merge -p '{"spec": {"disabled": true}}'
+              oc_wrapper patch deployment pulp-api --type=strategic -p '{
+                "spec": {
+                  "template": {
+                    "spec": {
+                      "volumes": [
+                        {
+                          "name": "bindings",
+                          "persistentVolumeClaim": {
+                            "claimName": "bindings"
+                          }
+                        }
+                      ],
+                      "containers": [
+                        {
+                          "name": "pulp-api",
+                          "volumeMounts": [
+                            {
+                              "mountPath": "/data",
+                              "name": "bindings"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }'
+              oc_wrapper rollout status deployment/pulp-api --timeout=4m
+
+              ### Adapted from ./.github/workflows/scripts/utils.sh
+              # Run a command
+              cmd_prefix() {
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- "$@"
+              }
+
+              # Run a command, and pass STDIN
+              cmd_stdin_prefix() {
+                oc_wrapper exec -c pulp-api -i deployment/pulp-api -- "$@"
+              }
+              ### END Adapted from ./.github/workflows/scripts/utils.sh
+
+
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pulp-smash@git+https://github.com/pulp/pulp-smash.git@2ded6671e0f32c51e70681467199e8a195f7f5fe"
-              cmd_prefix git clone https://github.com/pulp/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_maven-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_npm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_gem-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_python-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_service-client"
+              cmd_prefix bash -c "HOME=/tmp/home pip3 install /data/pulp/"
+              #cmd_prefix git clone https://github.com/pulp/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_maven-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_npm-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_gem-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_python-client"
+              #cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_service-client"
 
               cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
               cat << EOF >> pulp-smash.json

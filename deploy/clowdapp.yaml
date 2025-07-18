@@ -188,6 +188,72 @@ objects:
         wildcardPolicy: None
       EOF
 
+      # Generate bindings
+      kubectl apply -f-<<EOF
+      ---
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: bindings
+      spec:
+        storageClassName: gp3
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 500Mi
+      ---
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: build-bindings
+      spec:
+        template:
+          metadata:
+            labels:
+              pod: bindings
+          spec:
+            containers:
+            - args:
+              - generate
+              - -i
+              - /home/store/api.json
+              - -g
+              - python
+              - -o
+              - /home/store/pulp
+              - --additional-properties=packageName=pulpcore.client.pulp,projectName=pulp-client,packageVersion=1.0,domainEnabled=true
+              - --skip-validate-spec
+              - --strict-spec=false
+              image: docker.io/openapitools/openapi-generator-cli:v7.10.0
+              name: pulp-openapi-generator
+              volumeMounts:
+              - mountPath: /home/store
+                name: store
+            initContainers:
+            - name: wait-for-api-schema
+              image: docker.io/curlimages/curl
+              command: ["/bin/sh", "-c"]
+              args:
+              - >
+                curl --retry-all-errors --fail --retry-delay 15 --retry 30 --retry-max-time 900 https://${HOST}/api/pulp/api/v3/docs/api.json
+            - name: get-pulp-api-schema
+              args:
+              - -k
+              - -o
+              - /data/api.json
+              - https://${HOST}/api/pulp/api/v3/docs/api.json
+              image: docker.io/curlimages/curl
+              volumeMounts:
+              - mountPath: /data
+                name: store
+            restartPolicy: Never
+            volumes:
+            - name: store
+              persistentVolumeClaim:
+                claimName: bindings
+      EOF
+
 - apiVersion: v1
   kind: ConfigMap
   metadata:
