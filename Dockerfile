@@ -143,8 +143,11 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
-COPY images/assets/patches/0024-Decorate-worker-functions-to-understand-the-time-usa.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Decorate-worker-functions-to-understand-the-time-usa.patch
+COPY images/assets/patches/0024-add-profiling-to-the-worker-s-run-method.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-add-profiling-to-the-worker-s-run-method.patch
+
+COPY images/assets/patches/0025-Decorate-worker-functions-to-understand-the-time-usa.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0025-Decorate-worker-functions-to-understand-the-time-usa.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
