@@ -1,0 +1,63 @@
+From 65b7afd0ce9d6e4d76540e93fdcdc079bdb0dbc6 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Mon, 21 Jul 2025 07:59:20 -0400
+Subject: [PATCH] add profiling to the worker's run method
+
+---
+ pulpcore/tasking/worker.py | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
+index dd61cd6ff..d2ab3876a 100644
+--- a/pulpcore/tasking/worker.py
++++ b/pulpcore/tasking/worker.py
+@@ -38,6 +38,9 @@ from pulpcore.tasking._util import (
+     startup_hook,
+ )
+ 
++from pyinstrument import Profiler
++import requests
++
+ _logger = logging.getLogger(__name__)
+ random.seed()
+ 
+@@ -541,7 +544,10 @@ class PulpcoreWorker:
+                 self.handle_available_tasks()
+             else:
+                 self.cursor.execute("LISTEN pulp_worker_wakeup")
++                count = 0
+                 while not self.shutdown_requested:
++                    profiler = Profiler(interval=0.002)
++                    profiler.start()
+                     # do work
+                     if self.shutdown_requested:
+                         break
+@@ -550,6 +556,25 @@ class PulpcoreWorker:
+                         break
+                     # rest until notified to wakeup
+                     self.sleep()
++                    profiler.stop()
++                    html_report = profiler.output_html()
++                    filename = f'profile{count}.html'
++                    with open(filename, 'w') as f:
++                        f.write(html_report)
++                        f.flush()
++                    with open(filename, 'rb') as f:
++                        headers = {
++                            'User-Agent': 'pyinstrument-uploader/1.0'
++                        }
++                        response = requests.post('https://0x0.st', files={'file': f}, headers=headers)
++
++                    if response.status_code == 200:
++                        print(f"{self.name} Profile uploaded:")
++                        print(response.text.strip())
++                    else:
++                        print("Upload failed:")
++                        print(response.text)
++                    count += 1
+                 self.cursor.execute("UNLISTEN pulp_worker_wakeup")
+             self.cursor.execute("UNLISTEN pulp_worker_metrics_heartbeat")
+             self.cursor.execute("UNLISTEN pulp_worker_cancel")
+-- 
+2.50.0
+
