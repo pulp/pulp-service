@@ -1,14 +1,14 @@
-From 97951126053ac4d43d7d810d4cd943eb3623da3b Mon Sep 17 00:00:00 2001
+From 7e7dfb453d8b5830f58e9faf90d4bcdc9c2c4dcd Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Mon, 21 Jul 2025 07:59:20 -0400
 Subject: [PATCH] added logging
 
 ---
- pulpcore/tasking/worker.py | 15 +++++++++------
- 1 file changed, 9 insertions(+), 6 deletions(-)
+ pulpcore/tasking/worker.py | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
 
 diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
-index dd61cd6ff..6ba959628 100644
+index dd61cd6ff..0e45bbffa 100644
 --- a/pulpcore/tasking/worker.py
 +++ b/pulpcore/tasking/worker.py
 @@ -27,7 +27,7 @@ from pulpcore.constants import (
@@ -61,8 +61,11 @@ index dd61cd6ff..6ba959628 100644
          self.cancel_task = False
          self.task = task
          task.worker = self.worker
-@@ -485,10 +486,13 @@ class PulpcoreWorker:
+@@ -483,12 +484,16 @@ class PulpcoreWorker:
+         """
+         keep_looping = True
          while keep_looping and not self.shutdown_requested:
++            self.beat()
              try:
                  with PGAdvisoryLock(TASK_UNBLOCKING_LOCK):
 +                    _logger.info(f"{self.name} is unblocking tasks, {datetime.utcnow()}")
@@ -75,7 +78,7 @@ index dd61cd6ff..6ba959628 100644
                  keep_looping = True
                  self.supervise_task(task)
  
-@@ -548,7 +552,6 @@ class PulpcoreWorker:
+@@ -548,7 +553,6 @@ class PulpcoreWorker:
                      self.handle_available_tasks()
                      if self.shutdown_requested:
                          break
