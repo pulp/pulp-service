@@ -1,0 +1,80 @@
+From 040aa51983e712576127fc26618124261e30fe8e Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Mon, 21 Jul 2025 07:59:20 -0400
+Subject: [PATCH] added logging
+
+---
+ pulpcore/tasking/worker.py | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
+index dd61cd6ff..7491cb988 100644
+--- a/pulpcore/tasking/worker.py
++++ b/pulpcore/tasking/worker.py
+@@ -27,7 +27,7 @@ from pulpcore.constants import (
+ from pulpcore.metrics import init_otel_meter
+ from pulpcore.app.apps import pulp_plugin_configs
+ from pulpcore.app.models import Worker, Task, ApiAppStatus, ContentAppStatus
+-from pulpcore.app.util import PGAdvisoryLock, get_domain
++from pulpcore.app.util import PGAdvisoryLock, get_domain, get_artifact_url
+ from pulpcore.exceptions import AdvisoryLockError
+ 
+ from pulpcore.tasking.storage import WorkerDirectory
+@@ -145,11 +145,11 @@ class PulpcoreWorker:
+         if not created and worker.versions != self.versions:
+             worker.versions = self.versions
+             worker.save(update_fields=["versions"])
+-
++        _logger.info(f"{self.name} recorded heartbeat, {datetime.utcnow()}")
+         if created:
+             _logger.info(_("New worker '{name}' discovered").format(name=self.name))
+         elif worker.online is False:
+-            _logger.info(_("Worker '{name}' is back online.").format(name=self.name))
++            _logger.info(_("Worker '{name}' is back online, {d}").format(name=self.name, d=datetime.utcnow()))
+ 
+         worker.save_heartbeat()
+ 
+@@ -365,8 +365,9 @@ class PulpcoreWorker:
+     def sleep(self):
+         """Wait for signals on the wakeup channel while heart beating."""
+ 
+-        _logger.debug(_("Worker %s entering sleep state."), self.name)
++        _logger.info(_("Worker %s entering sleep state, %s"), self.name, datetime.utcnow())
+         while not self.shutdown_requested and not self.wakeup:
++
+             r, w, x = select.select(
+                 [self.sentinel, connection.connection], [], [], self.heartbeat_period.seconds
+             )
+@@ -381,7 +382,6 @@ class PulpcoreWorker:
+         """Call and supervise the task process while heart beating.
+ 
+         This function must only be called while holding the lock for that task."""
+-
+         self.cancel_task = False
+         self.task = task
+         task.worker = self.worker
+@@ -485,10 +485,13 @@ class PulpcoreWorker:
+         while keep_looping and not self.shutdown_requested:
+             try:
+                 with PGAdvisoryLock(TASK_UNBLOCKING_LOCK):
++                    _logger.info(f"{self.name} is unblocking tasks, {datetime.utcnow()}")
+                     keep_looping = self.unblock_tasks()
+             except AdvisoryLockError:
+                 keep_looping = True
++            _logger.info(f"{self.name} is looking for tasks to supervise, {datetime.utcnow()}")
+             for task in self.iter_tasks():
++                _logger.info(f"{self.name} found a task to supervise, {datetime.utcnow()}")
+                 keep_looping = True
+                 self.supervise_task(task)
+ 
+@@ -548,7 +551,6 @@ class PulpcoreWorker:
+                     self.handle_available_tasks()
+                     if self.shutdown_requested:
+                         break
+-                    # rest until notified to wakeup
+                     self.sleep()
+                 self.cursor.execute("UNLISTEN pulp_worker_wakeup")
+             self.cursor.execute("UNLISTEN pulp_worker_metrics_heartbeat")
+-- 
+2.50.0
+
