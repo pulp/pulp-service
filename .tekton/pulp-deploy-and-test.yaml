@@ -276,7 +276,6 @@ spec:
                 exit 1
               }
 
-              #sleep 5
               # Create a new volume that will be used as python modules path
               oc apply -f-<<EOF
               apiVersion: v1

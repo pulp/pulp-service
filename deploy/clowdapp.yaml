@@ -352,7 +352,7 @@ objects:
           httpGet:
             path: /api/pulp/api/v3/livez/
             port: 8000
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 120
           timeoutSeconds: 120
         terminationGracePeriodSeconds: 120
@@ -872,7 +872,7 @@ parameters:
     value: "500m"
   - name: PULP_API_MEMORY_REQUEST
     description: Amount of memory to request for API pods
-    value: "512Mi"
+    value: "256Mi"
   - name: PULP_CONTENT_MEMORY_REQUEST
     description: Amount of memory to request for Content pods
     value: "256Mi"
@@ -881,7 +881,7 @@ parameters:
     value: "1024Mi"
   - name: PULP_API_MEMORY_LIMIT
     description: Limit of memory use by API pods
-    value: "1Gi"
+    value: "512Mi"
   - name: PULP_CONTENT_MEMORY_LIMIT
     description: Limit of memory use by Content pods
     value: "512Mi"
