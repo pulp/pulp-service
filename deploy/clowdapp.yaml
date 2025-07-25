@@ -188,8 +188,7 @@ objects:
         wildcardPolicy: None
       EOF
 
-      # Generate bindings
-
+      ###### BINDINGS
       ## Download the templates
       TEMPLATES=(configuration partial_api_args requirements setup)
       for TEMPLATE in ${TEMPLATES[@]} ; do
@@ -197,8 +196,9 @@ objects:
       done
       kubectl create configmap templates $(printf -- '--from-file=%s.mustache ' "${TEMPLATES[@]}")
 
+      # It is not possible to create a ConfigMap to store the bindings because it exceeds
+      # the maximum CM size, so we will store them in a k8s volume
       PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_ostree pulp_file pulp_service)
-      #PACKAGES=(pulpcore pulp_rpm pulp_file pulp_gem)
       PULP_API_HOST=$(oc get routes pulp-api -ojsonpath='{.spec.host}')
       for PACKAGE in "${PACKAGES[@]}" ; do
       if [ "$PACKAGE" = "pulpcore" ]; then COMPONENT="core" ; else COMPONENT=${PACKAGE#"pulp_"} ; fi
@@ -274,6 +274,7 @@ objects:
                 name: templates
       EOF
       done
+      ###### END OF BINDINGS
 
 - apiVersion: v1
   kind: ConfigMap
@@ -344,14 +345,14 @@ objects:
           httpGet:
             path: /api/pulp/api/v3/livez/
             port: 8000
-          initialDelaySeconds: 3
+          initialDelaySeconds: 5
           periodSeconds: 60
           timeoutSeconds: 60
         livenessProbe:
           httpGet:
             path: /api/pulp/api/v3/livez/
             port: 8000
-          initialDelaySeconds: 3
+          initialDelaySeconds: 5
           periodSeconds: 120
           timeoutSeconds: 120
         terminationGracePeriodSeconds: 120

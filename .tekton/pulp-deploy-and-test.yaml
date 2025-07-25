@@ -277,8 +277,7 @@ spec:
               }
 
               #sleep 5
-
-              # Workaround to be able to mount the volume with the bindings
+              # Create a new volume that will be used as python modules path
               oc apply -f-<<EOF
               apiVersion: v1
               kind: PersistentVolumeClaim
@@ -292,10 +291,11 @@ spec:
                   requests:
                     storage: 2Gi
               EOF
+
+              # Disable clowder to be able to apply our configs
               oc_wrapper patch clowdapp pulp --type=merge -p '{"spec": {"disabled": true}}'
-              PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_ostree pulp_file pulp_service)
-              #PACKAGES=(pulpcore pulp_rpm pulp_file pulp_gem)
-              for PACKAGE in "${PACKAGES[@]}" ; do
+
+              # Update the deployment to mount each volume with the bindings and install it
               oc_wrapper patch deployment pulp-api --type=strategic -p "$(cat<<EOF
               {
                 "spec": {
@@ -303,15 +303,31 @@ spec:
                   "template": {
                     "spec": {
                       "volumes": [
-                        { "name": "bindings", "persistentVolumeClaim": { "claimName": "${PACKAGE//_/-}-bindings"}},
+                        { "name": "pulpcore-bindings", "persistentVolumeClaim": { "claimName": "pulpcore-bindings"}},
+                        { "name": "pulp-python-bindings", "persistentVolumeClaim": { "claimName": "pulp-python-bindings"}},
+                        { "name": "pulp-npm-bindings", "persistentVolumeClaim": { "claimName": "pulp-npm-bindings"}},
+                        { "name": "pulp-gem-bindings", "persistentVolumeClaim": { "claimName": "pulp-gem-bindings"}},
+                        { "name": "pulp-rpm-bindings", "persistentVolumeClaim": { "claimName": "pulp-rpm-bindings"}},
+                        { "name": "pulp-maven-bindings", "persistentVolumeClaim": { "claimName": "pulp-maven-bindings"}},
+                        { "name": "pulp-ostree-bindings", "persistentVolumeClaim": { "claimName": "pulp-ostree-bindings"}},
+                        { "name": "pulp-file-bindings", "persistentVolumeClaim": { "claimName": "pulp-file-bindings"}},
+                        { "name": "pulp-service-bindings", "persistentVolumeClaim": { "claimName": "pulp-service-bindings"}},
                         { "name": "python-path", "persistentVolumeClaim": { "claimName": "python-path"}}
                       ],
                       "containers": [
                         {
                           "name": "pulp-api",
                           "volumeMounts": [
-                            {"mountPath": "/data","name": "bindings"},
-                            {"mountPath": "/tmp/home/","name": "python-path"}
+                              {"mountPath": "/data/pulpcore","name": "pulpcore-bindings"},
+                              {"mountPath": "/data/python","name": "pulp-python-bindings"},
+                              {"mountPath": "/data/npm","name": "pulp-npm-bindings"},
+                              {"mountPath": "/data/gem","name": "pulp-gem-bindings"},
+                              {"mountPath": "/data/rpm","name": "pulp-rpm-bindings"},
+                              {"mountPath": "/data/maven","name": "pulp-maven-bindings"},
+                              {"mountPath": "/data/ostree","name": "pulp-ostree-bindings"},
+                              {"mountPath": "/data/file","name": "pulp-file-bindings"},
+                              {"mountPath": "/data/service","name": "pulp-service-bindings"},
+                              {"mountPath": "/tmp/home/","name": "python-path"}
                           ]
                         }
                       ]
@@ -322,7 +338,10 @@ spec:
               EOF
               )"
               oc_wrapper rollout status deployment/pulp-api --timeout=4m
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /data/pulp/"
+    
+              PACKAGES=(pulpcore python npm gem rpm maven ostree file service)
+              for PACKAGE in "${PACKAGES[@]}" ; do
+                cmd_prefix bash -c "HOME=/tmp/home pip3 install /data/${PACKAGE}/pulp"
               done
 
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
