@@ -146,6 +146,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0024-Added-call-to-self.beat-in-handle_available_tasks.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Added-call-to-self.beat-in-handle_available_tasks.patch
 
+COPY images/assets/patches/0025-Change-task-insertion-machinery.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0025-Change-task-insertion-machinery.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
