@@ -242,9 +242,6 @@ class CreateDomainView(APIView):
     Custom endpoint to create domains with service-specific logic.
     """
 
-    authentication_classes = []
-    permission_classes = []
-
     @extend_schema(
         request=DomainSerializer,
         description="Create a new domain for from S3 template domain, self-service path",
@@ -259,6 +256,15 @@ class CreateDomainView(APIView):
         
         # Prepare data with defaults from default domain if needed
         data = request.data.copy()
+        
+        # Check if the requested domain name already exists
+        domain_name = data.get('name')
+        if domain_name and Domain.objects.filter(name=domain_name).exists():
+            _logger.warning(f"Domain '{domain_name}' already exists")
+            return Response(
+                {"error": f"Domain '{domain_name}' already exists"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         # Always get storage settings from model domain (ignore user input)
         try:
