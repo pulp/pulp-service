@@ -242,9 +242,6 @@ class CreateDomainView(APIView):
     Custom endpoint to create domains with service-specific logic.
     """
 
-    authentication_classes = []
-    permission_classes = []
-
     @extend_schema(
         request=DomainSerializer,
         description="Create a new domain for from S3 template domain, self-service path",
