@@ -576,6 +576,8 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
+          - name: PULP_TASK_PROTECTION_TIME
+            value: ${PULP_TASK_PROTECTION_TIME}
 
     - name: migrate-db
       replicas: 1
@@ -937,3 +939,6 @@ parameters:
   - name: PULP_FEATURE_SERVICE_API_URL
     description: FeatureServices API URL to list the features from an owner
     value: "https://feature.stage.api.redhat.com/features/v1/featureStatus"
+  - name: PULP_TASK_PROTECTION_TIME
+    description: Set the time in minutes to purge tasks
+    value: "20160"
