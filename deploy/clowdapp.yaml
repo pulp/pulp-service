@@ -14,6 +14,7 @@ objects:
           protocols:
             http:
               endpoint: 0.0.0.0:10000
+        statsd:
       processors:
         batch:
         memory_limiter:
@@ -231,7 +232,7 @@ objects:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-api
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
+        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--statsd-host=localhost:8125', '--statsd-prefix=pulp-api.app', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
