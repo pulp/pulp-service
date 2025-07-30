@@ -18,7 +18,6 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
-from rest_framework.authentication import BasicAuthentication
 
 from pulpcore.plugin.viewsets import OperationPostponedResponse, SingleArtifactContentUploadViewSet
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet, LabelsMixin
@@ -27,7 +26,7 @@ from pulpcore.plugin.tasking import dispatch
 from pulpcore.app.models import Domain
 from pulpcore.app.serializers import DomainSerializer
 
-from pulp_service.app.authentication import RHServiceAccountCertAuthentication, JSONHeaderRemoteAuthentication
+from pulp_service.app.authentication import RHServiceAccountCertAuthentication
 from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.app.models import FeatureContentGuard
 from pulp_service.app.models import VulnerabilityReport as VulnReport
