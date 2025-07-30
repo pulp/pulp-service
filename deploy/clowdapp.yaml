@@ -285,6 +285,7 @@ objects:
             cpu: ${{PULP_API_CPU_REQUEST}}
             memory: ${{PULP_API_MEMORY_REQUEST}}
           limits:
+            cpu: ${{PULP_API_CPU_LIMIT}}
             memory: ${{PULP_API_MEMORY_LIMIT}}
         env:
           - name: PULP_OTEL_ENABLED
@@ -433,6 +434,7 @@ objects:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
             memory: ${{PULP_CONTENT_MEMORY_REQUEST}}
           limits:
+            cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
         env:
           - name: PULP_OTEL_ENABLED
@@ -531,6 +533,7 @@ objects:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
             memory: ${{PULP_WORKER_MEMORY_REQUEST}}
           limits:
+            cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
         env:
           - name: PULP_OTEL_ENABLED
