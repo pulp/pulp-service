@@ -27,7 +27,9 @@ from pulpcore.plugin.tasking import dispatch
 from pulpcore.app.models import Domain
 from pulpcore.app.serializers import DomainSerializer
 
-from pulp_service.app.authentication import RHServiceAccountCertAuthentication, JSONHeaderRemoteAuthentication
+
+from pulp_service.app.authentication import RHServiceAccountCertAuthentication
+
 from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.app.models import FeatureContentGuard
 from pulp_service.app.models import VulnerabilityReport as VulnReport
@@ -240,7 +242,7 @@ class RPMUploadViewSet(SingleArtifactContentUploadViewSet, LabelsMixin):
 
 
 class CreateDomainView(APIView):
-    authentication_classes = [BasicAuthentication, RHServiceAccountCertAuthentication, JSONHeaderRemoteAuthentication]
+
     permission_classes = [DomainBasedPermission]
     """
     Custom endpoint to create domains with service-specific logic.

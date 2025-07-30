@@ -82,7 +82,7 @@ class DomainBasedPermission(BasePermission):
                 return "domain_update"
             elif request.META['REQUEST_METHOD'] == 'DELETE':
                 return "domain_delete"
-        elif view_name == "create-domain":  # Your CreateDomainView endpoint
+        elif view_name == "create-domain" or view_name == "pulp_service.app.viewsets.CreateDomainView":
             return "domain_create"
         else:
             return "domain_operation"
