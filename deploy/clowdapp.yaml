@@ -576,6 +576,96 @@ objects:
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
 
+    - name: worker-auxiliary
+      replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: ['pulpcore-worker', '--auxiliary']
+        volumeMounts:
+          - name: secret-volume
+            mountPath: "/etc/pulp/keys"
+          - name: pulp-settings
+            mountPath: "/etc/pulp/settings.py"
+            subPath: "settings.py"
+        volumes:
+          - name: secret-volume
+            secret:
+              secretName: pulp-db-fields-encryption
+          - name: pulp-settings
+            secret:
+              secretName: pulp-settings
+        initContainers:
+          - name: wait-on-migrations
+            image: ${IMAGE}:${IMAGE_TAG}
+            command: [ "/bin/sh" ]
+            args:
+              - "-c"
+              - "/usr/bin/wait_on_postgres.py && /usr/bin/wait_on_database_migrations.sh"
+            inheritEnv: True
+        readinessProbe:
+          exec:
+            command:
+              - "/bin/true"
+          initialDelaySeconds: 10
+          periodSeconds: 25
+          timeoutSeconds: 20
+          failureThreshold: 5
+        terminationGracePeriodSeconds: 3660
+        sidecars:
+          - name: otel-collector
+            enabled: ${{PULP_WORKER_OTEL_COLLECTOR_SIDECAR_ENABLED}}
+        resources:
+          requests:
+            cpu: ${{PULP_WORKER_CPU_REQUEST}}
+            memory: ${{PULP_WORKER_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{PULP_WORKER_CPU_LIMIT}}
+            memory: ${{PULP_WORKER_MEMORY_LIMIT}}
+        env:
+          - name: PULP_OTEL_ENABLED
+            value: ${TELEMETRY_ENABLED}
+          - name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
+          - name: OTEL_TRACES_EXPORTER
+            value: "none"
+          - name: PULP_REDIS_PORT
+            value: "6379"
+          - name: SENTRY_DSN
+            valueFrom:
+              secretKeyRef:
+                name: pulp-glitchtip
+                key: dsn
+                optional: true
+          - name: PULP_API_ROOT
+            value: ${{PULP_API_ROOT}}
+          - name: PULP_DB_ENCRYPTION_KEY
+            value: ${{PULP_DB_ENCRYPTION_KEY}}
+          - name: PULP_CACHE_ENABLED
+            value: ${PULP_CACHE_ENABLED}
+          - name: PULP_STORAGES__default__OPTIONS__default_acl
+            value: ${{PULP_AWS_DEFAULT_ACL}}
+          - name: PULP_STORAGES__default__OPTIONS__signature_version
+            value: ${{PULP_AWS_S3_SIGNATURE_VERSION}}
+          - name: PULP_STORAGES__default__OPTIONS__addressing_style
+            value: ${{PULP_AWS_S3_ADDRESSING_STYLE}}
+          - name: PULP_STORAGES__default__BACKEND
+            value: ${{PULP_DEFAULT_FILE_STORAGE}}
+          - name: PULP_MEDIA_ROOT
+            value: ${{PULP_MEDIA_ROOT}}
+          - name: PULP_CONTENT_ORIGIN
+            value: ${{PULP_CONTENT_ORIGIN}}
+          - name: PULP_CONTENT_PATH_PREFIX
+            value: ${{PULP_CONTENT_PATH_PREFIX}}
+          - name: PULP_DOMAIN_ENABLED
+            value: ${PULP_DOMAIN_ENABLED}
+          - name: PULP_ALLOWED_CONTENT_CHECKSUMS
+            value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
+          - name: PULP_TASK_PROTECTION_TIME
+            value: ${PULP_TASK_PROTECTION_TIME}
+
+
     - name: migrate-db
       replicas: 1
       podSpec:
@@ -766,6 +856,9 @@ parameters:
     value: "0" # setting to 0 because we are using an ingress as a reverse proxy
   - name: PULP_WORKER_REPLICAS
     description: Number of pulp workers
+    value: "1"
+  - name: PULP_WORKER_AUXILIARY_REPLICAS
+    description: Number of pulp auxiliary workers
     value: "1"
   - name: PULP_CONTENT_REPLICAS
     description: Number of pulp content replicas
