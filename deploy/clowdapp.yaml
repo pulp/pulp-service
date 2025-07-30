@@ -877,13 +877,13 @@ parameters:
     value: "250m"
   - name: PULP_API_CPU_LIMIT
     description: Limit of CPU use by API pods
-    value: "1000m"
+    value: "8000m"
   - name: PULP_CONTENT_CPU_LIMIT
     description: Limit of CPU use by Content pods
-    value: "500m"
+    value: "8000m"
   - name: PULP_WORKER_CPU_LIMIT
     description: Limit of CPU use by Worker pods
-    value: "500m"
+    value: "8000m"
   - name: PULP_API_MEMORY_REQUEST
     description: Amount of memory to request for API pods
     value: "256Mi"
