@@ -240,7 +240,6 @@ class RPMUploadViewSet(SingleArtifactContentUploadViewSet, LabelsMixin):
 
 
 class CreateDomainView(APIView):
-    authentication_classes = [BasicAuthentication, RHServiceAccountCertAuthentication, JSONHeaderRemoteAuthentication]
     permission_classes = [DomainBasedPermission]
     """
     Custom endpoint to create domains with service-specific logic.
