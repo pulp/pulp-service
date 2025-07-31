@@ -108,7 +108,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "sum by (container) (kube_pod_container_info{container=~\"pulp-api|pulp-content|pulp-worker\"})",
+              "expr": "sum by (container) (kube_pod_container_info{container=~\"pulp-api|pulp-content|pulp-worker|pulp-worker-auxiliary\"})",
               "instant": false,
               "legendFormat": "__auto",
               "range": true,
@@ -2823,7 +2823,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker)/ \n| filter message like /Task completed/\n| stats count() as task_count",
+              "expression": "fields @logStream, @message\n| filter @logStream like /pulp-${cluster:text}_pulp-(worker|worker-auxiliary)/ \n| filter message like /Task completed/\n| stats count() as task_count",
               "id": "",
               "label": "",
               "logGroups": [
@@ -2847,7 +2847,7 @@ data:
             }
           ],
           "timeFrom": "now/d",
-          "title": "Successful tasks",
+          "title": "pulp-worker successful tasks ",
           "transformations": [
             {
               "id": "merge",
@@ -3055,7 +3055,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-(worker)/\n| filter message like /Starting task/\n| parse @message 'immediate: *,' as immediate\n| stats count(*) as task_count by bin(1h), immediate",
+              "expression": "fields @logStream, @message,  kubernetes.namespace_name | filter @logStream like /pulp-${cluster:text}_pulp-(worker|worker-auxiliary)/\n| filter message like /Starting task/\n| parse @message 'immediate: *,' as immediate\n| stats count(*) as task_count by bin(1h), immediate",
               "id": "",
               "label": "",
               "logGroups": [
@@ -3134,10 +3134,6 @@ data:
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
                   }
                 ]
               }
@@ -3146,7 +3142,7 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "pulp-api count(*)"
+                  "options": "count(*) pulp-api"
                 },
                 "properties": [
                   {
@@ -3158,12 +3154,44 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "pulp-worker count(*)"
+                  "options": "Total"
                 },
                 "properties": [
                   {
                     "id": "displayName",
                     "value": "Tasks executed by pulp-worker"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "count(*) pulp-worker"
+                },
+                "properties": []
+              },
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "Tasks executed by pulp-api",
+                      "Tasks executed by pulp-worker"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": true,
+                      "tooltip": false,
+                      "viz": true
+                    }
                   }
                 ]
               }
@@ -3197,7 +3225,7 @@ data:
                 "uid": "P1A97A9592CB7F392"
               },
               "dimensions": {},
-              "expression": "fields @logStream, @message, kubernetes.labels.pod as pod | filter @logStream like /pulp-${cluster:text}_pulp-(api|content|worker)/\n| filter message like /Task completed/\n| stats count(*) by bin(1h), pod\n\n\n\n",
+              "expression": "fields @logStream, @message, kubernetes.labels.pod as pod | filter @logStream like /pulp-${cluster:text}_pulp-(api|content|worker|worker-auxiliary)/\n| filter message like /Task completed/\n| stats count(*) by bin(1h), pod\n\n\n\n",
               "id": "",
               "label": "",
               "logGroups": [
@@ -3225,6 +3253,26 @@ data:
           ],
           "timeFrom": "now/d",
           "title": "Tasks per type of worker",
+          "transformations": [
+            {
+              "id": "calculateField",
+              "options": {
+                "cumulative": {
+                  "field": "count(*) pulp-worker",
+                  "reducer": "sum"
+                },
+                "mode": "reduceRow",
+                "reduce": {
+                  "include": [
+                    "count(*) pulp-worker",
+                    "count(*) pulp-worker-auxiliary"
+                  ],
+                  "reducer": "sum"
+                },
+                "replaceFields": false
+              }
+            }
+          ],
           "type": "timeseries"
         },
         {
@@ -3630,5 +3678,5 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 4
+      "version": 5
     }
