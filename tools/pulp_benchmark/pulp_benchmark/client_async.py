@@ -1,6 +1,7 @@
 # pulp_benchmark/client.py
 import asyncio
 import logging
+import ssl
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -21,19 +22,47 @@ async def send_request(session: aiohttp.ClientSession, url: str, timeout: int) -
         logging.error(f"Request failed: {e}")
     return 0
 
-async def run_concurrent_requests(url: str, timeout: int, max_workers: int) -> int:
+async def run_concurrent_requests(
+    url: str,
+    timeout: int,
+    max_workers: int,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    cert: Optional[str] = None,
+    key: Optional[str] = None,
+) -> int:
     """Runs concurrent requests using asyncio.gather."""
-    async with aiohttp.ClientSession() as session:
+    auth = aiohttp.BasicAuth(user, password) if user and password else None
+    ssl_context = None
+    if cert:
+        ssl_context = ssl.create_default_context(cafile=cert)
+        if key:
+            ssl_context.load_cert_chain(cert, key)
+    
+    async with aiohttp.ClientSession(auth=auth, connector=aiohttp.TCPConnector(ssl=ssl_context)) as session:
         tasks = [send_request(session, url, timeout) for _ in range(max_workers)]
         results = await asyncio.gather(*tasks)
         return sum(results)
 
-async def get_system_status(api_root: str):
+async def get_system_status(
+    api_root: str,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    cert: Optional[str] = None,
+    key: Optional[str] = None,
+):
     """Fetches and prints the system's worker status asynchronously."""
     logging.info("Fetching system status...")
     status_endpoint = f"{api_root}/pulp/api/v3/status/"
+    auth = aiohttp.BasicAuth(user, password) if user and password else None
+    ssl_context = None
+    if cert:
+        ssl_context = ssl.create_default_context(cafile=cert)
+        if key:
+            ssl_context.load_cert_chain(cert, key)
+
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(auth=auth, connector=aiohttp.TCPConnector(ssl=ssl_context)) as session:
             async with session.get(status_endpoint) as response:
                 response.raise_for_status()
                 status = await response.json()
