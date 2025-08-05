@@ -16,40 +16,29 @@ objects:
               endpoint: 0.0.0.0:10000
 
       processors:
-        filter/include_pulp_api:
+        filter/filter_pulp_api_request_duration:
           metrics:
-            # This OTTL expression will drop any metric that is *not* one of your histogram components.
-            # This is how you "include" only specific metrics in a pipeline.
-            metrics:
-            - 'not (MetricName == "pulp_api_request_duration_milliseconds_sum" or MetricName == "pulp_api_request_duration_milliseconds_count" or MetricName == "pulp_api_request_duration_milliseconds_bucket")'
+            metric:
+            - 'not (name == "api.request_duration")'
 
         filter/exclude_pulp_api:
           metrics:
-            # This OTTL expression will drop your histogram metrics from the main pipeline.
-            metrics:
-            - 'MetricName == "pulp_api_request_duration_milliseconds_sum" or MetricName == "pulp_api_request_duration_milliseconds_count" or MetricName == "pulp_api_request_duration_milliseconds_bucket"'
+            metric:
+            - 'name == "api.request_duration"'
 
         attributes/remove_worker_name:
           actions:
-          - key: worker_name
+          - key: worker.name
             action: delete
 
         interval/aggregate_metrics:
           interval: 30s
-
+        
         batch:
         
         memory_limiter:
-          check_interval: 1s
+          check_interval: 2s
           limit_mib: 200
-        
-        transform:
-          error_mode: ignore
-          metric_statements:
-            - context: metric
-              statements:
-                - set(description, "Duration of HTTP server requests.") where name == "http.server.duration"
-                - set(description, "Number of active HTTP server requests.") where name == "http.server.active_requests"
         
       exporters:
         prometheus:
@@ -69,19 +58,17 @@ objects:
             receivers: [otlp]
             processors: 
               - memory_limiter
-              - filter/include_pulp_api
-              - transform
+              - filter/filter_pulp_api_request_duration:
               - attributes/remove_worker_name
               - interval/aggregate_metrics
               - batch
             exporters: [prometheus]
         
-          metrics:
+          metrics/main:
             receivers: [otlp]
             processors: 
               - memory_limiter
               - filter/exclude_pulp_api
-              - transform
               - batch
             exporters: [prometheus]
 - apiVersion: v1
