@@ -62,19 +62,15 @@ objects:
           metrics/aggregation:
             receivers: [otlp]
             processors: 
-              - memory_limiter
-              - filter/filter_pulp_api_request_duration:
-              - attributes/remove_worker_name
-              - batch/api_aggregation
-              - groupbyattrs/api_aggregation
+            - memory_limiter
             exporters: [prometheus]
         
           metrics/main:
             receivers: [otlp]
             processors: 
-              - memory_limiter
-              - filter/exclude_pulp_api
-              - batch
+            - memory_limiter
+            - filter/exclude_pulp_api
+            - batch
             exporters: [prometheus]
 - apiVersion: v1
   kind: ConfigMap
