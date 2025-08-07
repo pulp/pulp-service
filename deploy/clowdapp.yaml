@@ -63,6 +63,9 @@ objects:
             receivers: [otlp]
             processors: 
             - memory_limiter
+            - filter/filter_pulp_api_request_duration
+            - attributes/remove_worker_name
+            - batch/api_aggregation
             exporters: [prometheus]
         
           metrics/main:
