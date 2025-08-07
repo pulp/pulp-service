@@ -16,6 +16,11 @@ objects:
               endpoint: 0.0.0.0:10000
 
       processors:
+
+        memory_limiter:
+          check_interval: 2s
+          limit_mib: 200
+
         filter/filter_pulp_api_request_duration:
           metrics:
             metric:
@@ -31,14 +36,14 @@ objects:
           - key: worker.name
             action: delete
 
-        interval/aggregate_metrics:
-          interval: 30s
-        
+        batch/api_aggregation:
+          timeout: 14s
+
+        groupbyattrs/api_aggregation:
+          keys:
+          - api.request_duration
+
         batch:
-        
-        memory_limiter:
-          check_interval: 2s
-          limit_mib: 200
         
       exporters:
         prometheus:
@@ -60,8 +65,8 @@ objects:
               - memory_limiter
               - filter/filter_pulp_api_request_duration:
               - attributes/remove_worker_name
-              - interval/aggregate_metrics
-              - batch
+              - batch/api_aggregation
+              - groupbyattrs/api_aggregation
             exporters: [prometheus]
         
           metrics/main:
