@@ -403,6 +403,8 @@ objects:
             value: ${PULP_USE_UVLOOP}
           - name: PULP_TEST_TASK_INGESTION 
             value: ${PULP_TEST_TASK_INGESTION}
+          - name: PYTHON_GROUP_UPLOADS
+            value: ${PYTHON_GROUP_UPLOADS}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -613,6 +615,8 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
+          - name: PYTHON_GROUP_UPLOADS
+            value: ${PYTHON_GROUP_UPLOADS}
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
@@ -702,6 +706,8 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
+          - name: PYTHON_GROUP_UPLOADS
+            value: ${PYTHON_GROUP_UPLOADS}
 
 
     - name: migrate-db
@@ -1070,3 +1076,6 @@ parameters:
   - name: PULP_TASK_PROTECTION_TIME
     description: Set the time in minutes to purge tasks
     value: "20160"
+  - name: PYTHON_GROUP_UPLOADS
+    description: Enable group uploads for Python packages
+    value: True
