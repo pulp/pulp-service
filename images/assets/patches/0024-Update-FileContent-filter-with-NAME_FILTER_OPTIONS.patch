@@ -1,0 +1,36 @@
+From ad0e5e22d1218ee09335dbde08c5ea5f6b3eeda1 Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Fri, 8 Aug 2025 09:29:18 -0300
+Subject: [PATCH] Update FileContent filter with NAME_FILTER_OPTIONS
+
+---
+ pulp_file/app/viewsets.py | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/pulp_file/app/viewsets.py b/pulp_file/app/viewsets.py
+index c45cad2b0..8f5605854 100644
+--- a/pulp_file/app/viewsets.py
++++ b/pulp_file/app/viewsets.py
+@@ -30,6 +30,7 @@ from pulpcore.plugin.viewsets import (
+     SingleArtifactContentUploadViewSet,
+     TaskGroupOperationResponse,
+ )
++from pulpcore.app.viewsets.base import NAME_FILTER_OPTIONS
+ 
+ from . import tasks
+ from .models import (
+@@ -59,7 +60,10 @@ class FileContentFilter(ContentFilter):
+ 
+     class Meta:
+         model = FileContent
+-        fields = ["relative_path", "sha256"]
++        fields = {
++            "relative_path": NAME_FILTER_OPTIONS,
++            "digest": ["exact"],
++        }
+ 
+ 
+ class FileContentViewSet(SingleArtifactContentUploadViewSet):
+-- 
+2.46.2
+
