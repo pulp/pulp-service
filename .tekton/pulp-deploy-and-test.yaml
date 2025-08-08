@@ -83,6 +83,10 @@ spec:
       type: string
       description: "Deploy frontend in the env or not"
       default: ""
+    - name: PULP_CREDENTIALS
+      type: string
+      default: pulp-python-bindings
+      description: "Secret for connecting to python-bindings domain in prod pulp."
 
   results:
     - name: ARTIFACTS_URL
@@ -204,6 +208,8 @@ spec:
           value: "$(tasks.reserve-namespace.results.NS)"
         - name: EPHEMERAL_ENV_PROVIDER_SECRET
           value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
+        - name: SNAPSHOT
+          value: "$(params.SNAPSHOT)"
       taskSpec:
         params:
           - name: BONFIRE_IMAGE
@@ -216,6 +222,9 @@ spec:
           - name: NS
             type: string
             description: Namespace name to deploy the application to
+          - name: PULP_CREDENTIALS
+            type: string
+            default: pulp-python-bindings
         steps:
           - name: functional-tests
             image: "$(params.BONFIRE_IMAGE)"
@@ -232,6 +241,18 @@ spec:
                     key: url
               - name: NS
                 value: $(params.NS)
+              - name: PULP_CLIENT_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: client-id
+              - name: PULP_CLIENT_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: client-secret
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
             script: |
               set -ex
 
@@ -257,12 +278,12 @@ spec:
               ### Adapted from ./.github/workflows/scripts/utils.sh
               # Run a command
               cmd_prefix() {
-                oc_wrapper exec "$POD" -- "$@"
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- "$@"
               }
 
               # Run a command, and pass STDIN
               cmd_stdin_prefix() {
-                oc_wrapper exec -i "$POD" -- "$@"
+                oc_wrapper exec -c pulp-api -i deployment/pulp-api -- "$@"
               }
               ### END Adapted from ./.github/workflows/scripts/utils.sh
 
@@ -276,18 +297,97 @@ spec:
                 exit 1
               }
 
+              # Create a new volume that will be used as python modules path
+              oc apply -f-<<EOF
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: python-path
+              spec:
+                storageClassName: gp3
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 2Gi
+              EOF
+
+              # Disable clowder to be able to apply our configs
+              oc_wrapper patch clowdapp pulp --type=merge -p '{"spec": {"disabled": true}}'
+
+              # Update the deployment to mount each volume with the bindings and install it
+              oc_wrapper patch deployment pulp-api --type=strategic -p "$(cat<<EOF
+              {
+                "spec": {
+                  "strategy": { "rollingUpdate": null, "type": "Recreate" },
+                  "template": { 
+                    "spec": {
+                      "volumes": [  
+                        { "name": "bindings", "persistentVolumeClaim": { "claimName": "bindings"}},
+                        { "name": "python-path", "persistentVolumeClaim": { "claimName": "python-path"}}
+                      ],
+                      "containers": [
+                        {
+                          "name": "pulp-api",
+                          "volumeMounts": [
+                            {"mountPath": "/data","name": "bindings"},
+                            {"mountPath": "/tmp/home/","name": "python-path"}
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              EOF
+              )"
+              oc_wrapper rollout status deployment/pulp-api --timeout=4m
+
+              ## [WIP - move this to the end after finishing the tests] Push the api.json docs to Pulp
+              # GET TOKEN
+              PULP_TOKEN=$(curl -XPOST -H 'content-type: application/x-www-form-urlencoded' -u "${PULP_CLIENT_ID}:${PULP_CLIENT_SECRET}" https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token/ -d 'grant_type=client_credentials&scope=api.console' |python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+
+              # GET FILE REPO
+              PULP_DOMAIN="python-bindings"
+              PULP_FILE_REPO=$(curl -s -H "Authorization: Bearer $PULP_TOKEN" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/repositories/file/file/?name=python-bindings|python3 -c "import json,sys;print(json.load(sys.stdin)['results'][0]['pulp_href'])")
+              
+              # GET CURRENT POSTN AND INCREMENT IT
+              CUR_DATE=$(date +%Y%m%d)
+              #postN=$(curl -sH "Authorization: Bearer $PULP_TOKEN" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/?relative_path__contains="pulpcore-$CUR_DATE" |python3 -c "import json,sys;results=json.load(sys.stdin)['results'];print(len(results)))
+              #postN=$((postN + 1))
+              postN=1
+
+              # GET COMMIT HASH
+              export short_commit_sha=`python3 <<EOF
+              import json,os
+              snapshot=os.getenv("SNAPSHOT", "")
+              snapshotComponent=json.loads(snapshot)['components'][0]
+              commit_sha=snapshotComponent['source']['git']['revision'].removeprefix('sha256:')
+              print(commit_sha[:7])
+              EOF`
+
+              # UPLOAD FILES TO PULP
+              PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service)
+              for PACKAGE in "${PACKAGES[@]}" ; do
+                cmd_prefix bash -c "curl -XPOST -H \"Authorization: Bearer $PULP_TOKEN\" -F \"file=@/data/api-${PACKAGE//_/-}.json\" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/  -F \"relative_path=${PACKAGE}-${CUR_DATE}.${postN}+${short_commit_sha}\" -F \"repository=${PULP_FILE_REPO}\""
+              done
+              ## End of api.json docs pushing to pulp instructions
+
+              # INSTALL CLIENTS
+              PACKAGES=(pulpcore pulp-python pulp-npm pulp-gem pulp-rpm pulp-maven pulp-file pulp-service) 
+              for PACKAGE in "${PACKAGES[@]}" ; do
+                cmd_prefix bash -c "HOME=/tmp/home pip3 install /data/${PACKAGE}"
+              done
+
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pulp-smash@git+https://github.com/pulp/pulp-smash.git@2ded6671e0f32c51e70681467199e8a195f7f5fe"
-              cmd_prefix git clone https://github.com/pulp/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_ostree-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_maven-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_npm-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_gem-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_python-client"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install /tmp/home/pulp-openapi-scratch-builds/pulp_service-client"
+
+              cat<<EOF > __tmp_init__.py
+              from pkgutil import extend_path
+              __path__ = extend_path(__path__, __name__)
+              EOF
+              cat __tmp_init__.py | cmd_stdin_prefix bash -c "cat > /tmp/home/.local/lib/python3.9/site-packages/pulpcore/__init__.py"
+              cat __tmp_init__.py | cmd_stdin_prefix bash -c "cat > /tmp/home/.local/lib/python3.9/site-packages/pulpcore/client/__init__.py"
 
               cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
               cat << EOF >> pulp-smash.json
@@ -357,9 +457,6 @@ spec:
               cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulpcore.tests.functional -m 'parallel' -n 8 -k 'test_jq_header_remote_auth' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
               ### END Adapted from ./.github/workflows/scripts/script.sh
-
-              # cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_ostree.tests.functional -m parallel -n 16 --junitxml=/tmp/home/junit-pulp-parallel.xml" || debug_and_fail
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_ostree.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
               # Run pulp_maven functional tests
               cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.9/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_maven.tests.functional.api.test_download_content --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
