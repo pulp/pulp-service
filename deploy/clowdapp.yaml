@@ -615,8 +615,6 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
-          - name: PYTHON_GROUP_UPLOADS
-            value: ${PYTHON_GROUP_UPLOADS}
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
@@ -706,8 +704,6 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
-          - name: PYTHON_GROUP_UPLOADS
-            value: ${PYTHON_GROUP_UPLOADS}
 
 
     - name: migrate-db
