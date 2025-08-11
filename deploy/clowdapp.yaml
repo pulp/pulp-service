@@ -714,7 +714,7 @@ objects:
             metadata:
               serverAddress: http://prometheus-app-sre.openshift-customer-monitoring.svc.cluster.local:9090
               metricName: pulp_tasks_unblocked_queue
-              query: pulp_tasks_unblocked_queue{namespace="pulp-${autoscaler-cluster}"}
+              query: pulp_tasks_unblocked_queue{namespace="pulp-${ENV_NAME}"}
               threshold: '5'
             metricType: Value
         advanced:
