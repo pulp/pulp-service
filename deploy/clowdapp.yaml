@@ -704,6 +704,33 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
+      autoScaler:
+        minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
+        maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
+        pollingInterval: 10
+        # externalHPA: true
+        triggers:
+          - type: prometheus
+            metadata:
+              serverAddress: http://prometheus-app-sre.openshift-customer-monitoring.svc.cluster.local:9090
+              metricName: pulp_tasks_unblocked_queue
+              query: pulp_tasks_unblocked_queue{namespace="pulp-${autoscaler-cluster}"}
+              threshold: '5'
+            metricType: Value
+        advanced:
+          horizontalPodAutoscalerConfig:
+            behavior:
+              scaleDown:
+                stabilizationWindowSeconds: 300
+                policies:
+                  - type: Pods
+                    value: 2
+                    periodSeconds: 60
+              scaleUp:
+                policies:
+                  - type: Pods
+                    value: 5
+                    periodSeconds: 30
 
 
     - name: migrate-db
@@ -900,6 +927,12 @@ parameters:
   - name: PULP_WORKER_AUXILIARY_REPLICAS
     description: Number of pulp auxiliary workers
     value: "1"
+  - name: PULP_WORKER_MIN_REPLICA_COUNT
+    description: Minimal number of pulp auxiliary workers
+    value: "1"
+  - name: PULP_WORKER_MAX_REPLICA_COUNT
+    description: Maximum number of pulp auxiliary workers
+    value: "20"
   - name: PULP_CONTENT_REPLICAS
     description: Number of pulp content replicas
     value: "1"
