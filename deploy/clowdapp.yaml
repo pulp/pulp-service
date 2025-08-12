@@ -1105,6 +1105,6 @@ parameters:
   - name: PULP_TASK_PROTECTION_TIME
     description: Set the time in minutes to purge tasks
     value: "20160"
-  - name: PYTHON_GROUP_UPLOADS
+  - name: PULP_PYTHON_GROUP_UPLOADS
     description: Enable group uploads for Python packages
     value: "true"
