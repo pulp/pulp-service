@@ -403,8 +403,8 @@ objects:
             value: ${PULP_USE_UVLOOP}
           - name: PULP_TEST_TASK_INGESTION 
             value: ${PULP_TEST_TASK_INGESTION}
-          - name: PYTHON_GROUP_UPLOADS
-            value: ${PYTHON_GROUP_UPLOADS}
+          - name: PULP_PYTHON_GROUP_UPLOADS
+            value: ${PULP_PYTHON_GROUP_UPLOADS}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -1105,6 +1105,6 @@ parameters:
   - name: PULP_TASK_PROTECTION_TIME
     description: Set the time in minutes to purge tasks
     value: "20160"
-  - name: PYTHON_GROUP_UPLOADS
+  - name: PULP_PYTHON_GROUP_UPLOADS
     description: Enable group uploads for Python packages
     value: "true"
