@@ -1107,4 +1107,4 @@ parameters:
     value: "20160"
   - name: PULP_PYTHON_GROUP_UPLOADS
     description: Enable group uploads for Python packages
-    value: "false"
+    value: "true"
