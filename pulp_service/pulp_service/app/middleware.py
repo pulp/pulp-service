@@ -66,15 +66,6 @@ class ProfilerMiddleware(MiddlewareMixin):
         return response
 
 
-class TaskProfilerMiddleware(MiddlewareMixin):
-    def process_view(self, request, callback, callback_args, callback_kwargs):
-        if 'HTTP_X_TASK_DIAGNOSTICS' in request.META:
-            x_task_diagnostics_var.set(request.META['HTTP_X_TASK_DIAGNOSTICS'])
-
-    def process_response(self, request, response):
-        x_task_diagnostics_var.set(None)
-        return response
-
 class OCIStorageMiddleware(MiddlewareMixin):
     def process_view(self, request, callback, callback_args, callback_kwargs):
         # Set the repository name in a contextvar
