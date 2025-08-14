@@ -615,6 +615,8 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
+          - name: PULP_TASK_DIAGNOSTICS
+            value: ${{PULP_TASK_DIAGNOSTICS}}
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
@@ -704,6 +706,8 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_TASK_PROTECTION_TIME
             value: ${PULP_TASK_PROTECTION_TIME}
+          - name: PULP_TASK_DIAGNOSTICS
+            value: ${{PULP_TASK_DIAGNOSTICS}}
       autoScaler:
         minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
         maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
@@ -1076,7 +1080,7 @@ parameters:
     value: "/api/pulp/assets/"
   - name: PULP_MIDDLEWARE
     description: List of Middleware
-    value: "@merge ['pulp_service.app.middleware.TaskProfilerMiddleware', 'pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.OCIStorageMiddleware', 'pulp_service.app.middleware.RhEdgeHostMiddleware']"
+    value: "@merge ['pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.OCIStorageMiddleware', 'pulp_service.app.middleware.RhEdgeHostMiddleware']"
   - name: PULP_PYPI_API_HOSTNAME
     description: The hostname used to form the distribution's `base_url`.
     value: "http://pulp-content:8000"
@@ -1108,3 +1112,6 @@ parameters:
   - name: PULP_PYTHON_GROUP_UPLOADS
     description: Enable group uploads for Python packages
     value: "true"
+  - name: PULP_TASK_DIAGNOSTICS
+    description: List of profilers available for task diagnostics
+    value: "['memory', 'memray', 'pyinstrument']"
