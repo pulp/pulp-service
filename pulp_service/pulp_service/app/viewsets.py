@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
@@ -215,6 +216,32 @@ class TaskIngestionDispatcherView(APIView):
             dispatch(
                 'pulp_service.app.tasks.util.no_op_task',
                 exclusive_resources=[str(uuid4())]
+            )
+                
+            task_count = task_count + 1
+
+        return Response({"tasks_executed": task_count})
+
+
+class TaskIngestionRandomResourceLockDispatcherView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request=None, timeout=25):
+        if not settings.TEST_TASK_INGESTION:
+            raise PermissionError("Access denied.")
+
+
+        exclusive_resources_list = [str(uuid4()) for _ in range(3)]
+
+        task_count = 0
+        start_time = datetime.now()
+        timeout = timedelta(seconds=timeout)
+
+        while datetime.now() < start_time + timeout:
+            dispatch(
+                'pulp_service.app.tasks.util.no_op_task',
+                exclusive_resources=[random.choice(exclusive_resources_list)]
             )
                 
             task_count = task_count + 1
