@@ -87,6 +87,21 @@ spec:
       type: string
       default: pulp-python-bindings
       description: "Secret for connecting to python-bindings domain in prod pulp."
+    - name: PULP_BINDINGS_COMPONENTS
+      type: string
+      description: space-separated list of Pulp components to generate the bindings
+      default: "pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service"
+    - name: BINDINGS_TEMPLATES
+      type: string
+      description: space-separated list of openapi-generator mustache template files
+      default: "configuration partial_api_args requirements setup"
+    - name: TEMPLATE_VERSION
+      type: string
+      default: "v7.10.0"
+    - name: PYPI_API_TOKEN
+      type: string
+      default: pypi-token
+      description: "Secret with the token to push bindings to PyPI"
 
   results:
     - name: ARTIFACTS_URL
@@ -244,6 +259,8 @@ spec:
                     key: url
               - name: NS
                 value: $(params.NS)
+              - name: BINDINGS_TEMPLATES
+                value: $(params.BINDINGS_TEMPLATES)
               - name: TEMPLATE_LANG
                 value: "python"
               - name: TEMPLATE_VERSION
@@ -257,15 +274,14 @@ spec:
                 export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
               fi
               echo "Namespace is $NS"
-              TEMPLATES=(configuration partial_api_args requirements setup)
-              for TEMPLATE in ${TEMPLATES[@]} ; do
+              for TEMPLATE in $BINDINGS_TEMPLATES ; do
                 curl -s -O https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/${TEMPLATE_LANG}/${TEMPLATE_VERSION}/${TEMPLATE}.mustache
                 if [ $? -ne 0 ]; then
                   echo "Error: Failed to download template ${TEMPLATE}.mustache"
                   exit 1
                 fi
               done
-              oc_wrapper create configmap templates $(printf -- '--from-file=%s.mustache ' "${TEMPLATES[@]}")
+              oc_wrapper create configmap templates $(printf -- '--from-file=%s.mustache ' $BINDINGS_TEMPLATES)
           - name: create-bindings-pvc
             image: "$(params.BONFIRE_IMAGE)"
             env:
@@ -329,6 +345,8 @@ spec:
                 value: $(params.BINDINGS_PVC)
               - name: TEMPLATE_VERSION
                 value: $(params.TEMPLATE_VERSION)
+              - name: PULP_BINDINGS_COMPONENTS
+                value: $(params.PULP_BINDINGS_COMPONENTS)
             script: |
               set -ex
               login.sh
@@ -339,9 +357,8 @@ spec:
               fi
               echo "Namespace is $NS"
 
-              PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service)
               PULP_API_HOST=$(oc_wrapper get routes pulp-api -ojsonpath='{.spec.host}')
-              for PACKAGE in "${PACKAGES[@]}" ; do
+              for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
               if [ "$PACKAGE" = "pulpcore" ]; then COMPONENT="core" ; else COMPONENT=${PACKAGE#"pulp_"} ; fi
               oc_wrapper apply -f-<<EOF
               apiVersion: batch/v1
@@ -414,8 +431,8 @@ spec:
               done
 
               # make sure all jobs finished before proceeding to the next step
-              PACKAGES=(pulpcore pulp-python pulp-npm pulp-gem pulp-rpm pulp-maven pulp-file pulp-service)
-              for PACKAGE in "${PACKAGES[@]}" ; do
+              PULP_BINDINGS_COMPONENTS=`echo $PULP_BINDINGS_COMPONENTS|tr '_' '-'`
+              for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
               oc_wrapper wait --for=condition=complete --timeout=600s job/${PACKAGE}-bindings
               done
 
@@ -567,6 +584,8 @@ spec:
                     key: url
               - name: NS
                 value: $(params.NS)
+              - name: PULP_BINDINGS_COMPONENTS
+                value: $(params.PULP_BINDINGS_COMPONENTS)
             script: |
               set -ex
 
@@ -585,8 +604,8 @@ spec:
               }
 
               # INSTALL CLIENTS
-              PACKAGES=(pulpcore pulp-python pulp-npm pulp-gem pulp-rpm pulp-maven pulp-file pulp-service) 
-              for PACKAGE in "${PACKAGES[@]}" ; do
+              PULP_BINDINGS_COMPONENTS=`echo $PULP_BINDINGS_COMPONENTS|tr '_' '-'`
+              for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
                 oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "HOME=/tmp/home pip3 install /data/${PACKAGE}"
               done
 
@@ -866,6 +885,8 @@ spec:
                 value: $(params.NS)
               - name: PULP_DOMAIN
                 value: $(params.PULP_DOMAIN)
+              - name: PULP_BINDINGS_COMPONENTS
+                value: $(params.PULP_BINDINGS_COMPONENTS)
             script: |
               set -ex
               login.sh
@@ -884,7 +905,219 @@ spec:
               PULP_FILE_REPO=$(cat /workspace/file_repo)
               
               # UPLOAD FILES TO PULP
-              PACKAGES=(pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service)
-              for PACKAGE in "${PACKAGES[@]}" ; do
+              for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
                 oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "curl -s -XPOST -H \"Authorization: Bearer $PULP_TOKEN\" -F \"file=@/data/api-${PACKAGE//_/-}.json\" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/  -F \"relative_path=${PACKAGE}-${CUR_DATE}.${POSTN}+${SHORT_COMMIT_SHA}\" -F \"repository=${PULP_FILE_REPO}\""
+              done
+
+    - name: publish-bindings-to-pypi
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["push"]
+      params:
+        - name: BONFIRE_IMAGE
+          value: "$(params.BONFIRE_IMAGE)"
+        - name: SNAPSHOT
+          value: "$(params.SNAPSHOT)"
+      runAfter:
+        - test-metadata
+      taskSpec:
+        params:
+          - name: BONFIRE_IMAGE
+            type: string
+            description: The container Bonfire image to use for the tekton tasks
+            default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
+          - name: PULP_CREDENTIALS
+            type: string
+            default: pulp-python-bindings
+          - name: PULP_DOMAIN
+            type: string
+            default: python-bindings
+        steps:
+          - name: get-pulp-token
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: PULP_CLIENT_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: client-id
+              - name: PULP_CLIENT_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: client-secret
+            script: |
+              curl -s -XPOST -H 'content-type: application/x-www-form-urlencoded' -u "${PULP_CLIENT_ID}:${PULP_CLIENT_SECRET}" https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token/ -d 'grant_type=client_credentials&scope=api.console' |python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])" > /workspace/token
+
+          - name: get-commit-hash
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              #!/usr/bin/env python3
+              import json,os,requests
+
+              # get the PR of the commit
+              snapshot=os.getenv("SNAPSHOT", "")
+              snapshot_component=json.loads(snapshot)['components'][0]
+              commit_hash_after_merge=snapshot_component['source']['git']['revision'].removeprefix('sha256:')
+              gh_pulls_url=f"https://api.github.com/repos/pulp/pulp-service/commits/{commit_hash_after_merge}/pulls"
+              response = requests.get(gh_pulls_url)
+              pr=response.json()[-1]['number']
+
+              # get the "original" (before merge) commit - this is the commit also used in api.json file name
+              gh_commit_from_pr_url=f"https://api.github.com/repos/pulp/pulp-service/pulls/{pr}/commits"
+              response = requests.get(gh_commit_from_pr_url)
+              if response.status_code != 200:
+                sys.exit(1)
+              with open("/workspace/commit_sha", "w") as file:
+                commit_sha = response.json()[-1]['sha'][:7] 
+                print(commit_sha)
+                file.write(commit_sha + "\n")
+
+          - name: get-the-list-of-files-to-download-from-pulp
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: PULP_DOMAIN
+                value: $(params.PULP_DOMAIN)
+              - name: PULP_BINDINGS_COMPONENTS
+                value: $(params.PULP_BINDINGS_COMPONENTS)
+            script: |
+              #!/usr/bin/env python3
+              import requests, os, sys
+              with open("/workspace/commit_sha") as file:
+                commit_sha = file.read().strip()
+                print(commit_sha)
+
+              with open("/workspace/token", "r") as file:
+                token = file.read().strip()
+
+              pulp_domain=os.getenv("PULP_DOMAIN","")
+              components = os.getenv("PULP_BINDINGS_COMPONENTS","")
+              headers = {"Authorization": f"Bearer {token}"}
+              with open("/workspace/list-of-api.json","w") as file:
+                for component in components.split(" "):
+                  files_url = f'https://console.redhat.com/api/pulp/{pulp_domain}/api/v3/content/file/files/?relative_path__regex={component}-.*{commit_sha}'
+                  try:
+                    response = requests.get(url=files_url,headers=headers)
+                    response.raise_for_status()
+                  except requests.exceptions.HTTPError as err:
+                    print(err)
+                    sys.exit(1)
+                  results = response.json()['results']
+                  print(results)
+                  relative_path = results[0]['relative_path']
+                  print(relative_path)
+                  file.write(relative_path + "\n")
+
+          - name: download-api-json-files-from-pulp
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: PULP_PROD_FILE_DISTRIBUTION_URL
+                value: "https://cert.console.redhat.com/api/pulp-content/python-bindings/python-bindings/"
+              - name: PULP_DOMAIN
+                value: $(params.PULP_DOMAIN)
+            script: |
+              mkdir -p /workspace/api-json-files ; cd $_
+              while read FILE ; do
+                curl -sLO -H "Authorization: Bearer $(cat /workspace/token)" https://cert.console.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
+                if [ $? -ne 0 ]; then
+                  echo "Error: Failed to download ${FILE} from Pulp"
+                  exit 1
+                fi
+              done < /workspace/list-of-api.json
+
+          - name: get-latest-version-from-pypi
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              #!/usr/bin/env python3
+              import requests
+              # get the latest pypi client version based on crc.pulpcore.client package
+              pypi_url = f"https://pypi.org/pypi/crc.pulpcore.client/json"
+              response = requests.get(pypi_url)
+              with open("/workspace/latest-version-from-pypi","w") as file:
+                latest_version = response.json()['info']['version']
+                print(latest_version)
+                file.write(latest_version + "\n")
+
+          - name: download-the-templates
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: BINDINGS_TEMPLATES
+                value: $(params.BINDINGS_TEMPLATES)
+              - name: TEMPLATE_LANG
+                value: python
+              - name: TEMPLATE_VERSION
+                value: $(params.TEMPLATE_VERSION)
+            script: |
+              mkdir -p /workspace/templates ; cd $_
+              for TEMPLATE in $BINDINGS_TEMPLATES ; do
+                curl -s -LO https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/${TEMPLATE_LANG}/${TEMPLATE_VERSION}/${TEMPLATE}.mustache
+                if [ $? -ne 0 ]; then
+                  echo "Error: Failed to download template ${TEMPLATE}.mustache"
+                  exit 1
+                fi
+              done
+
+          - name: generate-bindings
+            image: docker.io/openapitools/openapi-generator-cli:$(params.TEMPLATE_VERSION)
+            env:
+              - name: PULP_BINDINGS_COMPONENTS
+                value: $(params.PULP_BINDINGS_COMPONENTS)
+            script: |
+              #!/bin/bash
+              set -ex
+              today=$(date +%Y%m%d)
+              latest_version_date=$(awk -F. '{print $1}' /workspace/latest-version-from-pypi)
+              latest_version_postN=$(awk -F. '{print $2}' /workspace/latest-version-from-pypi)
+              if [ "$latest_version_date" -eq "$today" ] ; then postN=$((latest_version_postN + 1)) ; else postN=1 ; fi
+              package_version="${today}.${postN}"
+              echo $package_version > /workspace/package_version
+
+              cat<<EOF>/tmp/__tmp_init__.py
+              from pkgutil import extend_path
+              __path__ = extend_path(__path__, __name__)
+              EOF
+
+              mkdir -p /workspace/bindings/
+              for component in $PULP_BINDINGS_COMPONENTS ; do 
+                package_name="crc-${component}-client"
+                api_file=$(grep $component /workspace/list-of-api.json)
+                /usr/local/bin/docker-entrypoint.sh generate \
+                  -i /workspace/api-json-files/$api_file \
+                  -g python \
+                  -o /workspace/bindings/$component \
+                  --additional-properties=packageName=${package_name},projectName=${package_name},packageVersion=${package_version},domainEnabled=true \
+                  -t /workspace/templates \
+                  --skip-validate-spec \
+                  --strict-spec=false
+
+                cp /tmp/__tmp_init__.py /workspace/bindings/$component/__init__.py
+                cp /tmp/__tmp_init__.py /workspace/bindings/$component/$package_name/__init__.py
+              done
+
+          - name: publish-bindings
+            image: docker.io/library/python:3.11-slim
+            env:
+              - name: PULP_BINDINGS_COMPONENTS
+                value: $(params.PULP_BINDINGS_COMPONENTS)
+              - name: PYPI_API_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PYPI_API_TOKEN)
+                    key: token
+            script: |
+              set -e
+              PKG_VERSION=$(cat /workspace/package_version)
+              pip install build packaging twine wheel
+              for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
+                python -m build /workspace/bindings/${PACKAGE}
+                twine check /workspace/bindings/${PACKAGE}/dist/*
+
+                twine upload --skip-existing -u __token__ -p "${PYPI_API_TOKEN}" /workspace/bindings/${PACKAGE}/dist/*
               done
