@@ -1,5 +1,5 @@
 FROM registry.access.redhat.com/ubi9/ubi
-ARG PYTHON_VERSION=3.9
+ARG PYTHON_VERSION=3.11
 
 ENV PYTHONUNBUFFERED=0
 ENV DJANGO_SETTINGS_MODULE=pulpcore.app.settings
@@ -130,9 +130,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 
 COPY images/assets/patches/0016-Fix-pulp_content_origin_with_prefix-fixture.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0016-Fix-pulp_content_origin_with_prefix-fixture.patch
-
-COPY images/assets/patches/0017-Fix-distribution.base_url-in-tests.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0017-Fix-distribution.base_url-in-tests.patch
 
 COPY images/assets/patches/0018-Re-root-the-registry-API-at-api-pulp-v2.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0018-Re-root-the-registry-API-at-api-pulp-v2.patch

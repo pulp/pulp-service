@@ -19,9 +19,9 @@ def service_bindings(_api_client_set, bindings_cfg):
 
 
 @pytest.fixture(scope="session")
-def vuln_report_api(service_bindings):
+def vuln_report_service_api(service_bindings):
     """Vulnerability Report API fixture."""
-    return service_bindings.VulnReportApi
+    return service_bindings.VulnReportServiceApi
 
 
 @pytest.fixture(scope="session")

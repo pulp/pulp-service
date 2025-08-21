@@ -168,7 +168,7 @@ class TaskViewSet(TaskViewSet):
 
 class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
 
-    endpoint_name = "vuln_report"
+    endpoint_name = "vuln_report_service"
     queryset = VulnReport.objects.all()
     serializer_class = VulnerabilityReportSerializer
 
