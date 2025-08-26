@@ -1006,6 +1006,9 @@ parameters:
   - name: OTEL_COLLECTOR_MEMORY_LIMIT
     description: Limit of memory use by OpenTelemetry Collector container
     value: "1024Mi"
+  - name: OTEL_PYTHON_EXCLUDED_URLS
+    description: RegEx used to exclude URLs from the OTEL metrics system
+    value: ".*livez,.*status"
   - name: DB_SECRET_NAME
     description: Name of the secret with external database information for the operator.
     value: "pulp-external-database"
