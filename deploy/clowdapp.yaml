@@ -335,6 +335,8 @@ objects:
             value: ${OTEL_METRIC_EXPORT_TIMEOUT}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
+          - name: OTEL_PYTHON_EXCLUDED_URLS
+            value: ${{OTEL_PYTHON_EXCLUDED_URLS}}
           - name: PULP_REDIS_PORT
             value: "6379"
           - name: SENTRY_DSN
