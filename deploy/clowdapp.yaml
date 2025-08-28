@@ -338,7 +338,7 @@ objects:
           - name: OTEL_PYTHON_EXCLUDED_URLS
             value: ${{OTEL_PYTHON_EXCLUDED_URLS}}
           - name: PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS
-            value: ${{PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS}}
+            value: ${PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS}
           - name: PULP_REDIS_PORT
             value: "6379"
           - name: SENTRY_DSN
@@ -1015,7 +1015,7 @@ parameters:
     value: ".*livez,.*status"
   - name: PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS
     description: A list of float values for API request duration bucket boundaries.
-    value: "'100.0', '250.0', '500.0', '1000.0', '2500.0', '5000.0'"
+    value: "[100.0,250.0,500.0,1000.0,2500.0,5000.0]"
   - name: DB_SECRET_NAME
     description: Name of the secret with external database information for the operator.
     value: "pulp-external-database"
