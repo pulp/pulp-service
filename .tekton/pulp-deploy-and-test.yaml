@@ -1092,13 +1092,13 @@ spec:
                   -i /workspace/api-json-files/$api_file \
                   -g python \
                   -o /workspace/bindings/$component \
-                  --additional-properties=packageName=${package_name},projectName=${package_name},packageVersion=${package_version},domainEnabled=true \
+                  --additional-properties=packageName=pulpcore.client.${component},projectName=${package_name},packageVersion=${package_version},domainEnabled=true \
                   -t /workspace/templates \
                   --skip-validate-spec \
                   --strict-spec=false
 
-                cp /tmp/__tmp_init__.py /workspace/bindings/$component/__init__.py
-                cp /tmp/__tmp_init__.py /workspace/bindings/$component/$package_name/__init__.py
+                cp /tmp/__tmp_init__.py /workspace/bindings/$component/pulpcore/__init__.py
+                cp /tmp/__tmp_init__.py /workspace/bindings/$component/pulpcore/client/__init__.py
               done
 
           - name: publish-bindings
