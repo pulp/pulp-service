@@ -1102,7 +1102,7 @@ spec:
               done
 
           - name: publish-bindings
-            image: docker.io/library/python:3.11-slim
+            image: docker.io/library/python:3.13-slim
             env:
               - name: PULP_BINDINGS_COMPONENTS
                 value: $(params.PULP_BINDINGS_COMPONENTS)
