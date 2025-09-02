@@ -266,7 +266,7 @@ objects:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-api
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
+        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--max-requests', '${PULP_API_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '{$PULP_API_GUNICORN_MAX_REQUESTS_JITTER}', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -1083,6 +1083,12 @@ parameters:
   - name: PULP_API_GUNICORN_WORKERS
     description: Number of gunicorn workers in the API pods
     value: "1"
+  - name: PULP_API_GUNICORN_MAX_REQUESTS
+    description: The maximum number of requests a worker will process before restarting.
+    value: 20
+  - name: PULP_API_GUNICORN_MAX_REQUESTS_JITTER
+    description: The maximum jitter to add to the max_requests setting.
+    value: 5
   - name: PULP_CSRF_TRUSTED_ORIGINS
     value: "['https://*.apps.crc-eph.r9lp.p1.openshiftapps.com']"
   - name: PULP_STATIC_URL
