@@ -1085,10 +1085,10 @@ parameters:
     value: "1"
   - name: PULP_API_GUNICORN_MAX_REQUESTS
     description: The maximum number of requests a worker will process before restarting.
-    value: 20
+    value: "20"
   - name: PULP_API_GUNICORN_MAX_REQUESTS_JITTER
     description: The maximum jitter to add to the max_requests setting.
-    value: 5
+    value: "5"
   - name: PULP_CSRF_TRUSTED_ORIGINS
     value: "['https://*.apps.crc-eph.r9lp.p1.openshiftapps.com']"
   - name: PULP_STATIC_URL
