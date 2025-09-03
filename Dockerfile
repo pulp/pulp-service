@@ -143,6 +143,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch
 
+COPY images/assets/patches/0025-Extend-dwloader-to-push-data-stream-through-clamAV.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0025-Extend-dwloader-to-push-data-stream-through-clamAV.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
