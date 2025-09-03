@@ -102,6 +102,10 @@ spec:
       type: string
       default: pypi-token
       description: "Secret with the token to push bindings to PyPI"
+    - name: IMAGE_URL
+      type: string
+      default: ""
+      description: "Image URL"
 
   results:
     - name: ARTIFACTS_URL
@@ -147,6 +151,28 @@ spec:
           value: "dummy"
         - name: test-name
           value: $(context.pipelineRun.name)
+
+    - name: clamav-scan
+      params:
+      # - name: image-digest
+      #   value: $(params.SNAPSHOT.components[0].containerImage)
+      - name: image-url
+        value: $(params.SNAPSHOT.components[0])
+      taskRef:
+        params:
+        - name: name
+          value: clamav-scan
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-clamav-scan:0.3@sha256:b0bd59748cda4a7abf311e4f448e6c1d00c6b6d8c0ecc1c2eb33e08dc0e0b802
+        - name: kind
+          value: task
+        resolver: bundles
+      when:
+      - input: $(params.skip-checks)
+        operator: in
+        values:
+        - 'false'
+
     - name: reserve-namespace
       when:
         - input: '$(tasks.test-metadata.results.test-event-type)'
@@ -170,6 +196,7 @@ spec:
             value: tasks/reserve-namespace.yaml
       runAfter:
         - test-metadata
+
     - name: deploy-application
       when:
         - input: '$(tasks.test-metadata.results.test-event-type)'
@@ -200,6 +227,7 @@ spec:
           value: "$(params.DEPLOY_FRONTENDS)"
       runAfter:
         - reserve-namespace
+        - clamav-scan
       taskRef:
         resolver: git
         params:

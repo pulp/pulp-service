@@ -427,28 +427,28 @@ spec:
       workspaces:
       - name: workspace
         workspace: workspace
-    - name: clamav-scan
-      params:
-      - name: image-digest
-        value: $(tasks.build-container.results.IMAGE_DIGEST)
-      - name: image-url
-        value: $(tasks.build-container.results.IMAGE_URL)
-      runAfter:
-      - build-container
-      taskRef:
-        params:
-        - name: name
-          value: clamav-scan
-        - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-clamav-scan:0.3@sha256:b0bd59748cda4a7abf311e4f448e6c1d00c6b6d8c0ecc1c2eb33e08dc0e0b802
-        - name: kind
-          value: task
-        resolver: bundles
-      when:
-      - input: $(params.skip-checks)
-        operator: in
-        values:
-        - 'false'
+    # - name: clamav-scan
+    #   params:
+    #   - name: image-digest
+    #     value: $(tasks.build-container.results.IMAGE_DIGEST)
+    #   - name: image-url
+    #     value: $(tasks.build-container.results.IMAGE_URL)
+    #   runAfter:
+    #   - build-container
+    #   taskRef:
+    #     params:
+    #     - name: name
+    #       value: clamav-scan
+    #     - name: bundle
+    #       value: quay.io/konflux-ci/tekton-catalog/task-clamav-scan:0.3@sha256:b0bd59748cda4a7abf311e4f448e6c1d00c6b6d8c0ecc1c2eb33e08dc0e0b802
+    #     - name: kind
+    #       value: task
+    #     resolver: bundles
+    #   when:
+    #   - input: $(params.skip-checks)
+    #     operator: in
+    #     values:
+    #     - 'false'
     - name: apply-tags
       params:
       - name: ADDITIONAL_TAGS
