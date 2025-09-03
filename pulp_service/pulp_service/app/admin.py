@@ -1,6 +1,6 @@
-from django.contrib.auth.models import User
-from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.contrib.auth.admin import UserAdmin, GroupAdmin
+from django.contrib.auth.forms import UserChangeForm, UserCreationForm
+from django.contrib.auth.models import Group, User
 from django.contrib import admin
 
 from django import forms
@@ -63,6 +63,10 @@ class PulpUserAdmin(UserAdmin):
     add_form = PulpUserCreationForm
 
 
+class PulpGroupAdmin(GroupAdmin):
+    exclude = ('permissions',)
+
+
 class PulpAdminSite(admin.AdminSite):
     site_header = "Pulp administration"
 
@@ -107,5 +111,6 @@ admin_site = PulpAdminSite(name="myadmin")
 
 admin_site.register(DomainOrg, DomainOrgAdmin)
 #We are replacing the default UserAdmin with our PulpUserAdmin
-admin_site.register(User, PulpUserAdmin) 
+admin_site.register(User, PulpUserAdmin)
+admin_site.register(Group, PulpGroupAdmin) 
 admin_site.register(Domain, DomainAdmin)
