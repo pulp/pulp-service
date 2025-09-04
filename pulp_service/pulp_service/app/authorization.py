@@ -24,13 +24,17 @@ class DomainBasedPermission(BasePermission):
 
     def _has_domain_access(self, domain_pk, org_id, user):
         """
-        Checks if a user has access to a domain based on org_id, user, or group membership.
+        Checks if a user has access to a domain based on user, group membership, or org_id.
         """
-        return DomainOrg.objects.filter(
-            Q(domains__pk=domain_pk, org_id=org_id) |
-            Q(domains__pk=domain_pk, user=user) |
-            Q(domains__pk=domain_pk, group__in=user.groups.all())
-        ).exists()
+        query = Q(domains__pk=domain_pk, user=user)
+
+        if user.groups.exists():
+            query |= Q(domains__pk=domain_pk, group__in=user.groups.all())
+
+        if org_id is not None:
+            query |= Q(domains__pk=domain_pk, org_id=org_id)
+
+        return DomainOrg.objects.filter(query).exists()
 
     def has_permission(self, request, view):
         # Admins have all permissions
@@ -38,7 +42,6 @@ class DomainBasedPermission(BasePermission):
             return True
 
         user = request.user
-        _logger.info(user)
 
         # Anonymous users have no permissions
         if not user.is_authenticated:
@@ -53,7 +56,6 @@ class DomainBasedPermission(BasePermission):
         # Get the Org ID from the Red Hat Identity header
         org_id = self.get_org_id(decoded_header_content)
 
-        _logger.info(action)
         # Anyone can create a domain
         if action == "domain_create":
             if decoded_header_content:
@@ -87,7 +89,6 @@ class DomainBasedPermission(BasePermission):
         elif view_name in ["domains-set-label", "domains-unset-label"]:
             return "domain_update"
         elif view_name == "domains-detail":
-            _logger.info("detail")
             if request.META['REQUEST_METHOD'] == 'PATCH':
                 return "domain_update"
             elif request.META['REQUEST_METHOD'] == 'DELETE':
@@ -102,8 +103,6 @@ class DomainBasedPermission(BasePermission):
             header_content = request.META.get('HTTP_X_RH_IDENTITY')
             if header_content:
                 header_decoded_content = b64decode(header_content)
-                # Temporarily log the header for debugging purposes
-                _logger.info(header_decoded_content)
                 return header_decoded_content
         except Base64DecodeError:
             return
