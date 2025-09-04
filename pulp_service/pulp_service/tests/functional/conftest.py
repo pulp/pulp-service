@@ -31,19 +31,12 @@ def service_content_guards_api_client(service_bindings):
     return service_bindings.ContentguardsFeatureApi
 
 
-@pytest.fixture(scope="class")
-def gen_group(bindings_cfg, pulpcore_bindings, gen_object_with_cleanup):
-    class group_context:
-        def __init__(self, name=None):
-            self.name = name or str(uuid.uuid4())
-            self.group = gen_object_with_cleanup(
-                pulpcore_bindings.GroupsApi, {"name": self.name}
-            )
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc_value, traceback):
-            pass
-
-    return group_context
+@pytest.fixture
+def gen_group(pulpcore_bindings, gen_object_with_cleanup):
+    """A fixture to create a group."""
+    def _gen_group(name=None):
+        name = name or str(uuid.uuid4())
+        return gen_object_with_cleanup(
+            pulpcore_bindings.GroupsApi, {"name": name}
+        )
+    return _gen_group
