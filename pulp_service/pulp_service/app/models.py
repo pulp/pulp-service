@@ -44,7 +44,7 @@ class DomainOrg(models.Model):
     )
     group = models.ForeignKey(
         Group,
-        related_name="groups",
+        related_name="domainorgs",
         on_delete=models.CASCADE,
         null=True,
     )
