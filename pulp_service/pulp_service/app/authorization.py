@@ -22,6 +22,16 @@ class DomainBasedPermission(BasePermission):
     A Permission Class that grants permission to users who's org_id matches the requested Domain's org_id.
     """
 
+    def _has_domain_access(self, domain_pk, org_id, user):
+        """
+        Checks if a user has access to a domain based on org_id, user, or group membership.
+        """
+        return DomainOrg.objects.filter(
+            Q(domains__pk=domain_pk, org_id=org_id) |
+            Q(domains__pk=domain_pk, user=user) |
+            Q(domains__pk=domain_pk, group__in=user.groups.all())
+        ).exists()
+
     def has_permission(self, request, view):
         # Admins have all permissions
         if request.user.is_superuser:
@@ -56,28 +66,16 @@ class DomainBasedPermission(BasePermission):
         elif action == "domain_update":
             # The PK is part of the URL
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(
-                Q(domains__pk=domain_pk, org_id=org_id) |
-                Q(domains__pk=domain_pk, user=user) |
-                Q(domains__pk=domain_pk, group__in=user.groups.all())
-            ).exists()
+            return self._has_domain_access(domain_pk, org_id, user)
         elif action == "domain_delete":
             # The PK is part of the URL
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(
-                Q(domains__pk=domain_pk, org_id=org_id) |
-                Q(domains__pk=domain_pk, user=user) |
-                Q(domains__pk=domain_pk, group__in=user.groups.all())
-            ).exists()
+            return self._has_domain_access(domain_pk, org_id, user)
         # User has permission if the org_id matches the domain's org_id
         # The user that created the domain has permission to access that domain
         # The domain name is part of the URL, not the PK.
         domain_pk = get_domain_pk()
-        return DomainOrg.objects.filter(
-                Q(domains__pk=domain_pk, org_id=org_id) |
-                Q(domains__pk=domain_pk, user=user) |
-                Q(domains__pk=domain_pk, group__in=user.groups.all())
-            ).exists()
+        return self._has_domain_access(domain_pk, org_id, user)
 
     def get_user_action(self, request):
         view_name = request.resolver_match.view_name
