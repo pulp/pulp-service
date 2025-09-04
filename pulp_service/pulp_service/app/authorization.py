@@ -28,8 +28,10 @@ class DomainBasedPermission(BasePermission):
         """
         query = Q(domains__pk=domain_pk, user=user)
 
-        if user.groups.exists():
-            query |= Q(domains__pk=domain_pk, group__in=user.groups.all())
+        # Fetch group ids once to avoid multiple DB hits
+        group_pks = user.groups.values_list("pk", flat=True)
+        if group_pks.exists():
+            query |= Q(domains__pk=domain_pk, group_id__in=group_pks)
 
         if org_id is not None:
             query |= Q(domains__pk=domain_pk, org_id=org_id)

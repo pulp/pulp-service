@@ -84,3 +84,68 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
         assert exp.value.status == 403
     finally:
         file_bindings.RepositoriesFileApi.api_client.default_headers.pop("x-rh-identity", None)
+
+def test_domain_permission_for_user_without_group(pulpcore_bindings, file_bindings, gen_object_with_cleanup, anonymous_user):
+    """
+    Tests that a user without a group can manage their own domain,
+    and that another user cannot access it.
+    """
+    # Ensure we're using header-based auth for this test
+    pulpcore_bindings.DomainsApi.api_client.default_headers.pop("Authorization", None)
+    file_bindings.RepositoriesFileApi.api_client.default_headers.pop("Authorization", None)
+
+    # 1. Create user_a, not in any group
+    user_a_name = f"user-a-no-group-{uuid4()}"
+    gen_object_with_cleanup(
+        pulpcore_bindings.UsersApi, {"username": user_a_name}
+    )
+
+    # 2. Create a domain as user_a
+    domain_name = str(uuid4())
+    user_a_identity = {"identity": {"user": {"username": user_a_name}}}
+    auth_header_a = b64encode(json.dumps(user_a_identity).encode("ascii"))
+
+    try:
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header_a
+        gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+    finally:
+        pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+
+    # 3. Verify user_a can create a repository in their own domain
+    try:
+        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = auth_header_a
+        gen_object_with_cleanup(
+            file_bindings.RepositoriesFileApi,
+            {"name": str(uuid4())},
+            pulp_domain=domain_name,
+        )
+    finally:
+        file_bindings.RepositoriesFileApi.api_client.default_headers.pop("x-rh-identity", None)
+
+    # 4. Create user_b, also not in any group
+    user_b_name = f"user-b-no-group-{uuid4()}"
+    gen_object_with_cleanup(
+        pulpcore_bindings.UsersApi, {"username": user_b_name}
+    )
+
+    # 5. Verify user_b cannot create a repository in user_a's domain
+    user_b_identity = {"identity": {"user": {"username": user_b_name}}}
+    auth_header_b = b64encode(json.dumps(user_b_identity).encode("ascii"))
+    try:
+        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = auth_header_b
+        with pytest.raises(file_bindings.ApiException) as exp:
+            gen_object_with_cleanup(
+                file_bindings.RepositoriesFileApi,
+                {"name": str(uuid4())},
+                pulp_domain=domain_name,
+            )
+        assert exp.value.status == 403
+    finally:
+        file_bindings.RepositoriesFileApi.api_client.default_headers.pop("x-rh-identity", None)
