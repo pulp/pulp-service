@@ -40,7 +40,6 @@ class DomainOrg(models.Model):
         settings.AUTH_USER_MODEL,
         related_name="users",
         on_delete=models.CASCADE,
-        null=True,
     )
     group = models.ForeignKey(
         Group,
