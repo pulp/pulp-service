@@ -234,18 +234,6 @@ index 59870dc62..b8362afe7 100644
      "UnsupportedDigestValidationError",
 +    "MalwareError",
  ]
-diff --git a/pyproject.toml b/pyproject.toml
-index a38787891..e59896826 100644
---- a/pyproject.toml
-+++ b/pyproject.toml
-@@ -64,6 +64,7 @@ dependencies = [
-   "uuid6>=2023.5.2,<=2025.0.1",
-   "whitenoise>=5.0,<6.10.0",
-   "yarl>=1.9.1,<1.21",  # Seems to follow SemVer https://yarl.aio-libs.org/en/latest/contributing/release_guide/#pre-release-activities .
-+  "clamav-client>=0.7.1,<1.0",
- ]
- 
- [project.optional-dependencies]
 -- 
 2.46.2
 
