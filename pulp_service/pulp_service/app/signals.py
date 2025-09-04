@@ -19,5 +19,9 @@ def post_create_domain(sender, **kwargs):
             # The default domain is created when migrations are run for the first time.
             # User is only available when the REST API is used to create the domain.
             user = get_user_model().objects.get(pk=user_id)
-            do = DomainOrg.objects.create(org_id=org_id, user=user)
+            group = user.groups.first()
+            if group:
+                do = DomainOrg.objects.create(org_id=org_id, user=user, group=group)
+            else:
+                do = DomainOrg.objects.create(org_id=org_id, user=user)
             do.domains.add(kwargs['instance'])

@@ -56,16 +56,28 @@ class DomainBasedPermission(BasePermission):
         elif action == "domain_update":
             # The PK is part of the URL
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
+            return DomainOrg.objects.filter(
+                Q(domains__pk=domain_pk, org_id=org_id) |
+                Q(domains__pk=domain_pk, user=user) |
+                Q(domains__pk=domain_pk, group__in=user.groups.all())
+            ).exists()
         elif action == "domain_delete":
             # The PK is part of the URL
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
+            return DomainOrg.objects.filter(
+                Q(domains__pk=domain_pk, org_id=org_id) |
+                Q(domains__pk=domain_pk, user=user) |
+                Q(domains__pk=domain_pk, group__in=user.groups.all())
+            ).exists()
         # User has permission if the org_id matches the domain's org_id
         # The user that created the domain has permission to access that domain
         # The domain name is part of the URL, not the PK.
         domain_pk = get_domain_pk()
-        return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
+        return DomainOrg.objects.filter(
+                Q(domains__pk=domain_pk, org_id=org_id) |
+                Q(domains__pk=domain_pk, user=user) |
+                Q(domains__pk=domain_pk, group__in=user.groups.all())
+            ).exists()
 
     def get_user_action(self, request):
         view_name = request.resolver_match.view_name
