@@ -36,3 +36,16 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_user, gen
             {"name": str(uuid4())},
             pulp_domain=domain_name,
         )
+
+    # 5. Create user_c, not in the group
+    user_c = gen_user(username="user-c-not-in-team")
+
+    # 6. Verify user_c cannot create a repository in the domain
+    with user_c:
+        with pytest.raises(file_bindings.ApiException) as exp:
+            gen_object_with_cleanup(
+                file_bindings.RepositoriesFileApi,
+                {"name": str(uuid4())},
+                pulp_domain=domain_name,
+            )
+        assert exp.value.status == 403
