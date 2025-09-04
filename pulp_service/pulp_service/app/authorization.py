@@ -22,13 +22,28 @@ class DomainBasedPermission(BasePermission):
     A Permission Class that grants permission to users who's org_id matches the requested Domain's org_id.
     """
 
+    def _has_domain_access(self, domain_pk, org_id, user):
+        """
+        Checks if a user has access to a domain based on user, group membership, or org_id.
+        """
+        query = Q(domains__pk=domain_pk, user=user)
+
+        # Fetch group ids once to avoid multiple DB hits
+        group_pks = user.groups.values_list("pk", flat=True)
+        if group_pks.exists():
+            query |= Q(domains__pk=domain_pk, group_id__in=group_pks)
+
+        if org_id is not None:
+            query |= Q(domains__pk=domain_pk, org_id=org_id)
+
+        return DomainOrg.objects.filter(query).exists()
+
     def has_permission(self, request, view):
         # Admins have all permissions
         if request.user.is_superuser:
             return True
 
         user = request.user
-        _logger.info(user)
 
         # Anonymous users have no permissions
         if not user.is_authenticated:
@@ -43,7 +58,6 @@ class DomainBasedPermission(BasePermission):
         # Get the Org ID from the Red Hat Identity header
         org_id = self.get_org_id(decoded_header_content)
 
-        _logger.info(action)
         # Anyone can create a domain
         if action == "domain_create":
             if decoded_header_content:
@@ -56,16 +70,16 @@ class DomainBasedPermission(BasePermission):
         elif action == "domain_update":
             # The PK is part of the URL
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
+            return self._has_domain_access(domain_pk, org_id, user)
         elif action == "domain_delete":
             # The PK is part of the URL
             domain_pk = extract_pk(request.META['PATH_INFO'])
-            return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
+            return self._has_domain_access(domain_pk, org_id, user)
         # User has permission if the org_id matches the domain's org_id
         # The user that created the domain has permission to access that domain
         # The domain name is part of the URL, not the PK.
         domain_pk = get_domain_pk()
-        return DomainOrg.objects.filter(Q(domains__pk=domain_pk, org_id=org_id) | Q(domains__pk=domain_pk, user=user)).exists()
+        return self._has_domain_access(domain_pk, org_id, user)
 
     def get_user_action(self, request):
         view_name = request.resolver_match.view_name
@@ -77,7 +91,6 @@ class DomainBasedPermission(BasePermission):
         elif view_name in ["domains-set-label", "domains-unset-label"]:
             return "domain_update"
         elif view_name == "domains-detail":
-            _logger.info("detail")
             if request.META['REQUEST_METHOD'] == 'PATCH':
                 return "domain_update"
             elif request.META['REQUEST_METHOD'] == 'DELETE':
@@ -92,8 +105,6 @@ class DomainBasedPermission(BasePermission):
             header_content = request.META.get('HTTP_X_RH_IDENTITY')
             if header_content:
                 header_decoded_content = b64decode(header_content)
-                # Temporarily log the header for debugging purposes
-                _logger.info(header_decoded_content)
                 return header_decoded_content
         except Base64DecodeError:
             return
