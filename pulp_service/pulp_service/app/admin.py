@@ -93,8 +93,8 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
 
 
 class DomainOrgAdmin(admin.ModelAdmin):
-    list_display = ["user", "org_id"]
-    list_filter = ["user", "org_id"]
+    list_display = ["user", "org_id", "group"]
+    list_filter = ["user", "org_id", "group"]
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "domains":
