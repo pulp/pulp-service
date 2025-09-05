@@ -1,17 +1,16 @@
-From a30067172a33f01f6b4f13ec3ede74cfc8be8c62 Mon Sep 17 00:00:00 2001
+From 81ad2ad53e2fd6aff47048d064edae6397557af6 Mon Sep 17 00:00:00 2001
 From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
 Date: Fri, 29 Aug 2025 16:41:58 -0300
 Subject: [PATCH] Extend dwloader to push data stream through clamAV
 
 ---
  pulpcore/app/settings.py          |  4 +++
- pulpcore/content/handler.py       | 17 ++++++++++++-
+ pulpcore/content/handler.py       | 23 ++++++++++++++++-
  pulpcore/download/base.py         | 41 +++++++++++++++++++++++++++++++
  pulpcore/exceptions/__init__.py   |  1 +
  pulpcore/exceptions/validation.py | 19 ++++++++++++++
  pulpcore/plugin/exceptions.py     |  2 ++
- pyproject.toml                    |  1 +
- 7 files changed, 84 insertions(+), 1 deletion(-)
+ 6 files changed, 89 insertions(+), 1 deletion(-)
 
 diff --git a/pulpcore/app/settings.py b/pulpcore/app/settings.py
 index e5dfb1b1a..e3fc93dc0 100644
@@ -29,10 +28,18 @@ index e5dfb1b1a..e3fc93dc0 100644
  # Read more at https://www.dynaconf.com/django/
  
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 7e30e32cc..bc1a53655 100644
+index 7e30e32cc..5699c3b6e 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -59,8 +59,9 @@ from pulpcore.app.util import (  # noqa: E402: module level not at top of file
+@@ -16,6 +16,7 @@ from aiohttp.web_exceptions import (
+     HTTPFound,
+     HTTPMovedPermanently,
+     HTTPNotFound,
++    HTTPPreconditionFailed,
+     HTTPRequestRangeNotSatisfiable,
+ )
+ from yarl import URL
+@@ -59,8 +60,9 @@ from pulpcore.app.util import (  # noqa: E402: module level not at top of file
  )
  
  from pulpcore.exceptions import (  # noqa: E402
@@ -43,7 +50,19 @@ index 7e30e32cc..bc1a53655 100644
  )
  from pulpcore.metrics import artifacts_size_counter  # noqa: E402
  
-@@ -1311,6 +1312,10 @@ class Handler:
+@@ -934,6 +936,11 @@ class Handler:
+                             url=url, r=ce.message
+                         )
+                         raise Error(reason=reason)
++                    except RuntimeError:
++                        # raise HTTPPreconditionFailed if digest validation failed or 
++                        # found a virus in artifact
++                        raise HTTPPreconditionFailed()
++
+ 
+         if not any([repository, repo_version, publication, distro.remote]):
+             reason = _(
+@@ -1311,6 +1318,10 @@ class Handler:
          downloader.handle_data = handle_data
          original_finalize = downloader.finalize
          downloader.finalize = finalize
@@ -54,7 +73,7 @@ index 7e30e32cc..bc1a53655 100644
          try:
              download_result = await downloader.run(
                  extra_data={"disable_retry_list": (DigestValidationError,)}
-@@ -1333,6 +1338,16 @@ class Handler:
+@@ -1333,6 +1344,16 @@ class Handler:
                  "Learn more on <https://pulpproject.org/pulpcore/docs/user/learn/"
                  "on-demand-downloading/#on-demand-and-streamed-limitations>"
              )
