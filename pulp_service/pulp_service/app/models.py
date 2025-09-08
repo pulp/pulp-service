@@ -39,12 +39,13 @@ class DomainOrg(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name="users",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
     )
     group = models.ForeignKey(
         Group,
-        related_name="domainorgs",
-        on_delete=models.CASCADE,
+        related_name="domain_orgs",
+        on_delete=models.SET_NULL,
         null=True,
     )
 
