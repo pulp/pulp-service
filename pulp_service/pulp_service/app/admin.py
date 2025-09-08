@@ -2,11 +2,12 @@ from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 from django.contrib.auth.models import Group, User
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 
 from django import forms
 from django.core.validators import RegexValidator 
 
-from .models import DomainOrg
+from .models import DomainOrg, GroupMembership
 import re
 
 from pulpcore.plugin.models import Domain
@@ -43,6 +44,24 @@ class PulpUserCreationForm(UserCreationForm):
         return username
 
 
+class GroupMembershipInlineFormSet(forms.models.BaseInlineFormSet):              
+    def clean(self):                                                        
+        super().clean()                                                     
+        primary_group_count = 0                                             
+        for form in self.forms:                                             
+            if not form.cleaned_data.get('DELETE', False):                  
+                if form.cleaned_data.get('is_primary', False):              
+                    primary_group_count += 1                                
+        if primary_group_count > 1:                                         
+            raise ValidationError("A user can only have one primary group.")
+                                                                            
+                                                                            
+class GroupMembershipInline(admin.TabularInline):                                
+    model = GroupMembership                                                      
+    formset = GroupMembershipInlineFormSet                                       
+    extra = 1                                                               
+
+
 class PulpUserChangeForm(UserChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,6 +80,7 @@ class PulpUserChangeForm(UserChangeForm):
 class PulpUserAdmin(UserAdmin):
     form = PulpUserChangeForm
     add_form = PulpUserCreationForm
+    inlines = [GroupMembershipInline]       
 
 
 class PulpGroupAdmin(GroupAdmin):
