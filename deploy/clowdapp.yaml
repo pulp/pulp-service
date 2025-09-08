@@ -246,6 +246,21 @@ objects:
         sleep 1d
       done
 
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: clamav-conf
+  data:
+    clamd.conf: |
+      LogFile /var/log/clamav/clamd.log
+      LogTime yes
+      LocalSocket /tmp/clamd.sock
+      User clamav
+      StreamMaxLength ${CLAMAV_STREAM_MAX_LENGTH}
+      MaxFileSize ${CLAMAV_MAX_FILE_SIZE}
+      MaxScanSize ${CLAMAV_MAX_SCAN_SIZE}
+      TCPSocket ${CLAMAV_TCP_SOCKET}
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdApp
   metadata:
@@ -409,6 +424,15 @@ objects:
             value: ${PULP_TEST_TASK_INGESTION}
           - name: PULP_PYTHON_GROUP_UPLOADS
             value: ${PULP_PYTHON_GROUP_UPLOADS}
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+          - name: PULP_CLAMAV_HOST
+            value: ${PULP_CLAMAV_SVC_NAME}.$(NAMESPACE).svc
+          - name: PULP_CLAMAV_PORT
+            value: ${PULP_CLAMAV_SVC_PORT}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -530,6 +554,15 @@ objects:
             value: ${PULP_TOKEN_AUTH_DISABLED}
           - name: PULP_USE_UVLOOP
             value: ${PULP_USE_UVLOOP}
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+          - name: PULP_CLAMAV_HOST
+            value: ${PULP_CLAMAV_SVC_NAME}.$(NAMESPACE).svc
+          - name: PULP_CLAMAV_PORT
+            value: ${PULP_CLAMAV_SVC_PORT}
 
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
@@ -740,6 +773,71 @@ objects:
                     value: 5
                     periodSeconds: 30
 
+    - name: clamav
+      replicas: ${{CLAMAV_REPLICAS}}
+      webServices:
+        private:
+          appProtocol: tcp
+          enabled: true
+      podSpec:
+        image: ${CLAMAV_IMAGE}:${CLAMAV_IMAGE_TAG}
+        command:
+          - /bin/sh
+        args:
+          - -c
+          - /init-unprivileged  
+        env:
+          - name: CLAMD_CONF_StreamMaxLength
+            value: ${CLAMAV_STREAM_MAX_LENGTH}
+          - name: CLAMD_CONF_MaxFileSize
+            value: ${CLAMAV_MAX_FILE_SIZE}
+          - name: CLAMD_CONF_MaxScanSize
+            value: ${CLAMAV_MAX_SCAN_SIZE}
+          - name: CLAMD_CONF_TCPSocket
+            value: ${CLAMAV_TCP_SOCKET}
+        readinessProbe:
+          exec:
+            command:
+              - clamdscan
+              - "--ping"
+              - "1"
+          initialDelaySeconds: 20
+          periodSeconds: 25
+          timeoutSeconds: 20
+          failureThreshold: 5
+        livenessProbe:
+          exec:
+            command:
+              - clamdscan
+              - "--ping"
+              - "1"
+          initialDelaySeconds: 20
+          periodSeconds: 25
+          timeoutSeconds: 20
+          failureThreshold: 5
+        resources:
+          requests:
+            cpu: ${{CLAMAV_CPU_REQUEST}}
+            memory: ${{CLAMAV_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{CLAMAV_CPU_LIMIT}}
+            memory: ${{CLAMAV_MEMORY_LIMIT}}
+        volumes:
+          - name: lib
+            emptyDir: {}
+          - name: log
+            emptyDir: {}
+          - name: clamav-conf
+            configMap:
+              name: clamav-conf
+        volumeMounts:
+          - name: lib
+            mountPath: /var/lib/clamav
+          - name: log
+            mountPath: /var/log/clamav
+          - name: clamav-conf
+            mountPath: /etc/clamav/clamd.conf
+            subPath: clamd.conf
 
     - name: migrate-db
       replicas: 1
@@ -1131,3 +1229,42 @@ parameters:
   - name: PULP_TASK_DIAGNOSTICS
     description: List of profilers available for task diagnostics
     value: "['memory', 'memray', 'pyinstrument']"
+  - name: CLAMAV_REPLICAS
+    description: Number of ClamAV replicas 
+    value: "1"
+  - name: CLAMAV_IMAGE
+    description: Specify which ClamAV container image the operator will deploy.
+    value: docker.io/clamav/clamav
+  - name: CLAMAV_IMAGE_TAG
+    description: Specify the tag or hash for the ClamAV image deployed by the operator.
+    value: "1.4.3"
+  - name: CLAMAV_STREAM_MAX_LENGTH
+    description: This option allows you to specify the upper limit for data size that will be transfered to remote daemon when scanning a single file.
+    value: 2G
+  - name: CLAMAV_MAX_FILE_SIZE
+    description: Files larger than this limit won't be scanned.
+    value: 2G
+  - name: CLAMAV_MAX_SCAN_SIZE
+    description: Sets the maximum amount of data to be scanned for each input file.
+    value: 2G
+  - name: CLAMAV_CPU_REQUEST
+    description: Amount of CPU to request for ClamAV container
+    value: "1"
+  - name: CLAMAV_MEMORY_REQUEST
+    description: Amount of memory to request for ClamAV container
+    value: 3Gi
+  - name: CLAMAV_CPU_LIMIT
+    description: Limit of CPU use by ClamAV container
+    value: "2"
+  - name: CLAMAV_MEMORY_LIMIT
+    description: Limit of memory use by ClamAV container
+    value: 4Gi
+  - name: CLAMAV_TCP_SOCKET
+    description: TCP port number the daemon will listen on. DO NOT MODIFY THIS. As of now, it seems like clowder only accepts/configures port 10000 for the "private services".
+    value: "10000"
+  - name: PULP_CLAMAV_SVC_NAME
+    description: ClamAV service name. This variable will be used by Pulp to define the TCP host to connect to ClamAV.
+    value: pulp-clamav
+  - name: PULP_CLAMAV_SVC_PORT
+    description: ClamAV service port. This variable will be used by Pulp to define the TCP port to connect to ClamAV.
+    value: "10000"
