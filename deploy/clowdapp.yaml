@@ -418,8 +418,6 @@ objects:
             value: ${PULP_SECURE_PROXY_SSL_HEADER}
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
-          - name: PULP_USE_UVLOOP
-            value: ${PULP_USE_UVLOOP}
           - name: PULP_TEST_TASK_INGESTION 
             value: ${PULP_TEST_TASK_INGESTION}
           - name: PULP_PYTHON_GROUP_UPLOADS
@@ -552,8 +550,8 @@ objects:
             value: ${{PULP_FEATURE_SERVICE_API_URL}}
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
-          - name: PULP_USE_UVLOOP
-            value: ${PULP_USE_UVLOOP}
+          - name: PULP_UVLOOP_ENABLED
+            value: ${PULP_UVLOOP_ENABLED}
           - name: NAMESPACE
             valueFrom:
               fieldRef:
@@ -1207,7 +1205,7 @@ parameters:
   - name: PULP_TOKEN_AUTH_DISABLED
     description: Disable token authentication for the Container registry
     value: "true"
-  - name: PULP_USE_UVLOOP
+  - name: PULP_UVLOOP_ENABLED
     description: Enable the UVLoopWorker for gunicorn.
     value: "false"
   - name: PULP_TEST_TASK_INGESTION 
