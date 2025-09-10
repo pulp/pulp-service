@@ -1180,7 +1180,7 @@ parameters:
     description: Number of gunicorn workers in the API pods
     value: "1"
   - name: PULP_API_GUNICORN_MAX_REQUESTS
-    description: The maximum number of requests a api worker will process before restarting.
+    description: The maximum number of requests an API worker will process before restarting.
     value: "20"
   - name: PULP_API_GUNICORN_MAX_REQUESTS_JITTER
     description: The maximum jitter to add to the API max_requests setting.
