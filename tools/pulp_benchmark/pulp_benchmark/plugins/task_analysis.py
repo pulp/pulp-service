@@ -23,8 +23,8 @@ def task_analysis(ctx, since: datetime, until: Optional[datetime]):
     api_root = ctx.obj['api_root']
     user = ctx.obj['user']
     password = ctx.obj['password']
-    cert = ctx.obj.get('cert')
-    key = ctx.obj.get('key')
+    cert = ctx.obj['cert']
+    key = ctx.obj['key']
 
     # --- Client-specific logic ---
     if client_type == 'async':
