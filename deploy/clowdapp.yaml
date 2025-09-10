@@ -1189,7 +1189,7 @@ parameters:
     description: The maximum number of requests a content worker will process before restarting.
     value: "20"
   - name: PULP_CONTENT_GUNICORN_MAX_REQUESTS_JITTER
-    description: The maximum jitter to add to the Content max_requests setting.
+    description: The maximum jitter to add to the Content max_requests setting for each worker.
     value: "5"
   - name: PULP_CSRF_TRUSTED_ORIGINS
     value: "['https://*.apps.crc-eph.r9lp.p1.openshiftapps.com']"
