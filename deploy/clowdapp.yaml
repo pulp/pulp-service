@@ -1183,7 +1183,7 @@ parameters:
     description: The maximum number of requests an API worker will process before restarting.
     value: "20"
   - name: PULP_API_GUNICORN_MAX_REQUESTS_JITTER
-    description: The maximum jitter to add to the API max_requests setting.
+    description: The maximum jitter to add to the API max_requests setting for each worker.
     value: "5"
   - name: PULP_CONTENT_GUNICORN_MAX_REQUESTS
     description: The maximum number of requests a content worker will process before restarting.
