@@ -35,10 +35,8 @@ def run_concurrent_requests_sync(
         with requests.Session() as session:
             if user and password:
                 session.auth = (user, password)
-            if cert and key:
-                session.cert = (cert, key)
-            elif cert:
-                session.cert = cert
+            if cert:
+                session.cert = (cert, key) if key else cert
             # Pass a worker_id for better logging
             futures = [executor.submit(send_request_sync, session, url, timeout, i+1) for i in range(max_workers)]
             # Correctly wait for all futures to complete
