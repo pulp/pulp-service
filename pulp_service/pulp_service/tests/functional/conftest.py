@@ -1,3 +1,4 @@
+import uuid
 import pytest
 
 from pulpcore.tests.functional.utils import BindingsNamespace
@@ -28,3 +29,14 @@ def vuln_report_service_api(service_bindings):
 def service_content_guards_api_client(service_bindings):
     """Api for service content guards."""
     return service_bindings.ContentguardsFeatureApi
+
+
+@pytest.fixture
+def gen_group(pulpcore_bindings, gen_object_with_cleanup):
+    """A fixture to create a group."""
+    def _gen_group(name=None):
+        name = name or str(uuid.uuid4())
+        return gen_object_with_cleanup(
+            pulpcore_bindings.GroupsApi, {"name": name}
+        )
+    return _gen_group

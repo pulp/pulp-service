@@ -16,7 +16,7 @@ from django.db import models
 
 from django.contrib.postgres.fields import ArrayField
 
-from pulpcore.plugin.models import BaseModel, Domain
+from pulpcore.plugin.models import BaseModel, Domain, Group
 from pulpcore.plugin.models import AutoAddObjPermsMixin
 from pulpcore.plugin.util import get_domain_pk
 
@@ -39,7 +39,13 @@ class DomainOrg(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name="users",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+    group = models.ForeignKey(
+        Group,
+        related_name="domain_orgs",
+        on_delete=models.SET_NULL,
         null=True,
     )
 
@@ -182,3 +188,21 @@ class VulnerabilityReport(BaseModel):
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
+
+class GroupMembership(models.Model):
+    """
+    A through model for the relationship between a User and a Group,
+    with an added field to designate a primary group.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    is_primary = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(is_primary=True),
+                name='unique_primary_group_per_user'
+            )
+        ]
