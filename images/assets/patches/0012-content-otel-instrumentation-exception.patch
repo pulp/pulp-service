@@ -1,7 +1,7 @@
-From 87968f44eeb91e4cd43ffa9ea56c3970f6c8c3d8 Mon Sep 17 00:00:00 2001
+From 5f5ecc87d8327e25bf606cd793470b39513026d2 Mon Sep 17 00:00:00 2001
 From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
 Date: Thu, 21 Nov 2024 08:08:19 -0300
-Subject: [PATCH] content otel instrumentation exception
+Subject: [PATCH 1/2] content otel instrumentation exception
 
 ---
  pulpcore/content/instrumentation.py | 4 ++--
@@ -23,5 +23,72 @@ index 2755fe578..f3e65c6a9 100644
  
          duration_ms = (time.time() - start_time) * 1000
 -- 
-2.46.2
+2.51.0
+
+
+From 5db0600335627832a66093e9e1f4b2495732cb73 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Fri, 12 Sep 2025 14:18:13 -0300
+Subject: [PATCH 2/2] Change how the exceptions are propagated on the Content
+ instrumentation middleware.
+
+Closes #6925
+---
+ CHANGES/6925.bugfix                 |  1 +
+ pulpcore/content/instrumentation.py | 29 +++++++++++++++--------------
+ 2 files changed, 16 insertions(+), 14 deletions(-)
+ create mode 100644 CHANGES/6925.bugfix
+
+diff --git a/CHANGES/6925.bugfix b/CHANGES/6925.bugfix
+new file mode 100644
+index 000000000..8376f0a77
+--- /dev/null
++++ b/CHANGES/6925.bugfix
+@@ -0,0 +1 @@
++Fixed exception propagation in the pulp-content instrumentation middleware.
+diff --git a/pulpcore/content/instrumentation.py b/pulpcore/content/instrumentation.py
+index f3e65c6a9..f6f476777 100644
+--- a/pulpcore/content/instrumentation.py
++++ b/pulpcore/content/instrumentation.py
+@@ -21,23 +21,24 @@ def instrumentation(exporter=None, reader=None, provider=None):
+         try:
+             response = await handler(request)
+             status_code = response.status
++
++            return response
+         except Exception as exc:
+             status_code = exc.status if hasattr(exc,'status') else 500
+-            response = exc
+-
+-        duration_ms = (time.time() - start_time) * 1000
+-
+-        request_duration_histogram.record(
+-            duration_ms,
+-            attributes={
+-                "http.method": request.method,
+-                "http.status_code": normalize_http_status(status_code),
+-                "http.route": _get_view_request_handler_func(request),
+-                "worker.name": get_worker_name(),
+-            },
+-        )
++            raise exc
++        finally:
++            duration_ms = (time.time() - start_time) * 1000
++
++            request_duration_histogram.record(
++                duration_ms,
++                attributes={
++                    "http.method": request.method,
++                    "http.status_code": normalize_http_status(status_code),
++                    "http.route": _get_view_request_handler_func(request),
++                    "worker.name": get_worker_name(),
++                },
++            )
+ 
+-        return response
+ 
+     return middleware
+ 
+-- 
+2.51.0
 
