@@ -20,7 +20,8 @@ def post_create_domain(sender, **kwargs):
             # User is only available when the REST API is used to create the domain.
             user = get_user_model().objects.get(pk=user_id)
             if group := user.groups.first():
-                do = DomainOrg.objects.create(org_id=org_id, user=user, group=group)
+                # if the Group data exists, set it as the only owner of the DomainOrg
+                do = DomainOrg.objects.create(org_id=org_id, group=group)
             else:
                 do = DomainOrg.objects.create(org_id=org_id, user=user)
             do.domains.add(kwargs['instance'])
