@@ -1028,7 +1028,7 @@ parameters:
     value: "0" # setting to 0 because we are using an ingress as a reverse proxy
   - name: PULP_WORKER_REPLICAS
     description: Number of pulp workers
-    value: "1"
+    value: "2"
   - name: PULP_WORKER_AUXILIARY_REPLICAS
     description: Number of pulp auxiliary workers
     value: "1"
