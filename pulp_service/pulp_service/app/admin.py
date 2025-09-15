@@ -44,20 +44,16 @@ class PulpUserCreationForm(UserCreationForm):
         return username
 
 
-class GroupMembershipInlineFormSet(forms.models.BaseInlineFormSet):
-    def clean(self):
-        super().clean()
-        primary_group_count = 0
-        group_count = 0
-        for form in self.forms:
-            if not form.cleaned_data.get('DELETE', False):
-                group_count += 1
-                if form.cleaned_data.get('is_primary', False):
-                    primary_group_count += 1
-        if primary_group_count > 1:
+class GroupMembershipInlineFormSet(forms.models.BaseInlineFormSet):              
+    def clean(self):                                                        
+        super().clean()                                                     
+        primary_group_count = 0                                             
+        for form in self.forms:                                             
+            if not form.cleaned_data.get('DELETE', False):                  
+                if form.cleaned_data.get('is_primary', False):              
+                    primary_group_count += 1                                
+        if primary_group_count > 1:                                         
             raise ValidationError("A user can only have one primary group.")
-        if group_count > 0 and primary_group_count == 0:
-            raise ValidationError("If a user is in a group, one group must be primary.")
                                                                             
                                                                             
 class GroupMembershipInline(admin.TabularInline):                                
