@@ -260,6 +260,7 @@ objects:
       MaxFileSize ${CLAMAV_MAX_FILE_SIZE}
       MaxScanSize ${CLAMAV_MAX_SCAN_SIZE}
       TCPSocket ${CLAMAV_TCP_SOCKET}
+      Debug ${CLAMAV_DEBUG}
 
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdApp
@@ -1272,3 +1273,6 @@ parameters:
   - name: PULP_CLAMAV_SVC_PORT
     description: ClamAV service port. This variable will be used by Pulp to define the TCP port to connect to ClamAV.
     value: "10000"
+  - name: CLAMAV_DEBUG
+    description: Enable debug messages from libclamav.
+    value: "false"
