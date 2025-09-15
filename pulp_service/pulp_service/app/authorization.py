@@ -30,7 +30,7 @@ class DomainBasedPermission(BasePermission):
 
         # Fetch group ids once to avoid multiple DB hits
         group_pks = user.groups.values_list("pk", flat=True)
-        if group_pks.exists():
+        if group_pks
             query |= Q(domains__pk=domain_pk, group_id__in=group_pks)
 
         if org_id is not None:
