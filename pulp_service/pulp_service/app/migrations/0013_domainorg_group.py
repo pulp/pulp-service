@@ -24,31 +24,4 @@ class Migration(migrations.Migration):
             name='user',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='users', to=settings.AUTH_USER_MODEL),
         ),
-        migrations.CreateModel(
-            name='Membership',
-            fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('is_primary', models.BooleanField(default=False)),
-                ('group', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='core.group')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
-            ],
-        ),
-        migrations.AddConstraint(
-            model_name='membership',
-            constraint=models.UniqueConstraint(condition=models.Q(('is_primary', True)), fields=('user',), name='unique_primary_group_per_user'),
-        ),
-        migrations.RenameModel(
-            old_name='Membership',
-            new_name='GroupMembership',
-        ),
-        migrations.AlterField(
-            model_name='domainorg',
-            name='group',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='domain_orgs', to='core.group'),
-        ),
-        migrations.AlterField(
-            model_name='domainorg',
-            name='user',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='users', to=settings.AUTH_USER_MODEL),
-        ),
     ]

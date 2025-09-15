@@ -5,7 +5,7 @@ from django.db.models import Q
 import json
 import jq
 from pulpcore.plugin.util import extract_pk, get_domain_pk
-from pulp_service.app.models import DomainOrg, GroupMembership
+from pulp_service.app.models import DomainOrg
 from rest_framework.permissions import BasePermission
 import logging
 
@@ -29,7 +29,7 @@ class DomainBasedPermission(BasePermission):
         query = Q(domains__pk=domain_pk, user=user)
 
         # Fetch group ids once to avoid multiple DB hits
-        group_pks = GroupMembership.objects.filter(user=user).values_list("group__pk", flat=True)
+        group_pks = user.groups.values_list("pk", flat=True)
         if group_pks.exists():
             query |= Q(domains__pk=domain_pk, group_id__in=group_pks)
 

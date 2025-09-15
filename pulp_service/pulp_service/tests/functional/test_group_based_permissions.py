@@ -16,9 +16,10 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
 
     # 2. Create user_a and associate with the group
     user_a_name = f"user-a-in-team-{uuid4()}"
-    user_a = gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_a_name}
+    gen_object_with_cleanup(
+        pulpcore_bindings.UsersApi, {"username": user_a_name, "groups": [test_group.pulp_href]}
     )
+
     gen_object_with_cleanup(
         pulpcore_bindings.GroupsUsersApi, group_href=test_group.pulp_href, group_user={"username": user_a_name}
     )
@@ -43,7 +44,7 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
 
     # 4. Create user_b and associate with the same group
     user_b_name = f"user-b-in-team-{uuid4()}"
-    user_b = gen_object_with_cleanup(
+    gen_object_with_cleanup(
         pulpcore_bindings.UsersApi, {"username": user_b_name}
     )
     gen_object_with_cleanup(
