@@ -83,19 +83,20 @@ class DomainBasedPermission(BasePermission):
 
     def get_user_action(self, request):
         view_name = request.resolver_match.view_name
-        if view_name == "domains-list":
-            if request.META['REQUEST_METHOD'] == 'POST':
+        method = request.META['REQUEST_METHOD']
+
+        # Map view names to actions
+        if view_name in ["domains-list"]:
+            if method == 'POST':
                 return "domain_create"
-            elif request.META['REQUEST_METHOD'] == 'GET':
+            if method == 'GET':
                 return "domain_list"
         elif view_name in ["domains-set-label", "domains-unset-label"]:
             return "domain_update"
         elif view_name == "domains-detail":
-            if request.META['REQUEST_METHOD'] == 'PATCH':
-                return "domain_update"
-            elif request.META['REQUEST_METHOD'] == 'DELETE':
-                return "domain_delete"
-        elif view_name == "create-domain" or view_name == "pulp_service.app.viewsets.CreateDomainView":
+            if method in ['PATCH', 'DELETE']:
+                return "domain_update" if method == 'PATCH' else "domain_delete"
+        elif view_name in ["create-domain", "pulp_service.app.viewsets.CreateDomainView"]:
             return "domain_create"
         else:
             return "domain_operation"
