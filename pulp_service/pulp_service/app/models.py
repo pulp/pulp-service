@@ -16,7 +16,7 @@ from django.db import models
 
 from django.contrib.postgres.fields import ArrayField
 
-from pulpcore.plugin.models import BaseModel, Domain
+from pulpcore.plugin.models import BaseModel, Domain, Group
 from pulpcore.plugin.models import AutoAddObjPermsMixin
 from pulpcore.plugin.util import get_domain_pk
 
@@ -39,7 +39,13 @@ class DomainOrg(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name="users",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+    group = models.ForeignKey(
+        Group,
+        related_name="domain_orgs",
+        on_delete=models.SET_NULL,
         null=True,
     )
 
