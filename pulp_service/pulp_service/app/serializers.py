@@ -1,14 +1,9 @@
-import createrepo_c as cr
 import json
 import logging
-import traceback
 
-from django.conf import settings
-from django.db import DatabaseError
 from gettext import gettext as _
 from jsonschema import validate, ValidationError
 from rest_framework import serializers
-from rest_framework.exceptions import NotAcceptable
 
 from pulpcore.plugin.serializers import (
     ContentGuardSerializer,
@@ -16,12 +11,8 @@ from pulpcore.plugin.serializers import (
     ModelSerializer,
     ValidateFieldsMixin,
 )
-from pulpcore.plugin.models import Artifact, PulpTemporaryFile
-from pulpcore.plugin.serializers import ArtifactSerializer, IdentityField, RepositoryVersionRelatedField
-from pulpcore.app.util import get_domain_pk
-
-from pulp_rpm.app.models import Package
-from pulp_rpm.app.shared_utils import format_nvra
+from pulpcore.plugin.models import PulpTemporaryFile
+from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
 
 from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport
 from pulp_service.app.constants import (
@@ -29,8 +20,6 @@ from pulp_service.app.constants import (
     OSV_RH_ECOSYSTEM_CPES_LABEL,
     OSV_RH_ECOSYSTEM_LABEL,
 )
-
-from pulp_rpm.app.serializers import PackageSerializer
 
 
 _logger = logging.getLogger(__name__)
@@ -125,57 +114,3 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             raise serializers.ValidationError(_("Invalid JSON format."))
 
         return temp_file.pk
-
-
-class RPMPackageSerializer(PackageSerializer):
-
-    def validate(self, data):
-        uploaded_file = data.get('file')
-        # export META from rpm and prepare dict as saveable format
-        try:
-            cr_object = cr.package_from_rpm(
-                uploaded_file.file.name, changelog_limit=settings.KEEP_CHANGELOG_LIMIT
-            )
-            new_pkg = Package.createrepo_to_dict(cr_object)
-        except OSError as e:
-            _logger.info(traceback.format_exc())
-            raise NotAcceptable(detail="RPM file cannot be parsed for metadata") from e
-
-        # Get or create the Artifact
-        if "file" in data:
-            file = data.pop("file")
-            # if artifact already exists, let's use it
-            try:
-                artifact = Artifact.objects.get(
-                    sha256=file.hashers["sha256"].hexdigest(), pulp_domain=get_domain_pk()
-                )
-                if not artifact.pulp_domain.get_storage().exists(artifact.file.name):
-                    artifact.file = file
-                    artifact.save()
-                else:
-                    artifact.touch()
-            except (Artifact.DoesNotExist, DatabaseError):
-                artifact_data = {"file": file}
-                serializer = ArtifactSerializer(data=artifact_data)
-                serializer.is_valid(raise_exception=True)
-                artifact = serializer.save()
-            data["artifact"] = artifact
-
-        filename = (
-                format_nvra(
-                    new_pkg["name"],
-                    new_pkg["version"],
-                    new_pkg["release"],
-                    new_pkg["arch"],
-                )
-                + ".rpm"
-        )
-
-        if not data.get("relative_path"):
-            data["relative_path"] = filename
-            new_pkg["location_href"] = filename
-        else:
-            new_pkg["location_href"] = data["relative_path"]
-
-        data.update(new_pkg)
-        return data
