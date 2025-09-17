@@ -444,7 +444,7 @@ objects:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-content
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-content', '-b', '0.0.0.0:8000', '--max-requests', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS_JITTER}', '--access-logfile', '-', '--access-logformat', '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" cache:"%{X-PULP-CACHE}o" artifact_size:"%{X-PULP-ARTIFACT-SIZE}o" rh_org_id:"%{X-RH-ORG-ID}o"']
+        command: ['pulpcore-content', '-b', '0.0.0.0:8000', '--max-requests', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS_JITTER}', '--graceful-timeout', '${PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT}', '--access-logfile', '-', '--access-logformat', '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" cache:"%{X-PULP-CACHE}o" artifact_size:"%{X-PULP-ARTIFACT-SIZE}o" rh_org_id:"%{X-RH-ORG-ID}o"']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
@@ -1192,6 +1192,9 @@ parameters:
   - name: PULP_CONTENT_GUNICORN_MAX_REQUESTS_JITTER
     description: The maximum jitter to add to the Content max_requests setting for each worker.
     value: "5"
+  - name: PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT
+    description: Timeout for graceful gunicorn workers restart.
+    value: "300"
   - name: PULP_CSRF_TRUSTED_ORIGINS
     value: "['https://*.apps.crc-eph.r9lp.p1.openshiftapps.com']"
   - name: PULP_STATIC_URL
