@@ -120,9 +120,9 @@ class PulpUserAdmin(UserAdmin):
 
     def has_module_permission(self, request):
         """
-        Allow staff users to access the User module.
+        Allow any authenticated user to access the User module.
         """
-        return request.user.is_staff
+        return request.user.is_authenticated
 
 
 class PulpGroupAdmin(GroupAdmin):
@@ -179,9 +179,9 @@ class PulpGroupAdmin(GroupAdmin):
 
     def has_module_permission(self, request):
         """
-        Allow staff users to access the Group module.
+        Allow any authenticated user to access the Group module.
         """
-        return request.user.is_staff
+        return request.user.is_authenticated
 
 
 class PulpAdminSite(admin.AdminSite):
@@ -189,9 +189,9 @@ class PulpAdminSite(admin.AdminSite):
 
     def has_permission(self, request):
         """
-        Allow staff users (is_staff=True) to access admin, not just superusers.
+        Allow any authenticated user to access admin.
         """
-        return request.user.is_active and request.user.is_staff
+        return request.user.is_authenticated and request.user.is_active
 
     def get_app_list(self, request, app_label=None):
         """
@@ -330,9 +330,9 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
     def has_module_permission(self, request):
         """
-        Allow staff users to access the DomainOrg module.
+        Allow any authenticated user to access the DomainOrg module.
         """
-        return request.user.is_staff
+        return request.user.is_authenticated
 
 
 class DomainAdmin(admin.ModelAdmin):
@@ -402,9 +402,9 @@ class DomainAdmin(admin.ModelAdmin):
 
     def has_module_permission(self, request):
         """
-        Allow staff users to access the Domain module.
+        Allow any authenticated user to access the Domain module.
         """
-        return request.user.is_staff
+        return request.user.is_authenticated
 
 
 admin_site = PulpAdminSite(name="myadmin")
