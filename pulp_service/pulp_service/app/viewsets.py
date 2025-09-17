@@ -19,10 +19,9 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
-from rest_framework.authentication import BasicAuthentication
 
-from pulpcore.plugin.viewsets import OperationPostponedResponse, SingleArtifactContentUploadViewSet
-from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet, LabelsMixin
+from pulpcore.plugin.viewsets import OperationPostponedResponse
+from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
 from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
 from pulpcore.app.models import Domain
@@ -37,7 +36,6 @@ from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     ContentScanSerializer,
     FeatureContentGuardSerializer,
-    RPMPackageSerializer,
     VulnerabilityReportSerializer,
 )
 from pulp_service.app.tasks.package_scan import check_npm_package, check_content_from_repo_version
@@ -247,25 +245,6 @@ class TaskIngestionRandomResourceLockDispatcherView(APIView):
             task_count = task_count + 1
 
         return Response({"tasks_executed": task_count})
-
-
-class RPMUploadViewSet(SingleArtifactContentUploadViewSet, LabelsMixin):
-
-    endpoint_name = "rpmpackages"
-    queryset = Package.objects.all()
-    serializer_class = RPMPackageSerializer
-
-    def create(self, request):
-        """Create a content unit."""
-        serializer = self.get_serializer(data=request.data)
-        with transaction.atomic():
-            # Create the artifact
-            serializer.is_valid(raise_exception=True)
-            # Create the Package
-            serializer.save()
-
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class CreateDomainView(APIView):
