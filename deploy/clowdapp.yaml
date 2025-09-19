@@ -980,6 +980,36 @@ objects:
               value: "/tmp"
             - name: XDG_CACHE_HOME
               value: "/tmp"
+      - name: set-contentsources-group-to-cs-domains
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ 'pulpcore-manager' ]
+          args:
+            - "shell"
+            - "-c"
+            - |
+              from os import getenv
+              from django.contrib.auth import get_user_model
+              cs_group = Group.objects.get(name="contentsources")
+              DomainOrg.objects.filter(domains__pulp_labels__contains={"contentsources": "true"}).update(group=cs_group)
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
+          env:
+            - name: XDG_CONFIG_HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
 
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
@@ -1006,6 +1036,16 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: set-contentsources-group-to-cs-domains
+  spec:
+    appName: pulp
+    jobs:
+      - set-contentsources-group-to-cs-domains
+
+
 
 parameters:
   - name: ENV_NAME
