@@ -988,8 +988,8 @@ objects:
             - "shell"
             - "-c"
             - |
-              from os import getenv
-              from django.contrib.auth import get_user_model
+              from pulpcore.app.models import Group
+              from pulp_service.app.models import DomainOrg
               cs_group = Group.objects.get(name="contentsources")
               domain_orgs = DomainOrg.objects.filter(domains__pulp_labels__contains={"contentsources": "true"}).update(group=cs_group, user=None)
           volumeMounts:
@@ -1039,7 +1039,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: set-contentsources-group-to-cs-domains
+    name: set-contentsources-group-to-cs-domains-1
   spec:
     appName: pulp
     jobs:

@@ -1,6 +1,6 @@
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import User
 from django.contrib import admin
 from django.db.models import Q
 
@@ -10,7 +10,7 @@ from django.core.validators import RegexValidator
 from .models import DomainOrg
 import re
 
-from pulpcore.plugin.models import Domain
+from pulpcore.plugin.models import Domain, Group
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
 
 USERNAME_PATTERN = r'^[\w.@+=/-]+$'
