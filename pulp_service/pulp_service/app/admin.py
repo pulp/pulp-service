@@ -266,7 +266,19 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
         return queryset
 
 
+class DomainOrgForm(forms.ModelForm):
+    class Meta:
+        model = DomainOrg
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make user field optional since it can be null
+        self.fields['user'].required = False
+
+
 class DomainOrgAdmin(admin.ModelAdmin):
+    form = DomainOrgForm
     list_display = ["user", "org_id", "group"]
     list_filter = ["user", "org_id", "group"]
 
@@ -358,13 +370,9 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         """
-        Staff users can add DomainOrg entries if they have at least one group.
+        Only superusers can add new DomainOrg entries.
         """
-        if request.user.is_superuser:
-            return True
-
-        # Staff users can add if they have groups to work with
-        return request.user.groups.exists()
+        return request.user.is_superuser
 
     def has_module_permission(self, request):
         """
