@@ -266,7 +266,19 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
         return queryset
 
 
+class DomainOrgForm(forms.ModelForm):
+    class Meta:
+        model = DomainOrg
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make user field optional since it can be null
+        self.fields['user'].required = False
+
+
 class DomainOrgAdmin(admin.ModelAdmin):
+    form = DomainOrgForm
     list_display = ["user", "org_id", "group"]
     list_filter = ["user", "org_id", "group"]
 
@@ -358,13 +370,9 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         """
-        Staff users can add DomainOrg entries if they have at least one group.
+        Only superusers can add new DomainOrg entries.
         """
-        if request.user.is_superuser:
-            return True
-
-        # Staff users can add if they have groups to work with
-        return request.user.groups.exists()
+        return request.user.is_superuser
 
     def has_module_permission(self, request):
         """
@@ -374,8 +382,31 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
 
 class DomainAdmin(admin.ModelAdmin):
-    list_display = ["name", "description", "storage_class"]
-    list_filter = ["name", "description", "storage_class", ContentSourceDomainFilter]
+    list_display = ["name", "description", "storage_class", "domain_orgs_display"]
+    list_filter = ["description", "storage_class", ContentSourceDomainFilter]
+    search_fields = ["name"]
+
+    def domain_orgs_display(self, obj):
+        """Display related DomainOrg entries for this domain."""
+        domain_orgs = obj.domain_orgs.all()
+        if not domain_orgs:
+            return "-"
+
+        org_info = []
+        for domain_org in domain_orgs:
+            parts = []
+            if domain_org.org_id:
+                parts.append(f"Org: {domain_org.org_id}")
+            if domain_org.user:
+                parts.append(f"User: {domain_org.user.username}")
+            if domain_org.group:
+                parts.append(f"Group: {domain_org.group.name}")
+            if parts:
+                org_info.append(" | ".join(parts))
+
+        return "; ".join(org_info) if org_info else "-"
+
+    domain_orgs_display.short_description = "Domain Organizations"
 
     def get_queryset(self, request):
         """
