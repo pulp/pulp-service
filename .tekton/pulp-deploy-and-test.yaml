@@ -391,6 +391,7 @@ spec:
                       - -o
                       - /home/store/${PACKAGE//_/-}
                       - --additional-properties=packageName=pulpcore.client.${PACKAGE},projectName=${PACKAGE}-client,packageVersion=1.0,domainEnabled=true
+                      - --http-user-agent=crc-pulp-client
                       - -t
                       - /tmp/templates
                       - --skip-validate-spec
@@ -1093,6 +1094,7 @@ spec:
                   -g python \
                   -o /workspace/bindings/$component \
                   --additional-properties=packageName=pulpcore.client.${component},projectName=${package_name},packageVersion=${package_version},domainEnabled=true \
+                  --http-user-agent=crc-pulp-client \
                   -t /workspace/templates \
                   --skip-validate-spec \
                   --strict-spec=false
