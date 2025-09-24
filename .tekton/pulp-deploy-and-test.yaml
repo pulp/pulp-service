@@ -962,13 +962,14 @@ spec:
               #!/usr/bin/env python3
               import json,os,requests
 
-              # get the PR of the commit
-              snapshot=os.getenv("SNAPSHOT", "")
-              snapshot_component=json.loads(snapshot)['components'][0]
-              commit_hash_after_merge=snapshot_component['source']['git']['revision'].removeprefix('sha256:')
-              gh_pulls_url=f"https://api.github.com/repos/pulp/pulp-service/commits/{commit_hash_after_merge}/pulls"
-              response = requests.get(gh_pulls_url)
-              pr=response.json()[-1]['number']
+              ## get the PR of the commit
+              #snapshot=os.getenv("SNAPSHOT", "")
+              #snapshot_component=json.loads(snapshot)['components'][0]
+              #commit_hash_after_merge=snapshot_component['source']['git']['revision'].removeprefix('sha256:')
+              #gh_pulls_url=f"https://api.github.com/repos/pulp/pulp-service/commits/{commit_hash_after_merge}/pulls"
+              #response = requests.get(gh_pulls_url)
+              #pr=response.json()[-1]['number']
+              pr=686
 
               # get the "original" (before merge) commit - this is the commit also used in api.json file name
               gh_commit_from_pr_url=f"https://api.github.com/repos/pulp/pulp-service/pulls/{pr}/commits"
@@ -1020,7 +1021,7 @@ spec:
                     print("OpenAPI schema not found! Skipping step.")
                     note = os.getenv("TASK_RESULT_NOT_FOUND_NOTE","")
                     timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-                    task_results = {"result":"SKIPPED","note":note,"successes":0,"failures":0,"warnings":1}
+                    task_results = {"result":"SKIPPED","timestamp":timestamp,"note":note,"successes":0,"failures":0,"warnings":1}
                     with open('$(results.TEST_OUTPUT.path)', 'w') as f:
                       f.write(json.dumps(task_results))
                     sys.exit(0)
@@ -1041,7 +1042,7 @@ spec:
             script: |
               # skip step if openapi-schema is not found
               if [ -f $(results.TEST_OUTPUT.path) ] ; then
-                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                grep "$TASK_RESULT_NOT_FOUND_NOTE" $(results.TEST_OUTPUT.path)
                 if [ $? -eq 0 ] ; then
                   echo "OpenAPI schema not found! Skipping step."
                   exit 0
@@ -1062,12 +1063,14 @@ spec:
             env:
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
+              - name: TASK_RESULT_NOT_FOUND_NOTE
+                value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
               #!/usr/bin/env python3
-              import os, requests, sys
+              import json, os, requests, sys
 
               # skip step if openapi-schema is not found
-              test_output_file=$(results.TEST_OUTPUT.path)
+              test_output_file="$(results.TEST_OUTPUT.path)"
               if os.path.exists(test_output_file):
                 with open(test_output_file,'r') as f:
                   file_content=json.loads(f.read())
@@ -1093,10 +1096,12 @@ spec:
                 value: python
               - name: TEMPLATE_VERSION
                 value: $(params.TEMPLATE_VERSION)
+              - name: TASK_RESULT_NOT_FOUND_NOTE
+                value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
               # skip step if openapi-schema is not found
               if [ -f $(results.TEST_OUTPUT.path) ] ; then
-                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                grep "$TASK_RESULT_NOT_FOUND_NOTE" $(results.TEST_OUTPUT.path)
                 if [ $? -eq 0 ] ; then
                   echo "OpenAPI schema not found! Skipping step."
                   exit 0
@@ -1117,12 +1122,14 @@ spec:
             env:
               - name: PULP_BINDINGS_COMPONENTS
                 value: $(params.PULP_BINDINGS_COMPONENTS)
+              - name: TASK_RESULT_NOT_FOUND_NOTE
+                value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
               #!/bin/bash
 
               # skip step if openapi-schema is not found
               if [ -f $(results.TEST_OUTPUT.path) ] ; then
-                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                grep "$TASK_RESULT_NOT_FOUND_NOTE" $(results.TEST_OUTPUT.path)
                 if [ $? -eq 0 ] ; then
                   echo "OpenAPI schema not found! Skipping step."
                   exit 0
@@ -1170,10 +1177,12 @@ spec:
                   secretKeyRef:
                     name: $(params.PYPI_API_TOKEN)
                     key: token
+              - name: TASK_RESULT_NOT_FOUND_NOTE
+                value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
               # skip step if openapi-schema is not found
               if [ -f $(results.TEST_OUTPUT.path) ] ; then
-                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                grep "$TASK_RESULT_NOT_FOUND_NOTE" $(results.TEST_OUTPUT.path)
                 if [ $? -eq 0 ] ; then
                   echo "OpenAPI schema not found! Skipping step."
                   exit 0
