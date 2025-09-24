@@ -911,10 +911,6 @@ spec:
               done
 
     - name: publish-bindings-to-pypi
-      when:
-        - input: '$(tasks.test-metadata.results.test-event-type)'
-          operator: in
-          values: ["push"]
       params:
         - name: BONFIRE_IMAGE
           value: "$(params.BONFIRE_IMAGE)"
@@ -934,6 +930,12 @@ spec:
           - name: PULP_DOMAIN
             type: string
             default: python-bindings
+          - name: TASK_RESULT_NOT_FOUND_NOTE
+            type: string
+            default: "OpenAPI schema not found! Maybe it was not pushed to Pulp yet. Skipping the next steps."
+        results:
+          - name: TEST_OUTPUT
+            description: The output of the step
         steps:
           - name: get-pulp-token
             image: "$(params.BONFIRE_IMAGE)"
@@ -985,9 +987,12 @@ spec:
                 value: $(params.PULP_DOMAIN)
               - name: PULP_BINDINGS_COMPONENTS
                 value: $(params.PULP_BINDINGS_COMPONENTS)
+              - name: TASK_RESULT_NOT_FOUND_NOTE
+                value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
               #!/usr/bin/env python3
-              import requests, os, sys
+              import json, requests, os, sys
+              from datetime import datetime
               with open("/workspace/commit_sha") as file:
                 commit_sha = file.read().strip()
                 print(commit_sha)
@@ -1009,6 +1014,17 @@ spec:
                     sys.exit(1)
                   results = response.json()['results']
                   print(results)
+
+                  # exit step if openapi-schema is not found
+                  if not results:
+                    print("OpenAPI schema not found! Skipping step.")
+                    note = os.getenv("TASK_RESULT_NOT_FOUND_NOTE","")
+                    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                    task_results = {"result":"SKIPPED","note":note,"successes":0,"failures":0,"warnings":1}
+                    with open('$(results.TEST_OUTPUT.path)', 'w') as f:
+                      f.write(json.dumps(task_results))
+                    sys.exit(0)
+
                   relative_path = results[0]['relative_path']
                   print(relative_path)
                   file.write(relative_path + "\n")
@@ -1020,7 +1036,18 @@ spec:
                 value: "https://cert.console.redhat.com/api/pulp-content/python-bindings/python-bindings/"
               - name: PULP_DOMAIN
                 value: $(params.PULP_DOMAIN)
+              - name: TASK_RESULT_NOT_FOUND_NOTE
+                value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
+              # skip step if openapi-schema is not found
+              if [ -f $(results.TEST_OUTPUT.path) ] ; then
+                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                if [ $? -eq 0 ] ; then
+                  echo "OpenAPI schema not found! Skipping step."
+                  exit 0
+                fi
+              fi
+
               mkdir -p /workspace/api-json-files ; cd $_
               while read FILE ; do
                 curl -sLO -H "Authorization: Bearer $(cat /workspace/token)" https://cert.console.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
@@ -1037,7 +1064,18 @@ spec:
                 value: $(params.SNAPSHOT)
             script: |
               #!/usr/bin/env python3
-              import requests
+              import os, requests, sys
+
+              # skip step if openapi-schema is not found
+              test_output_file=$(results.TEST_OUTPUT.path)
+              if os.path.exists(test_output_file):
+                with open(test_output_file,'r') as f:
+                  file_content=json.loads(f.read())
+                not_found_note = os.getenv("TASK_RESULT_NOT_FOUND_NOTE","")
+                if file_content['note'] == not_found_note:
+                  print("OpenAPI schema not found! Skipping step.")
+                  sys.exit(0)
+
               # get the latest pypi client version based on crc.pulpcore.client package
               pypi_url = f"https://pypi.org/pypi/crc.pulpcore.client/json"
               response = requests.get(pypi_url)
@@ -1056,6 +1094,15 @@ spec:
               - name: TEMPLATE_VERSION
                 value: $(params.TEMPLATE_VERSION)
             script: |
+              # skip step if openapi-schema is not found
+              if [ -f $(results.TEST_OUTPUT.path) ] ; then
+                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                if [ $? -eq 0 ] ; then
+                  echo "OpenAPI schema not found! Skipping step."
+                  exit 0
+                fi
+              fi
+
               mkdir -p /workspace/templates ; cd $_
               for TEMPLATE in $BINDINGS_TEMPLATES ; do
                 curl -s -LO https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/${TEMPLATE_LANG}/${TEMPLATE_VERSION}/${TEMPLATE}.mustache
@@ -1072,6 +1119,16 @@ spec:
                 value: $(params.PULP_BINDINGS_COMPONENTS)
             script: |
               #!/bin/bash
+
+              # skip step if openapi-schema is not found
+              if [ -f $(results.TEST_OUTPUT.path) ] ; then
+                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                if [ $? -eq 0 ] ; then
+                  echo "OpenAPI schema not found! Skipping step."
+                  exit 0
+                fi
+              fi
+
               set -ex
               today=$(date +%Y%m%d)
               latest_version_date=$(awk -F. '{print $1}' /workspace/latest-version-from-pypi)
@@ -1114,6 +1171,15 @@ spec:
                     name: $(params.PYPI_API_TOKEN)
                     key: token
             script: |
+              # skip step if openapi-schema is not found
+              if [ -f $(results.TEST_OUTPUT.path) ] ; then
+                grep $TASK_RESULT_NOT_FOUND_NOTE $(results.TEST_OUTPUT.path)
+                if [ $? -eq 0 ] ; then
+                  echo "OpenAPI schema not found! Skipping step."
+                  exit 0
+                fi
+              fi
+
               set -e
               PKG_VERSION=$(cat /workspace/package_version)
               pip install build packaging twine wheel
