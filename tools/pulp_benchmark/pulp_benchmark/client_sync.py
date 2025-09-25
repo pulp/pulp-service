@@ -21,22 +21,42 @@ def send_request_sync(session: requests.Session, url: str, timeout: int, worker_
         logging.error(f"[Sync Worker {worker_id}] Request failed: {e}")
     return 0
 
-def run_concurrent_requests_sync(url: str, timeout: int, max_workers: int) -> int:
+def run_concurrent_requests_sync(
+    url: str,
+    timeout: int,
+    max_workers: int,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    cert: Optional[str] = None,
+    key: Optional[str] = None,
+) -> int:
     """Runs concurrent requests using a ThreadPoolExecutor."""
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         with requests.Session() as session:
+            if user and password:
+                session.auth = (user, password)
+            if cert:
+                session.cert = (cert, key) if key else cert
             # Pass a worker_id for better logging
             futures = [executor.submit(send_request_sync, session, url, timeout, i+1) for i in range(max_workers)]
             # Correctly wait for all futures to complete
             results = [f.result() for f in futures]
             return sum(results)
 
-def get_system_status_sync(api_root: str):
+def get_system_status_sync(
+    api_root: str,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    cert: Optional[str] = None,
+    key: Optional[str] = None,
+):
     """Fetches and prints the system's worker status synchronously."""
     logging.info("Fetching system status...")
     status_endpoint = f"{api_root}/pulp/api/v3/status/"
+    auth = (user, password) if user and password else None
+    cert_param = (cert, key) if cert and key else cert
     try:
-        response = requests.get(status_endpoint, timeout=15)
+        response = requests.get(status_endpoint, timeout=15, auth=auth, cert=cert_param)
         response.raise_for_status()
         status = response.json()
         logging.info(f"Online API workers: {len(status.get('online_api_apps', []))}")
