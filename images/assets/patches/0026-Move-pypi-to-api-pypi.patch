@@ -1,0 +1,28 @@
+From 6055764b9d3bcb7812998ecd9ad4b7a250c28138 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Thu, 25 Sep 2025 15:34:03 -0400
+Subject: [PATCH] Move /pypi/ to /api/pypi
+
+---
+ pulp_python/app/urls.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pulp_python/app/urls.py b/pulp_python/app/urls.py
+index 405ab119..c2a71f68 100644
+--- a/pulp_python/app/urls.py
++++ b/pulp_python/app/urls.py
+@@ -4,9 +4,9 @@ from django.urls import path
+ from pulp_python.app.pypi.views import SimpleView, MetadataView, PyPIView, UploadView
+ 
+ if settings.DOMAIN_ENABLED:
+-    PYPI_API_URL = "pypi/<slug:pulp_domain>/<path:path>/"
++    PYPI_API_URL = "api/pypi/<slug:pulp_domain>/<path:path>/"
+ else:
+-    PYPI_API_URL = "pypi/<path:path>/"
++    PYPI_API_URL = "api/pypi/<path:path>/"
+ # TODO: Implement remaining PyPI endpoints
+ # path("project/", PackageProject.as_view()), # Endpoints to nicely see contents of index
+ # path("search/", PackageSearch.as_view()),
+-- 
+2.51.0
+
