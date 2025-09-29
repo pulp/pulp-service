@@ -122,13 +122,13 @@ class PulpGroupAdmin(GroupAdmin):
         """
         Only superusers can delete groups.
         """
-        return request.user.is_superuser
+        return request.user.is_superuser or request.user.groups.filter(pk=obj.pk).exists()
 
     def has_add_permission(self, request):
         """
         Only superusers can add new groups.
         """
-        return request.user.is_superuser
+        return request.user.is_authenticated
 
     def has_view_permission(self, request, obj=None):
         """
