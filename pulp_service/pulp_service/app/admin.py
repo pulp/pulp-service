@@ -1,8 +1,9 @@
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
-from django.contrib.auth.forms import UserChangeForm, UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
 from django.contrib.auth.models import User
 from django.contrib import admin
 from django.db.models import Q
+from django.core.exceptions import ValidationError
 
 from django import forms
 from django.core.validators import RegexValidator
@@ -221,9 +222,13 @@ class PulpGroupAdmin(GroupAdmin):
         """
         return request.user.is_authenticated
 
+class PulpAuthenticationForm(AuthenticationForm):
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
 
 class PulpAdminSite(admin.AdminSite):
     site_header = "Pulp administration"
+    login_form = PulpAuthenticationForm
 
     def has_permission(self, request):
         """
