@@ -653,8 +653,8 @@ objects:
             value: ${PULP_TASK_PROTECTION_TIME}
           - name: PULP_TASK_DIAGNOSTICS
             value: ${{PULP_TASK_DIAGNOSTICS}}
-          - name: UPLOAD_PROTECTION_TIME
-            value: ${{UPLOAD_PROTECTION_TIME}}
+          - name: PULP_UPLOAD_PROTECTION_TIME
+            value: ${{PULP_UPLOAD_PROTECTION_TIME}}
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
@@ -1284,6 +1284,6 @@ parameters:
   - name: CLAMAV_DEBUG
     description: Enable debug messages from libclamav.
     value: "false"
-  - name: UPLOAD_PROTECTION_TIME
+  - name: PULP_UPLOAD_PROTECTION_TIME
     description: Enable uploads cleanup after some period, in minutes.
     value: 480
