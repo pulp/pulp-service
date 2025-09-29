@@ -1286,4 +1286,4 @@ parameters:
     value: "false"
   - name: PULP_UPLOAD_PROTECTION_TIME
     description: Enable uploads cleanup after some period, in minutes.
-    value: 480
+    value: "480"
