@@ -87,27 +87,6 @@ class PulpUserAdmin(UserAdmin):
     form = PulpUserChangeForm
     add_form = PulpUserCreationForm
 
-    def get_queryset(self, request):
-        """
-        Filter users based on group memberships for non-superusers.
-        """
-        qs = super().get_queryset(request)
-
-        if request.user.is_superuser:
-            return qs
-
-        # Staff users can see themselves + users in their groups
-        if request.user.is_staff:
-            user_groups = request.user.groups.all()
-            user_filter = Q(pk=request.user.pk)  # Always include themselves
-
-            if user_groups.exists():
-                user_filter |= Q(groups__in=user_groups)
-
-            return qs.filter(user_filter).distinct()
-
-        return qs.none()
-
     def has_change_permission(self, request, obj=None):
         """
         Staff users can only modify users in their groups or themselves.
@@ -121,13 +100,6 @@ class PulpUserAdmin(UserAdmin):
         if obj == request.user:
             return True
 
-        # Check if user shares any groups with the target user
-        if request.user.is_staff:
-            user_groups = set(request.user.groups.values_list('pk', flat=True))
-            target_groups = set(obj.groups.values_list('pk', flat=True))
-
-            return bool(user_groups.intersection(target_groups))
-        
         return False
 
     def has_delete_permission(self, request, obj=None):
@@ -152,7 +124,7 @@ class PulpUserAdmin(UserAdmin):
         """
         Allow any authenticated user to access the User module.
         """
-        return request.user.is_superuser or request.user.is_staff
+        return request.user.is_superuser
 
 
 class PulpGroupAdmin(GroupAdmin):
