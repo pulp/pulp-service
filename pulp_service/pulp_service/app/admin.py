@@ -88,67 +88,6 @@ class PulpUserAdmin(UserAdmin):
     form = PulpUserChangeForm
     add_form = PulpUserCreationForm
 
-    def get_queryset(self, request):
-        """
-        Filter users based on group memberships for non-superusers.
-        """
-        qs = super().get_queryset(request)
-
-        if request.user.is_superuser:
-            return qs
-
-        # Staff users can see themselves + users in their groups
-        user_groups = request.user.groups.all()
-        user_filter = Q(pk=request.user.pk)  # Always include themselves
-
-        if user_groups.exists():
-            user_filter |= Q(groups__in=user_groups)
-
-        return qs.filter(user_filter).distinct()
-
-    def has_change_permission(self, request, obj=None):
-        """
-        Staff users can only modify users in their groups or themselves.
-        """
-        if request.user.is_superuser:
-            return True
-
-        if obj is None:
-            return True
-
-        if obj == request.user:
-            return True
-
-        # Check if user shares any groups with the target user
-        user_groups = set(request.user.groups.values_list('pk', flat=True))
-        target_groups = set(obj.groups.values_list('pk', flat=True))
-
-        return bool(user_groups.intersection(target_groups))
-
-    def has_delete_permission(self, request, obj=None):
-        """
-        Only superusers can delete users.
-        """
-        return request.user.is_superuser
-
-    def has_view_permission(self, request, obj=None):
-        """
-        Staff users can view users based on same rules as change permission.
-        """
-        if request.user.is_superuser:
-            return True
-
-        if obj is None:
-            return True
-
-        return self.has_change_permission(request, obj)
-
-    def has_module_permission(self, request):
-        """
-        Allow any authenticated user to access the User module.
-        """
-        return request.user.is_authenticated
-
 
 class PulpGroupAdmin(GroupAdmin):
     form = PulpGroupForm
@@ -163,7 +102,7 @@ class PulpGroupAdmin(GroupAdmin):
         if request.user.is_superuser:
             return qs
 
-        # Staff users can only see their own groups
+        # Common users can only see their own groups
         user_groups = request.user.groups.all()
         return qs.filter(pk__in=user_groups.values_list('pk', flat=True))
 
@@ -193,7 +132,7 @@ class PulpGroupAdmin(GroupAdmin):
 
     def has_view_permission(self, request, obj=None):
         """
-        Staff users can view groups based on same rules as change permission.
+        Common users can view groups based on same rules as change permission.
         """
         if request.user.is_superuser:
             return True
@@ -236,18 +175,6 @@ class PulpAdminSite(admin.AdminSite):
         """
         return request.user.is_authenticated and request.user.is_active
 
-    def get_app_list(self, request, app_label=None):
-        """
-        Filter app list based on user permissions and group memberships.
-        """
-        app_list = super().get_app_list(request, app_label)
-
-        if request.user.is_superuser:
-            return app_list
-
-        # For staff users, let them see all registered models
-        # The individual model admins will handle the detailed filtering
-        return app_list
 
 class ContentSourceDomainFilter(admin.SimpleListFilter):
     title = 'ContentSource Domains'
@@ -296,7 +223,7 @@ class DomainOrgAdmin(admin.ModelAdmin):
         if request.user.is_superuser:
             return qs
 
-        # For staff users, show DomainOrg entries where:
+        # For common users, show DomainOrg entries where:
         # 1. User is assigned directly, OR
         # 2. User belongs to the group assigned to the DomainOrg
         user_groups = request.user.groups.all()
@@ -324,20 +251,20 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "user" and not request.user.is_superuser:
-            # Staff users can only assign users from their groups
+            # Common users can only assign users from their groups
             user_groups = request.user.groups.all()
             if user_groups.exists():
                 kwargs["queryset"] = User.objects.filter(groups__in=user_groups).distinct()
             else:
                 kwargs["queryset"] = User.objects.filter(pk=request.user.pk)
         elif db_field.name == "group" and not request.user.is_superuser:
-            # Staff users can only assign their own groups
+            # Common users can only assign their own groups
             kwargs["queryset"] = request.user.groups.all()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_change_permission(self, request, obj=None):
         """
-        Staff users can only modify DomainOrg entries they have access to.
+        Common users can only modify DomainOrg entries they have access to.
         """
         if request.user.is_superuser:
             return True
@@ -363,7 +290,7 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         """
-        Staff users can view DomainOrg entries based on same rules as change permission.
+        Common users can view DomainOrg entries based on same rules as change permission.
         """
         if request.user.is_superuser:
             return True
@@ -433,7 +360,7 @@ class DomainAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         """
-        Staff users can only modify domains they have access to.
+        Common users can only modify domains they have access to.
         """
         if request.user.is_superuser:
             return True
@@ -464,7 +391,7 @@ class DomainAdmin(admin.ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         """
-        Staff users can view domains based on same rules as change permission.
+        Common users can view domains based on same rules as change permission.
         """
         if request.user.is_superuser:
             return True
