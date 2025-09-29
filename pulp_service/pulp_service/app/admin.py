@@ -127,6 +127,8 @@ class PulpUserAdmin(UserAdmin):
             target_groups = set(obj.groups.values_list('pk', flat=True))
 
             return bool(user_groups.intersection(target_groups))
+        
+        return False
 
     def has_delete_permission(self, request, obj=None):
         """
