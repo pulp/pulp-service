@@ -97,13 +97,16 @@ class PulpUserAdmin(UserAdmin):
             return qs
 
         # Staff users can see themselves + users in their groups
-        user_groups = request.user.groups.all()
-        user_filter = Q(pk=request.user.pk)  # Always include themselves
+        if request.user.is_staff:
+            user_groups = request.user.groups.all()
+            user_filter = Q(pk=request.user.pk)  # Always include themselves
 
-        if user_groups.exists():
-            user_filter |= Q(groups__in=user_groups)
+            if user_groups.exists():
+                user_filter |= Q(groups__in=user_groups)
 
-        return qs.filter(user_filter).distinct()
+            return qs.filter(user_filter).distinct()
+
+        return qs.none()
 
     def has_change_permission(self, request, obj=None):
         """
@@ -119,10 +122,11 @@ class PulpUserAdmin(UserAdmin):
             return True
 
         # Check if user shares any groups with the target user
-        user_groups = set(request.user.groups.values_list('pk', flat=True))
-        target_groups = set(obj.groups.values_list('pk', flat=True))
+        if request.user.is_staff:
+            user_groups = set(request.user.groups.values_list('pk', flat=True))
+            target_groups = set(obj.groups.values_list('pk', flat=True))
 
-        return bool(user_groups.intersection(target_groups))
+            return bool(user_groups.intersection(target_groups))
 
     def has_delete_permission(self, request, obj=None):
         """
@@ -146,7 +150,7 @@ class PulpUserAdmin(UserAdmin):
         """
         Allow any authenticated user to access the User module.
         """
-        return request.user.is_authenticated
+        return request.user.is_superuser or request.user.is_staff
 
 
 class PulpGroupAdmin(GroupAdmin):
