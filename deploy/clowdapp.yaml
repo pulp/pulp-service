@@ -654,7 +654,7 @@ objects:
           - name: PULP_TASK_DIAGNOSTICS
             value: ${{PULP_TASK_DIAGNOSTICS}}
           - name: PULP_UPLOAD_PROTECTION_TIME
-            value: ${{PULP_UPLOAD_PROTECTION_TIME}}
+            value: ${PULP_UPLOAD_PROTECTION_TIME}
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
