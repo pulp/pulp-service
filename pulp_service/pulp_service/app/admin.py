@@ -205,8 +205,9 @@ class DomainOrgForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make user field optional since it can be null
+        # Make user and group field optional since it can be null
         self.fields['user'].required = False
+        self.fields['group'].required = False
 
 
 class DomainOrgAdmin(admin.ModelAdmin):
@@ -272,10 +273,11 @@ class DomainOrgAdmin(admin.ModelAdmin):
         if obj is None:
             return True
 
-        # Check if user has access to this DomainOrg entry
-        user_groups = request.user.groups.all()
         if obj.user == request.user:
             return True
+
+        # Check if user has access to this DomainOrg entry
+        user_groups = request.user.groups.all()
 
         if user_groups.exists() and obj.group in user_groups:
             return True
