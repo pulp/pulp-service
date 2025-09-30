@@ -120,19 +120,19 @@ class PulpGroupAdmin(GroupAdmin):
 
     def has_delete_permission(self, request, obj=None):
         """
-        Only superusers can delete groups.
+        Only superusers and group members can delete groups, based on has_change_permission.
         """
-        return request.user.is_superuser or request.user.groups.filter(pk=obj.pk).exists()
+        return request.user.is_superuser or self.has_change_permission(request, obj)
 
     def has_add_permission(self, request):
         """
-        Only superusers can add new groups.
+        Allow any authenticated user to add a new group.
         """
-        return request.user.is_authenticated
+        return request.user.is_authenticated and request.user.is_active
 
     def has_view_permission(self, request, obj=None):
         """
-        Common users can view groups based on same rules as change permission.
+        Authenticated users can view groups based on same rules as change permission.
         """
         if request.user.is_superuser:
             return True
@@ -159,10 +159,13 @@ class PulpGroupAdmin(GroupAdmin):
         """
         Allow any authenticated user to access the Group module.
         """
-        return request.user.is_authenticated
+        return request.user.is_authenticated and request.user.is_active
 
 class PulpAuthenticationForm(AuthenticationForm):
     def confirm_login_allowed(self, user):
+        """
+        This override allows non-staff users to login into pulp-admin.
+        """
         super().confirm_login_allowed(user)
 
 class PulpAdminSite(admin.AdminSite):
@@ -312,7 +315,7 @@ class DomainOrgAdmin(admin.ModelAdmin):
         """
         Allow any authenticated user to access the DomainOrg module.
         """
-        return request.user.is_authenticated
+        return request.user.is_authenticated and request.user.is_active
 
 
 class DomainAdmin(admin.ModelAdmin):
@@ -407,7 +410,7 @@ class DomainAdmin(admin.ModelAdmin):
         """
         Allow any authenticated user to access the Domain module.
         """
-        return request.user.is_authenticated
+        return request.user.is_authenticated and request.user.is_active 
 
 
 admin_site = PulpAdminSite(name="myadmin")
