@@ -19,29 +19,6 @@ USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these spec
 USERNAME_HELP_TEXT = "Required. 150 characters or fewer. Letters, numbers, and these special characters: @, ., +, -, =, /, _"
 
 
-class PulpGroupForm(forms.ModelForm):
-    users = forms.ModelMultipleChoiceField(
-        queryset=User.objects.all(),
-        widget=admin.widgets.FilteredSelectMultiple('Users', False),
-        required=False,
-        help_text='Select users to add to this group.'
-    )
-
-    class Meta:
-        model = Group
-        fields = ['name']
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.instance.pk:
-            self.fields['users'].initial = self.instance.user_set.all()
-
-    def save(self, commit=True):
-        group = super().save(commit=commit)
-        if commit:
-            group.user_set.set(self.cleaned_data['users'])
-        return group
-
 # Override Django's username validator
 pulp_username_validator = RegexValidator(
     USERNAME_PATTERN,
@@ -89,6 +66,38 @@ class PulpUserAdmin(UserAdmin):
     add_form = PulpUserCreationForm
 
 
+class PulpGroupForm(forms.ModelForm):
+    users = forms.ModelMultipleChoiceField(
+        queryset=User.objects.all(),
+        widget=admin.widgets.FilteredSelectMultiple('Users', False),
+        required=False,
+        help_text='Select users to add to this group.'
+    )
+
+    class Meta:
+        model = Group
+        fields = ['name']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields['users'].initial = self.instance.user_set.all()
+
+    def save(self, commit=True):
+        group = super().save(commit=False)
+
+        def save_m2m():
+            group.user_set.set(self.cleaned_data['users'])
+
+        if commit:
+            group.save()
+            save_m2m()
+        else:
+            self.save_m2m = save_m2m
+
+        return group
+
+
 class PulpGroupAdmin(GroupAdmin):
     form = PulpGroupForm
     fields = ('name', 'users')  # Show name and users fields
@@ -102,7 +111,7 @@ class PulpGroupAdmin(GroupAdmin):
         if request.user.is_superuser:
             return qs
 
-        # Common users can only see their own groups
+        # Regular users can only see their own groups
         user_groups = request.user.groups.all()
         return qs.filter(pk__in=user_groups.values_list('pk', flat=True))
 
@@ -255,20 +264,20 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "user" and not request.user.is_superuser:
-            # Common users can only assign users from their groups
+            # Regular users can only assign users from their groups
             user_groups = request.user.groups.all()
             if user_groups.exists():
                 kwargs["queryset"] = User.objects.filter(groups__in=user_groups).distinct()
             else:
                 kwargs["queryset"] = User.objects.filter(pk=request.user.pk)
         elif db_field.name == "group" and not request.user.is_superuser:
-            # Common users can only assign their own groups
+            # Regular users can only assign their own groups
             kwargs["queryset"] = request.user.groups.all()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_change_permission(self, request, obj=None):
         """
-        Common users can only modify DomainOrg entries they have access to.
+        Regular users can only modify DomainOrg entries they have access to.
         """
         if request.user.is_superuser:
             return True
@@ -295,7 +304,7 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         """
-        Common users can view DomainOrg entries based on same rules as change permission.
+        Regular users can view DomainOrg entries based on same rules as change permission.
         """
         if request.user.is_superuser:
             return True
@@ -365,7 +374,7 @@ class DomainAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         """
-        Common users can only modify domains they have access to.
+        Regular users can only modify domains they have access to.
         """
         if request.user.is_superuser:
             return True
@@ -396,7 +405,7 @@ class DomainAdmin(admin.ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         """
-        Common users can view domains based on same rules as change permission.
+        Regular users can view domains based on same rules as change permission.
         """
         if request.user.is_superuser:
             return True
