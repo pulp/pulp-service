@@ -85,3 +85,13 @@ class RhEdgeHostMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
         if "HTTP_X_RH_EDGE_HOST" in request.META and request.META["HTTP_X_RH_EDGE_HOST"] is not None:
             request.META["HTTP_X_FORWARDED_HOST"] = request.META["HTTP_X_RH_EDGE_HOST"]
+
+
+class AuthHeaderIntrospectionMiddleware(MiddlewareMixin):
+    def process_view(self, request, *args, **kwargs):
+        if request.path.endswith('pulp-admin/'):
+            _logger.info("Request to pulp-admin ui")
+            if "HTTP_X_RH_IDENTITY" in request.META:
+                _logger.info(f"{request.META['HTTP_X_RH_IDENTITY']}")
+            else:
+                _logger.info("No Identity header found in request to pulp-admin")
