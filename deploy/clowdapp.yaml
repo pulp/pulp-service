@@ -282,7 +282,7 @@ objects:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-api
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '90', '--max-requests', '${PULP_API_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_API_GUNICORN_MAX_REQUESTS_JITTER}', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
+        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '${PULP_API_GUNICORN_TIMEOUT}', '--max-requests', '${PULP_API_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_API_GUNICORN_MAX_REQUESTS_JITTER}', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -1179,6 +1179,9 @@ parameters:
   - name: PULP_ALLOWED_CONTENT_CHECKSUMS
     description: Checksums that Pulp can use to validate packages.
     value: "[\"sha224\", \"sha256\", \"sha384\", \"sha512\"]"
+  - name: PULP_API_GUNICORN_TIMEOUT
+    description: Workers silent for more than this many seconds are killed and restarted.
+    value: "1800"
   - name: PULP_API_GUNICORN_WORKERS
     description: Number of gunicorn workers in the API pods
     value: "1"
