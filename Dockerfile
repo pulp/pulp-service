@@ -146,6 +146,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0026-Move-pypi-to-api-pypi.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0026-Move-pypi-to-api-pypi.patch
 
+COPY images/assets/patches/0027-Adds-repository-version-to-Python-distribution.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0027-Adds-repository-version-to-Python-distribution.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
