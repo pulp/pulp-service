@@ -1,6 +1,6 @@
-from pulpcore.app.authentication import JSONHeaderRemoteAuthentication
+import logging
 
-from django.conf import settings
+from pulpcore.app.authentication import JSONHeaderRemoteAuthentication
 
 
 class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
@@ -19,3 +19,9 @@ class RHEntitlementCertAuthentication(JSONHeaderRemoteAuthentication):
 
     def authenticate_header(self, request):
         return "Bearer"
+
+
+class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
+
+    header = "HTTP_X_RH_IDENTITY"
+    jq_filter = ".identity.associate.email"

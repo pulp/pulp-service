@@ -1,17 +1,20 @@
-from contextlib import suppress
-from contextvars import ContextVar
 import cProfile
 import logging
 import marshal
 import tempfile
 
+from contextlib import suppress
+from contextvars import ContextVar
 from os import getenv
 
+from django.contrib.auth import login
 from django.db import IntegrityError
 from django.utils.deprecation import MiddlewareMixin
 
 from pulpcore.plugin.models import Artifact, Repository
 from pulpcore.plugin.util import extract_pk, get_artifact_url, resolve_prn
+from pulp_service.app.authentication import RHSamlAuthentication
+
 
 
 _logger = logging.getLogger(__name__)
@@ -87,11 +90,19 @@ class RhEdgeHostMiddleware(MiddlewareMixin):
             request.META["HTTP_X_FORWARDED_HOST"] = request.META["HTTP_X_RH_EDGE_HOST"]
 
 
-class AuthHeaderIntrospectionMiddleware(MiddlewareMixin):
+class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
-        if request.path.endswith('pulp-admin/'):
-            _logger.info("Request to pulp-admin ui")
+        if '/pulp-admin/' in request.path:
             if "HTTP_X_RH_IDENTITY" in request.META:
-                _logger.info(f"{request.META['HTTP_X_RH_IDENTITY']}")
-            else:
-                _logger.info("No Identity header found in request to pulp-admin")
+                _logger.debug(f"{request.META['HTTP_X_RH_IDENTITY']}")
+
+                # Authenticate user using RHSamlAuthentication backend
+                if not request.user.is_authenticated:
+                    backend = RHSamlAuthentication()
+                    user, _ = backend.authenticate(request)
+
+                    if user:
+                        login(request, user, backend='pulp_service.app.authentication.RHSamlAuthentication')
+                        _logger.info(f"User {user.username} authenticated for pulp-admin")
+                    else:
+                        _logger.warning("Failed to authenticate user from RH Identity header")
