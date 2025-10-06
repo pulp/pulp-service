@@ -331,6 +331,8 @@ objects:
         sidecars:
           - name: otel-collector
             enabled: true
+            memoryRequest: 256Mi
+            memoryLimit: 384Mi
         resources:
           requests:
             cpu: ${{PULP_API_CPU_REQUEST}}
