@@ -331,8 +331,8 @@ objects:
         sidecars:
           - name: otel-collector
             enabled: true
-            memoryRequest: 256Mi
-            memoryLimit: 384Mi
+            memoryRequest: ${OTEL_COLLECTOR_MEMORY_REQUEST}
+            memoryLimit: ${OTEL_COLLECTOR_MEMORY_LIMIT}
         resources:
           requests:
             cpu: ${{PULP_API_CPU_REQUEST}}
@@ -495,6 +495,8 @@ objects:
         sidecars:
           - name: otel-collector
             enabled: true
+            memoryRequest: ${OTEL_COLLECTOR_MEMORY_REQUEST}
+            memoryLimit: ${OTEL_COLLECTOR_MEMORY_LIMIT}
         resources:
           requests:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
@@ -603,6 +605,8 @@ objects:
         sidecars:
           - name: otel-collector
             enabled: ${{PULP_WORKER_OTEL_COLLECTOR_SIDECAR_ENABLED}}
+            memoryRequest: ${OTEL_COLLECTOR_MEMORY_REQUEST}
+            memoryLimit: ${OTEL_COLLECTOR_MEMORY_LIMIT}
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
@@ -693,9 +697,6 @@ objects:
           timeoutSeconds: 20
           failureThreshold: 5
         terminationGracePeriodSeconds: 3660
-        sidecars:
-          - name: otel-collector
-            enabled: ${{PULP_WORKER_OTEL_COLLECTOR_SIDECAR_ENABLED}}
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
@@ -1107,10 +1108,10 @@ parameters:
     value: "500m"
   - name: OTEL_COLLECTOR_MEMORY_REQUEST
     description: Amount of memory to request for OpenTelemetry Collector container
-    value: "512Mi"
+    value: "256Mi"
   - name: OTEL_COLLECTOR_MEMORY_LIMIT
     description: Limit of memory use by OpenTelemetry Collector container
-    value: "1024Mi"
+    value: "384Mi"
   - name: OTEL_PYTHON_EXCLUDED_URLS
     description: RegEx used to exclude URLs from the OTEL metrics system
     value: ".*livez,.*status"
