@@ -983,6 +983,43 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
+      - name: add-new-pulp-admin-users
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ 'pulpcore-manager' ]
+          args:
+            - "shell"
+            - "-c"
+            - |
+              from os import getenv
+              from django.contrib.auth import get_user_model
+
+              admin_list = ["bmbouter@redhat.com", "dkliban@redhat.com", "hyagi@redhat.com", "ytrahnov@redhat.com", "ddebrito@redhat.com"]
+
+              User = get_user_model()
+              for user in admin_list:
+                  user, created = User.objects.get_or_create(username=user)
+                  user.is_superuser = True
+                  user.save()
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
+              secret:
+                secretName: pulp-settings
+          env:
+            - name: XDG_CONFIG_HOME
+              value: "/tmp"
+            - name: XDG_CACHE_HOME
+              value: "/tmp"
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -1008,6 +1045,14 @@ objects:
     appName: pulp
     jobs:
       - create-contentsources-user
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: add-new-pulp-admin-users
+  spec:
+    appName: pulp
+    jobs:
+      - add-new-pulp-admin-users
 
 parameters:
   - name: ENV_NAME
