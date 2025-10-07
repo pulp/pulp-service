@@ -983,7 +983,7 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
-      - name: add-new-pulp-admin-users-2
+      - name: add-new-pulp-admin-users-3
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ 'pulpcore-manager' ]
@@ -1050,11 +1050,11 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: add-new-pulp-admin-users-2
+    name: add-new-pulp-admin-users-3
   spec:
     appName: pulp
     jobs:
-      - add-new-pulp-admin-users-2
+      - add-new-pulp-admin-users-3
 
 parameters:
   - name: ENV_NAME
