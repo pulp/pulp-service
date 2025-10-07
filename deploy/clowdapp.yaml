@@ -983,7 +983,7 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
-      - name: add-new-pulp-admin-users
+      - name: add-new-pulp-admin-users-1
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ 'pulpcore-manager' ]
@@ -1054,7 +1054,7 @@ objects:
   spec:
     appName: pulp
     jobs:
-      - add-new-pulp-admin-users
+      - add-new-pulp-admin-users-1
 
 parameters:
   - name: ENV_NAME
