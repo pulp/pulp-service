@@ -19,6 +19,10 @@ def test_task_insertion(ctx, timeout: int, max_workers: int, run_until: Optional
     """Run the task insertion load test."""
     client_type = ctx.obj['client_type']
     api_root = ctx.obj['api_root']
+    user = ctx.obj['user']
+    password = ctx.obj['password']
+    cert = ctx.obj['cert']
+    key = ctx.obj['key']
     test_url = f"{api_root}/pulp/test/tasks/"
     
     logging.info(f"Starting task insertion test on {test_url} using '{client_type}' client with {max_workers} workers.")
@@ -32,18 +36,26 @@ def test_task_insertion(ctx, timeout: int, max_workers: int, run_until: Optional
             nonlocal tasks_processed
             if run_until:
                 while tasks_processed < run_until:
-                    tasks_processed += await run_concurrent_async(test_url, timeout, max_workers)
+                    tasks_processed += await run_concurrent_async(
+                        test_url, timeout, max_workers, user=user, password=password, cert=cert, key=key
+                    )
                     logging.info(f"Total tasks processed so far: {tasks_processed}")
             else:
-                tasks_processed = await run_concurrent_async(test_url, timeout, max_workers)
+                tasks_processed = await run_concurrent_async(
+                    test_url, timeout, max_workers, user=user, password=password, cert=cert, key=key
+                )
         asyncio.run(run_logic())
     else: # 'sync' client
         if run_until:
             while tasks_processed < run_until:
-                tasks_processed += run_concurrent_requests_sync(test_url, timeout, max_workers)
+                tasks_processed += run_concurrent_requests_sync(
+                    test_url, timeout, max_workers, user=user, password=password, cert=cert, key=key
+                )
                 logging.info(f"Total tasks processed so far: {tasks_processed}")
         else:
-            tasks_processed = run_concurrent_requests_sync(test_url, timeout, max_workers)
+            tasks_processed = run_concurrent_requests_sync(
+                test_url, timeout, max_workers, user=user, password=password, cert=cert, key=key
+            )
 
     elapsed_time = time.monotonic() - start_time
     
