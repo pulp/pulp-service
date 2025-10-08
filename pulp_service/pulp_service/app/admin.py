@@ -79,9 +79,31 @@ class PulpGroupForm(forms.ModelForm):
         fields = ['name']
 
     def __init__(self, *args, **kwargs):
+        # Extract the request object if passed
+        self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
+
         if self.instance.pk:
+            # Existing group - populate with current members
             self.fields['users'].initial = self.instance.user_set.all()
+        elif self.request and self.request.user.is_authenticated:
+            # New group - prepopulate with current user
+            self.fields['users'].initial = [self.request.user.pk]
+            # Store the current user for validation
+            self._current_user = self.request.user
+
+    def clean_users(self):
+        users = self.cleaned_data.get('users')
+
+        # For new groups, ensure the creating user is included
+        if not self.instance.pk and hasattr(self, '_current_user'):
+            if self._current_user not in users:
+                raise ValidationError(
+                    f'You must include yourself ({self._current_user.username}) in the group members. '
+                    'This ensures you maintain access to the group after creation.'
+                )
+
+        return users
 
     def save(self, commit=True):
         group = super().save(commit=False)
@@ -153,16 +175,22 @@ class PulpGroupAdmin(GroupAdmin):
 
     def get_form(self, request, obj=None, **kwargs):
         """
-        Customize the form based on user permissions.
+        Customize the form based on user permissions and pass request to form.
         """
-        form = super().get_form(request, obj, **kwargs)
+        form_class = super().get_form(request, obj, **kwargs)
 
         if not request.user.is_superuser:
             # Non-superusers can see all users in the form
             # but can only save groups they belong to (checked in has_change_permission)
-            form.base_fields['users'].queryset = User.objects.all().order_by('username')
+            form_class.base_fields['users'].queryset = User.objects.all().order_by('username')
 
-        return form
+        # Create a wrapper to inject request into form instantiation
+        class FormWithRequest(form_class):
+            def __init__(self, *args, **form_kwargs):
+                form_kwargs['request'] = request
+                super().__init__(*args, **form_kwargs)
+
+        return FormWithRequest
 
     def has_module_permission(self, request):
         """
