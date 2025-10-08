@@ -95,9 +95,9 @@ class PulpGroupForm(forms.ModelForm):
     def clean_users(self):
         users = self.cleaned_data.get('users')
 
-        # For new groups, ensure the creating user is included
+        # For new groups, ensure the creating user is included (unless they're a superuser)
         if not self.instance.pk and hasattr(self, '_current_user'):
-            if self._current_user not in users:
+            if not self._current_user.is_superuser and self._current_user not in users:
                 raise ValidationError(
                     f'You must include yourself ({self._current_user.username}) in the group members. '
                     'This ensures you maintain access to the group after creation.'
