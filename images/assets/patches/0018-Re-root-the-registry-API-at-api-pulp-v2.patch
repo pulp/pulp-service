@@ -7,9 +7,9 @@ Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
  pulp_container/app/content.py            |  2 +-
  pulp_container/app/redirects.py          |  4 ++--
  pulp_container/app/registry_api.py       |  4 +++-
- pulp_container/app/token_verification.py |  2 +-
+ pulp_container/app/token_verification.py | 16 +---------------
  pulp_container/app/urls.py               | 14 +++++++-------
- 5 files changed, 14 insertions(+), 12 deletions(-)
+ 5 files changed, 15 insertions(+), 27 deletions(-)
 
 diff --git a/pulp_container/app/content.py b/pulp_container/app/content.py
 index dbe6418d..006e8afb 100644
@@ -69,15 +69,39 @@ index e3b0766c..4e9114be 100644
  
      @property
 diff --git a/pulp_container/app/token_verification.py b/pulp_container/app/token_verification.py
-index d78738a4..f80929a7 100644
+index d78738a4..faf05cd6 100644
 --- a/pulp_container/app/token_verification.py
 +++ b/pulp_container/app/token_verification.py
-@@ -194,7 +194,7 @@ class RegistryPermission(BasePermission):
-         if request.method in SAFE_METHODS:
-             return True
+@@ -15,6 +15,7 @@ from rest_framework.authentication import (
+ from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
+ from rest_framework.permissions import BasePermission, SAFE_METHODS
+ from pulp_container.app.utils import get_full_path
++from pulp_service.app.authorization import DomainBasedPermission
  
+ Scope = namedtuple("Scope", "resource_type, name, action")
+ User = get_user_model()
+@@ -178,23 +179,11 @@ def get_scopes(request):
+     return scopes
+ 
+ 
+-class RegistryPermission(BasePermission):
++class RegistryPermission(DomainBasedPermission):
+     """
+     Permission class to determine permissions based on the request user.
+     """
+ 
+-    message = "Access to the requested resource is not authorized."
+-
+-    def has_permission(self, request, view):
+-        """
+-        Decide upon permission based on user.
+-        """
+-        if request.user.is_superuser:
+-            return True
+-        if request.method in SAFE_METHODS:
+-            return True
+-
 -        return False
-+        return True
  
  
  class TokenPermission(BasePermission):
