@@ -201,7 +201,7 @@ class PulpGroupAdmin(GroupAdmin):
 class PulpAuthenticationForm(AuthenticationForm):
     def confirm_login_allowed(self, user):
         """
-        This override allows non-staff users to login into pulp-admin.
+        This override allows non-staff users to login into pulp-mgmt.
         """
         super().confirm_login_allowed(user)
 
