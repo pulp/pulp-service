@@ -92,7 +92,7 @@ class RhEdgeHostMiddleware(MiddlewareMixin):
 
 class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
-        if '/pulp-admin/' in request.path:
+        if '/pulp-mgmt/' in request.path:
             if "HTTP_X_RH_IDENTITY" in request.META:
                 _logger.debug(f"{request.META['HTTP_X_RH_IDENTITY']}")
 
@@ -103,6 +103,6 @@ class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
 
                     if user:
                         login(request, user, backend='pulp_service.app.authentication.RHSamlAuthentication')
-                        _logger.info(f"User {user.username} authenticated for pulp-admin")
+                        _logger.info(f"User {user.username} authenticated for pulp-mgmt")
                     else:
                         _logger.warning("Failed to authenticate user from RH Identity header")

@@ -14,7 +14,7 @@ from .viewsets import (
 
 
 urlpatterns = [
-    path("api/pulp-admin/", admin_site.urls),
+    path("api/pulp-mgmt/", admin_site.urls),
     path("api/pulp/redirect-check/", RedirectCheck.as_view()),
     path("api/pulp/internal-server-error-check/", InternalServerErrorCheck.as_view()),
     path("api/pulp/raise-exception-check/", InternalServerErrorCheckWithException.as_view()),
