@@ -266,7 +266,8 @@ class DomainOrgAdmin(admin.ModelAdmin):
         links = []
         for domain in domains:
             url = reverse('admin:core_domain_change', args=[domain.pk])
-            links.append(format_html('<a href="{}">{}</a>', url, domain.name))
+            label = domain.name if domain.name else "Unnamed domain"
+            links.append(format_html('<a href="{}">{}</a>', url, label))
 
         return format_html(', '.join(links))
 
