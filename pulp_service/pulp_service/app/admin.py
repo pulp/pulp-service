@@ -4,6 +4,8 @@ from django.contrib.auth.models import User
 from django.contrib import admin
 from django.db.models import Q
 from django.core.exceptions import ValidationError
+from django.urls import reverse
+from django.utils.html import format_html
 
 from django import forms
 from django.core.validators import RegexValidator
@@ -252,8 +254,23 @@ class DomainOrgForm(forms.ModelForm):
 
 class DomainOrgAdmin(admin.ModelAdmin):
     form = DomainOrgForm
-    list_display = ["user", "org_id", "group"]
+    list_display = ["user", "org_id", "group", "domains_display"]
     list_filter = ["user", "org_id", "group"]
+
+    def domains_display(self, obj):
+        """Display related domains for this DomainOrg with links to detail view."""
+        domains = obj.domains.all()
+        if not domains:
+            return "-"
+
+        links = []
+        for domain in domains:
+            url = reverse('admin:core_domain_change', args=[domain.pk])
+            links.append(format_html('<a href="{}">{}</a>', url, domain.name))
+
+        return format_html(', '.join(links))
+
+    domains_display.short_description = "Domains"
 
     def get_queryset(self, request):
         """
@@ -359,15 +376,24 @@ class DomainAdmin(admin.ModelAdmin):
     list_display = ["name", "description", "storage_class", "domain_orgs_display"]
     list_filter = ["description", "storage_class", ContentSourceDomainFilter]
     search_fields = ["name"]
+    readonly_fields = ["domain_url", "domain_orgs_detail"]
+
+    def domain_url(self, obj):
+        """Display the domain's API URL."""
+        api_url = f"/api/pulp/{obj.name}/api/v3/"
+        return format_html('<a href="{}" target="_blank">{}</a>', api_url, api_url)
+
+    domain_url.short_description = "Domain API URL"
 
     def domain_orgs_display(self, obj):
-        """Display related DomainOrg entries for this domain."""
+        """Display related DomainOrg entries for this domain with links."""
         domain_orgs = obj.domain_orgs.all()
         if not domain_orgs:
             return "-"
 
-        org_info = []
+        links = []
         for domain_org in domain_orgs:
+            url = reverse('myadmin:service_domainorg_change', args=[domain_org.pk])
             parts = []
             if domain_org.org_id:
                 parts.append(f"Org: {domain_org.org_id}")
@@ -375,12 +401,37 @@ class DomainAdmin(admin.ModelAdmin):
                 parts.append(f"User: {domain_org.user.username}")
             if domain_org.group:
                 parts.append(f"Group: {domain_org.group.name}")
-            if parts:
-                org_info.append(" | ".join(parts))
 
-        return "; ".join(org_info) if org_info else "-"
+            label = " | ".join(parts) if parts else f"DomainOrg #{domain_org.pk}"
+            links.append(format_html('<a href="{}">{}</a>', url, label))
+
+        return format_html('<br>'.join(links))
 
     domain_orgs_display.short_description = "Domain Organizations"
+
+    def domain_orgs_detail(self, obj):
+        """Display related DomainOrg entries with links in detail view."""
+        domain_orgs = obj.domain_orgs.all()
+        if not domain_orgs:
+            return "-"
+
+        links = []
+        for domain_org in domain_orgs:
+            url = reverse('myadmin:service_domainorg_change', args=[domain_org.pk])
+            parts = []
+            if domain_org.org_id:
+                parts.append(f"Org: {domain_org.org_id}")
+            if domain_org.user:
+                parts.append(f"User: {domain_org.user.username}")
+            if domain_org.group:
+                parts.append(f"Group: {domain_org.group.name}")
+
+            label = " | ".join(parts) if parts else f"DomainOrg #{domain_org.pk}"
+            links.append(format_html('<a href="{}">{}</a>', url, label))
+
+        return format_html('<br>'.join(links))
+
+    domain_orgs_detail.short_description = "Domain Organizations"
 
     def get_queryset(self, request):
         """
