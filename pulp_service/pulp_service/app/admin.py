@@ -382,7 +382,7 @@ class DomainAdmin(admin.ModelAdmin):
     def domain_url(self, obj):
         """Display the domain's API URL."""
         api_url = f"/api/pulp/{obj.name}/api/v3/"
-        return format_html('<a href="{}" target="_blank">{}</a>', api_url, api_url)
+        return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', api_url, api_url)
 
     domain_url.short_description = "Domain API URL"
 
