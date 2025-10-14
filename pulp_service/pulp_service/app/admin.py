@@ -248,6 +248,7 @@ class DomainOrgForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Make user and group field optional since it can be null
+        self.fields['org_id'].required = False
         self.fields['user'].required = False
         self.fields['group'].required = False
 
