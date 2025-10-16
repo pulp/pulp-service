@@ -93,7 +93,6 @@ class RhEdgeHostMiddleware(MiddlewareMixin):
 class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
         if '/pulp-mgmt/' in request.path:
-            # __import__('sdb').set_trace()
             if "HTTP_X_RH_IDENTITY" in request.META:
                 _logger.debug(f"{request.META['HTTP_X_RH_IDENTITY']}")
 
