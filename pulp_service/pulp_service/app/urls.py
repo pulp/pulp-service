@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 
 from .admin import admin_site
 from .viewsets import (
@@ -15,6 +15,7 @@ from .viewsets import (
 
 urlpatterns = [
     path("api/pulp-mgmt/", admin_site.urls),
+    path("api/pulp/hijack/", include("hijack.urls")),
     path("api/pulp/redirect-check/", RedirectCheck.as_view()),
     path("api/pulp/internal-server-error-check/", InternalServerErrorCheck.as_view()),
     path("api/pulp/raise-exception-check/", InternalServerErrorCheckWithException.as_view()),

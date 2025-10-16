@@ -16,3 +16,4 @@ jsonschema
 memray
 pyinstrument
 clamav-client>=0.7.1,<1.0
+django-hijack==3.7.4

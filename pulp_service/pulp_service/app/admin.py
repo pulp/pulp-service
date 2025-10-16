@@ -10,6 +10,8 @@ from django.utils.html import format_html
 from django import forms
 from django.core.validators import RegexValidator
 
+from hijack.contrib.admin import HijackUserAdminMixin
+
 from .models import DomainOrg
 import re
 
@@ -63,7 +65,7 @@ class PulpUserChangeForm(UserChangeForm):
         return username
 
 
-class PulpUserAdmin(UserAdmin):
+class PulpUserAdmin(HijackUserAdminMixin, UserAdmin):
     form = PulpUserChangeForm
     add_form = PulpUserCreationForm
 
@@ -272,8 +274,6 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
         return format_html(', '.join(links))
 
-    domains_display.short_description = "Domains"
-
     def get_queryset(self, request):
         """
         Filter DomainOrg based on user's group memberships and access.
@@ -385,8 +385,6 @@ class DomainAdmin(admin.ModelAdmin):
         api_url = f"/api/pulp/{obj.name}/api/v3/"
         return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', api_url, api_url)
 
-    domain_url.short_description = "Domain API URL"
-
     def domain_orgs_display(self, obj):
         """Display related DomainOrg entries for this domain with links."""
         domain_orgs = obj.domain_orgs.all()
@@ -409,8 +407,6 @@ class DomainAdmin(admin.ModelAdmin):
 
         return format_html('<br>'.join(links))
 
-    domain_orgs_display.short_description = "Domain Organizations"
-
     def domain_orgs_detail(self, obj):
         """Display related DomainOrg entries with links in detail view."""
         domain_orgs = obj.domain_orgs.all()
@@ -432,8 +428,6 @@ class DomainAdmin(admin.ModelAdmin):
             links.append(format_html('<a href="{}">{}</a>', url, label))
 
         return format_html('<br>'.join(links))
-
-    domain_orgs_detail.short_description = "Domain Organizations"
 
     def get_queryset(self, request):
         """
@@ -506,7 +500,6 @@ class DomainAdmin(admin.ModelAdmin):
 admin_site = PulpAdminSite(name="myadmin")
 
 admin_site.register(DomainOrg, DomainOrgAdmin)
-#We are replacing the default UserAdmin with our PulpUserAdmin
 admin_site.register(User, PulpUserAdmin)
-admin_site.register(Group, PulpGroupAdmin) 
+admin_site.register(Group, PulpGroupAdmin)
 admin_site.register(Domain, DomainAdmin)
