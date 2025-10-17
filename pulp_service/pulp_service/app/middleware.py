@@ -103,6 +103,9 @@ class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
 
                     if user:
                         login(request, user, backend='pulp_service.app.authentication.RHSamlAuthentication')
+                        request.session.modified = True
+                        # Update request.user for the current request
+                        request.user = user
                         _logger.info(f"User {user.username} authenticated for pulp-mgmt")
                     else:
                         _logger.warning("Failed to authenticate user from RH Identity header")
