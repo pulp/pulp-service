@@ -259,7 +259,6 @@ class DomainOrgAdmin(admin.ModelAdmin):
     form = DomainOrgForm
     list_display = ["user", "org_id", "group", "domains_display"]
     list_filter = ["user", "org_id", "group"]
-    autocomplete_fields = ["domains"]
 
     def domains_display(self, obj):
         """Display related domains for this DomainOrg with links to detail view."""
