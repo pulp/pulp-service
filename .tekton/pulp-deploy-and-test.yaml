@@ -1168,6 +1168,16 @@ spec:
 
                 cp /tmp/__tmp_init__.py /workspace/bindings/$component/pulpcore/__init__.py
                 cp /tmp/__tmp_init__.py /workspace/bindings/$component/pulpcore/client/__init__.py
+
+                # concatenate all docs
+                cat /workspace/bindings/$component/docs/*.md > /workspace/bindings/$component/crc-${component}-client.md
+
+                sed -i "/from setuptools import/i from pathlib import Path" /workspace/bindings/$component/setup.py
+                sed -i "/setup(/i docs = (docs_file).read_text()" /workspace/bindings/$component/setup.py
+                sed -i "/docs = /i docs_file = Path('/workspace/bindings/$component/crc-${component}-client.md')" /workspace/bindings/$component/setup.py
+                sed -i "/long_description=/,/# noqa: E501/c\    long_description=docs," /workspace/bindings/$component/setup.py
+                cat /workspace/bindings/$component/setup.py
+
               done
 
           - name: publish-bindings
