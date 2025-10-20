@@ -41,7 +41,8 @@ class OCIStorage(BaseStorage):
         token_response = requests.get(
             token_url,
             params=token_params,
-            headers={"Authorization": f"Basic {basic_auth}"}
+            headers={"Authorization": f"Basic {basic_auth}"},
+            timeout=30
         )
         
         if token_response.status_code == 200:
