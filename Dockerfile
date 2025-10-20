@@ -149,6 +149,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0027-Adds-repository-version-to-Python-distribution.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0027-Adds-repository-version-to-Python-distribution.patch
 
+COPY images/assets/patches/0028-OCIStorage-create-manifest.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-OCIStorage-create-manifest.patch
 COPY images/assets/patches/0028-Add-a-SIGTERM-handler-to-pulpcore-content.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-Add-a-SIGTERM-handler-to-pulpcore-content.patch
 
