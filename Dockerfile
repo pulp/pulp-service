@@ -152,6 +152,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0028-Add-a-SIGTERM-handler-to-pulpcore-content.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-Add-a-SIGTERM-handler-to-pulpcore-content.patch
 
+COPY images/assets/patches/0029-Update-pypi-BASE_CONTENT_URL-definition.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0029-Update-pypi-BASE_CONTENT_URL-definition.patch
+
 COPY images/assets/gunicorn_config.py /tmp/
 
 RUN mkdir /licenses
