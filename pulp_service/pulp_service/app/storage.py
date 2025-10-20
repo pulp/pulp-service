@@ -242,6 +242,8 @@ class OCIStorage(BaseStorage):
         :param artifact_name: Blob reference in format: registry/repository@sha256:digest
         :return: Direct URL to the blob
         """
+        if parameters is None:
+            parameters = {}
         # Parse the digest from the blob reference
         if '@' not in artifact_name:
             raise ValueError(f"Invalid blob reference format: {artifact_name}")
