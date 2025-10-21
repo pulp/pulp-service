@@ -409,8 +409,6 @@ objects:
             value: ${PULP_MIDDLEWARE}
           - name: PULP_PYPI_API_HOSTNAME
             value: ${{PULP_PYPI_API_HOSTNAME}}
-          - name: PULP_USE_PYPI_API_HOSTNAME_AS_CONTENT_ORIGIN
-            value: "true"
           - name: PULP_FEATURE_SERVICE_API_CERT_PATH
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_FEATURE_SERVICE_API_URL
