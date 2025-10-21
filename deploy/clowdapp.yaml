@@ -1166,7 +1166,7 @@ parameters:
     value: pulp-default-domain-s3
   - name: PULP_AUTHENTICATION_BACKENDS
     description: The AUTHENTICATION_BACKENDS to be used by Pulp.
-    value: "@merge django.contrib.auth.backends.RemoteUserBackend,pulp_service.app.authentication.RHSamlAuthentication"
+    value: "@merge ['django.contrib.auth.backends.RemoteUserBackend','pulp_service.app.authentication.RHSamlAuthentication']"
   - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
     description: The default authentication classes for Pulp.
     value: "['pulp_service.app.authentication.RHServiceAccountCertAuthentication','pulpcore.app.authentication.JSONHeaderRemoteAuthentication','rest_framework.authentication.BasicAuthentication','rest_framework.authentication.SessionAuthentication']"
