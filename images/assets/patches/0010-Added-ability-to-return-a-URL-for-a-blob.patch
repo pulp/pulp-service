@@ -1,17 +1,8 @@
-From 466e21de0f8332bfa9961518d64d86bf52bfcae2 Mon Sep 17 00:00:00 2001
-From: Dennis Kliban <dkliban@redhat.com>
-Date: Thu, 7 Nov 2024 12:43:48 -0500
-Subject: [PATCH] Added ability to return a URL for a blob.
-
----
- oras/provider.py | 36 ++++++++++++++++++++++++++----------
- 1 file changed, 26 insertions(+), 10 deletions(-)
-
 diff --git a/oras/provider.py b/oras/provider.py
-index 809ee12..a6a1e0b 100644
+index 1d91633..094e2a2 100644
 --- a/oras/provider.py
 +++ b/oras/provider.py
-@@ -401,6 +401,7 @@ class Registry:
+@@ -411,6 +411,7 @@ class Registry:
          digest: str,
          stream: bool = False,
          head: bool = False,
@@ -19,7 +10,7 @@ index 809ee12..a6a1e0b 100644
      ) -> requests.Response:
          """
          Retrieve a blob for a package.
-@@ -413,10 +414,12 @@ class Registry:
+@@ -423,10 +424,12 @@ class Registry:
          :type stream: bool
          :param head: use head to determine if blob exists
          :type head: bool
@@ -33,7 +24,7 @@ index 809ee12..a6a1e0b 100644
  
      def get_container(self, name: container_type) -> oras.container.Container:
          """
-@@ -477,7 +480,7 @@ class Registry:
+@@ -487,7 +490,7 @@ class Registry:
  
      @decorator.ensure_container
      def download_blob(
@@ -42,7 +33,7 @@ index 809ee12..a6a1e0b 100644
      ) -> str:
          """
          Stream download a blob into an output file.
-@@ -492,13 +495,15 @@ class Registry:
+@@ -502,13 +505,15 @@ class Registry:
              outdir = os.path.dirname(outfile)
              if outdir and not os.path.exists(outdir):
                  oras.utils.mkdir_p(outdir)
@@ -64,7 +55,7 @@ index 809ee12..a6a1e0b 100644
          # Allow an empty layer to fail and return /dev/null
          except Exception as e:
              if digest == oras.defaults.blank_hash:
-@@ -851,6 +856,7 @@ class Registry:
+@@ -873,6 +878,7 @@ class Registry:
          allowed_media_type: Optional[List] = None,
          overwrite: bool = True,
          outdir: Optional[str] = None,
@@ -72,7 +63,7 @@ index 809ee12..a6a1e0b 100644
      ) -> List[str]:
          """
          Pull an artifact from a target
-@@ -867,6 +873,8 @@ class Registry:
+@@ -889,6 +895,8 @@ class Registry:
          :type outdir: str
          :param target: target location to pull from
          :type target: str
@@ -81,7 +72,7 @@ index 809ee12..a6a1e0b 100644
          """
          container = self.get_container(target)
          self.auth.load_configs(
-@@ -898,14 +906,16 @@ class Registry:
+@@ -920,14 +928,16 @@ class Registry:
              # A directory will need to be uncompressed and moved
              if layer["mediaType"] == oras.defaults.default_blob_dir_media_type:
                  targz = oras.utils.get_tmpfile(suffix=".tar.gz")
@@ -100,24 +91,24 @@ index 809ee12..a6a1e0b 100644
              logger.info(f"Successfully pulled {outfile}.")
              files.append(outfile)
          return files
-@@ -944,6 +954,7 @@ class Registry:
+@@ -971,6 +981,7 @@ class Registry:
          headers: Optional[dict] = None,
          json: Optional[dict] = None,
          stream: bool = False,
 +        allow_redirects: bool = False,
-     ):
+     ) -> requests.Response:
          """
          Do a request. This is a wrapper around requests to handle retry auth.
-@@ -960,6 +971,8 @@ class Registry:
+@@ -987,6 +998,8 @@ class Registry:
          :type json: dict
          :param stream: stream the responses
          :type stream: bool
 +        :param allow_redirects: whether to follow the redirect or not
 +        :type allow_redirects: bool
          """
-         # Make the request and return to calling function, but attempt to use auth token if previously obtained
-         if headers is not None and isinstance(self.auth, oras.auth.TokenAuth):
-@@ -972,6 +985,7 @@ class Registry:
+         if headers is None:
+             headers = {}
+@@ -1002,6 +1015,7 @@ class Registry:
              headers=headers,
              stream=stream,
              verify=self._tls_verify,
@@ -125,7 +116,7 @@ index 809ee12..a6a1e0b 100644
          )
  
          # A 401 response is a request for authentication, 404 is not found
-@@ -990,6 +1004,7 @@ class Registry:
+@@ -1020,6 +1034,7 @@ class Registry:
              headers=headers,
              stream=stream,
              verify=self._tls_verify,
@@ -133,7 +124,7 @@ index 809ee12..a6a1e0b 100644
          )
  
          # One retry if 403 denied (need new token?)
-@@ -1005,6 +1020,7 @@ class Registry:
+@@ -1035,6 +1050,7 @@ class Registry:
                  headers=headers,
                  stream=stream,
                  verify=self._tls_verify,
@@ -141,6 +132,3 @@ index 809ee12..a6a1e0b 100644
              )
  
          return response
--- 
-2.47.0
-

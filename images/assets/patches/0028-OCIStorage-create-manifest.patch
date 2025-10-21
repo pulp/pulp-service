@@ -1,0 +1,184 @@
+diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
+index f354f0dd5..edc41cb99 100644
+--- a/pulpcore/app/models/publication.py
++++ b/pulpcore/app/models/publication.py
+@@ -12,6 +12,12 @@ from gettext import gettext as _
+ from url_normalize import url_normalize
+ from urllib.parse import urlparse, urljoin
+ 
++import oras.client
++import oras.oci
++import oras.defaults
++import base64
++import requests
++
+ from aiohttp.web_exceptions import HTTPNotFound
+ 
+ from django.conf import settings
+@@ -198,6 +204,153 @@ class Publication(MasterModel):
+         """
+         pass
+ 
++    def _create_oci_manifest(self):
++        """
++        Create and upload an OCI manifest for publications using OCIStorage.
++        
++        This method collects all artifacts from the repository version, retrieves their
++        blob metadata (digest, size, mediaType, annotations), creates an OCI manifest,
++        and uploads it to the registry.
++        """
++        
++        # Get storage settings from domain
++        storage = self.pulp_domain.get_storage()
++        registry = storage.registry
++        repository = storage.repository
++        username = storage.username
++        password = storage.password
++        
++        # Create ORAS client
++        client = oras.client.OrasClient()
++        
++        # Login to registry
++        client.login(
++            username=username,
++            password=password,
++            hostname=registry,
++            config_path="/tmp/.docker/config.json"
++        )
++        
++        # Get token with push scope
++        token_url = f"https://{registry}/v2/auth"
++        token_params = {
++            "service": registry,
++            "scope": f"repository:{repository}:pull,push"
++        }
++        basic_auth = base64.b64encode(f"{username}:{password}".encode()).decode()
++        token_response = requests.get(
++            token_url,
++            params=token_params,
++            headers={"Authorization": f"Basic {basic_auth}"}
++        )
++        
++        if token_response.status_code == 200:
++            token_data = token_response.json()
++            token = token_data.get('token') or token_data.get('access_token')
++            client.auth.set_token_auth(token)
++        else:
++            raise ValueError(f"Failed to get authentication token: {token_response.status_code}")
++        
++        # Get container reference for blob operations
++        container = client.get_container(f"{registry}/{repository}")
++        client.auth.load_configs(container, configs=["/tmp/.docker/config.json"])
++        
++        # Create empty manifest
++        manifest = oras.oci.NewManifest()
++        
++        # Collect all blob layers from artifacts in this publication
++        layers = []
++        for content in self.repository_version.content.all():
++            for content_artifact in content.contentartifact_set.all():
++                if content_artifact.artifact:
++                    artifact = content_artifact.artifact
++                    
++                    # Construct digest from artifact sha256
++                    digest = f"sha256:{artifact.sha256}"
++                    
++                    # Get blob info (size and media type) from registry using HEAD request
++                    response = client.get_blob(container=container, digest=digest, head=True)
++                    
++                    if response.status_code == 200:
++                        size = int(response.headers.get('Content-Length', artifact.size))
++                        media_type = response.headers.get('Content-Type', oras.defaults.default_blob_media_type)
++                        
++                        # Create layer entry with metadata
++                        layer = {
++                            "digest": digest,
++                            "size": size,
++                            "mediaType": media_type,
++                            "annotations": {
++                                oras.defaults.annotation_title: content_artifact.relative_path
++                            }
++                        }
++                        layers.append(layer)
++                    else:
++                        _logger.warning(f"Blob {digest} not found in registry, skipping from manifest")
++        
++        if not layers:
++            _logger.warning(f"No blobs found for publication {self.pulp_id}, skipping manifest creation")
++            return
++        
++        # Add layers to manifest
++        manifest["layers"] = layers
++        
++        # Create manifest config (empty config)
++        conf, config_file = oras.oci.ManifestConfig()
++        conf["mediaType"] = "application/vnd.oci.image.config.v1+json"
++        
++        # Check if the empty config blob exists in the registry
++        # The digest is always sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a for '{}'
++        config_digest = conf["digest"]
++        config_layer = {"digest": config_digest}
++        
++        # Upload empty config blob if it doesn't exist
++        if not client.blob_exists(config_layer, container):
++            import tempfile
++            # Create a temporary file with empty JSON
++            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
++                f.write('{}')
++                empty_config_path = f.name
++            
++            try:
++                # Create layer for the empty config
++                config_layer_full = oras.oci.NewLayer(
++                    empty_config_path,
++                    media_type=conf["mediaType"],
++                    is_dir=False
++                )
++                
++                # Upload the empty config blob
++                response = client.upload_blob(
++                    blob=empty_config_path,
++                    container=container,
++                    layer=config_layer_full
++                )
++                
++                if response.status_code not in [200, 201, 202]:
++                    raise ValueError(f"Empty config blob upload failed: {response.status_code} - {response.text}")
++                
++                _logger.info(f"Uploaded empty config blob to {registry}/{repository}")
++            finally:
++                # Clean up temp file
++                if os.path.exists(empty_config_path):
++                    os.remove(empty_config_path)
++        
++        manifest["config"] = conf
++        
++        # Upload the manifest with a tag based on publication ID
++        tag = f"publication-{self.pulp_id}"
++        tagged_container = client.get_container(f"{registry}/{repository}:{tag}")
++        client.auth.load_configs(tagged_container, configs=["/tmp/.docker/config.json"])
++        
++        response = client.upload_manifest(manifest, tagged_container)
++        
++        if response.status_code not in [200, 201, 202]:
++            raise ValueError(f"Manifest upload failed: {response.status_code} - {response.text}")
++        
++        _logger.info(f"Successfully uploaded OCI manifest for publication {self.pulp_id} to {registry}/{repository}:{tag}")
++
++
+     def __enter__(self):
+         """
+         Enter context.
+@@ -230,6 +383,12 @@ class Publication(MasterModel):
+                 self.finalize_new_publication()
+                 self.complete = True
+                 self.save()
++                
++                # If using OCI storage, create and upload manifest for the publication
++                domain = self.pulp_domain
++                if domain.storage_class == "pulp_service.app.storage.OCIStorage":
++                    self._create_oci_manifest()
++                    
+             except Exception:
+                 self.delete()
+                 raise
