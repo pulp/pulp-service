@@ -8,6 +8,7 @@ import jq
 
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
+from datetime import datetime
 from hashlib import sha256
 from gettext import gettext as _
 
@@ -78,7 +79,9 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                     return await response.json()
 
         try:
+            _logger.info(f"[{datetime.now()}] Making a request to feature service API ...")
             response = asyncio.run(fetch_feature())
+            _logger.info(f"[{datetime.now()}] Got a response from feature service API!")
         except aiohttp.ClientResponseError as err:
             if err.status == 400:
                 _logger.error(
