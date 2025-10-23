@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 import requests
 
+import ssl
+
 @click.command()
 @click.option('--since', type=click.DateTime(), default=datetime.now(timezone.utc).isoformat(), help='Analyze tasks created since this ISO 8601 timestamp.')
 @click.option('--until', type=click.DateTime(), default=None, help='Analyze tasks created until this ISO 8601 timestamp.')
@@ -21,12 +23,14 @@ def task_analysis(ctx, since: datetime, until: Optional[datetime]):
     api_root = ctx.obj['api_root']
     user = ctx.obj['user']
     password = ctx.obj['password']
+    cert = ctx.obj['cert']
+    key = ctx.obj['key']
 
     # --- Client-specific logic ---
     if client_type == 'async':
-        asyncio.run(run_analysis_async(api_root, user, password, since, until))
+        asyncio.run(run_analysis_async(api_root, user, password, cert, key, since, until))
     else:
-        run_analysis_sync(api_root, user, password, since, until)
+        run_analysis_sync(api_root, user, password, cert, key, since, until)
 
 def process_and_display_results(all_tasks: List[Dict[str, Any]]):
     """Shared function to process and print analysis results."""
@@ -85,17 +89,22 @@ def process_and_display_results(all_tasks: List[Dict[str, Any]]):
     click.echo("---------------------------------")
 
 
-async def run_analysis_async(api_root, user, password, since, until):
+async def run_analysis_async(api_root, user, password, cert, key, since, until):
     """Fetches all tasks using aiohttp."""
     logging.info("\nStarting task analysis using 'async' client...")
-    auth = aiohttp.BasicAuth(user, password)
-    base_url = f"{api_root}/pulp/default/api/v3/tasks/"
+    auth = aiohttp.BasicAuth(user, password) if user and password else None
+    ssl_context = None
+    if cert:
+        ssl_context = ssl.create_default_context(cafile=cert)
+        if key:
+            ssl_context.load_cert_chain(cert, key)
+    base_url = f"{api_root}/pulp/api/v3/tasks/"
     params = {"pulp_created__gte": since.isoformat()}
     if until:
         params["pulp_created__lte"] = until.isoformat()
 
     all_tasks = []
-    async with aiohttp.ClientSession(auth=auth) as session:
+    async with aiohttp.ClientSession(auth=auth, connector=aiohttp.TCPConnector(ssl=ssl_context)) as session:
         tasks_url: Optional[str] = base_url
         first_request = True
         while tasks_url:
@@ -109,11 +118,13 @@ async def run_analysis_async(api_root, user, password, since, until):
     process_and_display_results(all_tasks)
 
 
-def run_analysis_sync(api_root, user, password, since, until):
+
+def run_analysis_sync(api_root, user, password, cert, key, since, until):
     """Fetches all tasks using requests."""
     logging.info("\nStarting task analysis using 'sync' client...")
-    auth = (user, password)
-    tasks_url: Optional[str] = f"{api_root}/pulp/default/api/v3/tasks/"
+    auth = (user, password) if user and password else None
+    cert_param = (cert, key) if cert and key else cert
+    tasks_url: Optional[str] = f"{api_root}/pulp/api/v3/tasks/"
     params = {"pulp_created__gte": since.isoformat()}
     if until:
         params["pulp_created__lte"] = until.isoformat()
@@ -121,11 +132,13 @@ def run_analysis_sync(api_root, user, password, since, until):
     all_tasks = []
     with requests.Session() as session:
         session.auth = auth
+        session.cert = cert_param
         while tasks_url:
-            response = session.get(tasks_durl, params=params)
+            response = session.get(tasks_url, params=params)
             response.raise_for_status()
             data = response.json()
             all_tasks.extend(data.get("results", []))
             tasks_url = data.get("next")
             params = None # Subsequent requests use the full URL from 'next'
     process_and_display_results(all_tasks)
+

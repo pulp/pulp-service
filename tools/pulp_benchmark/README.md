@@ -50,6 +50,8 @@ These options are available for all commands and must be provided before the com
 | `--api-root` | `PULP_API_ROOT`      | Yes      | The root URL of the Pulp API instance (e.g., `https://pulp.example.com`). |
 | `--user`     | `PULP_USER`          | No       | Username for API authentication. Defaults to `admin`.                      |
 | `--password` | `PULP_PASSWORD`      | Yes      | Password for API authentication. Prompts securely if not provided.         |
+| `--cert`     | `None`               | No       | Path to the client certificate file for TLS authentication.                |
+| `--key`      | `None`               | No       | Path to the client private key file for TLS authentication.                |
 
 ### Available Commands
 
