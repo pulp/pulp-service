@@ -374,7 +374,19 @@ class DomainOrgAdmin(admin.ModelAdmin):
         return request.user.is_authenticated and request.user.is_active
 
 
+class DomainAdminForm(forms.ModelForm):
+    class Meta:
+        model = Domain
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make pulp_labels field optional since it can be empty
+        self.fields['pulp_labels'].required = False
+
+
 class DomainAdmin(admin.ModelAdmin):
+    form = DomainAdminForm
     list_display = ["name", "description", "storage_class", "domain_orgs_display"]
     list_filter = ["description", "storage_class", ContentSourceDomainFilter]
     search_fields = ["name"]
