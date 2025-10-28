@@ -382,7 +382,8 @@ class DomainAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Make pulp_labels field optional since it can be empty
-        self.fields['pulp_labels'].required = False
+        self.fields["pulp_labels"].required = False
+        self.fields["description"].required = False
 
 
 class DomainAdmin(admin.ModelAdmin):
