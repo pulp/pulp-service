@@ -739,6 +739,10 @@ objects:
             value: ${PULP_TASK_PROTECTION_TIME}
           - name: PULP_TASK_DIAGNOSTICS
             value: ${{PULP_TASK_DIAGNOSTICS}}
+          - name: PULP_DEBUG
+            value: "true"
+          - name: PULP_LOGGING__loggers
+            value: '@merge {"django.db.backends": {"level": "DEBUG", "handlers": ["console"]}}'
       autoScaler:
         minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
         maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
