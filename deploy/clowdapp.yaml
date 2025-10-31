@@ -432,6 +432,8 @@ objects:
             value: ${PULP_CLAMAV_SVC_NAME}.$(NAMESPACE).svc
           - name: PULP_CLAMAV_PORT
             value: ${PULP_CLAMAV_SVC_PORT}
+          - name: PULP_API_APP_TTL
+            value: ${PULP_API_APP_TTL}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -1334,3 +1336,5 @@ parameters:
   - name: PULP_UPLOAD_PROTECTION_TIME
     description: Enable uploads cleanup after some period, in minutes.
     value: "480"
+  - name: PULP_API_APP_TTL
+    value: "1800"
