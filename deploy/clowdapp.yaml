@@ -661,6 +661,10 @@ objects:
             value: ${{PULP_TASK_DIAGNOSTICS}}
           - name: PULP_UPLOAD_PROTECTION_TIME
             value: ${PULP_UPLOAD_PROTECTION_TIME}
+          - name: PULP_DEBUG
+            value: "true"
+          - name: PULP_LOGGING__loggers
+            value: '@merge {"django.db.backends": {"level": "DEBUG", "handlers": ["console"]}}'
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
