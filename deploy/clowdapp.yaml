@@ -1333,4 +1333,4 @@ parameters:
     description: Enable uploads cleanup after some period, in minutes.
     value: "480"
   - name: PULP_API_APP_TTL
-    value: "1800"
+    value: "120"

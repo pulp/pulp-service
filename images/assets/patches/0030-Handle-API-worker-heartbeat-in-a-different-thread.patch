@@ -1,0 +1,72 @@
+From 1baad22ba666f4b284edca5e43c2c9aee8cdeb23 Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Tue, 4 Nov 2025 13:21:06 -0300
+Subject: [PATCH] Handle API worker heartbeat in a different thread
+
+---
+ pulpcore/app/entrypoint.py | 23 ++++++++++++++++++++---
+ 1 file changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/pulpcore/app/entrypoint.py b/pulpcore/app/entrypoint.py
+index b48dda162..be402e264 100644
+--- a/pulpcore/app/entrypoint.py
++++ b/pulpcore/app/entrypoint.py
+@@ -2,9 +2,12 @@ from contextvars import ContextVar
+ from logging import getLogger
+ import os
+ import socket
++import threading
++import time
+ 
+ import click
+ import django
++from datetime import datetime
+ from django.conf import settings
+ from django.db import connection
+ from django.db.utils import IntegrityError, InterfaceError, DatabaseError
+@@ -22,9 +25,19 @@ using_pulp_api_worker = ContextVar("using_pulp_api_worker", default=False)
+ 
+ 
+ class PulpApiWorker(SyncWorker):
++
++    def __init__(self, *args, **kwargs):
++        super().__init__(*args, **kwargs)
++        self.heartbeat_thread = None
++
+     def notify(self):
++        logger.info(f"[{datetime.now()}] {self.name} calling notify()")
+         super().notify()
+-        self.heartbeat()
++
++    def _heartbeat_loop(self):
++        while self.alive:
++            self.heartbeat()
++            time.sleep(settings.API_APP_TTL)
+ 
+     def heartbeat(self):
+         try:
+@@ -35,8 +48,8 @@ class PulpApiWorker(SyncWorker):
+             try:
+                 self.app_status.save_heartbeat()
+                 logger.debug(self.beat_msg)
+-            except (InterfaceError, DatabaseError):
+-                logger.error(self.fail_beat_msg)
++            except (InterfaceError, DatabaseError) as e:
++                logger.error(f"{self.fail_beat_msg}: {e}")
+                 exit(Arbiter.WORKER_BOOT_ERROR)
+ 
+     def init_process(self):
+@@ -70,6 +83,10 @@ class PulpApiWorker(SyncWorker):
+             logger.error(f"An API app with name {self.name} already exists in the database.")
+             exit(Arbiter.WORKER_BOOT_ERROR)
+ 
++        # Start heartbeat thread before entering the main loop
++        self.heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
++        self.heartbeat_thread.start()
++
+         super().init_process()
+ 
+     def run(self):
+-- 
+2.46.2
+
