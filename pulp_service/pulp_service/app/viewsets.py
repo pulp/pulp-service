@@ -275,11 +275,8 @@ class CreateDomainView(APIView):
                 {"error": "Domain name is required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Check if user belongs to any groups
-        user_groups = user.groups.all()
-        
-        if not user_groups.exists():
+                
+        if not user.groups.exists():
             # User has no groups, create one with a unique name or reuse existing
             group_name = f"domain-{domain_name}"
             _logger.info(f"User {user.username} has no groups. Creating or finding group '{group_name}' for domain creation.")
@@ -301,7 +298,7 @@ class CreateDomainView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         else:
-            _logger.info(f"User {user.username} already belongs to {user_groups.count()} group(s).")
+            _logger.info(f"User {user.username} already belongs to a group.")
         
         # Prepare data with defaults from default domain if needed
         data = request.data.copy()
