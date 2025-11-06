@@ -24,7 +24,7 @@ from pulpcore.plugin.viewsets import OperationPostponedResponse
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
 from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
-from pulpcore.app.models import Domain
+from pulpcore.app.models import Domain, Group
 from pulpcore.app.serializers import DomainSerializer
 
 
@@ -265,6 +265,40 @@ class CreateDomainView(APIView):
         Self-service endpoint to create a new domain.
         This endpoint uses the model domain's storage settings and class,
         """
+        
+        # Check if user has a group, create one if not
+        user = request.user
+        domain_name = request.data.get('name')
+        
+        if not domain_name:
+            return Response(
+                {"error": "Domain name is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+                
+        if not user.groups.exists():
+            # User has no groups, create one with a unique name or reuse existing
+            group_name = f"domain-{domain_name}"
+            _logger.info(f"User {user.username} has no groups. Creating or finding group '{group_name}' for domain creation.")
+            try:
+                # Use get_or_create to avoid duplicate group name issues
+                group, created = Group.objects.get_or_create(name=group_name)
+                if created:
+                    _logger.info(f"Created new group '{group_name}'.")
+                else:
+                    _logger.info(f"Reusing existing group '{group_name}'.")
+                
+                # Add user to the group
+                user.groups.add(group)
+                _logger.info(f"Added user {user.username} to group '{group_name}'.")
+            except Exception as e:
+                _logger.error(f"Failed to create or assign group '{group_name}': {e}")
+                return Response(
+                    {"error": f"Failed to create group for domain: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        else:
+            _logger.info(f"User {user.username} already belongs to a group.")
         
         # Prepare data with defaults from default domain if needed
         data = request.data.copy()
