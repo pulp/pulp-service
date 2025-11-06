@@ -1,14 +1,14 @@
-From 1baad22ba666f4b284edca5e43c2c9aee8cdeb23 Mon Sep 17 00:00:00 2001
+From ed4a29623825418d91788dc8a8cd2c5cc04ecb82 Mon Sep 17 00:00:00 2001
 From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
 Date: Tue, 4 Nov 2025 13:21:06 -0300
 Subject: [PATCH] Handle API worker heartbeat in a different thread
 
 ---
- pulpcore/app/entrypoint.py | 23 ++++++++++++++++++++---
- 1 file changed, 20 insertions(+), 3 deletions(-)
+ pulpcore/app/entrypoint.py | 22 +++++++++++++++++++---
+ 1 file changed, 19 insertions(+), 3 deletions(-)
 
 diff --git a/pulpcore/app/entrypoint.py b/pulpcore/app/entrypoint.py
-index b48dda162..be402e264 100644
+index b48dda162..8c21191e9 100644
 --- a/pulpcore/app/entrypoint.py
 +++ b/pulpcore/app/entrypoint.py
 @@ -2,9 +2,12 @@ from contextvars import ContextVar
@@ -24,7 +24,7 @@ index b48dda162..be402e264 100644
  from django.conf import settings
  from django.db import connection
  from django.db.utils import IntegrityError, InterfaceError, DatabaseError
-@@ -22,9 +25,19 @@ using_pulp_api_worker = ContextVar("using_pulp_api_worker", default=False)
+@@ -22,9 +25,18 @@ using_pulp_api_worker = ContextVar("using_pulp_api_worker", default=False)
  
  
  class PulpApiWorker(SyncWorker):
@@ -34,7 +34,6 @@ index b48dda162..be402e264 100644
 +        self.heartbeat_thread = None
 +
      def notify(self):
-+        logger.info(f"[{datetime.now()}] {self.name} calling notify()")
          super().notify()
 -        self.heartbeat()
 +
@@ -45,7 +44,7 @@ index b48dda162..be402e264 100644
  
      def heartbeat(self):
          try:
-@@ -35,8 +48,8 @@ class PulpApiWorker(SyncWorker):
+@@ -35,8 +47,8 @@ class PulpApiWorker(SyncWorker):
              try:
                  self.app_status.save_heartbeat()
                  logger.debug(self.beat_msg)
@@ -56,7 +55,7 @@ index b48dda162..be402e264 100644
                  exit(Arbiter.WORKER_BOOT_ERROR)
  
      def init_process(self):
-@@ -70,6 +83,10 @@ class PulpApiWorker(SyncWorker):
+@@ -70,6 +82,10 @@ class PulpApiWorker(SyncWorker):
              logger.error(f"An API app with name {self.name} already exists in the database.")
              exit(Arbiter.WORKER_BOOT_ERROR)
  
