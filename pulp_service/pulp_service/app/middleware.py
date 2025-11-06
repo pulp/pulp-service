@@ -69,21 +69,6 @@ class ProfilerMiddleware(MiddlewareMixin):
         return response
 
 
-class OCIStorageMiddleware(MiddlewareMixin):
-    def process_view(self, request, callback, callback_args, callback_kwargs):
-        # Set the repository name in a contextvar
-        if 'repository' in request.POST and request.POST['repository'].startswith('prn:'):
-            m, pk = resolve_prn(request.POST['repository'])
-            repository_name = m.objects.get(pk=pk).name
-            repository_name_var.set(repository_name)
-        elif 'repository' in request.POST:
-            pk = extract_pk(request.POST['repository'])
-            repository_name = Repository.objects.get(pk=pk).name
-            repository_name_var.set(repository_name)
-        if 'HTTP_X_QUAY_AUTH' in request.META:
-            x_quay_auth_var.set(request.META['HTTP_X_QUAY_AUTH'])
-
-
 class RhEdgeHostMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
         if "HTTP_X_RH_EDGE_HOST" in request.META and request.META["HTTP_X_RH_EDGE_HOST"] is not None:
