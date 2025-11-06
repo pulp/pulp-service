@@ -661,6 +661,8 @@ objects:
             value: ${{PULP_TASK_DIAGNOSTICS}}
           - name: PULP_UPLOAD_PROTECTION_TIME
             value: ${PULP_UPLOAD_PROTECTION_TIME}
+          - name: PULP_MAX_CONCURRENT_CONTENT
+            value: ${PULP_MAX_CONCURRENT_CONTENT}
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
@@ -741,6 +743,9 @@ objects:
             value: ${PULP_TASK_PROTECTION_TIME}
           - name: PULP_TASK_DIAGNOSTICS
             value: ${{PULP_TASK_DIAGNOSTICS}}
+          - name: PULP_MAX_CONCURRENT_CONTENT
+            value: ${PULP_MAX_CONCURRENT_CONTENT}
+
       autoScaler:
         minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
         maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
@@ -1334,3 +1339,6 @@ parameters:
     value: "480"
   - name: PULP_API_APP_TTL
     value: "120"
+  - name: PULP_MAX_CONCURRENT_CONTENT
+    description: The size of the batch of content processed in one go when syncing content from a remote.
+    value: "50"
