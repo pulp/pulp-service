@@ -1345,4 +1345,4 @@ parameters:
     value: "120"
   - name: PULP_MAX_CONCURRENT_CONTENT
     description: The size of the batch of content processed in one go when syncing content from a remote.
-    value: "50"
+    value: "200"
