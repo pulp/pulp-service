@@ -95,6 +95,11 @@ objects:
       #!/bin/bash
       export PATH=${PATH}:/tmp/bin
 
+      curl -Lo /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz
+
+      mkdir /tmp/bin
+      tar -C /tmp/bin -xf /tmp/oc.tar.gz oc kubectl
+
       kubectl get secret
       retVal=$?
       echo $retVal
@@ -103,7 +108,6 @@ objects:
          exit 0
       fi
 
-      mkdir /tmp/bin
       cd /tmp/bin
       curl -L -O https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
       mv jq-linux64 jq
@@ -898,7 +902,7 @@ objects:
     jobs:
       - name: create-settings-and-ingress
         podSpec:
-          image: "quay.io/openshift/origin-cli:latest"
+          image: ${IMAGE}:${IMAGE_TAG}
           command: [ 'bash', '-x', '/tmp/config.sh' ]
           volumes:
             - name: config-sh
