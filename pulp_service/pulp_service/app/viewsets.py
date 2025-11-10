@@ -310,6 +310,9 @@ class RDSConnectionTestDispatcherView(APIView):
 
         dispatched_tasks = []
 
+        # Check if domain support is enabled
+        domain_enabled = getattr(settings, 'DOMAIN_ENABLED', False)
+
         for test_name in tests:
             task_func = self.AVAILABLE_TESTS[test_name]
 
@@ -319,10 +322,22 @@ class RDSConnectionTestDispatcherView(APIView):
                 exclusive_resources=[],  # No resource locking needed
             )
 
+            # Get task ID - use current_id() if available, fallback to pk
+            task_id = task.current_id() or task.pk
+
+            # Build task href based on domain support
+            if domain_enabled:
+                # Domain-aware path: /pulp/{domain}/api/v3/tasks/{task_id}/
+                domain_name = getattr(task.pulp_domain, 'name', 'default')
+                task_href = f"/pulp/{domain_name}/api/v3/tasks/{task_id}/"
+            else:
+                # Standard path: /pulp/api/v3/tasks/{task_id}/
+                task_href = f"/pulp/api/v3/tasks/{task_id}/"
+
             dispatched_tasks.append({
                 "test_name": test_name,
-                "task_id": str(task.pk),
-                "task_href": f"/pulp/api/v3/tasks/{task.pk}/",
+                "task_id": str(task_id),
+                "task_href": task_href,
             })
 
         return Response({

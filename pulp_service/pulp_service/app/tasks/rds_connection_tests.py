@@ -13,7 +13,8 @@ from datetime import datetime
 
 from django.db import connection, transaction
 
-from pulpcore.app.models import Task, Worker
+from pulpcore.app.models import AppStatus
+from pulpcore.plugin.models import Task
 
 
 logger = logging.getLogger(__name__)
@@ -233,7 +234,7 @@ def test_4_transaction_with_work():
                 task = Task.objects.first()
 
                 # Query 3: Count online workers
-                worker_count = Worker.objects.filter(online=True).count()
+                worker_count = AppStatus.objects.filter(app_type="worker", online=True).count()
 
                 elapsed_minutes = (i + 1) * 2
                 log(f"Iteration {i+1}/{iterations} ({elapsed_minutes} min): "

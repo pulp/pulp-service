@@ -51,7 +51,13 @@ async def dispatch_tests(
     Returns:
         dict: Response from the API with dispatched task information
     """
-    endpoint = f"{api_root}/pulp/rds-connection-tests/"
+    # Extract base URL from api_root (protocol + domain)
+    # /api/pulp/... endpoints are absolute paths, not relative to api_root
+    from urllib.parse import urlparse
+    parsed = urlparse(api_root)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+    endpoint = f"{base_url}/api/pulp/rds-connection-tests/"
 
     auth = aiohttp.BasicAuth(user, password) if user and password else None
     ssl_context = None
@@ -82,7 +88,7 @@ async def dispatch_tests(
 
 async def check_task_status(
     api_root: str,
-    task_id: str,
+    task_href: str,
     user: Optional[str] = None,
     password: Optional[str] = None,
     cert: Optional[str] = None,
@@ -93,7 +99,7 @@ async def check_task_status(
 
     Args:
         api_root: Pulp API root URL
-        task_id: Task UUID
+        task_href: Task href path (e.g., /pulp/api/v3/tasks/{id}/ or /pulp/default/api/v3/tasks/{id}/)
         user: Username for authentication
         password: Password for authentication
         cert: Path to client certificate
@@ -102,7 +108,9 @@ async def check_task_status(
     Returns:
         dict: Task status information
     """
-    endpoint = f"{api_root}/pulp/api/v3/tasks/{task_id}/"
+    # For normal Pulp endpoints, use api_root + task_href
+    # api_root might be something like https://example.com/api
+    endpoint = f"{api_root}{task_href}"
 
     auth = aiohttp.BasicAuth(user, password) if user and password else None
     ssl_context = None
@@ -140,7 +148,7 @@ async def monitor_tasks(
 
     Args:
         api_root: Pulp API root URL
-        tasks: List of task dictionaries with task_id
+        tasks: List of task dictionaries with task_href
         user: Username for authentication
         password: Password for authentication
         cert: Path to client certificate
@@ -166,7 +174,7 @@ async def monitor_tasks(
         for task_id, task_info in pending_tasks.items():
             try:
                 status = await check_task_status(
-                    api_root, task_id, user, password, cert, key
+                    api_root, task_info['task_href'], user, password, cert, key
                 )
 
                 state = status.get('state', 'unknown')
@@ -305,6 +313,7 @@ def rds_connection_tests(
             for task in result['tasks']:
                 click.echo(f"  - {task['test_name']}")
                 click.echo(f"    Task ID: {task['task_id']}")
+                # Task URLs use api_root (normal Pulp endpoints)
                 click.echo(f"    Task URL: {api_root}{task['task_href']}\n")
 
             # Monitor if requested

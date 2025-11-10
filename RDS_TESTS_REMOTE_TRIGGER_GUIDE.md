@@ -11,6 +11,28 @@ Two methods are available to trigger RDS connection tests remotely:
 1. **Direct API calls** - Using curl, httpie, or any HTTP client
 2. **pulp_benchmark CLI** - Automated tool with monitoring capabilities
 
+### API Path Structure
+
+**Important**: There are two types of endpoints with different path behaviors:
+
+**1. Test Dispatcher Endpoints** (pulp-service specific - `/api/pulp/...`):
+- Path: `/api/pulp/rds-connection-tests/`
+- These are **absolute paths from the domain root**, ignoring any API root configuration
+- Always accessed at: `https://{domain}/api/pulp/rds-connection-tests/`
+- Example: If your `api_root` is `https://pulp.example.com/api`, the test endpoint is at:
+  - `https://pulp.example.com/api/pulp/rds-connection-tests/` ✅
+  - NOT `https://pulp.example.com/api/api/pulp/rds-connection-tests/` ❌
+
+**2. Standard Pulp API Endpoints** (tasks, repositories, etc.):
+- These use the configured `api_root`
+- Task paths are relative to `api_root`: `{api_root}{task_href}`
+- Example: If your `api_root` is `https://pulp.example.com/api` and `task_href` is `/pulp/api/v3/tasks/{id}/`:
+  - Full URL: `https://pulp.example.com/api/pulp/api/v3/tasks/{id}/` ✅
+
+**Why this matters**:
+- Test dispatcher: Extract base URL (protocol + domain) only
+- Task monitoring: Use full `api_root` + `task_href`
+
 ## Method 1: Direct API Calls
 
 ### API Endpoint
@@ -121,17 +143,27 @@ http POST https://your-pulp-instance.com/api/pulp/rds-connection-tests/ \
 }
 ```
 
+**Note**: The `task_href` uses Pulp's standard API path format. If your Pulp instance has domain support enabled, the path will include the domain component (e.g., `/pulp/{domain}/api/v3/tasks/...`). The returned `task_href` always has the correct format for your instance.
+
 ### Check Task Status
 
-After dispatching, monitor task progress using the Pulp Tasks API:
+After dispatching, monitor task progress using the task URLs returned in the response. **Use the `task_href` value** returned from the dispatch response, as it will include the correct domain path if domain support is enabled.
 
 ```bash
-curl https://your-pulp-instance.com/pulp/api/v3/tasks/{task_id}/
+# Use the task_href from the dispatch response
+curl https://your-pulp-instance.com{task_href}
 ```
 
-Example:
+Examples:
+
+**Without domain support:**
 ```bash
 curl https://your-pulp-instance.com/pulp/api/v3/tasks/a1b2c3d4-5678-90ab-cdef-1234567890ab/
+```
+
+**With domain support:**
+```bash
+curl https://your-pulp-instance.com/pulp/default/api/v3/tasks/a1b2c3d4-5678-90ab-cdef-1234567890ab/
 ```
 
 Response includes:
@@ -294,6 +326,8 @@ Press Ctrl+C to stop monitoring (tasks will continue running)
 
 ✓ All tasks completed!
 ```
+
+**Note**: The Task URL shown will use the correct path format for your Pulp instance. If domain support is enabled, it will include the domain component (e.g., `/pulp/{domain}/api/v3/tasks/...`).
 
 ### Advanced Options
 
