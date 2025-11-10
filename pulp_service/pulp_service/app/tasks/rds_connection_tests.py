@@ -186,7 +186,7 @@ def test_2_active_heartbeat():
     if alive:
         finished_at = datetime.now()
         duration = (finished_at - started_at).total_seconds() / 60
-        log(f"All heartbeats successful!")
+        log("All heartbeats successful!")
 
     log(f"Test finished at: {finished_at.isoformat()}")
     log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
