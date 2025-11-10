@@ -522,7 +522,7 @@ def test_7_listen_with_activity():
         try:
             with connection.cursor() as cursor:
                 cursor.execute(f"UNLISTEN {channel_name}")
-        except:
+        except Exception:
             pass
 
     except Exception as e:
