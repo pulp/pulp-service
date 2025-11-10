@@ -247,6 +247,117 @@ class TaskIngestionRandomResourceLockDispatcherView(APIView):
         return Response({"tasks_executed": task_count})
 
 
+class RDSConnectionTestDispatcherView(APIView):
+    """
+    Endpoint to dispatch RDS Proxy connection timeout tests remotely.
+
+    POST body format:
+    {
+        "tests": ["test_1_idle_connection", "test_2_active_heartbeat"],
+        "run_sequentially": true  // optional, default false
+    }
+
+    Returns task IDs for dispatched tests.
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    AVAILABLE_TESTS = {
+        "test_1_idle_connection": "pulp_service.app.tasks.rds_connection_tests.test_1_idle_connection",
+        "test_2_active_heartbeat": "pulp_service.app.tasks.rds_connection_tests.test_2_active_heartbeat",
+        "test_3_long_transaction": "pulp_service.app.tasks.rds_connection_tests.test_3_long_transaction",
+        "test_4_transaction_with_work": "pulp_service.app.tasks.rds_connection_tests.test_4_transaction_with_work",
+        "test_5_session_variable": "pulp_service.app.tasks.rds_connection_tests.test_5_session_variable",
+        "test_6_listen_notify": "pulp_service.app.tasks.rds_connection_tests.test_6_listen_notify",
+        "test_7_listen_with_activity": "pulp_service.app.tasks.rds_connection_tests.test_7_listen_with_activity",
+    }
+
+    @extend_schema(
+        description="Dispatch RDS Proxy connection timeout tests",
+        summary="Dispatch RDS connection tests",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        """
+        Dispatch one or more RDS connection tests.
+        """
+        if not settings.DEBUG and not getattr(settings, 'RDS_CONNECTION_TESTS_ENABLED', False):
+            return Response(
+                {"error": "RDS connection tests are not enabled."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        tests = request.data.get('tests', [])
+        run_sequentially = request.data.get('run_sequentially', False)
+
+        if not tests:
+            return Response(
+                {"error": "No tests specified. Provide a list of test names."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate test names
+        invalid_tests = [t for t in tests if t not in self.AVAILABLE_TESTS]
+        if invalid_tests:
+            return Response(
+                {
+                    "error": f"Invalid test names: {invalid_tests}",
+                    "available_tests": list(self.AVAILABLE_TESTS.keys())
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        dispatched_tasks = []
+
+        for test_name in tests:
+            task_func = self.AVAILABLE_TESTS[test_name]
+
+            # Dispatch the task
+            task = dispatch(
+                task_func,
+                exclusive_resources=[],  # No resource locking needed
+            )
+
+            dispatched_tasks.append({
+                "test_name": test_name,
+                "task_id": str(task.pk),
+                "task_href": f"/pulp/api/v3/tasks/{task.pk}/",
+            })
+
+        return Response({
+            "message": f"Dispatched {len(dispatched_tasks)} test(s)",
+            "tasks": dispatched_tasks,
+            "run_sequentially": run_sequentially,
+            "note": "Each test runs for approximately 50 minutes. Monitor task status via task_href."
+        }, status=status.HTTP_202_ACCEPTED)
+
+    def get(self, request):
+        """
+        Get available tests and their descriptions.
+        """
+        return Response({
+            "available_tests": list(self.AVAILABLE_TESTS.keys()),
+            "descriptions": {
+                "test_1_idle_connection": "Idle connection test (50 min) - baseline timeout test",
+                "test_2_active_heartbeat": "Active heartbeat test (50 min) - periodic queries",
+                "test_3_long_transaction": "Long transaction test (50 min) - idle transaction",
+                "test_4_transaction_with_work": "Transaction with work test (50 min) - active transaction",
+                "test_5_session_variable": "Session variable test (50 min) - connection pinning via SET",
+                "test_6_listen_notify": "LISTEN/NOTIFY test (50 min) - CRITICAL: real worker behavior",
+                "test_7_listen_with_activity": "LISTEN with activity test (50 min) - periodic notifications",
+            },
+            "usage": {
+                "endpoint": "/api/pulp/rds-connection-tests/",
+                "method": "POST",
+                "body": {
+                    "tests": ["test_1_idle_connection", "test_2_active_heartbeat"],
+                    "run_sequentially": False
+                }
+            }
+        })
+
+
 class CreateDomainView(APIView):
 
     permission_classes = [DomainBasedPermission]

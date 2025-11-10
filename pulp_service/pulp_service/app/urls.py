@@ -6,6 +6,7 @@ from .viewsets import (
     DebugAuthenticationHeadersView,
     InternalServerErrorCheck,
     InternalServerErrorCheckWithException,
+    RDSConnectionTestDispatcherView,
     RedirectCheck,
     TaskViewSet,
     TaskIngestionDispatcherView,
@@ -23,5 +24,6 @@ urlpatterns = [
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
     path("api/pulp/test/tasks/", TaskIngestionDispatcherView.as_view()),
     path("api/pulp/test/random_lock_tasks/", TaskIngestionRandomResourceLockDispatcherView.as_view()),
+    path("api/pulp/rds-connection-tests/", RDSConnectionTestDispatcherView.as_view()),
     path("api/pulp/create-domain/", CreateDomainView.as_view()),
 ]
