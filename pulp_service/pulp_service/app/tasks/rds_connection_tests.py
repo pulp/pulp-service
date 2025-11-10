@@ -10,6 +10,7 @@ Test Infrastructure: Django ORM (production-like behavior)
 import logging
 import time
 from datetime import datetime
+from functools import wraps
 
 from django.db import connection, transaction
 
@@ -24,6 +25,79 @@ def log(message):
     """Log with timestamp"""
     timestamp = datetime.now().isoformat()
     logger.info(f"[{timestamp}] {message}")
+
+
+def rds_test_wrapper(test_name, connection_pinned=False):
+    """
+    Decorator to handle common test setup, timing, and result formatting.
+
+    Reduces code duplication across test functions by centralizing:
+    - Timing logic
+    - Logging setup/teardown
+    - Result formatting
+    - Error handling
+
+    Args:
+        test_name: Human-readable test name
+        connection_pinned: Whether this test pins the connection
+
+    Returns:
+        Decorated function that returns standardized test results
+    """
+    def decorator(test_func):
+        @wraps(test_func)
+        def wrapper(*args, **kwargs):
+            log(f"=== {test_name} ===")
+
+            started_at = datetime.now()
+            log(f"Test started at: {started_at.isoformat()}")
+
+            alive = True
+            extra_data = {}
+
+            try:
+                # Run the actual test logic
+                test_result = test_func(*args, **kwargs)
+
+                # Test function can return (alive, extra_data) or just alive
+                if isinstance(test_result, tuple):
+                    alive, extra_data = test_result
+                else:
+                    alive = test_result
+
+            except Exception as e:
+                log(f"TEST FAILED with exception: {e}")
+                alive = False
+                extra_data['error'] = str(e)
+
+            finished_at = datetime.now()
+            duration = (finished_at - started_at).total_seconds() / 60
+
+            log(f"Test finished at: {finished_at.isoformat()}")
+            log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
+
+            # Build result dictionary
+            result = {
+                'test': test_name,
+                'started_at': started_at.isoformat(),
+                'finished_at': finished_at.isoformat(),
+                'duration_minutes': round(duration, 2),
+                'connection_alive': alive,
+                'success': alive,
+                'status': 'PASSED' if alive else 'FAILED'
+            }
+
+            # Add connection pinning info if applicable
+            if connection_pinned:
+                result['connection_pinned'] = True
+
+            # Merge any extra data from the test
+            result.update(extra_data)
+
+            return result
+
+        return wrapper
+    return decorator
 
 
 def test_connection_alive_django():
@@ -47,6 +121,7 @@ def get_django_connection_info():
     return connection
 
 
+@rds_test_wrapper("TEST 1: IDLE CONNECTION (DJANGO ORM)")
 def test_1_idle_connection():
     """
     Test 1: Keep connection open but completely idle (Django ORM)
@@ -54,11 +129,6 @@ def test_1_idle_connection():
     Hypothesis: Idle connections timeout at ~40 minutes due to IdleClientTimeout
     Duration: 50 minutes
     """
-    log("=== TEST 1: IDLE CONNECTION (DJANGO ORM) ===")
-
-    started_at = datetime.now()
-    log(f"Test started at: {started_at.isoformat()}")
-
     # Force Django to establish connection
     test_connection_alive_django()
 
@@ -70,24 +140,8 @@ def test_1_idle_connection():
     log(f"Waiting {wait_minutes} minutes with Django idle connection...")
     time.sleep(wait_minutes * 60)
 
-    # Test if connection still works
-    alive = test_connection_alive_django()
-
-    finished_at = datetime.now()
-    duration = (finished_at - started_at).total_seconds() / 60
-
-    log(f"Test finished at: {finished_at.isoformat()}")
-    log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
-
-    return {
-        'test': 'Test 1 - Django Idle Connection',
-        'started_at': started_at.isoformat(),
-        'finished_at': finished_at.isoformat(),
-        'duration_minutes': round(duration, 2),
-        'connection_alive': alive,
-        'success': alive,  # Test succeeds if connection is alive
-        'status': 'PASSED' if alive else 'FAILED'
-    }
+    # Test if connection still works and return result
+    return test_connection_alive_django()
 
 
 def test_2_active_heartbeat():

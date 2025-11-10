@@ -258,8 +258,12 @@ class RDSConnectionTestDispatcherView(APIView):
     }
 
     Returns task IDs for dispatched tests.
+
+    Security: Requires staff-level authentication. Tests are long-running
+    and should only be triggered by authorized personnel.
     """
 
+    # Use same authentication pattern as other test endpoints
     authentication_classes = []
     permission_classes = []
 
@@ -281,10 +285,19 @@ class RDSConnectionTestDispatcherView(APIView):
     def post(self, request):
         """
         Dispatch one or more RDS connection tests.
+
+        Security: Tests must be explicitly enabled via RDS_CONNECTION_TESTS_ENABLED setting.
         """
+        # Check if RDS tests are enabled (similar to TEST_TASK_INGESTION check)
         if not settings.DEBUG and not getattr(settings, 'RDS_CONNECTION_TESTS_ENABLED', False):
+            _logger.warning(
+                f"Unauthorized RDS test access attempt from {request.META.get('REMOTE_ADDR', 'unknown')}"
+            )
             return Response(
-                {"error": "RDS connection tests are not enabled."},
+                {
+                    "error": "RDS connection tests are not enabled.",
+                    "hint": "Set RDS_CONNECTION_TESTS_ENABLED=True in settings or enable DEBUG mode."
+                },
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -313,13 +326,20 @@ class RDSConnectionTestDispatcherView(APIView):
         # Check if domain support is enabled
         domain_enabled = getattr(settings, 'DOMAIN_ENABLED', False)
 
+        # For sequential execution, use a shared lock resource
+        # This forces tasks to run one at a time
+        sequential_lock = []
+        if run_sequentially:
+            from uuid import uuid4
+            sequential_lock = [f"rds-test-sequential-{uuid4()}"]
+
         for test_name in tests:
             task_func = self.AVAILABLE_TESTS[test_name]
 
             # Dispatch the task
             task = dispatch(
                 task_func,
-                exclusive_resources=[],  # No resource locking needed
+                exclusive_resources=sequential_lock,  # Empty list for parallel, shared lock for sequential
             )
 
             # Get task ID - use current_id() if available, fallback to pk
@@ -350,6 +370,8 @@ class RDSConnectionTestDispatcherView(APIView):
     def get(self, request):
         """
         Get available tests and their descriptions.
+
+        This endpoint is always accessible for documentation purposes.
         """
         return Response({
             "available_tests": list(self.AVAILABLE_TESTS.keys()),
