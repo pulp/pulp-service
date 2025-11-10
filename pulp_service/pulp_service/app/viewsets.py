@@ -311,8 +311,7 @@ class RDSConnectionTestDispatcherView(APIView):
             )
 
         # Validate test names
-        invalid_tests = [t for t in tests if t not in self.AVAILABLE_TESTS]
-        if invalid_tests:
+        if invalid_tests := [t for t in tests if t not in self.AVAILABLE_TESTS]:
             return Response(
                 {
                     "error": f"Invalid test names: {invalid_tests}",
