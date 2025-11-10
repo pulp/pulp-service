@@ -8,7 +8,9 @@ Test Infrastructure: Django ORM (production-like behavior)
 """
 
 import logging
+import multiprocessing
 import time
+import traceback
 from datetime import datetime
 from functools import wraps
 
@@ -52,8 +54,20 @@ def rds_test_wrapper(test_name, connection_pinned=False):
             started_at = datetime.now()
             log(f"Test started at: {started_at.isoformat()}")
 
+            # Get and log backend PID
+            backend_pid = None
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT pg_backend_pid()")
+                    backend_pid = cursor.fetchone()[0]
+                    log(f"PostgreSQL backend PID: {backend_pid}")
+            except Exception as e:
+                log(f"Warning: Could not retrieve backend PID: {e}")
+
             alive = True
             extra_data = {}
+            if backend_pid:
+                extra_data['backend_pid'] = backend_pid
 
             try:
                 # Run the actual test logic
@@ -68,7 +82,11 @@ def rds_test_wrapper(test_name, connection_pinned=False):
             except Exception as e:
                 log(f"TEST FAILED with exception: {e}")
                 alive = False
-                extra_data['error'] = str(e)
+                extra_data['error'] = {
+                    'type': type(e).__name__,
+                    'message': str(e),
+                    'traceback': traceback.format_exc()
+                }
 
             finished_at = datetime.now()
             duration = (finished_at - started_at).total_seconds() / 60
@@ -144,6 +162,7 @@ def test_1_idle_connection():
     return test_connection_alive_django()
 
 
+@rds_test_wrapper("TEST 2: ACTIVE HEARTBEAT (DJANGO ORM)")
 def test_2_active_heartbeat():
     """
     Test 2: Keep connection alive with periodic heartbeat queries (Django ORM)
@@ -151,11 +170,6 @@ def test_2_active_heartbeat():
     Hypothesis: Periodic queries keep connection alive beyond 40 minutes
     Duration: 50 minutes
     """
-    log("=== TEST 2: ACTIVE HEARTBEAT (DJANGO ORM) ===")
-
-    started_at = datetime.now()
-    log(f"Test started at: {started_at.isoformat()}")
-
     # Send heartbeat every 60 seconds for 50 minutes
     test_duration_minutes = 50
     heartbeat_interval_seconds = 60
@@ -163,46 +177,22 @@ def test_2_active_heartbeat():
 
     log(f"Running heartbeat test: {iterations} iterations, 1 query per minute")
 
-    alive = True
     for i in range(iterations):
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                cursor.fetchone()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
 
-            elapsed_minutes = i + 1
-            log(f"Heartbeat {elapsed_minutes}/{iterations}: OK")
+        elapsed_minutes = i + 1
+        log(f"Heartbeat {elapsed_minutes}/{iterations}: OK")
 
-            if i < iterations - 1:  # Don't sleep after last iteration
-                time.sleep(heartbeat_interval_seconds)
-        except Exception as e:
-            alive = False
-            finished_at = datetime.now()
-            duration = (finished_at - started_at).total_seconds() / 60
-            log(f"HEARTBEAT FAILED at iteration {i+1} ({duration:.2f} minutes)")
-            log(f"Error: {e}")
-            break
+        if i < iterations - 1:  # Don't sleep after last iteration
+            time.sleep(heartbeat_interval_seconds)
 
-    if alive:
-        finished_at = datetime.now()
-        duration = (finished_at - started_at).total_seconds() / 60
-        log("All heartbeats successful!")
-
-    log(f"Test finished at: {finished_at.isoformat()}")
-    log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
-
-    return {
-        'test': 'Test 2 - Active Heartbeat',
-        'started_at': started_at.isoformat(),
-        'finished_at': finished_at.isoformat(),
-        'duration_minutes': round(duration, 2),
-        'connection_alive': alive,
-        'iterations_completed': i + 1 if not alive else iterations,
-        'success': alive,
-        'status': 'PASSED' if alive else 'FAILED'
-    }
+    log("All heartbeats successful!")
+    return True, {'iterations_completed': iterations}
 
 
+@rds_test_wrapper("TEST 3: LONG-RUNNING TRANSACTION (DJANGO ORM)")
 def test_3_long_transaction():
     """
     Test 3: Start transaction and hold it for extended period (Django ORM)
@@ -210,15 +200,7 @@ def test_3_long_transaction():
     Hypothesis: Long-running transactions timeout differently than idle connections
     Duration: 50 minutes
     """
-    log("=== TEST 3: LONG-RUNNING TRANSACTION (DJANGO ORM) ===")
-
-    started_at = datetime.now()
-    log(f"Test started at: {started_at.isoformat()}")
-
-    try:
-        # Disable autocommit for manual transaction control
-        transaction.set_autocommit(False)
-
+    with transaction.atomic():
         # Execute a query within transaction
         with connection.cursor() as cursor:
             cursor.execute("SELECT * FROM core_task LIMIT 1 FOR UPDATE")
@@ -230,42 +212,14 @@ def test_3_long_transaction():
         log(f"Holding transaction for {wait_minutes} minutes...")
         time.sleep(wait_minutes * 60)
 
-        # Try to commit
-        transaction.commit()
-        log("Transaction committed successfully")
-        alive = True
+        log("Transaction will commit on context exit")
+    # Transaction commits here automatically
 
-    except Exception as e:
-        finished_at = datetime.now()
-        duration = (finished_at - started_at).total_seconds() / 60
-        log(f"TRANSACTION FAILED after {duration:.2f} minutes")
-        log(f"Error: {e}")
-        alive = False
-        try:
-            transaction.rollback()
-        except:
-            pass
-    finally:
-        # Re-enable autocommit
-        transaction.set_autocommit(True)
-
-    finished_at = datetime.now()
-    duration = (finished_at - started_at).total_seconds() / 60
-
-    log(f"Test finished at: {finished_at.isoformat()}")
-    log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
-
-    return {
-        'test': 'Test 3 - Long Transaction',
-        'started_at': started_at.isoformat(),
-        'finished_at': finished_at.isoformat(),
-        'duration_minutes': round(duration, 2),
-        'connection_alive': alive,
-        'success': alive,
-        'status': 'PASSED' if alive else 'FAILED'
-    }
+    log("Transaction committed successfully")
+    return True
 
 
+@rds_test_wrapper("TEST 4: TRANSACTION WITH ACTIVE WORK (DJANGO ORM)")
 def test_4_transaction_with_work():
     """
     Test 4: Long transaction with periodic queries (Django ORM)
@@ -273,66 +227,38 @@ def test_4_transaction_with_work():
     Hypothesis: Transaction with periodic queries behaves differently than idle transaction
     Duration: 50 minutes
     """
-    log("=== TEST 4: TRANSACTION WITH ACTIVE WORK (DJANGO ORM) ===")
+    # Start Django atomic transaction
+    with transaction.atomic():
+        log("Django transaction started")
 
-    started_at = datetime.now()
-    log(f"Test started at: {started_at.isoformat()}")
+        # Do periodic work for 50 minutes
+        iterations = 25  # Every 2 minutes for 50 min
 
-    try:
-        # Start Django atomic transaction
-        with transaction.atomic():
-            log("Django transaction started")
+        for i in range(iterations):
+            # Query 1: Count waiting tasks (Django ORM)
+            waiting_count = Task.objects.filter(state='waiting').count()
 
-            # Do periodic work for 50 minutes
-            iterations = 25  # Every 2 minutes for 50 min
+            # Query 2: Get a task
+            task = Task.objects.first()
 
-            for i in range(iterations):
-                # Query 1: Count waiting tasks (Django ORM)
-                waiting_count = Task.objects.filter(state='waiting').count()
+            # Query 3: Count online workers
+            worker_count = AppStatus.objects.filter(app_type="worker").count()
 
-                # Query 2: Get a task
-                task = Task.objects.first()
+            elapsed_minutes = (i + 1) * 2
+            log(f"Iteration {i+1}/{iterations} ({elapsed_minutes} min): "
+                f"{waiting_count} waiting tasks, {worker_count} workers")
 
-                # Query 3: Count online workers
-                worker_count = AppStatus.objects.filter(app_type="worker", online=True).count()
+            if i < iterations - 1:
+                time.sleep(120)  # 2 minutes
 
-                elapsed_minutes = (i + 1) * 2
-                log(f"Iteration {i+1}/{iterations} ({elapsed_minutes} min): "
-                    f"{waiting_count} waiting tasks, {worker_count} workers")
+        log("Transaction will commit on context exit")
+    # Transaction commits here
 
-                if i < iterations - 1:
-                    time.sleep(120)  # 2 minutes
-
-            log("Transaction will commit on context exit")
-        # Transaction commits here
-
-        alive = True
-        log("Django transaction committed successfully")
-
-    except Exception as e:
-        finished_at = datetime.now()
-        duration = (finished_at - started_at).total_seconds() / 60
-        log(f"TRANSACTION FAILED after {duration:.2f} minutes")
-        log(f"Error: {e}")
-        alive = False
-
-    finished_at = datetime.now()
-    duration = (finished_at - started_at).total_seconds() / 60
-
-    log(f"Test finished at: {finished_at.isoformat()}")
-    log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
-
-    return {
-        'test': 'Test 4 - Django ORM Transaction with Work',
-        'started_at': started_at.isoformat(),
-        'finished_at': finished_at.isoformat(),
-        'duration_minutes': round(duration, 2),
-        'connection_alive': alive,
-        'success': alive,
-        'status': 'PASSED' if alive else 'FAILED'
-    }
+    log("Django transaction committed successfully")
+    return True
 
 
+@rds_test_wrapper("TEST 5: SESSION VARIABLE (SET TIMEZONE, DJANGO ORM)", connection_pinned=True)
 def test_5_session_variable():
     """
     Test 5: Set session variable (TIMEZONE) and hold connection (Django ORM)
@@ -340,58 +266,31 @@ def test_5_session_variable():
     Hypothesis: Setting session variables causes connection pinning, affecting timeout behavior
     Duration: 50 minutes
     """
-    log("=== TEST 5: SESSION VARIABLE (SET TIMEZONE, DJANGO ORM) ===")
+    # Set session variable (causes connection pinning)
+    with connection.cursor() as cursor:
+        cursor.execute("SET TIMEZONE TO 'UTC'")
+        log("Session variable set: SET TIMEZONE TO 'UTC'")
 
-    started_at = datetime.now()
-    log(f"Test started at: {started_at.isoformat()}")
+        # Verify it was set
+        cursor.execute("SHOW TIMEZONE")
+        tz = cursor.fetchone()[0]
+        log(f"Confirmed TIMEZONE = {tz}")
 
-    try:
-        # Set session variable (causes connection pinning)
-        with connection.cursor() as cursor:
-            cursor.execute("SET TIMEZONE TO 'UTC'")
-            log("Session variable set: SET TIMEZONE TO 'UTC'")
+    # Wait 50 minutes
+    wait_minutes = 50
+    log(f"Waiting {wait_minutes} minutes with pinned connection...")
+    time.sleep(wait_minutes * 60)
 
-            # Verify it was set
-            cursor.execute("SHOW TIMEZONE")
-            tz = cursor.fetchone()[0]
-            log(f"Confirmed TIMEZONE = {tz}")
+    # Try to query
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1")
+        result = cursor.fetchone()
+        log(f"Query successful: {result}")
 
-        # Wait 50 minutes
-        wait_minutes = 50
-        log(f"Waiting {wait_minutes} minutes with pinned connection...")
-        time.sleep(wait_minutes * 60)
-
-        # Try to query
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            result = cursor.fetchone()
-            log(f"Query successful: {result}")
-        alive = True
-
-    except Exception as e:
-        finished_at = datetime.now()
-        duration = (finished_at - started_at).total_seconds() / 60
-        log(f"CONNECTION FAILED after {duration:.2f} minutes")
-        log(f"Error: {e}")
-        alive = False
-
-    finished_at = datetime.now()
-    duration = (finished_at - started_at).total_seconds() / 60
-
-    log(f"Test finished at: {finished_at.isoformat()}")
-    log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
-
-    return {
-        'test': 'Test 5 - Session Variable',
-        'started_at': started_at.isoformat(),
-        'finished_at': finished_at.isoformat(),
-        'duration_minutes': round(duration, 2),
-        'connection_alive': alive,
-        'success': alive,
-        'status': 'PASSED' if alive else 'FAILED'
-    }
+    return True
 
 
+@rds_test_wrapper("TEST 6: LISTEN/NOTIFY (CONNECTION PINNING, DJANGO ORM)", connection_pinned=True)
 def test_6_listen_notify():
     """
     Test 6: Use LISTEN/NOTIFY to pin connection like Pulp workers do (Django ORM)
@@ -402,74 +301,94 @@ def test_6_listen_notify():
     Hypothesis: LISTEN causes persistent connection pinning
     Duration: 50 minutes
     """
-    log("=== TEST 6: LISTEN/NOTIFY (CONNECTION PINNING, DJANGO ORM) ===")
+    # Set up LISTEN (this pins the connection)
+    with connection.cursor() as cursor:
+        channel_name = "test_task_dispatch"
+        cursor.execute(f"LISTEN {channel_name}")
+        log(f"LISTEN started on channel: {channel_name}")
+        log("Connection is now PINNED (cannot be pooled)")
 
-    started_at = datetime.now()
-    log(f"Test started at: {started_at.isoformat()}")
+    # Simulate worker behavior: wait for notifications
+    wait_minutes = 50
+    log(f"Listening for {wait_minutes} minutes (simulating worker lifetime)...")
+
+    # Check for notifications periodically (like a worker would)
+    iterations = wait_minutes
+
+    for i in range(iterations):
+        # Simple sleep - workers poll for notifications
+        time.sleep(60)
+        elapsed = i + 1
+        log(f"Minute {elapsed}/{iterations}: Listening...")
+
+    log(f"LISTEN completed successfully")
+
+    # Clean up
+    with connection.cursor() as cursor:
+        cursor.execute(f"UNLISTEN {channel_name}")
+        log(f"UNLISTEN {channel_name}")
+
+    return True
+
+
+def _notification_sender_worker(channel_name, interval_seconds, duration_minutes, db_settings):
+    """
+    Worker function to send periodic NOTIFY commands from a separate process.
+
+    Args:
+        channel_name: PostgreSQL channel to send notifications on
+        interval_seconds: How often to send notifications
+        duration_minutes: How long to run
+        db_settings: Database connection settings from Django
+    """
+    import logging
+    import time
+    from datetime import datetime
+    import psycopg
+
+    logger = logging.getLogger(__name__)
+
+    def worker_log(message):
+        timestamp = datetime.now().isoformat()
+        logger.info(f"[NOTIFY-WORKER][{timestamp}] {message}")
 
     try:
-        # Set up LISTEN (this pins the connection)
-        with connection.cursor() as cursor:
-            channel_name = "test_task_dispatch"
-            cursor.execute(f"LISTEN {channel_name}")
-            log(f"LISTEN started on channel: {channel_name}")
-            log("Connection is now PINNED (cannot be pooled)")
+        # Create a new database connection (can't share with parent process)
+        conn = psycopg.connect(
+            host=db_settings['HOST'],
+            port=db_settings.get('PORT', 5432),
+            dbname=db_settings['NAME'],
+            user=db_settings['USER'],
+            password=db_settings['PASSWORD'],
+        )
+        conn.autocommit = True
 
-        # Simulate worker behavior: wait for notifications
-        wait_minutes = 50
-        log(f"Listening for {wait_minutes} minutes (simulating worker lifetime)...")
+        worker_log(f"Started notification sender for channel '{channel_name}'")
+        worker_log(f"Will send notifications every {interval_seconds}s for {duration_minutes} minutes")
 
-        # Check for notifications periodically (like a worker would)
-        iterations = wait_minutes
-        alive = True
+        iterations = int((duration_minutes * 60) / interval_seconds)
 
         for i in range(iterations):
-            try:
-                # Simple sleep - workers poll for notifications
-                time.sleep(60)
-                elapsed = i + 1
-                log(f"Minute {elapsed}/{iterations}: Listening...")
+            time.sleep(interval_seconds)
 
+            try:
+                cursor = conn.cursor()
+                payload = f"heartbeat_{i+1}"
+                cursor.execute(f"NOTIFY {channel_name}, '{payload}'")
+                cursor.close()
+                worker_log(f"Sent NOTIFY #{i+1}/{iterations}: '{payload}'")
             except Exception as e:
-                finished_at = datetime.now()
-                duration = (finished_at - started_at).total_seconds() / 60
-                log(f"LISTEN FAILED at minute {i+1} ({duration:.2f} minutes)")
-                log(f"Error: {e}")
-                alive = False
+                worker_log(f"Error sending NOTIFY: {e}")
                 break
 
-        if alive:
-            finished_at = datetime.now()
-            duration = (finished_at - started_at).total_seconds() / 60
-            log(f"LISTEN completed successfully for {duration:.2f} minutes")
-
-            # Clean up
-            with connection.cursor() as cursor:
-                cursor.execute(f"UNLISTEN {channel_name}")
-                log(f"UNLISTEN {channel_name}")
+        conn.close()
+        worker_log("Notification sender completed")
 
     except Exception as e:
-        finished_at = datetime.now()
-        duration = (finished_at - started_at).total_seconds() / 60
-        log(f"CONNECTION FAILED after {duration:.2f} minutes")
-        log(f"Error: {e}")
-        alive = False
-
-    log(f"Test finished at: {finished_at.isoformat()}")
-    log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
-
-    return {
-        'test': 'Test 6 - LISTEN/NOTIFY',
-        'started_at': started_at.isoformat(),
-        'finished_at': finished_at.isoformat(),
-        'duration_minutes': round(duration, 2),
-        'connection_alive': alive,
-        'connection_pinned': True,
-        'success': alive,
-        'status': 'PASSED' if alive else 'FAILED'
-    }
+        worker_log(f"Worker failed: {e}")
 
 
+@rds_test_wrapper("TEST 7: LISTEN WITH PERIODIC ACTIVITY (DJANGO ORM)", connection_pinned=True)
 def test_7_listen_with_activity():
     """
     Test 7: LISTEN with periodic NOTIFY to keep connection active (Django ORM)
@@ -477,71 +396,58 @@ def test_7_listen_with_activity():
     Hypothesis: Active LISTEN connection with periodic notifications stays alive longer
     Duration: 50 minutes
 
-    Note: This test requires running a separate connection to send NOTIFY.
-    Use send_test_notification() helper from another worker/shell.
+    This test automatically sends NOTIFY commands from a separate process every 2 minutes.
     """
-    log("=== TEST 7: LISTEN WITH PERIODIC ACTIVITY (DJANGO ORM) ===")
+    channel_name = "test_task_dispatch"
 
-    started_at = datetime.now()
-    log(f"Test started at: {started_at.isoformat()}")
+    # Set up LISTEN
+    with connection.cursor() as cursor:
+        cursor.execute(f"LISTEN {channel_name}")
+        log(f"LISTEN started on channel: {channel_name}")
+
+    # Start notification sender in separate process
+    log("Starting automatic NOTIFY sender in separate process (every 2 minutes)...")
+
+    # Get database settings to pass to worker
+    db_settings = connection.settings_dict.copy()
+
+    notify_process = multiprocessing.Process(
+        target=_notification_sender_worker,
+        args=(channel_name, 120, 50, db_settings)  # Send every 2 minutes for 50 minutes
+    )
+    notify_process.start()
+    log(f"NOTIFY sender process started (PID: {notify_process.pid})")
+
+    # Listen for notifications
+    iterations = 50  # 50 minutes
 
     try:
-        # Set up LISTEN
-        with connection.cursor() as cursor:
-            channel_name = "test_task_dispatch"
-            cursor.execute(f"LISTEN {channel_name}")
-            log(f"LISTEN started on channel: {channel_name}")
-            log("Note: Manually send NOTIFY commands every 2 minutes from another session")
-            log(f"  Example: NOTIFY {channel_name}, 'heartbeat_1';")
-
-        # Listen for notifications
-        alive = True
-        iterations = 50  # 50 minutes
-
         for i in range(iterations):
-            try:
-                # Wait 60 seconds
-                time.sleep(60)
-                log(f"Minute {i+1}/{iterations}: Waiting for notification...")
+            # Wait 60 seconds
+            time.sleep(60)
+            log(f"Minute {i+1}/{iterations}: Listening for notifications...")
 
-            except Exception as e:
-                finished_at = datetime.now()
-                duration = (finished_at - started_at).total_seconds() / 60
-                log(f"LISTEN FAILED after {duration:.2f} minutes")
-                log(f"Error: {e}")
-                alive = False
-                break
-
-        finished_at = datetime.now()
-        duration = (finished_at - started_at).total_seconds() / 60
-
-        log(f"Test finished at: {finished_at.isoformat()}")
-        log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
-
-        # Clean up
+    finally:
+        # Clean up LISTEN
         try:
             with connection.cursor() as cursor:
                 cursor.execute(f"UNLISTEN {channel_name}")
+                log(f"UNLISTEN {channel_name}")
         except Exception:
             pass
 
-    except Exception as e:
-        finished_at = datetime.now()
-        duration = (finished_at - started_at).total_seconds() / 60
-        log(f"CONNECTION FAILED after {duration:.2f} minutes")
-        log(f"Error: {e}")
-        alive = False
+        # Stop the notification sender process
+        if notify_process.is_alive():
+            log("Terminating NOTIFY sender process...")
+            notify_process.terminate()
+            notify_process.join(timeout=5)
+            if notify_process.is_alive():
+                log("Force killing NOTIFY sender process...")
+                notify_process.kill()
+                notify_process.join()
+        log("NOTIFY sender process stopped")
 
-    return {
-        'test': 'Test 7 - LISTEN with Activity',
-        'started_at': started_at.isoformat(),
-        'finished_at': finished_at.isoformat(),
-        'duration_minutes': round(duration, 2),
-        'connection_alive': alive,
-        'connection_pinned': True,
-        'success': alive,
-        'status': 'PASSED' if alive else 'FAILED'
-    }
+    return True
 
 
 def send_test_notification(channel_name="test_task_dispatch", payload="test_payload"):

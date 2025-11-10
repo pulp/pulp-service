@@ -159,6 +159,7 @@ async def monitor_tasks(
     logger.info("Note: Each test runs for approximately 50 minutes")
 
     pending_tasks = {task['task_id']: task for task in tasks}
+    completed_tasks = {}  # Track completed tasks with their results
     start_time = time.time()
 
     while pending_tasks:
@@ -182,6 +183,14 @@ async def monitor_tasks(
 
                 if state in ['completed', 'failed', 'canceled']:
                     logger.info(f"  {test_name}: {state.upper()}")
+
+                    # Store completion info
+                    completed_tasks[task_id] = {
+                        'test_name': test_name,
+                        'state': state,
+                        'status': status
+                    }
+
                     if state == 'completed':
                         # Try to extract results
                         if 'result' in status:
@@ -189,6 +198,8 @@ async def monitor_tasks(
                             logger.info(f"    Status: {result.get('status', 'UNKNOWN')}")
                             logger.info(f"    Duration: {result.get('duration_minutes', 0)} minutes")
                             logger.info(f"    Connection Alive: {result.get('connection_alive', 'unknown')}")
+                            if 'backend_pid' in result:
+                                logger.info(f"    Backend PID: {result.get('backend_pid')}")
                     completed.append(task_id)
                 else:
                     logger.info(f"  {test_name}: {state}")
@@ -202,6 +213,9 @@ async def monitor_tasks(
 
         if pending_tasks:
             logger.info(f"{len(pending_tasks)} task(s) still running...")
+
+    # Return completed tasks for summary
+    return completed_tasks
 
 
 @click.command()
@@ -326,10 +340,80 @@ def rds_connection_tests(
                 click.echo("Press Ctrl+C to stop monitoring (tasks will continue running)\n")
 
                 try:
-                    await monitor_tasks(
+                    completed_tasks = await monitor_tasks(
                         api_root, result['tasks'], user, password, cert, key, poll_interval
                     )
                     click.echo("\n✓ All tasks completed!")
+
+                    # Display summary
+                    click.echo("\n" + "=" * 60)
+                    click.echo("TEST SUMMARY")
+                    click.echo("=" * 60)
+
+                    passed_tests = []
+                    failed_tests = []
+
+                    for task_id, task_data in completed_tasks.items():
+                        test_name = task_data['test_name']
+                        state = task_data['state']
+                        status_obj = task_data['status']
+
+                        if state == 'completed':
+                            result_data = status_obj.get('result', {})
+                            test_status = result_data.get('status', 'UNKNOWN')
+                            connection_alive = result_data.get('connection_alive', 'unknown')
+                            duration = result_data.get('duration_minutes', 0)
+                            backend_pid = result_data.get('backend_pid', 'N/A')
+
+                            if test_status == 'PASSED':
+                                passed_tests.append({
+                                    'name': test_name,
+                                    'duration': duration,
+                                    'backend_pid': backend_pid,
+                                    'connection_alive': connection_alive
+                                })
+                            else:
+                                failed_tests.append({
+                                    'name': test_name,
+                                    'duration': duration,
+                                    'backend_pid': backend_pid,
+                                    'connection_alive': connection_alive,
+                                    'error': result_data.get('error', 'Unknown error')
+                                })
+                        else:
+                            # Task failed or was canceled
+                            failed_tests.append({
+                                'name': test_name,
+                                'duration': 0,
+                                'backend_pid': 'N/A',
+                                'connection_alive': False,
+                                'error': f"Task {state}"
+                            })
+
+                    # Display passed tests
+                    if passed_tests:
+                        click.echo(f"\n✓ PASSED ({len(passed_tests)}):")
+                        for test in passed_tests:
+                            click.echo(f"  • {test['name']}")
+                            click.echo(f"    Duration: {test['duration']} min | Backend PID: {test['backend_pid']} | Connection: {'ALIVE' if test['connection_alive'] else 'DEAD'}")
+
+                    # Display failed tests
+                    if failed_tests:
+                        click.echo(f"\n✗ FAILED ({len(failed_tests)}):")
+                        for test in failed_tests:
+                            click.echo(f"  • {test['name']}")
+                            click.echo(f"    Duration: {test['duration']} min | Backend PID: {test['backend_pid']} | Connection: {'ALIVE' if test['connection_alive'] else 'DEAD'}")
+                            if isinstance(test['error'], dict):
+                                click.echo(f"    Error: {test['error'].get('type', 'Unknown')}: {test['error'].get('message', 'No message')}")
+                            else:
+                                click.echo(f"    Error: {test['error']}")
+
+                    # Final stats
+                    total = len(passed_tests) + len(failed_tests)
+                    click.echo(f"\n{'-' * 60}")
+                    click.echo(f"Total: {total} | Passed: {len(passed_tests)} | Failed: {len(failed_tests)}")
+                    click.echo("=" * 60)
+
                 except KeyboardInterrupt:
                     click.echo("\n\nMonitoring stopped. Tasks are still running on the server.")
                     click.echo("Check task status manually using the task URLs above.")
