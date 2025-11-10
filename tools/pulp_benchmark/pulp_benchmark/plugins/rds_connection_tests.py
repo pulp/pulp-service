@@ -185,7 +185,10 @@ async def monitor_tasks(
                     if state == 'completed':
                         # Try to extract results
                         if 'result' in status:
-                            logger.info(f"    Result: {status['result']}")
+                            result = status['result']
+                            logger.info(f"    Status: {result.get('status', 'UNKNOWN')}")
+                            logger.info(f"    Duration: {result.get('duration_minutes', 0)} minutes")
+                            logger.info(f"    Connection Alive: {result.get('connection_alive', 'unknown')}")
                     completed.append(task_id)
                 else:
                     logger.info(f"  {test_name}: {state}")

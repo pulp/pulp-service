@@ -83,8 +83,10 @@ def test_1_idle_connection():
         'test': 'Test 1 - Django Idle Connection',
         'started_at': started_at.isoformat(),
         'finished_at': finished_at.isoformat(),
-        'duration_minutes': duration,
-        'connection_alive': alive
+        'duration_minutes': round(duration, 2),
+        'connection_alive': alive,
+        'success': alive,  # Test succeeds if connection is alive
+        'status': 'PASSED' if alive else 'FAILED'
     }
 
 
@@ -139,9 +141,11 @@ def test_2_active_heartbeat():
         'test': 'Test 2 - Active Heartbeat',
         'started_at': started_at.isoformat(),
         'finished_at': finished_at.isoformat(),
-        'duration_minutes': duration,
+        'duration_minutes': round(duration, 2),
         'connection_alive': alive,
-        'iterations_completed': i + 1 if not alive else iterations
+        'iterations_completed': i + 1 if not alive else iterations,
+        'success': alive,
+        'status': 'PASSED' if alive else 'FAILED'
     }
 
 
@@ -201,8 +205,10 @@ def test_3_long_transaction():
         'test': 'Test 3 - Long Transaction',
         'started_at': started_at.isoformat(),
         'finished_at': finished_at.isoformat(),
-        'duration_minutes': duration,
-        'connection_alive': alive
+        'duration_minutes': round(duration, 2),
+        'connection_alive': alive,
+        'success': alive,
+        'status': 'PASSED' if alive else 'FAILED'
     }
 
 
@@ -266,8 +272,10 @@ def test_4_transaction_with_work():
         'test': 'Test 4 - Django ORM Transaction with Work',
         'started_at': started_at.isoformat(),
         'finished_at': finished_at.isoformat(),
-        'duration_minutes': duration,
-        'connection_alive': alive
+        'duration_minutes': round(duration, 2),
+        'connection_alive': alive,
+        'success': alive,
+        'status': 'PASSED' if alive else 'FAILED'
     }
 
 
@@ -323,8 +331,10 @@ def test_5_session_variable():
         'test': 'Test 5 - Session Variable',
         'started_at': started_at.isoformat(),
         'finished_at': finished_at.isoformat(),
-        'duration_minutes': duration,
-        'connection_alive': alive
+        'duration_minutes': round(duration, 2),
+        'connection_alive': alive,
+        'success': alive,
+        'status': 'PASSED' if alive else 'FAILED'
     }
 
 
@@ -398,9 +408,11 @@ def test_6_listen_notify():
         'test': 'Test 6 - LISTEN/NOTIFY',
         'started_at': started_at.isoformat(),
         'finished_at': finished_at.isoformat(),
-        'duration_minutes': duration,
+        'duration_minutes': round(duration, 2),
         'connection_alive': alive,
-        'connection_pinned': True
+        'connection_pinned': True,
+        'success': alive,
+        'status': 'PASSED' if alive else 'FAILED'
     }
 
 
@@ -470,9 +482,11 @@ def test_7_listen_with_activity():
         'test': 'Test 7 - LISTEN with Activity',
         'started_at': started_at.isoformat(),
         'finished_at': finished_at.isoformat(),
-        'duration_minutes': duration,
+        'duration_minutes': round(duration, 2),
         'connection_alive': alive,
-        'connection_pinned': True
+        'connection_pinned': True,
+        'success': alive,
+        'status': 'PASSED' if alive else 'FAILED'
     }
 
 
