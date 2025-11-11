@@ -438,6 +438,8 @@ objects:
             value: ${PULP_CLAMAV_SVC_PORT}
           - name: PULP_API_APP_TTL
             value: ${PULP_API_APP_TTL}
+          - name: RDS_CONNECTION_TESTS_ENABLED
+            value: ${{RDS_CONNECTION_TESTS_ENABLED}}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
