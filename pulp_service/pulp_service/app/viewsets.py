@@ -289,7 +289,7 @@ class RDSConnectionTestDispatcherView(APIView):
         Security: Tests must be explicitly enabled via RDS_CONNECTION_TESTS_ENABLED setting.
         """
         # Check if RDS tests are enabled (similar to TEST_TASK_INGESTION check)
-        if not settings.DEBUG or not getattr(settings, 'RDS_CONNECTION_TESTS_ENABLED', False):
+        if not settings.RDS_CONNECTION_TESTS_ENABLED or not settings.DEBUG:
             _logger.warning(
                 f"Unauthorized RDS test access attempt from {request.META.get('REMOTE_ADDR', 'unknown')}"
             )

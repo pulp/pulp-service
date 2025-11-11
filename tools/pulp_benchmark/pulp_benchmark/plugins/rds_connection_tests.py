@@ -15,6 +15,9 @@ from typing import List, Optional
 import aiohttp
 import click
 
+# Import shared connection utilities
+from pulp_benchmark.client_async import create_session
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +39,7 @@ async def dispatch_tests(
     password: Optional[str] = None,
     cert: Optional[str] = None,
     key: Optional[str] = None,
+    verify_ssl: bool = True,
 ) -> dict:
     """
     Dispatch RDS connection tests to the Pulp instance.
@@ -47,6 +51,7 @@ async def dispatch_tests(
         password: Password for authentication
         cert: Path to client certificate
         key: Path to client private key
+        verify_ssl: Whether to verify SSL certificates
 
     Returns:
         dict: Response from the API with dispatched task information
@@ -59,28 +64,29 @@ async def dispatch_tests(
 
     endpoint = f"{base_url}/api/pulp/rds-connection-tests/"
 
-    auth = aiohttp.BasicAuth(user, password) if user and password else None
-    ssl_context = None
-    if cert:
-        import ssl
-        ssl_context = ssl.create_default_context(cafile=cert)
-        if key:
-            ssl_context.load_cert_chain(cert, key)
-
     payload = {
         "tests": tests,
         "run_sequentially": False  # All tests run in parallel by default
     }
 
+    logger.info(f"Dispatching to endpoint: {endpoint}")
+    logger.info(f"Authentication: {'Basic Auth' if user and password else 'Cert Auth' if cert else 'None'}")
+    logger.info(f"SSL Verification: {verify_ssl}")
+
     try:
-        async with aiohttp.ClientSession(
-            auth=auth,
-            connector=aiohttp.TCPConnector(ssl=ssl_context)
-        ) as session:
+        async with create_session(user, password, cert, key, verify_ssl) as session:
             async with session.post(endpoint, json=payload) as response:
+                logger.info(f"Response status: {response.status}")
+                logger.info(f"Response headers: {dict(response.headers)}")
                 response.raise_for_status()
                 data = await response.json()
                 return data
+    except aiohttp.ClientResponseError as e:
+        logger.error(f"HTTP {e.status} error: {e.message}")
+        logger.error(f"Response headers: {e.headers}")
+        if e.status == 403:
+            logger.error("403 Forbidden - Check authentication credentials and permissions")
+        raise
     except aiohttp.ClientError as e:
         logger.error(f"Failed to dispatch tests: {e}")
         raise
@@ -93,6 +99,7 @@ async def check_task_status(
     password: Optional[str] = None,
     cert: Optional[str] = None,
     key: Optional[str] = None,
+    verify_ssl: bool = True,
 ) -> dict:
     """
     Check the status of a Pulp task.
@@ -104,6 +111,7 @@ async def check_task_status(
         password: Password for authentication
         cert: Path to client certificate
         key: Path to client private key
+        verify_ssl: Whether to verify SSL certificates
 
     Returns:
         dict: Task status information
@@ -112,19 +120,8 @@ async def check_task_status(
     # api_root might be something like https://example.com/api
     endpoint = f"{api_root}{task_href}"
 
-    auth = aiohttp.BasicAuth(user, password) if user and password else None
-    ssl_context = None
-    if cert:
-        import ssl
-        ssl_context = ssl.create_default_context(cafile=cert)
-        if key:
-            ssl_context.load_cert_chain(cert, key)
-
     try:
-        async with aiohttp.ClientSession(
-            auth=auth,
-            connector=aiohttp.TCPConnector(ssl=ssl_context)
-        ) as session:
+        async with create_session(user, password, cert, key, verify_ssl) as session:
             async with session.get(endpoint) as response:
                 response.raise_for_status()
                 data = await response.json()
@@ -142,6 +139,7 @@ async def monitor_tasks(
     cert: Optional[str] = None,
     key: Optional[str] = None,
     poll_interval: int = 60,
+    verify_ssl: bool = True,
 ):
     """
     Monitor the progress of dispatched tasks.
@@ -154,6 +152,7 @@ async def monitor_tasks(
         cert: Path to client certificate
         key: Path to client private key
         poll_interval: How often to poll for status (seconds)
+        verify_ssl: Whether to verify SSL certificates
     """
     logger.info(f"Monitoring {len(tasks)} task(s)...")
     logger.info("Note: Each test runs for approximately 50 minutes")
@@ -175,7 +174,7 @@ async def monitor_tasks(
         for task_id, task_info in pending_tasks.items():
             try:
                 status = await check_task_status(
-                    api_root, task_info['task_href'], user, password, cert, key
+                    api_root, task_info['task_href'], user, password, cert, key, verify_ssl
                 )
 
                 state = status.get('state', 'unknown')
@@ -309,6 +308,7 @@ def rds_connection_tests(
     password = ctx.obj['password']
     cert = ctx.obj['cert']
     key = ctx.obj['key']
+    verify_ssl = ctx.obj['verify_ssl']
 
     click.echo(f"\nDispatching {len(selected_tests)} test(s) to {api_root}")
     click.echo("Tests to run:")
@@ -320,7 +320,7 @@ def rds_connection_tests(
     async def run_dispatch():
         try:
             result = await dispatch_tests(
-                api_root, selected_tests, user, password, cert, key
+                api_root, selected_tests, user, password, cert, key, verify_ssl
             )
 
             click.echo(f"\n✓ Successfully dispatched {len(result['tasks'])} test(s)\n")
@@ -341,7 +341,7 @@ def rds_connection_tests(
 
                 try:
                     completed_tasks = await monitor_tasks(
-                        api_root, result['tasks'], user, password, cert, key, poll_interval
+                        api_root, result['tasks'], user, password, cert, key, poll_interval, verify_ssl
                     )
                     click.echo("\n✓ All tasks completed!")
 
