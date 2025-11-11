@@ -17,3 +17,6 @@ LOGIN_URL = '/api/pulp-mgmt/login/'
 HIJACK_LOGIN_REDIRECT_URL = '/api/pulp-mgmt/'
 HIJACK_LOGOUT_REDIRECT_URL = '/api/pulp-mgmt/'
 HIJACK_ALLOW_GET_REQUESTS = True
+
+# RDS Test endpoints setting
+PULP_RDS_CONNECTION_TESTS_ENABLED = False
