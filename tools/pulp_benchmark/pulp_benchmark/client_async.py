@@ -6,6 +6,17 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
+# User-Agent version constants
+PULP_BENCHMARK_VERSION = "1.0"
+CURL_COMPATIBLE_VERSION = "8.0.0"
+
+
+def log_worker_status(status: dict) -> None:
+    """Log worker status information from Pulp API response."""
+    logging.info(f"Online API workers: {len(status.get('online_api_apps', []))}")
+    logging.info(f"Online Content workers: {len(status.get('online_content_apps', []))}")
+    logging.info(f"Online Task workers: {len(status.get('online_workers', []))}")
+
 
 def create_ssl_context(
     cert: Optional[str] = None,
@@ -69,7 +80,7 @@ def create_session(
 
     # Set headers to avoid CDN/WAF blocks (e.g., Akamai)
     headers = {
-        'User-Agent': 'pulp-benchmark/1.0 (compatible; curl/8.0.0)',
+        'User-Agent': f'pulp-benchmark/{PULP_BENCHMARK_VERSION} (compatible; curl/{CURL_COMPATIBLE_VERSION})',
     }
 
     return aiohttp.ClientSession(
@@ -128,8 +139,6 @@ async def get_system_status(
             async with session.get(status_endpoint) as response:
                 response.raise_for_status()
                 status = await response.json()
-                logging.info(f"Online API workers: {len(status.get('online_api_apps', []))}")
-                logging.info(f"Online Content workers: {len(status.get('online_content_apps', []))}")
-                logging.info(f"Online Task workers: {len(status.get('online_workers', []))}")
+                log_worker_status(status)
     except aiohttp.ClientError as e:
         logging.error(f"Could not fetch system status: {e}")

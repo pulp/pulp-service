@@ -6,6 +6,13 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+
+def log_worker_status(status: dict) -> None:
+    """Log worker status information from Pulp API response."""
+    logging.info(f"Online API workers: {len(status.get('online_api_apps', []))}")
+    logging.info(f"Online Content workers: {len(status.get('online_content_apps', []))}")
+    logging.info(f"Online Task workers: {len(status.get('online_workers', []))}")
+
 def send_request_sync(session: requests.Session, url: str, timeout: int, worker_id: int) -> int:
     """Sends a single sync request and returns the number of tasks processed."""
     logging.info(f"[Sync Worker {worker_id}] Attempting to send request...") # <-- ADDED LOGGING
@@ -62,8 +69,6 @@ def get_system_status_sync(
         response = requests.get(status_endpoint, timeout=15, auth=auth, cert=cert_param, verify=verify_ssl)
         response.raise_for_status()
         status = response.json()
-        logging.info(f"Online API workers: {len(status.get('online_api_apps', []))}")
-        logging.info(f"Online Content workers: {len(status.get('online_content_apps', []))}")
-        logging.info(f"Online Task workers: {len(status.get('online_workers', []))}")
+        log_worker_status(status)
     except requests.exceptions.RequestException as e:
         logging.error(f"Could not fetch system status: {e}")
