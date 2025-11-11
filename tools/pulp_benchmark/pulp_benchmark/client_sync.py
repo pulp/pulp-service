@@ -29,6 +29,7 @@ def run_concurrent_requests_sync(
     password: Optional[str] = None,
     cert: Optional[str] = None,
     key: Optional[str] = None,
+    verify_ssl: bool = True,
 ) -> int:
     """Runs concurrent requests using a ThreadPoolExecutor."""
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -37,6 +38,7 @@ def run_concurrent_requests_sync(
                 session.auth = (user, password)
             if cert:
                 session.cert = (cert, key) if key else cert
+            session.verify = verify_ssl
             # Pass a worker_id for better logging
             futures = [executor.submit(send_request_sync, session, url, timeout, i+1) for i in range(max_workers)]
             # Correctly wait for all futures to complete
@@ -49,6 +51,7 @@ def get_system_status_sync(
     password: Optional[str] = None,
     cert: Optional[str] = None,
     key: Optional[str] = None,
+    verify_ssl: bool = True,
 ):
     """Fetches and prints the system's worker status synchronously."""
     logging.info("Fetching system status...")
@@ -56,7 +59,7 @@ def get_system_status_sync(
     auth = (user, password) if user and password else None
     cert_param = (cert, key) if cert and key else cert
     try:
-        response = requests.get(status_endpoint, timeout=15, auth=auth, cert=cert_param)
+        response = requests.get(status_endpoint, timeout=15, auth=auth, cert=cert_param, verify=verify_ssl)
         response.raise_for_status()
         status = response.json()
         logging.info(f"Online API workers: {len(status.get('online_api_apps', []))}")
