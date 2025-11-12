@@ -73,9 +73,9 @@ def rds_test_wrapper(test_name, connection_pinned=False):
 
                 try:
                     # Run the actual test logic
-                    log(f"Starting test execution...")
+                    log("Starting test execution...")
                     test_result = test_func(*args, **kwargs)
-                    log(f"Test execution completed")
+                    log("Test execution completed")
 
                     # Test function can return (alive, extra_data) or just alive
                     if isinstance(test_result, tuple):
@@ -161,7 +161,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                             'traceback': traceback.format_exc()
                         }
                     }
-                except:
+                except Exception:
                     # If even the error result construction fails, return bare minimum
                     return {
                         'test': test_name,
@@ -271,7 +271,7 @@ def test_3_long_transaction(duration_minutes=50):
         with connection.cursor() as cursor:
             cursor.execute("SELECT * FROM core_task LIMIT 1 FOR UPDATE")
             result = cursor.fetchone()
-            log(f"Query executed: selected 1 task for update")
+            log("Query executed: selected 1 task for update")
 
         # Hold transaction for specified duration
         log(f"Holding transaction for {duration_minutes} minutes...")
@@ -384,7 +384,7 @@ def test_6_listen_notify(duration_minutes=50):
         elapsed = i + 1
         log(f"Minute {elapsed}/{iterations}: Listening...")
 
-    log(f"LISTEN completed successfully")
+    log("LISTEN completed successfully")
 
     # Clean up
     with connection.cursor() as cursor:
