@@ -1306,7 +1306,7 @@ parameters:
     value: docker.io/clamav/clamav
   - name: CLAMAV_IMAGE_TAG
     description: Specify the tag or hash for the ClamAV image deployed by the operator.
-    value: "1.4.3"
+    value: "1.5.1"
   - name: CLAMAV_STREAM_MAX_LENGTH
     description: This option allows you to specify the upper limit for data size that will be transfered to remote daemon when scanning a single file.
     value: 2G
