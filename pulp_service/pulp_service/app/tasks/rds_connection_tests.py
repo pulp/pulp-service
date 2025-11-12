@@ -49,15 +49,19 @@ def rds_test_wrapper(test_name, connection_pinned=False):
     def decorator(test_func):
         @wraps(test_func)
         def wrapper(*args, **kwargs):
-            # Outer try/except to catch ANY exception including BaseException
+            # Initialize all variables at the start to prevent UnboundLocalError
+            started_at = datetime.now()
+            finished_at = None
+            duration = 0
+            alive = True
+            backend_pid = None
+            extra_data = {}
+
             try:
                 log(f"=== {test_name} ===")
-
-                started_at = datetime.now()
                 log(f"Test started at: {started_at.isoformat()}")
 
                 # Get and log backend PID
-                backend_pid = None
                 try:
                     with connection.cursor() as cursor:
                         cursor.execute("SELECT pg_backend_pid()")
@@ -66,8 +70,6 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                 except Exception as e:
                     log(f"Warning: Could not retrieve backend PID: {e}")
 
-                alive = True
-                extra_data = {}
                 if backend_pid:
                     extra_data['backend_pid'] = backend_pid
 
@@ -100,74 +102,50 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                 log(f"Connection status: {'ALIVE' if alive else 'DEAD'}")
                 log(f"Duration: {round(duration, 2)} minutes")
 
-                # Build result dictionary
-                result = {
-                    'test': test_name,
-                    'started_at': started_at.isoformat(),
-                    'finished_at': finished_at.isoformat(),
-                    'duration_minutes': round(duration, 2),
-                    'connection_alive': alive,
-                    'success': alive,
-                    'status': 'PASSED' if alive else 'FAILED'
+            except Exception as fatal_error:
+                # Catch any fatal error in the wrapper itself
+                log(f"FATAL ERROR in test wrapper: {type(fatal_error).__name__}: {fatal_error}")
+                log(f"Traceback: {traceback.format_exc()}")
+                alive = False
+                finished_at = datetime.now()
+                duration = (finished_at - started_at).total_seconds() / 60
+                extra_data['error'] = {
+                    'type': type(fatal_error).__name__,
+                    'message': str(fatal_error),
+                    'traceback': traceback.format_exc()
                 }
 
-                # Add connection pinning info if applicable
-                if connection_pinned:
-                    result['connection_pinned'] = True
+            # Build result dictionary
+            result = {
+                'test': test_name,
+                'started_at': started_at.isoformat(),
+                'finished_at': finished_at.isoformat() if finished_at else datetime.now().isoformat(),
+                'duration_minutes': round(duration, 2),
+                'connection_alive': alive,
+                'success': alive,
+                'status': 'PASSED' if alive else 'FAILED'
+            }
 
-                # Merge any extra data from the test
-                result.update(extra_data)
+            # Add connection pinning info if applicable
+            if connection_pinned:
+                result['connection_pinned'] = True
 
-                log(f"Returning result: {result.get('status')}")
+            # Merge any extra data from the test
+            result.update(extra_data)
 
-                # Explicitly close connection if test showed it as dead
-                # This prevents worker crashes from trying to use a dead connection
-                if not alive:
-                    try:
-                        log("Connection was dead, explicitly closing Django connection...")
-                        connection.close()
-                        log("Django connection closed successfully")
-                    except Exception as close_err:
-                        log(f"Warning: Error closing connection: {close_err}")
+            log(f"Returning result: {result.get('status')}")
 
-                return result
-
-            except BaseException as fatal_error:
-                # Catch absolutely everything including SystemExit, KeyboardInterrupt
-                log(f"FATAL ERROR in test wrapper: {type(fatal_error).__name__}: {fatal_error}")
-                log(f"Fatal error traceback: {traceback.format_exc()}")
-
-                # Try to close connection on fatal error
+            # Explicitly close connection if test showed it as dead
+            # This prevents worker crashes from trying to use a dead connection
+            if not alive:
                 try:
-                    log("Fatal error occurred, attempting to close connection...")
+                    log("Connection was dead, explicitly closing Django connection...")
                     connection.close()
-                    log("Connection closed after fatal error")
+                    log("Django connection closed successfully")
                 except Exception as close_err:
-                    log(f"Could not close connection after fatal error: {close_err}")
+                    log(f"Warning: Error closing connection: {close_err}")
 
-                # Try to return a minimal result even for fatal errors
-                try:
-                    return {
-                        'test': test_name,
-                        'started_at': started_at.isoformat() if 'started_at' in locals() else datetime.now().isoformat(),
-                        'finished_at': datetime.now().isoformat(),
-                        'duration_minutes': 0,
-                        'connection_alive': False,
-                        'success': False,
-                        'status': 'FATAL_ERROR',
-                        'error': {
-                            'type': type(fatal_error).__name__,
-                            'message': str(fatal_error),
-                            'traceback': traceback.format_exc()
-                        }
-                    }
-                except Exception:
-                    # If even the error result construction fails, return bare minimum
-                    return {
-                        'test': test_name,
-                        'status': 'FATAL_ERROR',
-                        'error': 'Could not construct error result'
-                    }
+            return result
 
         return wrapper
     return decorator
