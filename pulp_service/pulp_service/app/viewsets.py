@@ -254,7 +254,8 @@ class RDSConnectionTestDispatcherView(APIView):
     POST body format:
     {
         "tests": ["test_1_idle_connection", "test_2_active_heartbeat"],
-        "run_sequentially": true  // optional, default false
+        "run_sequentially": false,  // optional, default false
+        "duration_minutes": 50       // optional, default 50 (min: 1, max: 300)
     }
 
     Returns task IDs for dispatched tests.
@@ -303,6 +304,17 @@ class RDSConnectionTestDispatcherView(APIView):
 
         tests = request.data.get('tests', [])
         run_sequentially = request.data.get('run_sequentially', False)
+        duration_minutes = request.data.get('duration_minutes', 50)
+
+        # Validate duration
+        if not isinstance(duration_minutes, int) or duration_minutes < 1 or duration_minutes > 300:
+            return Response(
+                {
+                    "error": "Invalid duration_minutes. Must be an integer between 1 and 300 (5 hours).",
+                    "provided": duration_minutes
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if not tests:
             return Response(
@@ -335,10 +347,11 @@ class RDSConnectionTestDispatcherView(APIView):
         for test_name in tests:
             task_func = self.AVAILABLE_TESTS[test_name]
 
-            # Dispatch the task
+            # Dispatch the task with duration parameter
             task = dispatch(
                 task_func,
                 exclusive_resources=sequential_lock,  # Empty list for parallel, shared lock for sequential
+                kwargs={'duration_minutes': duration_minutes}
             )
 
             # Get task ID - use current_id() if available, fallback to pk
@@ -363,7 +376,8 @@ class RDSConnectionTestDispatcherView(APIView):
             "message": f"Dispatched {len(dispatched_tasks)} test(s)",
             "tasks": dispatched_tasks,
             "run_sequentially": run_sequentially,
-            "note": "Each test runs for approximately 50 minutes. Monitor task status via task_href."
+            "duration_minutes": duration_minutes,
+            "note": f"Each test runs for approximately {duration_minutes} minutes. Monitor task status via task_href."
         }, status=status.HTTP_202_ACCEPTED)
 
     def get(self, request):
@@ -375,21 +389,23 @@ class RDSConnectionTestDispatcherView(APIView):
         return Response({
             "available_tests": list(self.AVAILABLE_TESTS.keys()),
             "descriptions": {
-                "test_1_idle_connection": "Idle connection test (50 min) - baseline timeout test",
-                "test_2_active_heartbeat": "Active heartbeat test (50 min) - periodic queries",
-                "test_3_long_transaction": "Long transaction test (50 min) - idle transaction",
-                "test_4_transaction_with_work": "Transaction with work test (50 min) - active transaction",
-                "test_5_session_variable": "Session variable test (50 min) - connection pinning via SET",
-                "test_6_listen_notify": "LISTEN/NOTIFY test (50 min) - CRITICAL: real worker behavior",
-                "test_7_listen_with_activity": "LISTEN with activity test (50 min) - periodic notifications",
+                "test_1_idle_connection": "Idle connection test - baseline timeout test",
+                "test_2_active_heartbeat": "Active heartbeat test - periodic queries",
+                "test_3_long_transaction": "Long transaction test - idle transaction",
+                "test_4_transaction_with_work": "Transaction with work test - active transaction",
+                "test_5_session_variable": "Session variable test - connection pinning via SET",
+                "test_6_listen_notify": "LISTEN/NOTIFY test - CRITICAL: real worker behavior",
+                "test_7_listen_with_activity": "LISTEN with activity test - periodic notifications",
             },
             "usage": {
                 "endpoint": "/api/pulp/rds-connection-tests/",
                 "method": "POST",
                 "body": {
                     "tests": ["test_1_idle_connection", "test_2_active_heartbeat"],
-                    "run_sequentially": False
-                }
+                    "run_sequentially": False,
+                    "duration_minutes": 50
+                },
+                "note": "duration_minutes is optional (default: 50, min: 1, max: 300)"
             }
         })
 
