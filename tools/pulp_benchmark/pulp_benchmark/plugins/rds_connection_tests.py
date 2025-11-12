@@ -22,13 +22,13 @@ logger = logging.getLogger(__name__)
 
 
 AVAILABLE_TESTS = {
-    "test_1_idle_connection": "Idle connection test (50 min) - baseline timeout test",
-    "test_2_active_heartbeat": "Active heartbeat test (50 min) - periodic queries",
-    "test_3_long_transaction": "Long transaction test (50 min) - idle transaction",
-    "test_4_transaction_with_work": "Transaction with work test (50 min) - active transaction",
-    "test_5_session_variable": "Session variable test (50 min) - connection pinning via SET",
-    "test_6_listen_notify": "LISTEN/NOTIFY test (50 min) - CRITICAL: real worker behavior",
-    "test_7_listen_with_activity": "LISTEN with activity test (50 min) - periodic notifications",
+    "test_1_idle_connection": "Idle connection test - baseline timeout test",
+    "test_2_active_heartbeat": "Active heartbeat test - periodic queries",
+    "test_3_long_transaction": "Long transaction test - idle transaction",
+    "test_4_transaction_with_work": "Transaction with work test - active transaction",
+    "test_5_session_variable": "Session variable test - connection pinning via SET",
+    "test_6_listen_notify": "LISTEN/NOTIFY test - CRITICAL: real worker behavior",
+    "test_7_listen_with_activity": "LISTEN with activity test - periodic notifications",
 }
 
 
@@ -40,6 +40,8 @@ async def dispatch_tests(
     cert: Optional[str] = None,
     key: Optional[str] = None,
     verify_ssl: bool = True,
+    debug_requests: bool = False,
+    duration_minutes: int = 50,
 ) -> dict:
     """
     Dispatch RDS connection tests to the Pulp instance.
@@ -52,6 +54,8 @@ async def dispatch_tests(
         cert: Path to client certificate
         key: Path to client private key
         verify_ssl: Whether to verify SSL certificates
+        debug_requests: Whether to log detailed request/response information
+        duration_minutes: Duration of each test in minutes
 
     Returns:
         dict: Response from the API with dispatched task information
@@ -66,20 +70,50 @@ async def dispatch_tests(
 
     payload = {
         "tests": tests,
-        "run_sequentially": False  # All tests run in parallel by default
+        "run_sequentially": False,  # All tests run in parallel by default
+        "duration_minutes": duration_minutes
     }
 
     logger.info(f"Dispatching to endpoint: {endpoint}")
     logger.info(f"Authentication: {'Basic Auth' if user and password else 'Cert Auth' if cert else 'None'}")
     logger.info(f"SSL Verification: {verify_ssl}")
+    if cert:
+        logger.info(f"Client cert: {cert}")
+        logger.info(f"Client key: {key if key else 'None (using cert file)'}")
 
     try:
         async with create_session(user, password, cert, key, verify_ssl) as session:
+            if debug_requests:
+                logger.info(f"[DEBUG REQUEST] POST {endpoint}")
+                logger.info(f"[DEBUG REQUEST] Headers: {dict(session.headers)}")
+                logger.info(f"[DEBUG REQUEST] Body: {payload}")
+            else:
+                logger.info(f"Session headers: {dict(session.headers)}")
+
             async with session.post(endpoint, json=payload) as response:
-                logger.info(f"Response status: {response.status}")
-                logger.info(f"Response headers: {dict(response.headers)}")
+                if debug_requests:
+                    logger.info(f"[DEBUG RESPONSE] Status: {response.status}")
+                    logger.info(f"[DEBUG RESPONSE] Headers: {dict(response.headers)}")
+                else:
+                    logger.info(f"Response status: {response.status}")
+                    logger.info(f"Response headers: {dict(response.headers)}")
+
+                # Read response body
+                response_text = await response.text()
+
+                # Log response body at appropriate level
+                if response.status >= 400:
+                    logger.error(f"Response body: {response_text}")
+                elif debug_requests:
+                    logger.info(f"[DEBUG RESPONSE] Body: {response_text}")
+                else:
+                    logger.debug(f"Response body: {response_text}")
+
                 response.raise_for_status()
-                data = await response.json()
+
+                # Parse JSON from the text we already read
+                import json
+                data = json.loads(response_text)
                 return data
     except aiohttp.ClientResponseError as e:
         logger.error(f"HTTP {e.status} error: {e.message}")
@@ -100,6 +134,7 @@ async def check_task_status(
     cert: Optional[str] = None,
     key: Optional[str] = None,
     verify_ssl: bool = True,
+    debug_requests: bool = False,
 ) -> dict:
     """
     Check the status of a Pulp task.
@@ -112,6 +147,7 @@ async def check_task_status(
         cert: Path to client certificate
         key: Path to client private key
         verify_ssl: Whether to verify SSL certificates
+        debug_requests: Whether to log detailed request/response information
 
     Returns:
         dict: Task status information
@@ -120,11 +156,25 @@ async def check_task_status(
     # api_root might be something like https://example.com/api
     endpoint = f"{api_root}{task_href}"
 
+    if debug_requests:
+        logger.info(f"[DEBUG REQUEST] GET {endpoint}")
+
     try:
         async with create_session(user, password, cert, key, verify_ssl) as session:
+            if debug_requests:
+                logger.info(f"[DEBUG REQUEST] Headers: {dict(session.headers)}")
+
             async with session.get(endpoint) as response:
+                if debug_requests:
+                    logger.info(f"[DEBUG RESPONSE] Status: {response.status}")
+                    logger.info(f"[DEBUG RESPONSE] Headers: {dict(response.headers)}")
+
                 response.raise_for_status()
                 data = await response.json()
+
+                if debug_requests:
+                    logger.info(f"[DEBUG RESPONSE] Body: {data}")
+
                 return data
     except aiohttp.ClientError as e:
         logger.error(f"Failed to check task status: {e}")
@@ -140,6 +190,7 @@ async def monitor_tasks(
     key: Optional[str] = None,
     poll_interval: int = 60,
     verify_ssl: bool = True,
+    debug_requests: bool = False,
 ):
     """
     Monitor the progress of dispatched tasks.
@@ -153,6 +204,7 @@ async def monitor_tasks(
         key: Path to client private key
         poll_interval: How often to poll for status (seconds)
         verify_ssl: Whether to verify SSL certificates
+        debug_requests: Whether to log detailed request/response information
     """
     logger.info(f"Monitoring {len(tasks)} task(s)...")
     logger.info("Note: Each test runs for approximately 50 minutes")
@@ -174,7 +226,7 @@ async def monitor_tasks(
         for task_id, task_info in pending_tasks.items():
             try:
                 status = await check_task_status(
-                    api_root, task_info['task_href'], user, password, cert, key, verify_ssl
+                    api_root, task_info['task_href'], user, password, cert, key, verify_ssl, debug_requests
                 )
 
                 state = status.get('state', 'unknown')
@@ -199,6 +251,14 @@ async def monitor_tasks(
                             logger.info(f"    Connection Alive: {result.get('connection_alive', 'unknown')}")
                             if 'backend_pid' in result:
                                 logger.info(f"    Backend PID: {result.get('backend_pid')}")
+                    elif state == 'failed':
+                        # Task failed at Pulp level - show error details
+                        error_info = status.get('error', {})
+                        if error_info:
+                            logger.error(f"    Pulp Task Error: {error_info.get('description', 'Unknown error')}")
+                            if 'traceback' in error_info:
+                                logger.debug(f"    Traceback: {error_info['traceback']}")
+
                     completed.append(task_id)
                 else:
                     logger.info(f"  {test_name}: {state}")
@@ -250,6 +310,13 @@ async def monitor_tasks(
     show_default=True,
     help="Interval in seconds to poll for task status when monitoring"
 )
+@click.option(
+    "--duration",
+    type=int,
+    default=50,
+    show_default=True,
+    help="Duration of each test in minutes (default: 50 minutes to identify ~40-46 min timeout)"
+)
 @click.pass_context
 def rds_connection_tests(
     ctx,
@@ -257,27 +324,34 @@ def rds_connection_tests(
     run_all: bool,
     list_tests: bool,
     monitor: bool,
-    poll_interval: int
+    poll_interval: int,
+    duration: int
 ):
     """
     Trigger RDS Proxy connection timeout tests remotely.
 
     This command dispatches RDS connection tests to identify timeout issues
-    with RDS Proxy. Each test runs for approximately 50 minutes.
+    with RDS Proxy. Each test runs for a configurable duration (default: 50 minutes).
 
     Examples:
 
       # List all available tests
       pulp-benchmark --api-root https://pulp.example.com rds_connection_tests --list
 
-      # Run a single test
+      # Run a single test (default 50 minutes)
       pulp-benchmark --api-root https://pulp.example.com rds_connection_tests -t test_1_idle_connection
+
+      # Run with custom duration (10 minutes for quick test)
+      pulp-benchmark --api-root https://pulp.example.com rds_connection_tests -t test_1_idle_connection --duration 10
 
       # Run multiple specific tests
       pulp-benchmark --api-root https://pulp.example.com rds_connection_tests -t test_1_idle_connection -t test_2_active_heartbeat
 
       # Run all tests
       pulp-benchmark --api-root https://pulp.example.com rds_connection_tests --all
+
+      # Extended test (90 minutes)
+      pulp-benchmark --api-root https://pulp.example.com rds_connection_tests -t test_6_listen_notify --duration 90
 
       # Dispatch without monitoring
       pulp-benchmark --api-root https://pulp.example.com rds_connection_tests -t test_6_listen_notify --no-monitor
@@ -309,6 +383,7 @@ def rds_connection_tests(
     cert = ctx.obj['cert']
     key = ctx.obj['key']
     verify_ssl = ctx.obj['verify_ssl']
+    debug_requests = ctx.obj['debug_requests']
 
     click.echo(f"\nDispatching {len(selected_tests)} test(s) to {api_root}")
     click.echo("Tests to run:")
@@ -317,10 +392,23 @@ def rds_connection_tests(
     click.echo("")
 
     # Dispatch tests
-    async def run_dispatch():
+    # Note: Explicitly capture variables as default arguments for Python 3.13+ compatibility
+    async def run_dispatch(
+        api_root=api_root,
+        selected_tests=selected_tests,
+        user=user,
+        password=password,
+        cert=cert,
+        key=key,
+        verify_ssl=verify_ssl,
+        debug_requests=debug_requests,
+        duration=duration,
+        monitor=monitor,
+        poll_interval=poll_interval
+    ):
         try:
             result = await dispatch_tests(
-                api_root, selected_tests, user, password, cert, key, verify_ssl
+                api_root, selected_tests, user, password, cert, key, verify_ssl, debug_requests, duration
             )
 
             click.echo(f"\n✓ Successfully dispatched {len(result['tasks'])} test(s)\n")
@@ -341,7 +429,7 @@ def rds_connection_tests(
 
                 try:
                     completed_tasks = await monitor_tasks(
-                        api_root, result['tasks'], user, password, cert, key, poll_interval, verify_ssl
+                        api_root, result['tasks'], user, password, cert, key, poll_interval, verify_ssl, debug_requests
                     )
                     click.echo("\n✓ All tasks completed!")
 
@@ -354,9 +442,14 @@ def rds_connection_tests(
                     failed_tests = []
 
                     for task_id, task_data in completed_tasks.items():
-                        test_name = task_data['test_name']
-                        state = task_data['state']
-                        status_obj = task_data['status']
+                        test_name = task_data.get('test_name', 'Unknown')
+                        state = task_data.get('state', 'unknown')
+                        status_obj = task_data.get('status', {})
+
+                        # Initialize default values
+                        duration = 0
+                        backend_pid = 'N/A'
+                        connection_alive = False
 
                         if state == 'completed':
                             result_data = status_obj.get('result', {})
@@ -381,13 +474,31 @@ def rds_connection_tests(
                                     'error': result_data.get('error', 'Unknown error')
                                 })
                         else:
-                            # Task failed or was canceled
+                            # Task failed or was canceled at Pulp level
+                            # Extract error information from Pulp task
+                            error_info = status_obj.get('error', {})
+                            error_description = error_info.get('description', f"Task {state}")
+
+                            # Try to get timing information even for failed tasks
+                            started_at = status_obj.get('started_at')
+                            finished_at = status_obj.get('finished_at')
+                            if started_at and finished_at:
+                                from datetime import datetime
+                                try:
+                                    start = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+                                    finish = datetime.fromisoformat(finished_at.replace('Z', '+00:00'))
+                                    duration = round((finish - start).total_seconds() / 60, 2)
+                                except Exception:
+                                    # Keep default duration = 0 from initialization
+                                    pass
+
                             failed_tests.append({
                                 'name': test_name,
-                                'duration': 0,
+                                'duration': duration,
                                 'backend_pid': 'N/A',
                                 'connection_alive': False,
-                                'error': f"Task {state}"
+                                'error': error_description,
+                                'pulp_task_state': state
                             })
 
                     # Display passed tests
@@ -403,6 +514,12 @@ def rds_connection_tests(
                         for test in failed_tests:
                             click.echo(f"  • {test['name']}")
                             click.echo(f"    Duration: {test['duration']} min | Backend PID: {test['backend_pid']} | Connection: {'ALIVE' if test['connection_alive'] else 'DEAD'}")
+
+                            # Show Pulp task state if task failed at Pulp level
+                            if 'pulp_task_state' in test:
+                                click.echo(f"    Pulp Task State: {test['pulp_task_state'].upper()}")
+
+                            # Display error information
                             if isinstance(test['error'], dict):
                                 click.echo(f"    Error: {test['error'].get('type', 'Unknown')}: {test['error'].get('message', 'No message')}")
                             else:

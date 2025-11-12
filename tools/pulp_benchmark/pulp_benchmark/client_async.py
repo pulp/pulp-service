@@ -43,11 +43,17 @@ def create_ssl_context(
         ssl_context.verify_mode = ssl.CERT_NONE
         # Load client certificate if provided
         if cert:
-            ssl_context.load_cert_chain(cert, key) if key else ssl_context.load_cert_chain(cert)
+            if key:
+                ssl_context.load_cert_chain(cert, keyfile=key)
+            else:
+                ssl_context.load_cert_chain(cert)
     elif cert:
         # Use client certificate with normal SSL verification
         ssl_context = ssl.create_default_context()
-        ssl_context.load_cert_chain(cert, key) if key else ssl_context.load_cert_chain(cert)
+        if key:
+            ssl_context.load_cert_chain(cert, keyfile=key)
+        else:
+            ssl_context.load_cert_chain(cert)
 
     return ssl_context
 
@@ -90,13 +96,28 @@ def create_session(
         trust_env=True  # Use HTTP_PROXY, HTTPS_PROXY, NO_PROXY from environment
     )
 
-async def send_request(session: aiohttp.ClientSession, url: str, timeout: int) -> int:
+async def send_request(session: aiohttp.ClientSession, url: str, timeout: int, debug_requests: bool = False) -> int:
     """Sends a single async request and returns the number of tasks processed."""
     try:
         timeout_config = aiohttp.ClientTimeout(total=timeout + 5)
-        async with session.get(url, params={"timeout": timeout}, timeout=timeout_config) as response:
+        params = {"timeout": timeout}
+
+        if debug_requests:
+            logging.info(f"[DEBUG REQUEST] GET {url}")
+            logging.info(f"[DEBUG REQUEST] Params: {params}")
+            logging.info(f"[DEBUG REQUEST] Headers: {dict(session.headers)}")
+
+        async with session.get(url, params=params, timeout=timeout_config) as response:
+            if debug_requests:
+                logging.info(f"[DEBUG RESPONSE] Status: {response.status}")
+                logging.info(f"[DEBUG RESPONSE] Headers: {dict(response.headers)}")
+
             response.raise_for_status()
             data = await response.json()
+
+            if debug_requests:
+                logging.info(f"[DEBUG RESPONSE] Body: {data}")
+
             tasks = data.get('tasks_executed', 0)
             logging.info(f"Successfully processed {tasks} tasks.")
             return tasks
@@ -115,10 +136,11 @@ async def run_concurrent_requests(
     cert: Optional[str] = None,
     key: Optional[str] = None,
     verify_ssl: bool = True,
+    debug_requests: bool = False,
 ) -> int:
     """Runs concurrent requests using asyncio.gather."""
     async with create_session(user, password, cert, key, verify_ssl) as session:
-        tasks = [send_request(session, url, timeout) for _ in range(max_workers)]
+        tasks = [send_request(session, url, timeout, debug_requests) for _ in range(max_workers)]
         results = await asyncio.gather(*tasks)
         return sum(results)
 
@@ -129,16 +151,31 @@ async def get_system_status(
     cert: Optional[str] = None,
     key: Optional[str] = None,
     verify_ssl: bool = True,
+    debug_requests: bool = False,
 ):
     """Fetches and prints the system's worker status asynchronously."""
     logging.info("Fetching system status...")
     status_endpoint = f"{api_root}/pulp/api/v3/status/"
 
+    if debug_requests:
+        logging.info(f"[DEBUG REQUEST] GET {status_endpoint}")
+
     try:
         async with create_session(user, password, cert, key, verify_ssl) as session:
+            if debug_requests:
+                logging.info(f"[DEBUG REQUEST] Headers: {dict(session.headers)}")
+
             async with session.get(status_endpoint) as response:
+                if debug_requests:
+                    logging.info(f"[DEBUG RESPONSE] Status: {response.status}")
+                    logging.info(f"[DEBUG RESPONSE] Headers: {dict(response.headers)}")
+
                 response.raise_for_status()
                 status = await response.json()
+
+                if debug_requests:
+                    logging.info(f"[DEBUG RESPONSE] Body: {status}")
+
                 log_worker_status(status)
     except aiohttp.ClientError as e:
         logging.error(f"Could not fetch system status: {e}")
