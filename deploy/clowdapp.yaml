@@ -781,6 +781,9 @@ objects:
                     periodSeconds: 30
 
     - name: clamav
+      metadata:
+        annotations:
+          ignore-check.kube-linter.io/minimum-three-replicas: "ClamAV is a low-requirement and non-essential service for our app."
       replicas: ${{CLAMAV_REPLICAS}}
       webServices:
         private:
