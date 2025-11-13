@@ -8,6 +8,7 @@ Tests run for approximately 50 minutes each to identify RDS Proxy timeout issues
 Related to PULP-955: Pulp workers disconnect from RDS Proxy after ~40-46 minutes
 """
 import asyncio
+import json
 import logging
 import time
 from typing import List, Optional
@@ -79,7 +80,7 @@ async def dispatch_tests(
     logger.info(f"SSL Verification: {verify_ssl}")
     if cert:
         logger.info(f"Client cert: {cert}")
-        logger.info(f"Client key: {key if key else 'None (using cert file)'}")
+        logger.info(f"Client key: {key or 'None (using cert file)'}")
 
     try:
         async with create_session(user, password, cert, key, verify_ssl) as session:
@@ -112,9 +113,7 @@ async def dispatch_tests(
                 response.raise_for_status()
 
                 # Parse JSON from the text we already read
-                import json
-                data = json.loads(response_text)
-                return data
+                return json.loads(response_text)
     except aiohttp.ClientResponseError as e:
         logger.error(f"HTTP {e.status} error: {e.message}")
         logger.error(f"Response headers: {e.headers}")
@@ -253,8 +252,7 @@ async def monitor_tasks(
                                 logger.info(f"    Backend PID: {result.get('backend_pid')}")
                     elif state == 'failed':
                         # Task failed at Pulp level - show error details
-                        error_info = status.get('error', {})
-                        if error_info:
+                        if error_info := status.get('error', {}):
                             logger.error(f"    Pulp Task Error: {error_info.get('description', 'Unknown error')}")
                             if 'traceback' in error_info:
                                 logger.debug(f"    Traceback: {error_info['traceback']}")
