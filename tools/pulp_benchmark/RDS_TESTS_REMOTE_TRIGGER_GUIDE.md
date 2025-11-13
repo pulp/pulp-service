@@ -86,9 +86,15 @@ Response:
     "test_1_idle_connection",
     "test_2_active_heartbeat"
   ],
-  "run_sequentially": false
+  "run_sequentially": false,
+  "duration_minutes": 50
 }
 ```
+
+**Parameters:**
+- `tests` (required): List of test names to run
+- `run_sequentially` (optional): Whether to run tests sequentially (default: `false`)
+- `duration_minutes` (optional): Duration of each test in minutes (default: `50`, min: `1`, max: `300`)
 
 #### Example: Dispatch Single Test
 
@@ -114,11 +120,23 @@ curl -X POST https://your-pulp-instance.com/api/pulp/rds-connection-tests/ \
   }'
 ```
 
+#### Example: Custom Duration (Quick Test)
+
+```bash
+curl -X POST https://your-pulp-instance.com/api/pulp/rds-connection-tests/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tests": ["test_1_idle_connection"],
+    "duration_minutes": 10
+  }'
+```
+
 #### Example: Using httpie
 
 ```bash
 http POST https://your-pulp-instance.com/api/pulp/rds-connection-tests/ \
-  tests:='["test_1_idle_connection", "test_2_active_heartbeat"]'
+  tests:='["test_1_idle_connection", "test_2_active_heartbeat"]' \
+  duration_minutes:=50
 ```
 
 #### Response
@@ -285,10 +303,39 @@ python -m pulp_benchmark.main rds_connection_tests -t test_1_idle_connection
 ```bash
 python -m pulp_benchmark.main \
   --api-root https://your-pulp-instance.com \
-  --cert /path/to/client.crt \
+  --cert /path/to/client.pem \
   --key /path/to/client.key \
   rds_connection_tests -t test_1_idle_connection
 ```
+
+#### Disable SSL Verification (Self-Signed Certificates)
+
+```bash
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  --cert /path/to/client.pem \
+  --key /path/to/client.key \
+  --no-verify-ssl \
+  rds_connection_tests -t test_1_idle_connection
+```
+
+#### Enable Debug Request Logging
+
+Use `--debug-requests` to see detailed HTTP request/response information (headers, body, status codes):
+
+```bash
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  --cert /path/to/client.pem \
+  --key /path/to/client.key \
+  --debug-requests \
+  rds_connection_tests -t test_1_idle_connection
+```
+
+This will log:
+- Request method, URL, headers, and body
+- Response status, headers, and body
+- Useful for troubleshooting authentication issues, CDN/WAF blocks, etc.
 
 ### Monitoring Output
 
@@ -331,6 +378,8 @@ Press Ctrl+C to stop monitoring (tasks will continue running)
 
 ### Advanced Options
 
+#### Custom Poll Interval
+
 ```bash
 python -m pulp_benchmark.main \
   --api-root https://your-pulp-instance.com \
@@ -338,6 +387,32 @@ python -m pulp_benchmark.main \
     -t test_6_listen_notify \
     --poll-interval 120  # Check status every 2 minutes instead of 60 seconds
 ```
+
+#### Custom Test Duration
+
+Use `--duration` to run shorter or longer tests:
+
+```bash
+# Quick 10-minute test
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  rds_connection_tests \
+    -t test_1_idle_connection \
+    --duration 10
+
+# Extended 90-minute test
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  rds_connection_tests \
+    -t test_6_listen_notify \
+    --duration 90
+```
+
+**Use Cases:**
+- `--duration 10`: Quick smoke test (validates connectivity)
+- `--duration 50`: Default (identifies ~40-46 min timeout)
+- `--duration 90`: Extended test (validates long-running connections)
+- `--duration 300`: Maximum (5 hours - stress test)
 
 ## Test Descriptions
 
@@ -452,6 +527,35 @@ python -m pulp_benchmark.main \
   --key /path/to/key.pem \
   rds_connection_tests --list
 ```
+
+**Troubleshooting Authentication Issues:**
+
+If you encounter 403 Forbidden or SSL errors:
+
+1. **Enable debug logging** to see detailed request/response information:
+   ```bash
+   python -m pulp_benchmark.main \
+     --api-root https://pulp.example.com \
+     --cert /path/to/cert.pem \
+     --key /path/to/key.pem \
+     --debug-requests \
+     rds_connection_tests --list
+   ```
+
+2. **For self-signed certificates**, disable SSL verification:
+   ```bash
+   python -m pulp_benchmark.main \
+     --api-root https://pulp.example.com \
+     --cert /path/to/cert.pem \
+     --key /path/to/key.pem \
+     --no-verify-ssl \
+     rds_connection_tests --list
+   ```
+
+3. **Check the debug logs** for:
+   - Request headers (User-Agent, authentication)
+   - Response status codes and headers
+   - Response body with error details
 
 ### Connection Timeout
 

@@ -45,13 +45,34 @@ The application is run through the `main.py` entry point. It follows the structu
 
 These options are available for all commands and must be provided before the command name.
 
-| Option       | Environment Variable | Required | Description                                                                |
-|--------------|----------------------|----------|----------------------------------------------------------------------------|
-| `--api-root` | `PULP_API_ROOT`      | Yes      | The root URL of the Pulp API instance (e.g., `https://pulp.example.com`). |
-| `--user`     | `PULP_USER`          | No       | Username for API authentication. Defaults to `admin`.                      |
-| `--password` | `PULP_PASSWORD`      | Yes      | Password for API authentication. Prompts securely if not provided.         |
-| `--cert`     | `None`               | No       | Path to the client certificate file for TLS authentication.                |
-| `--key`      | `None`               | No       | Path to the client private key file for TLS authentication.                |
+| Option                       | Environment Variable | Default | Description                                                                                                  |
+|------------------------------|----------------------|---------|--------------------------------------------------------------------------------------------------------------|
+| `--api-root`                 | `PULP_API_ROOT`      | *None*  | **Required.** The root URL of the Pulp API instance (e.g., `https://pulp.example.com`).                     |
+| `--user`                     | `PULP_USER`          | `admin` | Username for API authentication.                                                                             |
+| `--password`                 | `PULP_PASSWORD`      | *None*  | **Required** (or use `--cert`/`--key`). Password for API authentication.                                     |
+| `--cert`                     | *None*               | *None*  | Path to the client certificate file for mTLS authentication.                                                 |
+| `--key`                      | *None*               | *None*  | Path to the client private key file for mTLS authentication.                                                 |
+| `--verify-ssl`/`--no-verify-ssl` | *None*           | `True`  | Verify SSL certificates. Use `--no-verify-ssl` for self-signed certificates.                                |
+| `--debug-requests`/`--no-debug-requests` | *None*   | `False` | Enable detailed logging of HTTP requests and responses (headers, body, status).                              |
+| `--client`                   | *None*               | `async` | HTTP client to use: `async` (aiohttp) or `sync` (requests).                                                 |
+
+**Authentication**: Either `--password` or both `--cert` and `--key` must be provided.
+
+**Examples:**
+
+```bash
+# Basic authentication
+python -m pulp_benchmark.main --api-root https://pulp.example.com --user admin --password secret command
+
+# Client certificate authentication
+python -m pulp_benchmark.main --api-root https://pulp.example.com --cert /path/to/cert.pem --key /path/to/key.pem command
+
+# With self-signed certificates
+python -m pulp_benchmark.main --api-root https://pulp.example.com --user admin --password secret --no-verify-ssl command
+
+# Enable debug logging
+python -m pulp_benchmark.main --api-root https://pulp.example.com --user admin --password secret --debug-requests command
+```
 
 ### Available Commands
 
