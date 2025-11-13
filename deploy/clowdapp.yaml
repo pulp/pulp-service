@@ -781,15 +781,15 @@ objects:
                     periodSeconds: 30
 
     - name: clamav
-      metadata:
-        annotations:
-          ignore-check.kube-linter.io/minimum-three-replicas: "ClamAV is a low-requirement and non-essential service for our app."
       replicas: ${{CLAMAV_REPLICAS}}
       webServices:
         private:
           appProtocol: tcp
           enabled: true
       podSpec:
+        metadata:
+          annotations:
+            ignore-check.kube-linter.io/minimum-three-replicas: "ClamAV is a low-requirement and must run with just one replica."
         image: ${CLAMAV_IMAGE}:${CLAMAV_IMAGE_TAG}
         command:
           - /bin/sh
