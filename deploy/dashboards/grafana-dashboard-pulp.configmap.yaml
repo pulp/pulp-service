@@ -220,7 +220,7 @@ data:
               },
               "fieldMinMax": false,
               "mappings": [],
-              "max": 1800000000,
+              "max": 5242880000,
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
@@ -229,11 +229,11 @@ data:
                   },
                   {
                     "color": "#EAB839",
-                    "value": 614000000
+                    "value": 880803840
                   },
                   {
                     "color": "semi-dark-red",
-                    "value": 1536000000
+                    "value": 3707764736
                   }
                 ]
               },
