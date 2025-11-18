@@ -11,6 +11,9 @@ from django.contrib.auth import login
 from django.db import IntegrityError
 from django.utils.deprecation import MiddlewareMixin
 
+
+from pulpcore.metrics import init_otel_meter
+from pulpcore.app.util import get_worker_name
 from pulpcore.plugin.models import Artifact, Repository
 from pulpcore.plugin.util import extract_pk, get_artifact_url, resolve_prn
 from pulp_service.app.authentication import RHSamlAuthentication
@@ -94,3 +97,35 @@ class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
                         _logger.info(f"User {user.username} authenticated for pulp-mgmt")
                     else:
                         _logger.warning("Failed to authenticate user from RH Identity header")
+
+
+class ActiveConnectionsMetricMiddleware(MiddlewareMixin):
+    """
+    Middleware to track the number of active/concurrent HTTP connections to the API.
+
+    This middleware increments an UpDownCounter when a request enters and decrements it
+    when the request completes, providing a real-time gauge of in-flight requests.
+    """
+
+    def __init__(self, get_response):
+        self.meter = init_otel_meter("pulp-api")
+        self.active_connections_counter = self.meter.create_up_down_counter(
+            name="api.active_connections",
+            description="Tracks the number of active/concurrent HTTP connections",
+            unit="1",
+        )
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Increment active connections counter
+        worker_attributes = {"worker.name": get_worker_name()}
+        _logger.info("Counting active connections")
+        self.active_connections_counter.add(1, attributes=worker_attributes)
+
+        try:
+            response = self.get_response(request)
+            return response
+        finally:
+            # Decrement active connections counter
+            self.active_connections_counter.add(-1, attributes=worker_attributes)
+            _logger.info("Decreasing active connections")
