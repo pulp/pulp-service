@@ -1,0 +1,47 @@
+From 4b8df0f61821c2f559f3e7f1b892394e452b8fbc Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Tue, 18 Nov 2025 14:47:50 -0300
+Subject: [PATCH] Re-schedule startup_hook tasks to "normal" workers
+
+---
+ pulpcore/tasking/worker.py | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/pulpcore/tasking/worker.py b/pulpcore/tasking/worker.py
+index 6cce69c7a..2aa0821ff 100644
+--- a/pulpcore/tasking/worker.py
++++ b/pulpcore/tasking/worker.py
+@@ -16,6 +16,8 @@ from django.conf import settings
+ from django.db import connection, transaction, DatabaseError, IntegrityError
+ from django.db.models import Case, Count, F, Max, Value, When
+ from django.utils import timezone
++from django_guid import set_guid
++from django_guid.utils import generate_guid
+ 
+ from pulpcore.constants import (
+     TASK_STATES,
+@@ -32,6 +34,7 @@ from pulpcore.app.apps import pulp_plugin_configs
+ from pulpcore.app.models import Task, AppStatus
+ 
+ from pulpcore.tasking.storage import WorkerDirectory
++from pulpcore.tasking.tasks import dispatch
+ from pulpcore.tasking._util import (
+     delete_incomplete_resources,
+     dispatch_scheduled_tasks,
+@@ -120,7 +123,12 @@ class PulpcoreWorker:
+ 
+         self._init_instrumentation()
+ 
+-        startup_hook()
++        if self.auxiliary:
++            # Reschedule startup_hook to run as a "normal" (non-auxiliary) worker
++            set_guid(generate_guid())
++            dispatch(startup_hook, immediate=False, deferred=True)
++        else:
++            startup_hook()
+ 
+     def _init_instrumentation(self):
+         if settings.OTEL_ENABLED:
+-- 
+2.46.2
+

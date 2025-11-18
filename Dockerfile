@@ -157,6 +157,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0030-Handle-API-worker-heartbeat-in-a-different-thread.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0030-Handle-API-worker-heartbeat-in-a-different-thread.patch
 
+COPY images/assets/patches/0031-Re-schedule-startup_hook-tasks-to-normal-workers.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Re-schedule-startup_hook-tasks-to-normal-workers.patch
+
 COPY images/assets/gunicorn_config.py /tmp/
 
 RUN mkdir /licenses
