@@ -705,6 +705,11 @@ objects:
           timeoutSeconds: 20
           failureThreshold: 5
         terminationGracePeriodSeconds: 3660
+        sidecars:
+          - name: otel-collector
+            enabled: ${{PULP_WORKER_OTEL_COLLECTOR_SIDECAR_ENABLED}}
+            memoryRequest: ${OTEL_COLLECTOR_MEMORY_REQUEST}
+            memoryLimit: ${OTEL_COLLECTOR_MEMORY_LIMIT}
         resources:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
@@ -751,6 +756,14 @@ objects:
             value: ${{PULP_TASK_DIAGNOSTICS}}
           - name: PULP_MAX_CONCURRENT_CONTENT
             value: ${PULP_MAX_CONCURRENT_CONTENT}
+          - name: PULP_OTEL_ENABLED
+            value: ${TELEMETRY_ENABLED}
+          - name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: ${{OTEL_EXPORTER_OTLP_PROTOCOL}}
+          - name: OTEL_EXPORTER_OTLP_ENDPOINT
+            value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
+          - name: OTEL_TRACES_EXPORTER
+            value: "none"
 
       autoScaler:
         minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
