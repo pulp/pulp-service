@@ -119,13 +119,10 @@ class ActiveConnectionsMetricMiddleware(MiddlewareMixin):
     def __call__(self, request):
         # Increment active connections counter
         worker_attributes = {"worker.name": get_worker_name()}
-        _logger.info("Counting active connections")
         self.active_connections_counter.add(1, attributes=worker_attributes)
 
         try:
-            response = self.get_response(request)
-            return response
+            return self.get_response(request)
         finally:
             # Decrement active connections counter
             self.active_connections_counter.add(-1, attributes=worker_attributes)
-            _logger.info("Decreasing active connections")
