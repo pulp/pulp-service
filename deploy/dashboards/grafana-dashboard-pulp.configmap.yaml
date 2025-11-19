@@ -1828,8 +1828,10 @@ data:
           "id": 21,
           "options": {
             "legend": {
-              "calcs": [],
-              "displayMode": "list",
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
               "placement": "bottom",
               "showLegend": true
             },
@@ -1847,7 +1849,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "topk(5, sum by (domain_name) (pulp_space_usage_bytes))",
+              "expr": "topk(5, avg by (domain_name) (pulp_space_usage_bytes))",
               "interval": "",
               "legendFormat": "{{domain_name}}",
               "range": true,
