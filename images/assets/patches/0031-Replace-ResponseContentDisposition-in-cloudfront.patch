@@ -1,0 +1,24 @@
+From 7b599c51c60cad2ef645994f1b2507a840252644 Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Wed, 26 Nov 2025 21:17:36 -0300
+Subject: [PATCH] Replace ResponseContentDisposition in cloudfront
+
+---
+ storages/backends/s3.py | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/storages/backends/s3.py b/storages/backends/s3.py
+index fa2d39f..8d87b91 100644
+--- a/storages/backends/s3.py
++++ b/storages/backends/s3.py
+@@ -680,6 +680,7 @@ class S3Storage(CompressStorageMixin, BaseStorage):
+                 "?{}".format(urlencode(params)) if params else "",
+             )
+ 
++            url = url.replace('ResponseContentDisposition','response-content-disposition')
+             if self.querystring_auth and self.cloudfront_signer:
+                 expiration = datetime.utcnow() + timedelta(seconds=expire)
+                 return self.cloudfront_signer.generate_presigned_url(
+-- 
+2.46.2
+
