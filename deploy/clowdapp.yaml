@@ -1050,14 +1050,14 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: reset-admin-password-2
-  spec:
-    appName: pulp
-    jobs:
-      - reset-admin-password
+# - apiVersion: cloud.redhat.com/v1alpha1
+#   kind: ClowdJobInvocation
+#   metadata:
+#     name: reset-admin-password-2
+#   spec:
+#     appName: pulp
+#     jobs:
+#       - reset-admin-password
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -1067,22 +1067,22 @@ objects:
     runOnNotReady: True
     jobs:
       - create-settings-and-ingress
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: create-contentsources-user-1
-  spec:
-    appName: pulp
-    jobs:
-      - create-contentsources-user
-- apiVersion: cloud.redhat.com/v1alpha1
-  kind: ClowdJobInvocation
-  metadata:
-    name: add-new-pulp-admin-users-3
-  spec:
-    appName: pulp
-    jobs:
-      - add-new-pulp-admin-users-3
+# - apiVersion: cloud.redhat.com/v1alpha1
+#   kind: ClowdJobInvocation
+#   metadata:
+#     name: create-contentsources-user-1
+#   spec:
+#     appName: pulp
+#     jobs:
+#       - create-contentsources-user
+# - apiVersion: cloud.redhat.com/v1alpha1
+#   kind: ClowdJobInvocation
+#   metadata:
+#     name: add-new-pulp-admin-users-3
+#   spec:
+#     appName: pulp
+#     jobs:
+#       - add-new-pulp-admin-users-3
 
 parameters:
   - name: ENV_NAME
