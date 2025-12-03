@@ -1047,8 +1047,6 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-<<<<<<< HEAD
-=======
     name: reset-admin-password-1
   spec:
     appName: pulp
@@ -1057,15 +1055,12 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
->>>>>>> parent of cde2a7e (Add the PULP_DB_ENCRYPTION_KEY envvar into some job definitions. (#774))
     name: pulp-create-settings-and-ingress
   spec:
     appName: pulp
     runOnNotReady: True
     jobs:
       - create-settings-and-ingress
-<<<<<<< HEAD
-=======
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -1082,7 +1077,6 @@ objects:
     appName: pulp
     jobs:
       - add-new-pulp-admin-users-3
->>>>>>> parent of cde2a7e (Add the PULP_DB_ENCRYPTION_KEY envvar into some job definitions. (#774))
 
 parameters:
   - name: ENV_NAME
