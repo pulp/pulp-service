@@ -4,20 +4,21 @@ import logging
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
-import aiohttp
 import click
 import numpy as np
 import pandas as pd
 import requests
 
-import ssl
+from pulp_benchmark.client_async import create_session as create_async_session
 
 @click.command()
 @click.option('--since', type=click.DateTime(), default=datetime.now(timezone.utc).isoformat(), help='Analyze tasks created since this ISO 8601 timestamp.')
 @click.option('--until', type=click.DateTime(), default=None, help='Analyze tasks created until this ISO 8601 timestamp.')
+@click.option('--task-name', type=str, default=None, help='Filter tasks by name (e.g., "pulp_ansible.app.tasks.collections.sync").')
 @click.pass_context
-def task_analysis(ctx, since: datetime, until: Optional[datetime]):
+def task_analysis(ctx, since: datetime, until: Optional[datetime], task_name: Optional[str]):
     """Perform a wait-time analysis of completed tasks."""
     client_type = ctx.obj['client_type']
     api_root = ctx.obj['api_root']
@@ -25,12 +26,13 @@ def task_analysis(ctx, since: datetime, until: Optional[datetime]):
     password = ctx.obj['password']
     cert = ctx.obj['cert']
     key = ctx.obj['key']
+    verify_ssl = ctx.obj['verify_ssl']
 
     # --- Client-specific logic ---
     if client_type == 'async':
-        asyncio.run(run_analysis_async(api_root, user, password, cert, key, since, until))
+        asyncio.run(run_analysis_async(api_root, user, password, cert, key, verify_ssl, since, until, task_name))
     else:
-        run_analysis_sync(api_root, user, password, cert, key, since, until)
+        run_analysis_sync(api_root, user, password, cert, key, verify_ssl, since, until, task_name)
 
 def process_and_display_results(all_tasks: List[Dict[str, Any]]):
     """Shared function to process and print analysis results."""
@@ -89,56 +91,132 @@ def process_and_display_results(all_tasks: List[Dict[str, Any]]):
     click.echo("---------------------------------")
 
 
-async def run_analysis_async(api_root, user, password, cert, key, since, until):
+async def run_analysis_async(api_root, user, password, cert, key, verify_ssl, since, until, task_name):
     """Fetches all tasks using aiohttp."""
     logging.info("\nStarting task analysis using 'async' client...")
-    auth = aiohttp.BasicAuth(user, password) if user and password else None
-    ssl_context = None
+    logging.info(f"Authentication: {'Basic Auth' if user and password else 'Cert Auth' if cert else 'None'}")
+    logging.info(f"SSL Verification: {verify_ssl}")
     if cert:
-        ssl_context = ssl.create_default_context(cafile=cert)
-        if key:
-            ssl_context.load_cert_chain(cert, key)
-    base_url = f"{api_root}/pulp/api/v3/tasks/"
+        logging.info(f"Client cert: {cert}")
+        logging.info(f"Client key: {key or 'None (using cert file)'}")
+
+    # Extract base URL (scheme + netloc) to build absolute path
+    parsed = urlparse(api_root)
+    base_domain = f"{parsed.scheme}://{parsed.netloc}"
+
+    base_url = f"{base_domain}/api/pulp/admin/tasks/"
+    logging.info(f"Fetching tasks from: {base_url}")
     params = {"pulp_created__gte": since.isoformat()}
     if until:
         params["pulp_created__lte"] = until.isoformat()
+    if task_name:
+        params["name"] = task_name
+        logging.info(f"Filtering by task name: {task_name}")
 
     all_tasks = []
-    async with aiohttp.ClientSession(auth=auth, connector=aiohttp.TCPConnector(ssl=ssl_context)) as session:
+    async with create_async_session(user, password, cert, key, verify_ssl) as session:
         tasks_url: Optional[str] = base_url
         first_request = True
         while tasks_url:
             request_params = params if first_request else None
+            logging.info(f"GET {tasks_url}")
+            if request_params:
+                logging.info(f"Query params: {request_params}")
+
             async with session.get(tasks_url, params=request_params) as response:
+                logging.info(f"Response status: {response.status}")
+                if response.status >= 400:
+                    error_text = await response.text()
+                    logging.error(f"Error response body: {error_text}")
                 response.raise_for_status()
                 data = await response.json()
                 all_tasks.extend(data.get("results", []))
-                tasks_url = data.get("next")
+
+                # Get next URL and check if it's on the same domain
+                next_url = data.get("next")
+                if next_url:
+                    next_parsed = urlparse(next_url)
+                    # If pagination URL is on a different domain, reconstruct it on our domain
+                    if next_parsed.netloc != parsed.netloc:
+                        logging.info(f"Pagination URL points to different domain ({next_parsed.netloc}), reconstructing on correct domain")
+                        # Reconstruct the URL with our base domain
+                        tasks_url = f"{base_domain}{next_parsed.path}"
+                        if next_parsed.query:
+                            tasks_url += f"?{next_parsed.query}"
+                    else:
+                        tasks_url = next_url
+                else:
+                    tasks_url = None
+
                 first_request = False
     process_and_display_results(all_tasks)
 
 
 
-def run_analysis_sync(api_root, user, password, cert, key, since, until):
+def run_analysis_sync(api_root, user, password, cert, key, verify_ssl, since, until, task_name):
     """Fetches all tasks using requests."""
     logging.info("\nStarting task analysis using 'sync' client...")
-    auth = (user, password) if user and password else None
-    cert_param = (cert, key) if cert and key else cert
-    tasks_url: Optional[str] = f"{api_root}/pulp/api/v3/tasks/"
+    logging.info(f"Authentication: {'Basic Auth' if user and password else 'Cert Auth' if cert else 'None'}")
+    logging.info(f"SSL Verification: {verify_ssl}")
+    if cert:
+        logging.info(f"Client cert: {cert}")
+        logging.info(f"Client key: {key or 'None (using cert file)'}")
+
+    # Extract base URL (scheme + netloc) to build absolute path
+    parsed = urlparse(api_root)
+    base_domain = f"{parsed.scheme}://{parsed.netloc}"
+
+    tasks_url: Optional[str] = f"{base_domain}/api/pulp/admin/tasks/"
+    logging.info(f"Fetching tasks from: {tasks_url}")
     params = {"pulp_created__gte": since.isoformat()}
     if until:
         params["pulp_created__lte"] = until.isoformat()
+    if task_name:
+        params["name"] = task_name
+        logging.info(f"Filtering by task name: {task_name}")
 
     all_tasks = []
     with requests.Session() as session:
-        session.auth = auth
-        session.cert = cert_param
+        # Configure authentication
+        if user and password:
+            session.auth = (user, password)
+
+        # Configure client certificate for mTLS
+        if cert:
+            session.cert = (cert, key) if key else cert
+
+        # Configure SSL verification
+        session.verify = verify_ssl
+
         while tasks_url:
+            logging.info(f"GET {tasks_url}")
+            if params:
+                logging.info(f"Query params: {params}")
+
             response = session.get(tasks_url, params=params)
+            logging.info(f"Response status: {response.status_code}")
+            if response.status_code >= 400:
+                logging.error(f"Error response body: {response.text}")
             response.raise_for_status()
             data = response.json()
             all_tasks.extend(data.get("results", []))
-            tasks_url = data.get("next")
-            params = None # Subsequent requests use the full URL from 'next'
+
+            # Get next URL and check if it's on the same domain
+            next_url = data.get("next")
+            if next_url:
+                next_parsed = urlparse(next_url)
+                # If pagination URL is on a different domain, reconstruct it on our domain
+                if next_parsed.netloc != parsed.netloc:
+                    logging.info(f"Pagination URL points to different domain ({next_parsed.netloc}), reconstructing on correct domain")
+                    # Reconstruct the URL with our base domain
+                    tasks_url = f"{base_domain}{next_parsed.path}"
+                    if next_parsed.query:
+                        tasks_url += f"?{next_parsed.query}"
+                else:
+                    tasks_url = next_url
+                params = None  # Subsequent requests use the full URL from 'next'
+            else:
+                tasks_url = None
+
     process_and_display_results(all_tasks)
 

@@ -102,17 +102,104 @@ Fetches and performs a detailed wait-time analysis on tasks completed in the sys
 
 **Options:**
 
-| Option    | Type       | Default      | Description                                                              |
-|-----------|------------|--------------|--------------------------------------------------------------------------|
-| `--since` | `DateTime` | *Current UTC* | Analyze tasks created since this timestamp. Format: `YYYY-MM-DDTHH:MM:SS`. |
+| Option        | Type       | Default       | Description                                                              |
+|---------------|------------|---------------|--------------------------------------------------------------------------|
+| `--since`     | `DateTime` | *Current UTC* | Analyze tasks created since this timestamp. Format: `YYYY-MM-DDTHH:MM:SS`. |
+| `--until`     | `DateTime` | *None*        | Analyze tasks created until this timestamp. Format: `YYYY-MM-DDTHH:MM:SS`. |
+| `--task-name` | `String`   | *None*        | Filter tasks by name (e.g., `pulp_ansible.app.tasks.collections.sync`).  |
 
-**Example:**
+**Examples:**
 ```bash
-# Analyze tasks created since June 10, 2025 at 6:00 PM UTC
-python -m pulp_benchmark.main --api-root [https://pulp.example.com](https://pulp.example.com) task_analysis --since "2025-06-10T18:00:00"
+# Analyze all tasks created since June 10, 2025 at 6:00 PM UTC
+python -m pulp_benchmark.main --api-root https://pulp.example.com task_analysis --since "2025-06-10T18:00:00"
+
+# Analyze tasks within a specific time range
+python -m pulp_benchmark.main --api-root https://pulp.example.com task_analysis \
+  --since "2025-12-01T00:00:00" \
+  --until "2025-12-03T23:59:59"
+
+# Analyze only specific task type
+python -m pulp_benchmark.main --api-root https://pulp.example.com task_analysis \
+  --since "2025-12-01T00:00:00" \
+  --task-name "pulp_ansible.app.tasks.collections.sync"
+
+# Use with mTLS authentication
+python -m pulp_benchmark.main \
+  --api-root https://mtls.internal.console.stage.redhat.com/api \
+  --cert /path/to/cert.pem \
+  --key /path/to/key.pem \
+  task_analysis --task-name "pulp_container.app.tasks.sync"
 ```
 
-### **Section 8: Extending the Tool**
+### **Section 8: Usage - `rds_connection_tests` Command**
+
+```markdown
+#### `rds_connection_tests`
+
+Triggers and monitors RDS Proxy connection timeout tests remotely. This plugin tests database connection behavior over extended periods to identify RDS Proxy timeout issues.
+
+**Related Ticket**: [PULP-955](https://issues.redhat.com/browse/PULP-955)
+
+**Options:**
+
+| Option              | Short | Type      | Default | Description                                                              |
+|---------------------|-------|-----------|---------|--------------------------------------------------------------------------|
+| `--test`            | `-t`  | `String`  | *All*   | Test name to run (can be specified multiple times). If not provided, runs all tests. |
+| `--duration`        | `-d`  | `Integer` | `50`    | Duration of each test in minutes (1-300).                                |
+| `--monitor`         |       | `Flag`    | `True`  | Monitor task progress and display results when complete.                 |
+| `--no-monitor`      |       | `Flag`    | `False` | Disable monitoring (dispatch tasks and exit immediately).                |
+| `--poll-interval`   | `-p`  | `Integer` | `60`    | How often to check task status in seconds (when monitoring).             |
+| `--run-sequentially`|       | `Flag`    | `False` | Run tests sequentially instead of in parallel.                           |
+
+**Available Tests:**
+- `test_1_idle_connection` - Tests connection that remains idle
+- `test_2_active_heartbeat` - Tests connection with periodic heartbeat queries
+- `test_3_transaction_open` - Tests open transaction behavior
+- `test_4_advisory_lock` - Tests PostgreSQL advisory locks
+- `test_5_cursor_hold` - Tests cursor with hold behavior
+- `test_6_listen_notify` - Tests LISTEN/NOTIFY channels
+- `test_7_pinned_connection` - Tests pinned database connections
+
+**Examples:**
+```bash
+# Run all tests with default 50-minute duration
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  rds_connection_tests
+
+# Run specific test with custom duration
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  rds_connection_tests \
+    --test test_1_idle_connection \
+    --duration 90
+
+# Run multiple tests sequentially
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  rds_connection_tests \
+    -t test_1_idle_connection \
+    -t test_2_active_heartbeat \
+    --run-sequentially
+
+# Dispatch tests without monitoring
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  rds_connection_tests \
+    --no-monitor
+
+# Debug mode with detailed HTTP logging
+python -m pulp_benchmark.main \
+  --api-root https://your-pulp-instance.com \
+  --debug-requests \
+  rds_connection_tests \
+    -t test_1_idle_connection
+```
+
+**For detailed documentation**, see [RDS_TESTS_REMOTE_TRIGGER_GUIDE.md](RDS_TESTS_REMOTE_TRIGGER_GUIDE.md)
+```
+
+### **Section 9: Extending the Tool**
 
 ```markdown
 ---
