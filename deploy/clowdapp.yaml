@@ -765,34 +765,6 @@ objects:
           - name: OTEL_TRACES_EXPORTER
             value: "none"
 
-      autoScaler:
-        minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
-        maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
-        pollingInterval: 10
-        # externalHPA: true
-        triggers:
-          - type: prometheus
-            metadata:
-              serverAddress: http://prometheus-app-sre.openshift-customer-monitoring.svc.cluster.local:9090
-              metricName: pulp_tasks_unblocked_queue
-              query: pulp_tasks_unblocked_queue and on(pod) topk(1, max(timestamp(pulp_tasks_unblocked_queue)) by (pod))
-              threshold: '5'
-            metricType: Value
-        advanced:
-          horizontalPodAutoscalerConfig:
-            behavior:
-              scaleDown:
-                stabilizationWindowSeconds: 300
-                policies:
-                  - type: Pods
-                    value: 2
-                    periodSeconds: 60
-              scaleUp:
-                policies:
-                  - type: Pods
-                    value: 5
-                    periodSeconds: 30
-
     - name: clamav
       replicas: ${{CLAMAV_REPLICAS}}
       webServices:
