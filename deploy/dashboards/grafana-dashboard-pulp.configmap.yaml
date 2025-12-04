@@ -3787,40 +3787,13 @@ data:
               "text": "pulpp01ue1-prometheus",
               "value": ""
             },
+            "hide": 2,
             "includeAll": false,
             "name": "datasource_new",
             "options": [],
             "query": "prometheus",
             "refresh": 1,
             "regex": "/pulp${cluster}.*ue1-prometheus/",
-            "type": "datasource"
-          },
-          {
-            "current": {
-              "text": "pulpp01ue1-prometheus",
-              "value": ""
-            },
-            "includeAll": false,
-            "label": "prod datasource",
-            "name": "datasource_prod",
-            "options": [],
-            "query": "prometheus",
-            "refresh": 1,
-            "regex": "/pulpp.*ue1-prometheus/",
-            "type": "datasource"
-          },
-          {
-            "current": {
-              "text": "pulps01ue1-prometheus",
-              "value": ""
-            },
-            "includeAll": false,
-            "label": "stage datasource",
-            "name": "datasource_stage",
-            "options": [],
-            "query": "prometheus",
-            "refresh": 1,
-            "regex": "/pulps.*ue1-prometheus/",
             "type": "datasource"
           },
           {
