@@ -2218,12 +2218,37 @@ data:
               "expr": "sum(pulp_tasks_longest_unblocked_time_seconds)",
               "instant": false,
               "interval": "",
-              "legendFormat": "task",
+              "legendFormat": "old cluster",
               "range": true,
               "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource_new}"
+              },
+              "editorMode": "code",
+              "expr": "sum(pulp_tasks_longest_unblocked_time_seconds)",
+              "instant": false,
+              "interval": "",
+              "legendFormat": "new cluster",
+              "range": true,
+              "refId": "B"
             }
           ],
           "title": "Longest Unblocked Task Wait Time",
+          "transformations": [
+            {
+              "id": "calculateField",
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "sum"
+                },
+                "replaceFields": true
+              }
+            }
+          ],
           "type": "timeseries"
         },
         {
@@ -2315,12 +2340,36 @@ data:
               "editorMode": "code",
               "expr": "sum(pulp_tasks_unblocked_queue)",
               "instant": false,
-              "legendFormat": "tasks",
+              "legendFormat": "old cluster",
               "range": true,
               "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource_new}"
+              },
+              "editorMode": "code",
+              "expr": "sum(pulp_tasks_unblocked_queue)",
+              "instant": false,
+              "legendFormat": "new cluster",
+              "range": true,
+              "refId": "B"
             }
           ],
           "title": "Unblocked Tasks Waiting in the Queue",
+          "transformations": [
+            {
+              "id": "calculateField",
+              "options": {
+                "mode": "reduceRow",
+                "reduce": {
+                  "reducer": "sum"
+                },
+                "replaceFields": true
+              }
+            }
+          ],
           "type": "timeseries"
         },
         {
@@ -3731,6 +3780,47 @@ data:
             "query": "prometheus",
             "refresh": 1,
             "regex": "/crc${cluster}.*ue1-prometheus/",
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "text": "pulpp01ue1-prometheus",
+              "value": ""
+            },
+            "includeAll": false,
+            "name": "datasource_new",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "/pulp${cluster}.*ue1-prometheus/",
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "text": "pulpp01ue1-prometheus",
+              "value": ""
+            },
+            "includeAll": false,
+            "label": "prod datasource",
+            "name": "datasource_prod",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "/pulpp.*ue1-prometheus/",
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "text": "pulps01ue1-prometheus",
+              "value": ""
+            },
+            "includeAll": false,
+            "label": "stage datasource",
+            "name": "datasource_stage",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "/pulps.*ue1-prometheus/",
             "type": "datasource"
           },
           {
