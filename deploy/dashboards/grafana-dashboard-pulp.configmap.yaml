@@ -167,12 +167,43 @@ data:
               "editorMode": "code",
               "expr": "sum by (container) (kube_pod_container_info{container=~\"pulp-api|pulp-content|pulp-worker|pulp-worker-auxiliary\"})",
               "instant": false,
-              "legendFormat": "__auto",
+              "legendFormat": "{{container}}",
               "range": true,
               "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource_new}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (container) (kube_pod_container_info{container=~\"pulp-api|pulp-content|pulp-worker|pulp-worker-auxiliary\"})",
+              "instant": false,
+              "legendFormat": "{{container}}",
+              "range": true,
+              "refId": "B"
             }
           ],
           "title": "Number of Pods Per App",
+          "transformations": [
+            {
+              "id": "groupBy",
+              "options": {
+                "fields": {
+                  "Value": {
+                    "aggregations": [
+                      "sum"
+                    ],
+                    "operation": "aggregate"
+                  },
+                  "container": {
+                    "aggregations": [],
+                    "operation": "groupby"
+                  }
+                }
+              }
+            }
+          ],
           "type": "timeseries"
         },
         {
@@ -3787,8 +3818,8 @@ data:
               "text": "pulpp01ue1-prometheus",
               "value": ""
             },
-            "hide": 2,
             "includeAll": false,
+            "label": "new cluster datasource",
             "name": "datasource_new",
             "options": [],
             "query": "prometheus",
@@ -3818,6 +3849,30 @@ data:
             },
             "refresh": 1,
             "regex": "/crc${cluster}0[12]ue1\\.pulp-${cluster:text}/",
+            "type": "query"
+          },
+          {
+            "current": {
+              "text": "pulpp01ue1.pulp-prod",
+              "value": "arn:aws:logs:us-east-1:744086762512:log-group:pulpp01ue1.pulp-prod:*"
+            },
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "definition": "",
+            "includeAll": false,
+            "label": "new cluster logsource",
+            "name": "logsource_new",
+            "options": [],
+            "query": {
+              "logGroupPrefix": "pulp",
+              "queryType": "logGroups",
+              "refId": "CloudWatchVariableQueryEditor-VariableQuery",
+              "region": "us-east-1"
+            },
+            "refresh": 1,
+            "regex": "/pulp${cluster}0[12]ue1\\.pulp-${cluster:text}/",
             "type": "query"
           },
           {
