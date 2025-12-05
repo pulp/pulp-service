@@ -160,6 +160,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0031-Replace-ResponseContentDisposition-in-cloudfront.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Replace-ResponseContentDisposition-in-cloudfront.patch
 
+COPY images/assets/patches/0032-Disable-the-timestamp-of-interest-query.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0032-Disable-the-timestamp-of-interest-query.patch
+
 COPY images/assets/gunicorn_config.py /tmp/
 
 RUN mkdir /licenses
