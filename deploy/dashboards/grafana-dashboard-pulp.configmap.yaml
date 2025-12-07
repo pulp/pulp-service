@@ -35,7 +35,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 2,
-      "id": 886202,
+      "id": 1026001,
       "links": [],
       "panels": [
         {
@@ -53,50 +53,14 @@ data:
         },
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
+            "type": "datasource",
+            "uid": "-- Mixed --"
           },
           "description": "",
           "fieldConfig": {
             "defaults": {
               "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "barWidthFactor": 0.6,
-                "drawStyle": "line",
-                "fillOpacity": 0,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": false
-                },
-                "insertNulls": false,
-                "lineInterpolation": "linear",
-                "lineStyle": {
-                  "fill": "solid"
-                },
-                "lineWidth": 2,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "auto",
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "dashed"
-                }
+                "mode": "thresholds"
               },
               "mappings": [],
               "thresholds": {
@@ -104,14 +68,6 @@ data:
                 "steps": [
                   {
                     "color": "green"
-                  },
-                  {
-                    "color": "#EAB839",
-                    "value": 70
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
                   }
                 ]
               },
@@ -121,41 +77,35 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "pulp-content"
+                  "options": "pulp-worker-auxiliary"
                 },
-                "properties": [
-                  {
-                    "id": "color",
-                    "value": {
-                      "fixedColor": "purple",
-                      "mode": "fixed"
-                    }
-                  }
-                ]
+                "properties": []
               }
             ]
           },
           "gridPos": {
-            "h": 9,
+            "h": 3,
             "w": 10,
             "x": 0,
             "y": 1
           },
           "id": 22,
           "options": {
-            "legend": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
               "calcs": [
-                "last"
+                "lastNotNull"
               ],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
+              "fields": "",
+              "values": false
             },
-            "tooltip": {
-              "hideZeros": false,
-              "mode": "single",
-              "sort": "none"
-            }
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
           },
           "pluginVersion": "11.6.3",
           "targets": [
@@ -185,26 +135,7 @@ data:
             }
           ],
           "title": "Number of Pods Per App",
-          "transformations": [
-            {
-              "id": "groupBy",
-              "options": {
-                "fields": {
-                  "Value": {
-                    "aggregations": [
-                      "sum"
-                    ],
-                    "operation": "aggregate"
-                  },
-                  "container": {
-                    "aggregations": [],
-                    "operation": "groupby"
-                  }
-                }
-              }
-            }
-          ],
-          "type": "timeseries"
+          "type": "stat"
         },
         {
           "datasource": {
@@ -312,7 +243,7 @@ data:
             ]
           },
           "gridPos": {
-            "h": 9,
+            "h": 10,
             "w": 10,
             "x": 10,
             "y": 1
@@ -425,7 +356,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 10
+            "y": 4
           },
           "id": 31,
           "options": {
@@ -502,7 +433,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 17
+            "y": 11
           },
           "id": 13,
           "panels": [],
@@ -577,7 +508,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 0,
-            "y": 18
+            "y": 12
           },
           "id": 6,
           "options": {
@@ -719,7 +650,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 10,
-            "y": 18
+            "y": 12
           },
           "id": 9,
           "options": {
@@ -896,7 +827,7 @@ data:
             "h": 7,
             "w": 20,
             "x": 0,
-            "y": 26
+            "y": 20
           },
           "id": 32,
           "options": {
@@ -1079,7 +1010,7 @@ data:
             "h": 9,
             "w": 10,
             "x": 0,
-            "y": 33
+            "y": 27
           },
           "id": 43,
           "options": {
@@ -1191,7 +1122,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 42
+            "y": 36
           },
           "id": 12,
           "panels": [],
@@ -1325,7 +1256,7 @@ data:
             "h": 10,
             "w": 10,
             "x": 0,
-            "y": 43
+            "y": 37
           },
           "id": 16,
           "options": {
@@ -1562,7 +1493,7 @@ data:
             "h": 10,
             "w": 10,
             "x": 10,
-            "y": 43
+            "y": 37
           },
           "id": 17,
           "options": {
@@ -1684,7 +1615,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 53
+            "y": 47
           },
           "id": 19,
           "panels": [],
@@ -1755,7 +1686,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 0,
-            "y": 54
+            "y": 48
           },
           "id": 23,
           "options": {
@@ -1792,8 +1723,8 @@ data:
         },
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
+            "type": "datasource",
+            "uid": "-- Mixed --"
           },
           "fieldConfig": {
             "defaults": {
@@ -1854,7 +1785,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 10,
-            "y": 54
+            "y": 48
           },
           "id": 21,
           "options": {
@@ -1885,6 +1816,18 @@ data:
               "legendFormat": "{{domain_name}}",
               "range": true,
               "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource_new}"
+              },
+              "editorMode": "code",
+              "expr": "topk(5, avg by (domain_name) (pulp_space_usage_bytes))",
+              "hide": false,
+              "legendFormat": "{{domain_name}}",
+              "range": true,
+              "refId": "B"
             }
           ],
           "title": "Disk Usage by Domain",
@@ -1981,7 +1924,7 @@ data:
             "h": 9,
             "w": 20,
             "x": 0,
-            "y": 62
+            "y": 56
           },
           "id": 42,
           "options": {
@@ -2103,7 +2046,7 @@ data:
             "h": 7,
             "w": 20,
             "x": 0,
-            "y": 71
+            "y": 65
           },
           "hideTimeOverride": false,
           "id": 30,
@@ -2161,8 +2104,8 @@ data:
         },
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
+            "type": "datasource",
+            "uid": "-- Mixed --"
           },
           "fieldConfig": {
             "defaults": {
@@ -2222,7 +2165,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 78
+            "y": 72
           },
           "id": 25,
           "options": {
@@ -2272,6 +2215,7 @@ data:
             {
               "id": "calculateField",
               "options": {
+                "alias": "Waiting time in queue",
                 "mode": "reduceRow",
                 "reduce": {
                   "reducer": "sum"
@@ -2284,8 +2228,8 @@ data:
         },
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
+            "type": "datasource",
+            "uid": "-- Mixed --"
           },
           "fieldConfig": {
             "defaults": {
@@ -2345,7 +2289,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 10,
-            "y": 78
+            "y": 72
           },
           "id": 26,
           "options": {
@@ -2393,8 +2337,10 @@ data:
             {
               "id": "calculateField",
               "options": {
+                "alias": "Unblocked tasks",
                 "mode": "reduceRow",
                 "reduce": {
+                  "include": [],
                   "reducer": "sum"
                 },
                 "replaceFields": true
@@ -2409,7 +2355,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 85
+            "y": 79
           },
           "id": 28,
           "panels": [],
@@ -2481,7 +2427,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 0,
-            "y": 86
+            "y": 80
           },
           "id": 27,
           "options": {
@@ -2629,7 +2575,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 10,
-            "y": 86
+            "y": 80
           },
           "id": 29,
           "options": {
@@ -2670,7 +2616,7 @@ data:
               "period": "",
               "queryMode": "Logs",
               "refId": "rpm",
-              "region": "default",
+              "region": "us-east-1",
               "sqlExpression": "",
               "statistic": "Average",
               "statsGroups": [
@@ -2701,7 +2647,7 @@ data:
               "period": "",
               "queryMode": "Logs",
               "refId": "xml",
-              "region": "default",
+              "region": "us-east-1",
               "sqlExpression": "",
               "statistic": "Average",
               "statsGroups": [
@@ -2818,7 +2764,7 @@ data:
             "h": 9,
             "w": 20,
             "x": 0,
-            "y": 94
+            "y": 88
           },
           "id": 38,
           "options": {
@@ -2847,8 +2793,8 @@ data:
               "label": "",
               "logGroups": [
                 {
-                  "arn": "$logsource",
-                  "name": "$logsource"
+                  "arn": "$logsource_new",
+                  "name": "$logsource_new"
                 }
               ],
               "matchExact": true,
@@ -2934,7 +2880,7 @@ data:
             "h": 10,
             "w": 8,
             "x": 0,
-            "y": 103
+            "y": 97
           },
           "id": 37,
           "options": {
@@ -2967,8 +2913,8 @@ data:
               "label": "",
               "logGroups": [
                 {
-                  "arn": "$logsource",
-                  "name": "$logsource"
+                  "arn": "$logsource_new",
+                  "name": "$logsource_new"
                 }
               ],
               "matchExact": true,
@@ -3021,7 +2967,7 @@ data:
             "h": 10,
             "w": 12,
             "x": 8,
-            "y": 103
+            "y": 97
           },
           "id": 40,
           "options": {
@@ -3062,8 +3008,8 @@ data:
               "label": "",
               "logGroups": [
                 {
-                  "arn": "$logsource",
-                  "name": "$logsource"
+                  "arn": "$logsource_new",
+                  "name": "$logsource_new"
                 }
               ],
               "matchExact": true,
@@ -3170,7 +3116,7 @@ data:
             "h": 10,
             "w": 20,
             "x": 0,
-            "y": 113
+            "y": 107
           },
           "id": 39,
           "options": {
@@ -3370,7 +3316,7 @@ data:
             "h": 10,
             "w": 20,
             "x": 0,
-            "y": 123
+            "y": 117
           },
           "id": 41,
           "options": {
@@ -3507,7 +3453,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 133
+            "y": 127
           },
           "id": 44,
           "options": {
@@ -3567,7 +3513,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 141
+            "y": 135
           },
           "id": 33,
           "panels": [],
@@ -3638,7 +3584,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 142
+            "y": 136
           },
           "id": 34,
           "options": {
@@ -3736,7 +3682,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 142
+            "y": 136
           },
           "id": 35,
           "options": {
@@ -3772,7 +3718,7 @@ data:
         }
       ],
       "preload": false,
-      "refresh": "5m",
+      "refresh": "30s",
       "schemaVersion": 41,
       "tags": [],
       "templating": {
@@ -3816,10 +3762,10 @@ data:
           {
             "current": {
               "text": "pulpp01ue1-prometheus",
-              "value": ""
+              "value": "P5942F18727659A27"
             },
+            "hide": 2,
             "includeAll": false,
-            "label": "new cluster datasource",
             "name": "datasource_new",
             "options": [],
             "query": "prometheus",
@@ -3861,8 +3807,8 @@ data:
               "uid": "P1A97A9592CB7F392"
             },
             "definition": "",
+            "hide": 2,
             "includeAll": false,
-            "label": "new cluster logsource",
             "name": "logsource_new",
             "options": [],
             "query": {
@@ -3921,5 +3867,5 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 61763
+      "version": 90
     }
