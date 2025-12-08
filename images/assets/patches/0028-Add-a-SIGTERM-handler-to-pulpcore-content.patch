@@ -1,4 +1,4 @@
-From 049c3fc2cfb981a34afbeddbb47df9da4a1302b7 Mon Sep 17 00:00:00 2001
+From 526cc222d20441d9c8cb8718e9ce6f930a06d005 Mon Sep 17 00:00:00 2001
 From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
 Date: Thu, 16 Oct 2025 14:41:13 -0300
 Subject: [PATCH] Add a SIGTERM handler to pulpcore-content
@@ -38,17 +38,17 @@ index 29c55ba13..d11d0985b 100644
  
      for pulp_plugin in pulp_plugin_configs():
 diff --git a/pulpcore/content/entrypoint.py b/pulpcore/content/entrypoint.py
-index 0a878c16e..9cc3ab5a3 100644
+index 0965ee7fc..739d35db7 100644
 --- a/pulpcore/content/entrypoint.py
 +++ b/pulpcore/content/entrypoint.py
 @@ -48,6 +48,7 @@ class PulpcoreContentApplication(PulpcoreGunicornApplication):
+ @click.option("--preload/--no-preload", "preload_app")
+ @click.option("--reuse-port/--no-reuse-port")
  @click.option("--chdir")
++@click.option("--config", "-c")
  @click.option("--user", "-u")
  @click.option("--group", "-g")
-+@click.option("--config", "-c")
- @click.command()
- def main(bind, **options):
-     options["bind"] = list(bind)
+ @click.option(
 -- 
 2.46.2
 
