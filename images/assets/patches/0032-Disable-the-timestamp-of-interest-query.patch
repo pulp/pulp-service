@@ -1,0 +1,38 @@
+From 4d0b36bc6a05893c2dea731474f17d97632f1e5a Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Fri, 5 Dec 2025 10:34:08 -0300
+Subject: [PATCH] Disable the timestamp of interest query
+
+---
+ pulpcore/app/models/content.py | 15 +++------------
+ 1 file changed, 3 insertions(+), 12 deletions(-)
+
+diff --git a/pulpcore/app/models/content.py b/pulpcore/app/models/content.py
+index 3cdc318c2..00a68b5b5 100644
+--- a/pulpcore/app/models/content.py
++++ b/pulpcore/app/models/content.py
+@@ -105,18 +105,9 @@ class BulkTouchQuerySet(models.QuerySet):
+ 
+     def touch(self):
+         """
+-        Update the ``timestamp_of_interest`` on all objects of the query.
+-
+-        Postgres' UPDATE call doesn't support order-by. This can (and does) result in deadlocks in
+-        high-concurrency environments, when using touch() on overlapping data sets. In order to
+-        prevent this, we choose to SELECT FOR UPDATE with SKIP LOCKS == True, and only update
+-        the rows that we were able to get locks on. Since a previously-locked-row implies
+-        that updating that row's timestamp-of-interest is the responsibility of whoever currently
+-        owns it, this results in correct data, while closing the window on deadlocks.
+-        """
+-        with transaction.atomic():
+-            sub_q = self.order_by("pk").select_for_update(skip_locked=True)
+-            return self.filter(pk__in=sub_q).update(timestamp_of_interest=now())
++        ref: https://issues.redhat.com/browse/PULP-1001
++        """
++        return 1
+ 
+ 
+ class QueryMixin:
+-- 
+2.46.2
+
