@@ -366,15 +366,13 @@ class NewPulpcoreWorker:
 
     def fetch_task(self):
         """
-        Fetch an available waiting task using Redis distributed lock-based algorithm.
+        Fetch an available waiting task using Redis locks and app_lock.
 
         This method:
         1. Queries waiting tasks (sorted by creation time, limited)
-        2. For each task, attempts to acquire Redis distributed locks for all exclusive resources
-        3. Returns the first task for which all locks can be acquired
-
-        Note: This method does NOT update the task state. The execute_task method
-        will handle the state transition to RUNNING.
+        2. For each task, attempts to acquire Redis distributed locks for exclusive resources
+        3. If Redis locks acquired, attempts to claim the task with app_lock
+        4. Returns the first task for which both locks can be acquired
 
         Returns:
             Task: A task object if one was successfully locked, None otherwise
@@ -398,23 +396,38 @@ class NewPulpcoreWorker:
                     if not resource.startswith("shared:")
                 ]
 
-                # Always lock the task itself to ensure only one worker executes it
-                # This is critical for tasks with no exclusive resources
-                task_lock = f"task:{task.pk}"
-                resources_to_lock = exclusive_resources + [task_lock]
+                # First, try to acquire Redis locks for resources
+                if self._try_acquire_resource_locks(exclusive_resources):
+                    # Successfully acquired resource locks!
+                    # Now try to claim the task with app_lock
+                    rows = Task.objects.filter(
+                        pk=task.pk,
+                        state=TASK_STATES.WAITING,
+                        app_lock__isnull=True
+                    ).update(app_lock=self.app_status)
 
-                # Try to acquire all locks for this task
-                if self._try_acquire_resource_locks(resources_to_lock):
-                    # Successfully acquired all locks!
-                    _logger.info(
-                        "Worker %s acquired locks for task %s in domain: %s",
-                        self.name,
-                        task.pk,
-                        task.pulp_domain.name
-                    )
-                    # Store resources so we can release them later
-                    task._locked_resources = resources_to_lock
-                    return task
+                    if rows == 1:
+                        # We successfully claimed the task!
+                        _logger.info(
+                            "Worker %s acquired resource locks and app_lock for task %s in domain: %s",
+                            self.name,
+                            task.pk,
+                            task.pulp_domain.name
+                        )
+                        # Store resources so we can release them later
+                        task._locked_resources = exclusive_resources
+                        # Refresh task to get updated app_lock
+                        task.refresh_from_db()
+                        return task
+                    else:
+                        # This should never happen - we have the resource locks but can't get app_lock
+                        # This indicates another worker claimed the task without holding the resource locks
+                        self._release_resource_locks(exclusive_resources)
+                        raise RuntimeError(
+                            f"Worker {self.name} acquired resource locks for task {task.pk} "
+                            f"but failed to acquire app_lock. Another worker may have claimed "
+                            f"the task without holding the required resource locks."
+                        )
 
             except Exception as e:
                 _logger.error("Error processing task %s: %s", task.pk, e)
