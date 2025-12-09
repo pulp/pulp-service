@@ -1,0 +1,568 @@
+From f721dcadf3fd422743f7ee83b5e36ef8ca6fd197 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Tue, 25 Nov 2025 11:06:48 -0500
+Subject: [PATCH] Adds use of NewPulpcoreWorker from pulp_service.
+
+This also adds Redis based locking for tasks and resources.
+---
+ pulpcore/app/models/task.py    |   4 -
+ pulpcore/app/viewsets/task.py  |  14 +-
+ pulpcore/tasking/_util.py      |  96 +++++++++++++-
+ pulpcore/tasking/entrypoint.py |   4 +-
+ pulpcore/tasking/tasks.py      | 236 ++++++++++++++++++++++++---------
+ 5 files changed, 272 insertions(+), 82 deletions(-)
+
+diff --git a/pulpcore/app/models/task.py b/pulpcore/app/models/task.py
+index ed0b2e87a..18ad7fef4 100644
+--- a/pulpcore/app/models/task.py
++++ b/pulpcore/app/models/task.py
+@@ -210,7 +210,6 @@ class Task(BaseModel, AutoAddObjPermsMixin):
+         rows = Task.objects.filter(
+             pk=self.pk,
+             state=TASK_STATES.WAITING,
+-            app_lock=AppStatus.objects.current(),
+         ).update(
+             state=TASK_STATES.RUNNING,
+             started_at=started_at,
+@@ -250,7 +249,6 @@ class Task(BaseModel, AutoAddObjPermsMixin):
+         rows = Task.objects.filter(
+             pk=self.pk,
+             state=TASK_STATES.RUNNING,
+-            app_lock=AppStatus.objects.current(),
+         ).update(
+             state=TASK_STATES.COMPLETED,
+             finished_at=finished_at,
+@@ -289,7 +287,6 @@ class Task(BaseModel, AutoAddObjPermsMixin):
+         rows = Task.objects.filter(
+             pk=self.pk,
+             state=TASK_STATES.RUNNING,
+-            app_lock=AppStatus.objects.current(),
+         ).update(
+             state=TASK_STATES.FAILED,
+             finished_at=finished_at,
+@@ -340,7 +337,6 @@ class Task(BaseModel, AutoAddObjPermsMixin):
+         rows = Task.objects.filter(
+             pk=self.pk,
+             state=TASK_STATES.CANCELING,
+-            app_lock=AppStatus.objects.current(),
+         ).update(
+             state=final_state,
+             finished_at=finished_at,
+diff --git a/pulpcore/app/viewsets/task.py b/pulpcore/app/viewsets/task.py
+index a3f2f6d56..8e18a510b 100644
+--- a/pulpcore/app/viewsets/task.py
++++ b/pulpcore/app/viewsets/task.py
+@@ -223,19 +223,7 @@ class TaskViewSet(
+         responses={200: TaskSerializer, 409: TaskSerializer},
+     )
+     def partial_update(self, request, pk=None, partial=True):
+-        serializer = self.get_serializer(data=request.data)
+-        serializer.is_valid(raise_exception=True)
+-
+-        task = self.get_object()
+-        task = cancel_task(task.pk)
+-        # Check whether task is actually canceled
+-        http_status = (
+-            None
+-            if task.state in [TASK_STATES.CANCELING, TASK_STATES.CANCELED]
+-            else status.HTTP_409_CONFLICT
+-        )
+-        serializer = self.serializer_class(task, context={"request": request})
+-        return Response(serializer.data, status=http_status)
++        return Response(status=status.HTTP_501_NOT_IMPLEMENTED)
+ 
+     def destroy(self, request, pk=None):
+         task = self.get_object()
+diff --git a/pulpcore/tasking/_util.py b/pulpcore/tasking/_util.py
+index 49ecaecdb..cdc3303ef 100644
+--- a/pulpcore/tasking/_util.py
++++ b/pulpcore/tasking/_util.py
+@@ -9,6 +9,7 @@ import threading
+ import time
+ import tempfile
+ from gettext import gettext as _
++from asgiref.sync import sync_to_async
+ 
+ from django.conf import settings
+ from django.db import connection, transaction, IntegrityError
+@@ -17,21 +18,106 @@ from django.utils import timezone
+ from django_guid import set_guid
+ from django_guid.utils import generate_guid
+ from pulpcore.app.models import Artifact, Content, Task, TaskSchedule, ProfileArtifact
++from pulpcore.app.redis_connection import get_redis_connection
+ from pulpcore.app.util import (
+     configure_analytics,
+     configure_cleanup,
+     configure_periodic_telemetry,
+ )
+ from pulpcore.constants import TASK_FINAL_STATES, TASK_STATES
+-from pulpcore.tasking.tasks import dispatch, execute_task
++
+ from pulp_service.app.tasks.util import (
+     content_sources_periodic_telemetry,
+     rhel_ai_repos_periodic_telemetry,
+ )
+ 
+-
+ _logger = logging.getLogger(__name__)
+ 
++# Redis key prefix for resource locks
++REDIS_LOCK_PREFIX = "pulp:resource_lock:"
++
++# Lua script for atomic lock release (only release if we own the lock)
++REDIS_UNLOCK_SCRIPT = """
++if redis.call("get", KEYS[1]) == ARGV[1] then
++    return redis.call("del", KEYS[1])
++else
++    return 0
++end
++"""
++
++
++def resource_to_lock_key(resource_name):
++    """
++    Convert a resource name to a Redis lock key.
++
++    Args:
++        resource_name (str): The resource name (e.g., "prn:rpm.repository:abc123")
++
++    Returns:
++        str: A Redis key for the resource lock
++    """
++    return f"{REDIS_LOCK_PREFIX}{resource_name}"
++
++
++def release_resource_locks(redis_conn, lock_owner, resources):
++    """
++    Release Redis distributed locks for the given resources.
++
++    Uses a Lua script to ensure we only release locks that we own.
++
++    Args:
++        redis_conn: Redis connection
++        lock_owner (str): The identifier of the lock owner
++        resources (list): List of resource names to release locks for
++    """
++    if not redis_conn:
++        return
++
++    # Register the unlock script
++    unlock_script = redis_conn.register_script(REDIS_UNLOCK_SCRIPT)
++
++    for resource in resources:
++        try:
++            lock_key = resource_to_lock_key(resource)
++            # Use Lua script to atomically check and delete only if we own the lock
++            released = unlock_script(keys=[lock_key], args=[lock_owner])
++            if released:
++                _logger.debug("Released lock for resource: %s", resource)
++            else:
++                _logger.warning("Lock for resource %s was not owned by %s", resource, lock_owner)
++        except Exception as e:
++            _logger.error("Error releasing lock for resource %s: %s", resource, e)
++
++
++async def async_release_resource_locks(redis_conn, lock_owner, resources):
++    """
++    Async version: Release Redis distributed locks for the given resources.
++
++    Uses a Lua script to ensure we only release locks that we own.
++
++    Args:
++        redis_conn: Redis connection
++        lock_owner (str): The identifier of the lock owner
++        resources (list): List of resource names to release locks for
++    """
++    if not redis_conn:
++        return
++
++    # Register the unlock script
++    unlock_script = await sync_to_async(redis_conn.register_script)(REDIS_UNLOCK_SCRIPT)
++
++    for resource in resources:
++        try:
++            lock_key = resource_to_lock_key(resource)
++            # Use Lua script to atomically check and delete only if we own the lock
++            released = await sync_to_async(unlock_script)(keys=[lock_key], args=[lock_owner])
++            if released:
++                _logger.debug("Released lock for resource: %s", resource)
++            else:
++                _logger.warning("Lock for resource %s was not owned by %s", resource, lock_owner)
++        except Exception as e:
++            _logger.error("Error releasing lock for resource %s: %s", resource, e)
++
+ 
+ def startup_hook():
+     configure_analytics()
+@@ -93,6 +179,8 @@ def child_signal_handler(sig, frame):
+ def perform_task(task_pk, task_working_dir_rel_path):
+     """Setup the environment to handle a task and execute it.
+     This must be called as a subprocess, while the parent holds the advisory lock of the task."""
++    from pulpcore.tasking.tasks import execute_task
++
+     signal.signal(signal.SIGINT, child_signal_handler)
+     signal.signal(signal.SIGTERM, child_signal_handler)
+     signal.signal(signal.SIGHUP, child_signal_handler)
+@@ -119,6 +207,8 @@ def perform_task(task_pk, task_working_dir_rel_path):
+ 
+ 
+ def _execute_task_and_profile(task, profile_options):
++    from pulpcore.tasking.tasks import execute_task
++
+     with tempfile.TemporaryDirectory(dir=settings.WORKING_DIRECTORY) as temp_dir:
+         _execute_task = execute_task
+ 
+@@ -226,6 +316,8 @@ def _memray_diagnostic_decorator(temp_dir, func):
+ 
+ 
+ def dispatch_scheduled_tasks():
++    from pulpcore.tasking.tasks import dispatch
++
+     # Warning, dispatch_scheduled_tasks is not race condition free!
+     now = timezone.now()
+     # Dispatch all tasks old enough and not still running
+diff --git a/pulpcore/tasking/entrypoint.py b/pulpcore/tasking/entrypoint.py
+index fdc9b0de8..cd61aa893 100644
+--- a/pulpcore/tasking/entrypoint.py
++++ b/pulpcore/tasking/entrypoint.py
+@@ -9,7 +9,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
+ django.setup()
+ 
+ from django.conf import settings  # noqa: E402: module level not at top
+-from pulpcore.tasking.worker import PulpcoreWorker  # noqa: E402: module level not at top
++from pulp_service.tasking.new_worker import NewPulpcoreWorker  # noqa: E402: module level not at top
+ 
+ 
+ _logger = logging.getLogger(__name__)
+@@ -61,4 +61,4 @@ def worker(
+ 
+     _logger.info("Starting distributed type worker")
+ 
+-    PulpcoreWorker(auxiliary=auxiliary).run(burst=burst)
++    NewPulpcoreWorker().run(burst=burst)
+diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
+index c187bd919..3ef86ba19 100644
+--- a/pulpcore/tasking/tasks.py
++++ b/pulpcore/tasking/tasks.py
+@@ -17,6 +17,7 @@ from django.db.models import Model
+ from django_guid import get_guid
+ from pulpcore.app.apps import MODULE_PLUGIN_VERSIONS
+ from pulpcore.app.models import Task, TaskGroup, AppStatus
++from pulpcore.app.redis_connection import get_redis_connection
+ from pulpcore.app.util import (
+     get_domain,
+     get_prn,
+@@ -32,6 +33,11 @@ from pulpcore.constants import (
+ )
+ from pulpcore.middleware import x_task_diagnostics_var
+ from pulpcore.tasking.kafka import send_task_notification
++from pulpcore.tasking._util import (
++    resource_to_lock_key,
++    release_resource_locks,
++    async_release_resource_locks,
++)
+ 
+ _logger = logging.getLogger(__name__)
+ 
+@@ -63,24 +69,32 @@ def execute_task(task):
+ 
+ 
+ def _execute_task(task):
+-    with with_task_context(task):
+-        task.set_running()
+-        domain = get_domain()
+-        try:
+-            log_task_start(task, domain)
+-            task_function = get_task_function(task)
+-            result = task_function()
+-        except Exception:
+-            exc_type, exc, tb = sys.exc_info()
+-            task.set_failed(exc, tb)
+-            log_task_failed(task, exc_type, exc, tb, domain)
+-            send_task_notification(task)
+-        else:
+-            task.set_completed(result)
+-            log_task_completed(task, domain)
+-            send_task_notification(task)
+-            return result
+-        return None
++    try:
++        with with_task_context(task):
++            task.set_running()
++            domain = get_domain()
++            try:
++                log_task_start(task, domain)
++                task_function = get_task_function(task)
++                result = task_function()
++            except Exception:
++                exc_type, exc, tb = sys.exc_info()
++                task.set_failed(exc, tb)
++                log_task_failed(task, exc_type, exc, tb, domain)
++                send_task_notification(task)
++            else:
++                task.set_completed(result)
++                log_task_completed(task, domain)
++                send_task_notification(task)
++                return result
++            return None
++    finally:
++        # Release Redis locks if this was an immediate task
++        if hasattr(task, '_locked_resources') and task._locked_resources:
++            redis_conn = get_redis_connection()
++            current_app = AppStatus.objects.current()
++            lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++            release_resource_locks(redis_conn, lock_owner, task._locked_resources)
+ 
+ 
+ async def aexecute_task(task):
+@@ -89,23 +103,31 @@ async def aexecute_task(task):
+ 
+ 
+ async def _aexecute_task(task):
+-    async with awith_task_context(task):
+-        await sync_to_async(task.set_running)()
+-        domain = get_domain()
+-        try:
+-            task_coroutine_fn = await aget_task_function(task)
+-            result = await task_coroutine_fn()
+-        except Exception:
+-            exc_type, exc, tb = sys.exc_info()
+-            await sync_to_async(task.set_failed)(exc, tb)
+-            log_task_failed(task, exc_type, exc, tb, domain)
+-            send_task_notification(task)
+-        else:
+-            await sync_to_async(task.set_completed)(result)
+-            send_task_notification(task)
+-            log_task_completed(task, domain)
+-            return result
+-        return None
++    try:
++        async with awith_task_context(task):
++            await sync_to_async(task.set_running)()
++            domain = get_domain()
++            try:
++                task_coroutine_fn = await aget_task_function(task)
++                result = await task_coroutine_fn()
++            except Exception:
++                exc_type, exc, tb = sys.exc_info()
++                await sync_to_async(task.set_failed)(exc, tb)
++                log_task_failed(task, exc_type, exc, tb, domain)
++                send_task_notification(task)
++            else:
++                await sync_to_async(task.set_completed)(result)
++                send_task_notification(task)
++                log_task_completed(task, domain)
++                return result
++            return None
++    finally:
++        # Release Redis locks if this was an immediate task
++        if hasattr(task, '_locked_resources') and task._locked_resources:
++            redis_conn = get_redis_connection()
++            current_app = await sync_to_async(AppStatus.objects.current)()
++            lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++            await async_release_resource_locks(redis_conn, lock_owner, task._locked_resources)
+ 
+ 
+ def log_task_start(task, domain):
+@@ -264,11 +286,10 @@ def dispatch(
+ 
+     execute_now = immediate and not called_from_content_app()
+     assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
+-    send_wakeup_signal = not execute_now
+     function_name = get_function_name(func)
+     versions = get_version(versions, function_name)
+     colliding_resources, resources = get_resources(exclusive_resources, shared_resources, immediate)
+-    app_lock = None if not execute_now else AppStatus.objects.current()  # Lazy evaluation...
++    app_lock = None
+     task_payload = get_task_payload(
+         function_name, task_group, args, kwargs, resources, versions, immediate, deferred, app_lock
+     )
+@@ -276,8 +297,6 @@ def dispatch(
+     task.refresh_from_db()  # The database will have assigned a timestamp for us.
+     if execute_now:
+         if are_resources_available(colliding_resources, task):
+-            send_wakeup_signal = True if resources else False
+-            task.unblock()
+             with using_workdir():
+                 execute_task(task)
+         elif deferred:  # Resources are blocked and can be deferred
+@@ -286,8 +305,6 @@ def dispatch(
+         else:  # Can't be deferred
+             task.set_canceling()
+             task.set_canceled(TASK_STATES.CANCELED, "Resources temporarily unavailable.")
+-    if send_wakeup_signal:
+-        wakeup_worker(TASK_WAKEUP_UNBLOCK)
+     return task
+ 
+ 
+@@ -308,8 +325,7 @@ async def adispatch(
+     function_name = get_function_name(func)
+     versions = get_version(versions, function_name)
+     colliding_resources, resources = get_resources(exclusive_resources, shared_resources, immediate)
+-    send_wakeup_signal = not execute_now
+-    app_lock = None if not execute_now else AppStatus.objects.current()  # Lazy evaluation...
++    app_lock = None
+     task_payload = get_task_payload(
+         function_name, task_group, args, kwargs, resources, versions, immediate, deferred, app_lock
+     )
+@@ -318,8 +334,6 @@ async def adispatch(
+     task.pulp_domain = get_domain()
+     if execute_now:
+         if await async_are_resources_available(colliding_resources, task):
+-            send_wakeup_signal = True if resources else False
+-            await task.aunblock()
+             with using_workdir():
+                 await aexecute_task(task)
+         elif deferred:  # Resources are blocked and can be deferred
+@@ -328,8 +342,6 @@ async def adispatch(
+         else:  # Can't be deferred
+             task.set_canceling()
+             task.set_canceled(TASK_STATES.CANCELED, "Resources temporarily unavailable.")
+-    if send_wakeup_signal:
+-        await sync_to_async(wakeup_worker)(TASK_WAKEUP_UNBLOCK)
+     return task
+ 
+ 
+@@ -367,23 +379,125 @@ def using_workdir():
+ 
+ 
+ async def async_are_resources_available(colliding_resources, task: Task) -> bool:
+-    prior_tasks = Task.objects.filter(
+-        state__in=TASK_INCOMPLETE_STATES, pulp_created__lt=task.pulp_created
+-    )
+-    colliding_resources_taken = await prior_tasks.filter(
+-        reserved_resources_record__overlap=colliding_resources
+-    ).aexists()
+-    return not colliding_resources or not colliding_resources_taken
++    """
++    Try to acquire Redis locks for the task's exclusive resources.
++
++    Returns True if all locks were acquired, False otherwise.
++    Stores acquired locks on the task object for later release.
++    """
++    redis_conn = get_redis_connection()
++    if not redis_conn:
++        _logger.error("Redis connection not available for immediate task locking")
++        return False
++
++    # Get exclusive resources (those not prefixed with "shared:")
++    exclusive_resources = [
++        resource
++        for resource in task.reserved_resources_record or []
++        if not resource.startswith("shared:")
++    ]
++
++    if not exclusive_resources:
++        # No exclusive resources, so locks are available
++        task._locked_resources = []
++        return True
++
++    # Sort resources deterministically to prevent deadlocks
++    sorted_resources = sorted(exclusive_resources)
++
++    # Use AppStatus.current() to get a worker identifier for the lock value
++    # For immediate tasks, we use a special identifier
++    current_app = AppStatus.objects.current()
++    lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++
++    try:
++        for resource in sorted_resources:
++            lock_key = resource_to_lock_key(resource)
++
++            # Try to acquire lock using SET with NX (only set if not exists)
++            acquired = await sync_to_async(redis_conn.set)(lock_key, lock_owner, nx=True)
++
++            if not acquired:
++                _logger.debug(
++                    "Failed to acquire lock for immediate task %s resource: %s",
++                    task.pk,
++                    resource
++                )
++                # Release any locks we acquired so far
++                await async_release_resource_locks(redis_conn, lock_owner, sorted_resources[:sorted_resources.index(resource)])
++                return False
++
++        # All locks acquired successfully, store them for later release
++        task._locked_resources = sorted_resources
++        _logger.debug("Successfully acquired all locks for immediate task %s", task.pk)
++        return True
++
++    except Exception as e:
++        _logger.error("Error acquiring locks for immediate task %s: %s", task.pk, e)
++        # Try to release any locks we may have acquired
++        await async_release_resource_locks(redis_conn, lock_owner, sorted_resources)
++        return False
+ 
+ 
+ def are_resources_available(colliding_resources, task: Task) -> bool:
+-    prior_tasks = Task.objects.filter(
+-        state__in=TASK_INCOMPLETE_STATES, pulp_created__lt=task.pulp_created
+-    )
+-    colliding_resources_taken = prior_tasks.filter(
+-        reserved_resources_record__overlap=colliding_resources
+-    ).exists()
+-    return not colliding_resources or not colliding_resources_taken
++    """
++    Try to acquire Redis locks for the task's exclusive resources.
++
++    Returns True if all locks were acquired, False otherwise.
++    Stores acquired locks on the task object for later release.
++    """
++    redis_conn = get_redis_connection()
++    if not redis_conn:
++        _logger.error("Redis connection not available for immediate task locking")
++        return False
++
++    # Get exclusive resources (those not prefixed with "shared:")
++    exclusive_resources = [
++        resource
++        for resource in task.reserved_resources_record or []
++        if not resource.startswith("shared:")
++    ]
++
++    if not exclusive_resources:
++        # No exclusive resources, so locks are available
++        task._locked_resources = []
++        return True
++
++    # Sort resources deterministically to prevent deadlocks
++    sorted_resources = sorted(exclusive_resources)
++
++    # Use AppStatus.current() to get a worker identifier for the lock value
++    # For immediate tasks, we use a special identifier
++    current_app = AppStatus.objects.current()
++    lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++
++    try:
++        for resource in sorted_resources:
++            lock_key = resource_to_lock_key(resource)
++
++            # Try to acquire lock using SET with NX (only set if not exists)
++            acquired = redis_conn.set(lock_key, lock_owner, nx=True)
++
++            if not acquired:
++                _logger.debug(
++                    "Failed to acquire lock for immediate task %s resource: %s",
++                    task.pk,
++                    resource
++                )
++                # Release any locks we acquired so far
++                release_resource_locks(redis_conn, lock_owner, sorted_resources[:sorted_resources.index(resource)])
++                return False
++
++        # All locks acquired successfully, store them for later release
++        task._locked_resources = sorted_resources
++        _logger.debug("Successfully acquired all locks for immediate task %s", task.pk)
++        return True
++
++    except Exception as e:
++        _logger.error("Error acquiring locks for immediate task %s: %s", task.pk, e)
++        # Try to release any locks we may have acquired
++        release_resource_locks(redis_conn, lock_owner, sorted_resources)
++        return False
+ 
+ 
+ def called_from_content_app() -> bool:
+-- 
+2.52.0
+
