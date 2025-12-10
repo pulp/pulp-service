@@ -835,7 +835,7 @@ objects:
             subPath: clamd.conf
 
     - name: migrate-db
-      replicas: 1
+      replicas: ${{PULP_MIGRATION_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
         command: [ 'bash', '-x', '/tmp/migrate.sh' ]
@@ -1083,6 +1083,9 @@ parameters:
     value: "20"
   - name: PULP_CONTENT_REPLICAS
     description: Number of pulp content replicas
+    value: "1"
+  - name: PULP_MIGRATION_REPLICAS
+    description: Number of pulp migration replicas. This is a workaround to be able to deploy the migration pods only in one of the clusters.
     value: "1"
   - name: PULP_API_CPU_REQUEST
     description: Amount of CPU to request for the API pods
