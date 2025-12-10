@@ -366,12 +366,12 @@ class NewPulpcoreWorker:
 
     def fetch_task(self):
         """
-        Fetch an available waiting task using Redis locks and app_lock.
+        Fetch an available waiting task using Redis locks.
 
         This method:
         1. Queries waiting tasks (sorted by creation time, limited)
         2. For each task, attempts to acquire Redis distributed locks for exclusive resources
-        3. If Redis locks acquired, attempts to claim the task with app_lock
+        3. If resource locks acquired, attempts to claim the task with a Redis task lock (24h expiration)
         4. Returns the first task for which both locks can be acquired
 
         Returns:
@@ -399,25 +399,28 @@ class NewPulpcoreWorker:
                 # First, try to acquire Redis locks for resources
                 if self._try_acquire_resource_locks(exclusive_resources):
                     # Successfully acquired resource locks!
-                    # Now try to claim the task with app_lock
-                    rows = Task.objects.filter(
-                        pk=task.pk,
-                        state=TASK_STATES.WAITING,
-                        app_lock__isnull=True
-                    ).update(app_lock=self.app_status)
+                    # Now try to claim the task with a Redis lock (24 hour expiration)
+                    task_lock_key = f"task:{task.pk}"
+                    # Use SET with NX (only set if not exists) and EX (expiration in seconds)
+                    # 24 hours = 86400 seconds
+                    acquired = self.redis_conn.set(
+                        task_lock_key,
+                        self.name,
+                        nx=True,
+                        ex=86400
+                    )
 
-                    if rows == 1:
+                    if acquired:
                         # We successfully claimed the task!
                         _logger.info(
-                            "Worker %s acquired resource locks and app_lock for task %s in domain: %s",
+                            "Worker %s acquired resource locks and task lock for task %s in domain: %s",
                             self.name,
                             task.pk,
                             task.pulp_domain.name
                         )
                         # Store resources so we can release them later
+                        # Note: We don't store the task lock since it auto-expires in 24h
                         task._locked_resources = exclusive_resources
-                        # Refresh task to get updated app_lock
-                        task.refresh_from_db()
                         return task
                     else:
                         # Another worker claimed this task
@@ -428,14 +431,14 @@ class NewPulpcoreWorker:
                             # We hold the resource locks, so no other worker should be able to claim this task
                             raise RuntimeError(
                                 f"Worker {self.name} acquired resource locks {exclusive_resources} "
-                                f"for task {task.pk} but another worker claimed it with app_lock. "
+                                f"for task {task.pk} but another worker claimed it with task lock. "
                                 f"This indicates a serious locking protocol violation."
                             )
                         else:
                             # This is normal for tasks without exclusive resources where multiple workers
                             # can acquire the (empty) resource locks simultaneously
                             _logger.debug(
-                                "Worker %s tried to claim task %s but another worker got app_lock first",
+                                "Worker %s tried to claim task %s but another worker got task lock first",
                                 self.name,
                                 task.pk
                             )
