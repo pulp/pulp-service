@@ -420,14 +420,26 @@ class NewPulpcoreWorker:
                         task.refresh_from_db()
                         return task
                     else:
-                        # This should never happen - we have the resource locks but can't get app_lock
-                        # This indicates another worker claimed the task without holding the resource locks
+                        # Another worker claimed this task
                         self._release_resource_locks(exclusive_resources)
-                        raise RuntimeError(
-                            f"Worker {self.name} acquired resource locks for task {task.pk} "
-                            f"but failed to acquire app_lock. Another worker may have claimed "
-                            f"the task without holding the required resource locks."
-                        )
+
+                        if exclusive_resources:
+                            # This should NOT happen for tasks with exclusive resources!
+                            # We hold the resource locks, so no other worker should be able to claim this task
+                            raise RuntimeError(
+                                f"Worker {self.name} acquired resource locks {exclusive_resources} "
+                                f"for task {task.pk} but another worker claimed it with app_lock. "
+                                f"This indicates a serious locking protocol violation."
+                            )
+                        else:
+                            # This is normal for tasks without exclusive resources where multiple workers
+                            # can acquire the (empty) resource locks simultaneously
+                            _logger.debug(
+                                "Worker %s tried to claim task %s but another worker got app_lock first",
+                                self.name,
+                                task.pk
+                            )
+                            continue
 
             except Exception as e:
                 _logger.error("Error processing task %s: %s", task.pk, e)
