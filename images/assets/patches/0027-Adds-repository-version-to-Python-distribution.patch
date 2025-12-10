@@ -1,0 +1,91 @@
+From 700c694e387947b4a674951595e48b8aa34af1f0 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Wed, 1 Oct 2025 16:24:05 -0400
+Subject: [PATCH] Adds repository_version to the Python Distribution API.
+
+This allows serving a specific repository version.
+---
+ CHANGES/982.feature                                | 1 +
+ pulp_python/app/pypi/views.py                      | 3 +++
+ pulp_python/app/serializers.py                     | 4 ++++
+ pulp_python/pytest_plugin.py                       | 2 +-
+ pulp_python/tests/functional/api/test_pypi_apis.py | 5 +++++
+ 5 files changed, 14 insertions(+), 1 deletion(-)
+ create mode 100644 CHANGES/982.feature
+
+diff --git a/CHANGES/982.feature b/CHANGES/982.feature
+new file mode 100644
+index 00000000..27a6ecf6
+--- /dev/null
++++ b/CHANGES/982.feature
+@@ -0,0 +1 @@
++Added ability to serve a specific repository version of a PyPI index.
+diff --git a/pulp_python/app/pypi/views.py b/pulp_python/app/pypi/views.py
+index bd8bc2af..de502a7d 100644
+--- a/pulp_python/app/pypi/views.py
++++ b/pulp_python/app/pypi/views.py
+@@ -89,10 +89,13 @@ def get_repository_version(distribution):
+         """Finds the repository version this distribution is serving."""
+         pub = distribution.publication
+         rep = distribution.repository
++        rep_version = distribution.repository_version
+         if pub:
+             return pub.repository_version or pub.repository.latest_version()
+         elif rep:
+             return rep.latest_version()
++        elif rep_version:
++            return rep_version
+         else:
+             raise Http404("No repository associated with this index")
+
+diff --git a/pulp_python/app/serializers.py b/pulp_python/app/serializers.py
+index d8387adf..d1e6148c 100644
+--- a/pulp_python/app/serializers.py
++++ b/pulp_python/app/serializers.py
+@@ -53,6 +53,9 @@ class PythonDistributionSerializer(core_serializers.DistributionSerializer):
+         queryset=core_models.Publication.objects.exclude(complete=False),
+         allow_null=True,
+     )
++    repository_version = core_serializers.RepositoryVersionRelatedField(
++        required=False, help_text=_("RepositoryVersion to be served."), allow_null=True
++    )
+     base_url = serializers.SerializerMethodField(read_only=True)
+     allow_uploads = serializers.BooleanField(
+         default=True, help_text=_("Allow packages to be uploaded to this index.")
+@@ -74,6 +77,7 @@ def get_base_url(self, obj):
+     class Meta:
+         fields = core_serializers.DistributionSerializer.Meta.fields + (
+             "publication",
++            "repository_version",
+             "allow_uploads",
+             "remote",
+         )
+diff --git a/pulp_python/pytest_plugin.py b/pulp_python/pytest_plugin.py
+index 1a3f756c..50a32000 100644
+--- a/pulp_python/pytest_plugin.py
++++ b/pulp_python/pytest_plugin.py
+@@ -73,7 +73,7 @@ def _gen_python_distribution(
+                     ver_href = f"{repo_href}versions/{version}/"
+                 else:
+                     ver_href = get_href(version)
+-                body = {"repository_version": ver_href}
++                body["repository_version"] = ver_href
+             else:
+                 body["repository"] = repo_href
+         kwargs = {}
+diff --git a/pulp_python/tests/functional/api/test_pypi_apis.py b/pulp_python/tests/functional/api/test_pypi_apis.py
+index 9ed002cc..e09318fa 100644
+--- a/pulp_python/tests/functional/api/test_pypi_apis.py
++++ b/pulp_python/tests/functional/api/test_pypi_apis.py
+@@ -267,6 +267,11 @@ def test_pypi_json(python_remote_factory, python_repo_with_sync, python_distribu
+     distro = python_distribution_factory(repository=repo)
+     response = requests.get(urljoin(distro.base_url, "pypi/shelf-reader/json"))
+     assert_pypi_json(response.json())
++    # Test serving a repository version
++    distro = python_distribution_factory(repository=repo, version="1")
++    assert distro.repository is None
++    response = requests.get(urljoin(distro.base_url, "pypi/shelf-reader/json"))
++    assert_pypi_json(response.json())
+
+
+ @pytest.mark.parallel

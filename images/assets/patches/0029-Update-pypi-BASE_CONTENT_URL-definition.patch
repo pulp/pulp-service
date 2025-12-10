@@ -1,14 +1,26 @@
+From 4713f6851baa63a0424130ee6d3b2fc06126992c Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Mon, 20 Oct 2025 16:03:53 -0300
+Subject: [PATCH] Update pypi BASE_CONTENT_URL definition
+
+---
+ pulp_python/app/pypi/views.py | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
 diff --git a/pulp_python/app/pypi/views.py b/pulp_python/app/pypi/views.py
-index 4bbbb8a6..929bfece 100644
+index bd8bc2a..39d062e 100644
 --- a/pulp_python/app/pypi/views.py
 +++ b/pulp_python/app/pypi/views.py
-@@ -57,8 +57,7 @@ from pulp_python.app import tasks
+@@ -54,8 +54,7 @@ from pulp_python.app import tasks
  
  log = logging.getLogger(__name__)
  
 -ORIGIN_HOST = settings.CONTENT_ORIGIN if settings.CONTENT_ORIGIN else settings.PYPI_API_HOSTNAME
 -BASE_CONTENT_URL = urljoin(ORIGIN_HOST, settings.CONTENT_PATH_PREFIX)
 +BASE_CONTENT_URL = settings.CONTENT_PATH_PREFIX
- BASE_API_URL = urljoin(settings.PYPI_API_HOSTNAME, "pypi/")
  
- PYPI_SIMPLE_V1_HTML = "application/vnd.pypi.simple.v1+html"
+ 
+ class PyPIMixin:
+-- 
+2.46.2
+
