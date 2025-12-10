@@ -16,7 +16,6 @@ from .models import DomainOrg
 import re
 
 from pulpcore.plugin.models import Domain, Group
-from pulpcore.app.models import Task
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
 
 USERNAME_PATTERN = r'^[\w.@+=/-]+$'
@@ -511,41 +510,9 @@ class DomainAdmin(admin.ModelAdmin):
         return request.user.is_authenticated and request.user.is_active 
 
 
-class TaskAdmin(admin.ModelAdmin):
-    list_display = ["pulp_id", "name", "state", "started_at", "finished_at", "pulp_created"]
-    list_filter = ["state", "started_at", "finished_at"]
-    search_fields = ["pulp_id"]
-    readonly_fields = [
-        "pulp_id", "pulp_created", "pulp_last_updated", "name",
-        "started_at", "finished_at", "error", "args", "kwargs", "reserved_resources_record"
-    ]
-    list_per_page = 50  # Pagination: 50 tasks per page
-
-    def has_add_permission(self, request):
-        """Tasks should not be created through admin."""
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        """Only superusers can delete tasks."""
-        return request.user.is_superuser
-
-    def has_view_permission(self, request, obj=None):
-        """Only superusers can view tasks."""
-        return request.user.is_superuser
-
-    def has_change_permission(self, request, obj=None):
-        """Only superusers can edit tasks."""
-        return request.user.is_superuser
-
-    def has_module_permission(self, request):
-        """Only superusers can access the Task module."""
-        return request.user.is_superuser
-
-
 admin_site = PulpAdminSite(name="myadmin")
 
 admin_site.register(DomainOrg, DomainOrgAdmin)
 admin_site.register(User, PulpUserAdmin)
 admin_site.register(Group, PulpGroupAdmin)
 admin_site.register(Domain, DomainAdmin)
-admin_site.register(Task, TaskAdmin)
