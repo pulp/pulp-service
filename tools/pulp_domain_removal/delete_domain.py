@@ -36,10 +36,6 @@ import tomllib
 from typing import Optional
 
 import pulpcore.client.pulpcore
-import pulpcore.client.pulp_python
-import pulpcore.client.pulp_file
-import pulpcore.client.pulp_rpm
-import pulpcore.client.pulp_maven
 
 
 def config_from_pulp_cli_config(
@@ -92,14 +88,10 @@ class PulpDomainCleanup:
         self.configuration = configuration
         self.domain = domain or configuration.domain
 
-        # Create API clients for each plugin
+        # Create API client
         self.api_client = pulpcore.client.pulpcore.ApiClient(configuration)
-        self.python_api_client = pulpcore.client.pulp_python.ApiClient(configuration)
-        self.file_api_client = pulpcore.client.pulp_file.ApiClient(configuration)
-        self.rpm_api_client = pulpcore.client.pulp_rpm.ApiClient(configuration)
-        self.maven_api_client = pulpcore.client.pulp_maven.ApiClient(configuration)
 
-        # Initialize core APIs
+        # Initialize core APIs (these handle all content types via generic endpoints)
         self.domains_api = pulpcore.client.pulpcore.DomainsApi(self.api_client)
         self.repositories_api = pulpcore.client.pulpcore.RepositoriesApi(self.api_client)
         self.distributions_api = pulpcore.client.pulpcore.DistributionsApi(self.api_client)
@@ -108,29 +100,6 @@ class PulpDomainCleanup:
         self.tasks_api = pulpcore.client.pulpcore.TasksApi(self.api_client)
         self.contentguards_api = pulpcore.client.pulpcore.ContentguardsApi(self.api_client)
         self.orphans_cleanup_api = pulpcore.client.pulpcore.OrphansCleanupApi(self.api_client)
-
-        # Python-specific APIs
-        self.python_repos_api = pulpcore.client.pulp_python.RepositoriesPythonApi(self.python_api_client)
-        self.python_distributions_api = pulpcore.client.pulp_python.DistributionsPypiApi(self.python_api_client)
-        self.python_remotes_api = pulpcore.client.pulp_python.RemotesPythonApi(self.python_api_client)
-        self.python_publications_api = pulpcore.client.pulp_python.PublicationsPypiApi(self.python_api_client)
-
-        # File-specific APIs
-        self.file_repos_api = pulpcore.client.pulp_file.RepositoriesFileApi(self.file_api_client)
-        self.file_distributions_api = pulpcore.client.pulp_file.DistributionsFileApi(self.file_api_client)
-        self.file_remotes_api = pulpcore.client.pulp_file.RemotesFileApi(self.file_api_client)
-        self.file_publications_api = pulpcore.client.pulp_file.PublicationsFileApi(self.file_api_client)
-
-        # RPM-specific APIs
-        self.rpm_repos_api = pulpcore.client.pulp_rpm.RepositoriesRpmApi(self.rpm_api_client)
-        self.rpm_distributions_api = pulpcore.client.pulp_rpm.DistributionsRpmApi(self.rpm_api_client)
-        self.rpm_remotes_api = pulpcore.client.pulp_rpm.RemotesRpmApi(self.rpm_api_client)
-        self.rpm_publications_api = pulpcore.client.pulp_rpm.PublicationsRpmApi(self.rpm_api_client)
-
-        # Maven-specific APIs (no publications API for maven)
-        self.maven_repos_api = pulpcore.client.pulp_maven.RepositoriesMavenApi(self.maven_api_client)
-        self.maven_distributions_api = pulpcore.client.pulp_maven.DistributionsMavenApi(self.maven_api_client)
-        self.maven_remotes_api = pulpcore.client.pulp_maven.RemotesMavenApi(self.maven_api_client)
 
     def _delete_resource(self, href: str) -> Optional[str]:
         """
@@ -780,19 +749,9 @@ Configuration:
         action="store_true",
         help="Clean up resources but don't delete the domain itself",
     )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be deleted without actually deleting",
-    )
 
     args = parser.parse_args()
 
-    if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
-        # TODO: Implement dry-run mode that lists resources without deleting
-        print("   Dry-run mode not yet implemented")
-        sys.exit(0)
 
     # Confirmation prompt - require user to retype domain name
     print(f"\n⚠️  WARNING: You are about to delete all resources in domain '{args.domain}'")
