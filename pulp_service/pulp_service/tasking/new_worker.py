@@ -456,6 +456,12 @@ class NewPulpcoreWorker:
 
         This function must only be called while holding the lock for that task."""
         self.task = task
+        _logger.info(
+            "WORKER IMMEDIATE EXECUTION: Worker %s executing immediate task %s in domain: %s",
+            self.name,
+            task.pk,
+            task.pulp_domain.name
+        )
         with using_workdir():
             execute_task(task)
         self.task = None
@@ -468,6 +474,12 @@ class NewPulpcoreWorker:
 
         self.task = task
         domain = task.pulp_domain
+        _logger.info(
+            "WORKER DEFERRED EXECUTION: Worker %s executing deferred task %s in domain: %s",
+            self.name,
+            task.pk,
+            domain.name
+        )
         with TemporaryDirectory(dir=".") as task_working_dir_rel_path:
             task_process = Process(target=perform_task, args=(task.pk, task_working_dir_rel_path))
             task_process.start()
@@ -533,6 +545,8 @@ class NewPulpcoreWorker:
 
             try:
                 if self.is_compatible(task):
+                    # Task is compatible, execute it
+                    # Note: _execute_task() will handle resource lock release in its finally block
                     if task.immediate:
                         self.supervise_immediate_task(task)
                     else:
@@ -540,10 +554,23 @@ class NewPulpcoreWorker:
                 else:
                     # Incompatible task, add to ignored list
                     self.ignored_task_ids.append(task.pk)
-            finally:
-                # Release resource locks if any were acquired
+                    # Release both resource locks and task lock since we're not executing this task
+                    if hasattr(task, '_locked_resources'):
+                        self._release_resource_locks(task._locked_resources)
+                    # Release the task lock so other workers can attempt it
+                    task_lock_key = f"task:{task.pk}"
+                    self.redis_conn.delete(task_lock_key)
+            except Exception:
+                # Exception occurred - could be during is_compatible() check or before
+                # task execution begins.
+                # If _execute_task() ran, it will have released resource locks and deleted
+                # the _locked_resources attribute. Only release if attribute still exists.
                 if hasattr(task, '_locked_resources'):
                     self._release_resource_locks(task._locked_resources)
+                    # Also delete task lock since task is still in WAITING state
+                    task_lock_key = f"task:{task.pk}"
+                    self.redis_conn.delete(task_lock_key)
+                raise
 
     def sleep(self):
         """Sleep while calling beat() to maintain heartbeat and perform periodic tasks.
