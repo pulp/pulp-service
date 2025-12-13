@@ -192,10 +192,13 @@ class NewPulpcoreWorker:
 
     def cleanup_redis_locks_for_worker(self, worker_name):
         """
-        Clean up Redis locks held by a specific worker.
+        Clean up Redis locks held by a specific worker and fail its tasks.
 
-        This is called when a worker is detected as missing to release any
-        locks it may have been holding.
+        This is called when a worker is detected as missing to:
+        1. Find tasks locked by the worker (via task locks)
+        2. Mark those tasks as FAILED if not already in a final state
+        3. Release the task's exclusive resource locks
+        4. Delete the task lock
 
         Args:
             worker_name (str): Name of the missing worker
@@ -204,31 +207,67 @@ class NewPulpcoreWorker:
             return
 
         try:
-            # Scan for all resource locks
-            lock_pattern = f"{REDIS_LOCK_PREFIX}*"
-            locks_cleaned = 0
+            # Find task locks held by this worker
+            task_lock_pattern = "task:*"
+            tasks_failed = 0
 
-            for key in self.redis_conn.scan_iter(match=lock_pattern, count=100):
-                # Check if this lock is held by the missing worker
+            for key in self.redis_conn.scan_iter(match=task_lock_pattern, count=100):
+                # Check if this task lock is held by the missing worker
                 lock_holder = self.redis_conn.get(key)
                 if lock_holder and lock_holder.decode('utf-8') == worker_name:
-                    # Delete the lock
-                    self.redis_conn.delete(key)
-                    locks_cleaned += 1
-                    _logger.info(
-                        "Cleaned up lock %s held by missing worker %s",
-                        key.decode('utf-8'),
-                        worker_name
-                    )
+                    # Extract task UUID from key (format: "task:{uuid}")
+                    task_uuid = key.decode('utf-8').split(':', 1)[1]
 
-            if locks_cleaned > 0:
+                    try:
+                        # Load the task
+                        task = Task.objects.select_related('pulp_domain').get(pk=task_uuid)
+
+                        # Extract exclusive resources from the task
+                        exclusive_resources = [
+                            resource
+                            for resource in task.reserved_resources_record or []
+                            if not resource.startswith("shared:")
+                        ]
+
+                        # Release the resource locks
+                        if exclusive_resources:
+                            self._release_resource_locks(exclusive_resources)
+                            _logger.info(
+                                "Released %d resource locks for task %s from missing worker %s",
+                                len(exclusive_resources),
+                                task_uuid,
+                                worker_name
+                            )
+
+                        # Mark task as failed if it's not already in a final state
+                        if task.state not in TASK_FINAL_STATES:
+                            error_msg = f"Task failed because worker {worker_name} went missing"
+                            task.set_failed(RuntimeError(error_msg), None)
+                            tasks_failed += 1
+                            _logger.warning(
+                                "Marked task %s (state=%s) as FAILED (was being executed by missing worker %s)",
+                                task_uuid,
+                                task.state,
+                                worker_name
+                            )
+                    except Task.DoesNotExist:
+                        _logger.warning(
+                            "Task %s locked by missing worker %s not found in database",
+                            task_uuid,
+                            worker_name
+                        )
+
+                    # Delete the task lock
+                    self.redis_conn.delete(key)
+
+            if tasks_failed > 0:
                 _logger.info(
-                    "Cleaned up %d Redis locks for missing worker %s",
-                    locks_cleaned,
-                    worker_name
+                    "Cleanup for missing worker %s: failed %d tasks",
+                    worker_name,
+                    tasks_failed
                 )
         except Exception as e:
-            _logger.error("Error cleaning up Redis locks for worker %s: %s", worker_name, e)
+            _logger.error("Error cleaning up locks for worker %s: %s", worker_name, e)
 
     @exclusive(WORKER_CLEANUP_LOCK)
     def app_worker_cleanup(self):
