@@ -478,7 +478,7 @@ class NewPulpcoreWorker:
                 # Shared resources are NOT locked, but we can't claim a task if someone
                 # has an exclusive lock on a resource we need shared access to
                 blocked_by_exclusive = False
-                _logger.info(
+                _logger.debug(
                     "Task %s checking shared resources %s for exclusive locks",
                     task.pk,
                     shared_resources
@@ -486,7 +486,7 @@ class NewPulpcoreWorker:
                 for resource in shared_resources:
                     lock_key = resource_to_lock_key(resource)
                     exists = self.redis_conn.exists(lock_key)
-                    _logger.info(
+                    _logger.debug(
                         "Task %s: checking lock %s for resource %s, exists=%s",
                         task.pk,
                         lock_key,
@@ -497,7 +497,7 @@ class NewPulpcoreWorker:
                         # Someone has an exclusive lock on a resource we need shared access to
                         blocked_by_exclusive = True
                         lock_holder = self.redis_conn.get(lock_key)
-                        _logger.info(
+                        _logger.debug(
                             "Task %s blocked: resource %s has exclusive lock held by %s",
                             task.pk,
                             resource,
@@ -526,7 +526,7 @@ class NewPulpcoreWorker:
                             # Check if resource is used in shared mode by running task
                             if f"shared:{excl_resource}" in running_resources:
                                 blocked_by_shared_usage = True
-                                _logger.info(
+                                _logger.debug(
                                     "Task %s blocked: resource %s is in shared use by running task %s",
                                     task.pk,
                                     excl_resource,
@@ -708,7 +708,7 @@ class NewPulpcoreWorker:
                     # For immediate tasks, _execute_task() releases locks and deletes this attribute.
                     if hasattr(task, '_locked_resources') and task._locked_resources:
                         self._release_resource_locks(task._locked_resources)
-                        _logger.info(
+                        _logger.debug(
                             "Worker %s released resource locks for task %s after subprocess completion",
                             self.name,
                             task.pk
