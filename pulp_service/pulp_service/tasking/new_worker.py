@@ -27,6 +27,7 @@ from django.utils import timezone
 from pulpcore.constants import (
     TASK_STATES,
     TASK_INCOMPLETE_STATES,
+    TASK_FINAL_STATES,
     TASK_SCHEDULING_LOCK,
     WORKER_CLEANUP_LOCK,
 )
@@ -54,7 +55,7 @@ TASK_GRACE_INTERVAL = settings.TASK_GRACE_INTERVAL
 # Seconds between attempts to kill the subprocess (approx)
 TASK_KILL_INTERVAL = 1
 # Number of heartbeats between cleaning up worker processes
-WORKER_CLEANUP_INTERVAL = 100
+WORKER_CLEANUP_INTERVAL = 50
 # Number of heartbeats between rechecking ignored tasks
 IGNORED_TASKS_CLEANUP_INTERVAL = 100
 # Number of tasks to fetch in each query
@@ -192,10 +193,13 @@ class NewPulpcoreWorker:
 
     def cleanup_redis_locks_for_worker(self, worker_name):
         """
-        Clean up Redis locks held by a specific worker.
+        Clean up Redis locks held by a specific worker and fail its tasks.
 
-        This is called when a worker is detected as missing to release any
-        locks it may have been holding.
+        This is called when a worker is detected as missing to:
+        1. Find tasks locked by the worker (via task locks)
+        2. Mark those tasks as FAILED if not already in a final state
+        3. Release the task's exclusive resource locks
+        4. Delete the task lock
 
         Args:
             worker_name (str): Name of the missing worker
@@ -204,43 +208,80 @@ class NewPulpcoreWorker:
             return
 
         try:
-            # Scan for all resource locks
-            lock_pattern = f"{REDIS_LOCK_PREFIX}*"
-            locks_cleaned = 0
+            # Find task locks held by this worker
+            task_lock_pattern = "task:*"
+            tasks_failed = 0
 
-            for key in self.redis_conn.scan_iter(match=lock_pattern, count=100):
-                # Check if this lock is held by the missing worker
+            for key in self.redis_conn.scan_iter(match=task_lock_pattern, count=100):
+                # Check if this task lock is held by the missing worker
                 lock_holder = self.redis_conn.get(key)
                 if lock_holder and lock_holder.decode('utf-8') == worker_name:
-                    # Delete the lock
-                    self.redis_conn.delete(key)
-                    locks_cleaned += 1
-                    _logger.info(
-                        "Cleaned up lock %s held by missing worker %s",
-                        key.decode('utf-8'),
-                        worker_name
-                    )
+                    # Extract task UUID from key (format: "task:{uuid}")
+                    task_uuid = key.decode('utf-8').split(':', 1)[1]
 
-            if locks_cleaned > 0:
+                    try:
+                        # Load the task
+                        task = Task.objects.select_related('pulp_domain').get(pk=task_uuid)
+
+                        # Extract exclusive resources from the task
+                        exclusive_resources = [
+                            resource
+                            for resource in task.reserved_resources_record or []
+                            if not resource.startswith("shared:")
+                        ]
+
+                        # Release the resource locks
+                        # Note: Use the missing worker's name as the lock owner, not self.name
+                        if exclusive_resources:
+                            release_resource_locks(self.redis_conn, worker_name, exclusive_resources)
+                            _logger.info(
+                                "Released %d resource locks for task %s from missing worker %s",
+                                len(exclusive_resources),
+                                task_uuid,
+                                worker_name
+                            )
+
+                        # Mark task as failed if it's not already in a final state
+                        if task.state not in TASK_FINAL_STATES:
+                            error_msg = f"Task failed because worker {worker_name} went missing"
+                            task.set_failed(RuntimeError(error_msg), None)
+                            tasks_failed += 1
+                            _logger.warning(
+                                "Marked task %s (state=%s) as FAILED (was being executed by missing worker %s)",
+                                task_uuid,
+                                task.state,
+                                worker_name
+                            )
+                    except Task.DoesNotExist:
+                        _logger.warning(
+                            "Task %s locked by missing worker %s not found in database",
+                            task_uuid,
+                            worker_name
+                        )
+
+                    # Delete the task lock
+                    self.redis_conn.delete(key)
+
+            if tasks_failed > 0:
                 _logger.info(
-                    "Cleaned up %d Redis locks for missing worker %s",
-                    locks_cleaned,
-                    worker_name
+                    "Cleanup for missing worker %s: failed %d tasks",
+                    worker_name,
+                    tasks_failed
                 )
         except Exception as e:
-            _logger.error("Error cleaning up Redis locks for worker %s: %s", worker_name, e)
+            _logger.error("Error cleaning up locks for worker %s: %s", worker_name, e)
 
     @exclusive(WORKER_CLEANUP_LOCK)
     def app_worker_cleanup(self):
-        """Cleanup records of missing worker processes and their Redis locks."""
+        """Cleanup records of missing app processes and their Redis locks."""
         qs = AppStatus.objects.missing()
         for app_worker in qs:
             _logger.warning(
                 "Cleanup record of missing %s process %s.", app_worker.app_type, app_worker.name
             )
-            # Clean up any Redis locks held by this missing worker
-            if app_worker.app_type == "worker":
-                self.cleanup_redis_locks_for_worker(app_worker.name)
+            # Clean up any Redis locks held by this missing process
+            # This includes workers and API processes (which can hold locks for immediate tasks)
+            self.cleanup_redis_locks_for_worker(app_worker.name)
         qs.delete()
 
     @exclusive(TASK_SCHEDULING_LOCK)
@@ -384,6 +425,21 @@ class NewPulpcoreWorker:
             pk__in=self.ignored_task_ids
         ).order_by('pulp_created').select_related('pulp_domain')[:FETCH_TASK_LIMIT]
 
+        # Build a set of all resources currently in shared use by RUNNING tasks
+        # This query only happens once per fetch_task() call for efficiency
+        resources_in_shared_use = set()
+        running_tasks = Task.objects.filter(state=TASK_STATES.RUNNING).only('reserved_resources_record', 'pk')
+        for running_task in running_tasks:
+            running_resources = running_task.reserved_resources_record or []
+            for resource in running_resources:
+                if resource.startswith("shared:"):
+                    # Strip "shared:" prefix to get the actual resource name
+                    resources_in_shared_use.add(resource[7:])
+
+        # Track resources that are blocked during this iteration
+        # If we find a resource is blocked, skip all tasks needing that resource
+        blocked_resources = set()
+
         # Try to acquire locks for each task
         for task in waiting_tasks:
             try:
@@ -396,7 +452,97 @@ class NewPulpcoreWorker:
                     if not resource.startswith("shared:")
                 ]
 
-                # First, try to acquire Redis locks for resources
+                # Extract shared resources (strip "shared:" prefix)
+                shared_resources = [
+                    resource[7:]  # Remove "shared:" prefix
+                    for resource in reserved_resources_record
+                    if resource.startswith("shared:")
+                ]
+
+                # Check if any of this task's resources are already known to be blocked
+                task_needs_blocked_resource = False
+                for resource in exclusive_resources:
+                    if resource in blocked_resources:
+                        task_needs_blocked_resource = True
+                        _logger.debug(
+                            "Task %s skipped: needs blocked resource %s",
+                            task.pk,
+                            resource
+                        )
+                        break
+                if not task_needs_blocked_resource:
+                    for resource in shared_resources:
+                        if resource in blocked_resources:
+                            task_needs_blocked_resource = True
+                            _logger.debug(
+                                "Task %s skipped: needs blocked resource %s",
+                                task.pk,
+                                resource
+                            )
+                            break
+
+                if task_needs_blocked_resource:
+                    # Skip this task, try next one
+                    continue
+
+                # Check if any shared resources have exclusive locks
+                # Shared resources are NOT locked, but we can't claim a task if someone
+                # has an exclusive lock on a resource we need shared access to
+                blocked_by_exclusive = False
+                _logger.debug(
+                    "Task %s checking shared resources %s for exclusive locks",
+                    task.pk,
+                    shared_resources
+                )
+                for resource in shared_resources:
+                    lock_key = resource_to_lock_key(resource)
+                    exists = self.redis_conn.exists(lock_key)
+                    _logger.debug(
+                        "Task %s: checking lock %s for resource %s, exists=%s",
+                        task.pk,
+                        lock_key,
+                        resource,
+                        exists
+                    )
+                    if exists:
+                        # Someone has an exclusive lock on a resource we need shared access to
+                        blocked_by_exclusive = True
+                        lock_holder = self.redis_conn.get(lock_key)
+                        _logger.debug(
+                            "Task %s blocked: resource %s has exclusive lock held by %s",
+                            task.pk,
+                            resource,
+                            lock_holder.decode('utf-8') if lock_holder else 'unknown'
+                        )
+                        # Add this resource to blocked set so we skip other tasks needing it
+                        blocked_resources.add(resource)
+                        break
+
+                if blocked_by_exclusive:
+                    # Can't claim this task, try next one
+                    continue
+
+                # For exclusive resources, check if they're in shared use by any RUNNING task
+                # We can't acquire exclusive access to a resource if someone is using it in shared mode
+                blocked_by_shared_usage = False
+                if exclusive_resources:
+                    for excl_resource in exclusive_resources:
+                        if excl_resource in resources_in_shared_use:
+                            blocked_by_shared_usage = True
+                            _logger.debug(
+                                "Task %s blocked: resource %s is in shared use by a running task",
+                                task.pk,
+                                excl_resource
+                            )
+                            blocked_resources.add(excl_resource)
+                            break
+
+                if blocked_by_shared_usage:
+                    # Can't claim this task, try next one
+                    continue
+
+                # Try to acquire Redis locks for exclusive resources only
+                # Shared resources are never locked
                 if self._try_acquire_resource_locks(exclusive_resources):
                     # Successfully acquired resource locks!
                     # Now try to claim the task with a Redis lock (24 hour expiration)
@@ -443,6 +589,11 @@ class NewPulpcoreWorker:
                                 task.pk
                             )
                             continue
+                else:
+                    # Failed to acquire resource locks - resources are already locked
+                    # Add them to blocked set so we skip other tasks needing them
+                    for resource in exclusive_resources:
+                        blocked_resources.add(resource)
 
             except Exception as e:
                 _logger.error("Error processing task %s: %s", task.pk, e)
@@ -456,6 +607,12 @@ class NewPulpcoreWorker:
 
         This function must only be called while holding the lock for that task."""
         self.task = task
+        _logger.info(
+            "WORKER IMMEDIATE EXECUTION: Worker %s executing immediate task %s in domain: %s",
+            self.name,
+            task.pk,
+            task.pulp_domain.name
+        )
         with using_workdir():
             execute_task(task)
         self.task = None
@@ -468,6 +625,12 @@ class NewPulpcoreWorker:
 
         self.task = task
         domain = task.pulp_domain
+        _logger.info(
+            "WORKER DEFERRED EXECUTION: Worker %s executing deferred task %s in domain: %s",
+            self.name,
+            task.pk,
+            domain.name
+        )
         with TemporaryDirectory(dir=".") as task_working_dir_rel_path:
             task_process = Process(target=perform_task, args=(task.pk, task_working_dir_rel_path))
             task_process.start()
@@ -533,17 +696,47 @@ class NewPulpcoreWorker:
 
             try:
                 if self.is_compatible(task):
+                    # Task is compatible, execute it
                     if task.immediate:
                         self.supervise_immediate_task(task)
                     else:
                         self.supervise_task(task)
+
+                    # Release resource locks if subprocess didn't release them
+                    # For deferred tasks running in subprocess, the subprocess doesn't have
+                    # _locked_resources attribute, so locks aren't released there.
+                    # For immediate tasks, _execute_task() releases locks and deletes this attribute.
+                    if hasattr(task, '_locked_resources') and task._locked_resources:
+                        self._release_resource_locks(task._locked_resources)
+                        _logger.debug(
+                            "Worker %s released resource locks for task %s after subprocess completion",
+                            self.name,
+                            task.pk
+                        )
+
+                    # Delete the task lock now that task is complete
+                    task_lock_key = f"task:{task.pk}"
+                    self.redis_conn.delete(task_lock_key)
                 else:
                     # Incompatible task, add to ignored list
                     self.ignored_task_ids.append(task.pk)
-            finally:
-                # Release resource locks if any were acquired
+                    # Release both resource locks and task lock since we're not executing this task
+                    if hasattr(task, '_locked_resources'):
+                        self._release_resource_locks(task._locked_resources)
+                    # Release the task lock so other workers can attempt it
+                    task_lock_key = f"task:{task.pk}"
+                    self.redis_conn.delete(task_lock_key)
+            except Exception:
+                # Exception occurred - could be during is_compatible() check or before
+                # task execution begins.
+                # If _execute_task() ran, it will have released resource locks and deleted
+                # the _locked_resources attribute. Only release if attribute still exists.
                 if hasattr(task, '_locked_resources'):
                     self._release_resource_locks(task._locked_resources)
+                    # Also delete task lock since task is still in WAITING state
+                    task_lock_key = f"task:{task.pk}"
+                    self.redis_conn.delete(task_lock_key)
+                raise
 
     def sleep(self):
         """Sleep while calling beat() to maintain heartbeat and perform periodic tasks.
