@@ -425,6 +425,17 @@ class NewPulpcoreWorker:
             pk__in=self.ignored_task_ids
         ).order_by('pulp_created').select_related('pulp_domain')[:FETCH_TASK_LIMIT]
 
+        # Build a set of all resources currently in shared use by RUNNING tasks
+        # This query only happens once per fetch_task() call for efficiency
+        resources_in_shared_use = set()
+        running_tasks = Task.objects.filter(state=TASK_STATES.RUNNING).only('reserved_resources_record', 'pk')
+        for running_task in running_tasks:
+            running_resources = running_task.reserved_resources_record or []
+            for resource in running_resources:
+                if resource.startswith("shared:"):
+                    # Strip "shared:" prefix to get the actual resource name
+                    resources_in_shared_use.add(resource[7:])
+
         # Track resources that are blocked during this iteration
         # If we find a resource is blocked, skip all tasks needing that resource
         blocked_resources = set()
@@ -511,30 +522,19 @@ class NewPulpcoreWorker:
                     # Can't claim this task, try next one
                     continue
 
-                # For exclusive resources, check if they're locked by anyone
-                # If locked, it means someone is using them exclusively
-                # We also need to check if anyone is using them in shared mode, but we can't
-                # detect that from locks alone since shared resources aren't locked
-                # So we check RUNNING tasks for shared usage
+                # For exclusive resources, check if they're in shared use by any RUNNING task
+                # We can't acquire exclusive access to a resource if someone is using it in shared mode
                 blocked_by_shared_usage = False
                 if exclusive_resources:
-                    # Check RUNNING tasks to see if any are using our exclusive resources in shared mode
-                    running_tasks = Task.objects.filter(state=TASK_STATES.RUNNING).only('reserved_resources_record', 'pk')
-                    for running_task in running_tasks:
-                        running_resources = running_task.reserved_resources_record or []
-                        for excl_resource in exclusive_resources:
-                            # Check if resource is used in shared mode by running task
-                            if f"shared:{excl_resource}" in running_resources:
-                                blocked_by_shared_usage = True
-                                _logger.debug(
-                                    "Task %s blocked: resource %s is in shared use by running task %s",
-                                    task.pk,
-                                    excl_resource,
-                                    running_task.pk
-                                )
-                                blocked_resources.add(excl_resource)
-                                break
-                        if blocked_by_shared_usage:
+                    for excl_resource in exclusive_resources:
+                        if excl_resource in resources_in_shared_use:
+                            blocked_by_shared_usage = True
+                            _logger.debug(
+                                "Task %s blocked: resource %s is in shared use by a running task",
+                                task.pk,
+                                excl_resource
+                            )
+                            blocked_resources.add(excl_resource)
                             break
 
                 if blocked_by_shared_usage:
