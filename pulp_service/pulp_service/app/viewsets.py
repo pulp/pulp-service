@@ -410,6 +410,65 @@ class RDSConnectionTestDispatcherView(APIView):
         })
 
 
+class DatabaseTriggersView(APIView):
+    """
+    Returns information about database triggers on the core_task table.
+    """
+
+    # Allow anyone to access the endpoint for debugging
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request=None):
+        """
+        Query PostgreSQL system catalogs for triggers on core_task table.
+        """
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT
+                    t.tgname AS trigger_name,
+                    c.relname AS table_name,
+                    CASE t.tgtype::integer & 1
+                        WHEN 1 THEN 'ROW'
+                        ELSE 'STATEMENT'
+                    END AS trigger_level,
+                    CASE t.tgtype::integer & 66
+                        WHEN 2 THEN 'BEFORE'
+                        WHEN 64 THEN 'INSTEAD OF'
+                        ELSE 'AFTER'
+                    END AS trigger_timing,
+                    CASE
+                        WHEN t.tgtype::integer & 4 <> 0 THEN 'INSERT'
+                        WHEN t.tgtype::integer & 8 <> 0 THEN 'DELETE'
+                        WHEN t.tgtype::integer & 16 <> 0 THEN 'UPDATE'
+                        ELSE 'UNKNOWN'
+                    END AS trigger_event,
+                    p.proname AS function_name,
+                    pg_get_triggerdef(t.oid) AS trigger_definition,
+                    pg_get_functiondef(p.oid) AS function_definition
+                FROM pg_trigger t
+                JOIN pg_class c ON t.tgrelid = c.oid
+                JOIN pg_proc p ON t.tgfoid = p.oid
+                WHERE c.relname = 'core_task'
+                AND t.tgisinternal = false
+                ORDER BY t.tgname;
+            """)
+
+            columns = [col[0] for col in cursor.description]
+            triggers = []
+            for row in cursor.fetchall():
+                trigger_info = dict(zip(columns, row))
+                triggers.append(trigger_info)
+
+        return Response({
+            "table": "core_task",
+            "trigger_count": len(triggers),
+            "triggers": triggers
+        })
+
+
 class CreateDomainView(APIView):
 
     permission_classes = [DomainBasedPermission]
