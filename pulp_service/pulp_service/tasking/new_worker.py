@@ -541,59 +541,65 @@ class NewPulpcoreWorker:
                     # Can't claim this task, try next one
                     continue
 
-                # Try to acquire Redis locks for exclusive resources only
-                # Shared resources are never locked
-                if self._try_acquire_resource_locks(exclusive_resources):
-                    # Successfully acquired resource locks!
-                    # Now try to claim the task with a Redis lock (24 hour expiration)
-                    task_lock_key = f"task:{task.pk}"
-                    # Use SET with NX (only set if not exists) and EX (expiration in seconds)
-                    # 24 hours = 86400 seconds
-                    acquired = self.redis_conn.set(
-                        task_lock_key,
-                        self.name,
-                        nx=True,
-                        ex=86400
-                    )
+                # First try to acquire task lock (lightweight single Redis operation)
+                # This prevents wasting time on resource locks if another worker already has the task
+                task_lock_key = f"task:{task.pk}"
+                # Use SET with NX (only set if not exists) and EX (expiration in seconds)
+                # 24 hours = 86400 seconds
+                acquired = self.redis_conn.set(
+                    task_lock_key,
+                    self.name,
+                    nx=True,
+                    ex=86400
+                )
 
-                    if acquired:
-                        # We successfully claimed the task!
+                if acquired:
+                    # Successfully claimed the task lock!
+                    # Now try to acquire resource locks for exclusive resources only
+                    # Shared resources are never locked
+                    if exclusive_resources:
+                        if self._try_acquire_resource_locks(exclusive_resources):
+                            # Got both task lock and resource locks!
+                            _logger.info(
+                                "Worker %s acquired task lock and resource locks for task %s in domain: %s",
+                                self.name,
+                                task.pk,
+                                task.pulp_domain.name
+                            )
+                            # Store resources so we can release them later
+                            # Note: We don't store the task lock since it auto-expires in 24h
+                            task._locked_resources = exclusive_resources
+                            return task
+                        else:
+                            # Failed to acquire resource locks
+                            # Release the task lock since we can't execute this task
+                            self.redis_conn.delete(task_lock_key)
+                            _logger.debug(
+                                "Worker %s acquired task lock but failed to acquire resource locks for task %s, released task lock",
+                                self.name,
+                                task.pk
+                            )
+                            # Add resources to blocked set so we skip other tasks needing them
+                            for resource in exclusive_resources:
+                                blocked_resources.add(resource)
+                    else:
+                        # No exclusive resources needed, just task lock is enough
                         _logger.info(
-                            "Worker %s acquired resource locks and task lock for task %s in domain: %s",
+                            "Worker %s acquired task lock for task %s (no exclusive resources) in domain: %s",
                             self.name,
                             task.pk,
                             task.pulp_domain.name
                         )
-                        # Store resources so we can release them later
-                        # Note: We don't store the task lock since it auto-expires in 24h
-                        task._locked_resources = exclusive_resources
+                        task._locked_resources = []
                         return task
-                    else:
-                        # Another worker claimed this task
-                        self._release_resource_locks(exclusive_resources)
-
-                        if exclusive_resources:
-                            # This should NOT happen for tasks with exclusive resources!
-                            # We hold the resource locks, so no other worker should be able to claim this task
-                            raise RuntimeError(
-                                f"Worker {self.name} acquired resource locks {exclusive_resources} "
-                                f"for task {task.pk} but another worker claimed it with task lock. "
-                                f"This indicates a serious locking protocol violation."
-                            )
-                        else:
-                            # This is normal for tasks without exclusive resources where multiple workers
-                            # can acquire the (empty) resource locks simultaneously
-                            _logger.debug(
-                                "Worker %s tried to claim task %s but another worker got task lock first",
-                                self.name,
-                                task.pk
-                            )
-                            continue
                 else:
-                    # Failed to acquire resource locks - resources are already locked
-                    # Add them to blocked set so we skip other tasks needing them
-                    for resource in exclusive_resources:
-                        blocked_resources.add(resource)
+                    # Another worker has the task lock, skip this task
+                    _logger.debug(
+                        "Worker %s skipped task %s - another worker holds task lock",
+                        self.name,
+                        task.pk
+                    )
+                    continue
 
             except Exception as e:
                 _logger.error("Error processing task %s: %s", task.pk, e)
@@ -686,15 +692,12 @@ class NewPulpcoreWorker:
     def handle_tasks(self):
         """Pick and supervise tasks until there are no more available tasks."""
         while not self.shutdown_requested:
-            # Clear pending wakeups
-            self.wakeup_handle = False
-
-            task = self.fetch_task()
-            if task is None:
-                # No task found
-                break
-
             try:
+                task = self.fetch_task()
+                if task is None:
+                    # No task found
+                    break
+
                 if self.is_compatible(task):
                     # Task is compatible, execute it
                     if task.immediate:
@@ -713,10 +716,6 @@ class NewPulpcoreWorker:
                             self.name,
                             task.pk
                         )
-
-                    # Delete the task lock now that task is complete
-                    task_lock_key = f"task:{task.pk}"
-                    self.redis_conn.delete(task_lock_key)
                 else:
                     # Incompatible task, add to ignored list
                     self.ignored_task_ids.append(task.pk)
@@ -726,17 +725,12 @@ class NewPulpcoreWorker:
                     # Release the task lock so other workers can attempt it
                     task_lock_key = f"task:{task.pk}"
                     self.redis_conn.delete(task_lock_key)
-            except Exception:
-                # Exception occurred - could be during is_compatible() check or before
-                # task execution begins.
+            finally:
                 # If _execute_task() ran, it will have released resource locks and deleted
                 # the _locked_resources attribute. Only release if attribute still exists.
                 if hasattr(task, '_locked_resources'):
                     self._release_resource_locks(task._locked_resources)
-                    # Also delete task lock since task is still in WAITING state
-                    task_lock_key = f"task:{task.pk}"
-                    self.redis_conn.delete(task_lock_key)
-                raise
+
 
     def sleep(self):
         """Sleep while calling beat() to maintain heartbeat and perform periodic tasks.
