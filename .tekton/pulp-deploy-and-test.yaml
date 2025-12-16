@@ -85,7 +85,7 @@ spec:
       default: ""
     - name: PULP_CREDENTIALS
       type: string
-      default: pulp-python-bindings
+      default: pulp-sa-cert
       description: "Secret for connecting to python-bindings domain in prod pulp."
     - name: PULP_BINDINGS_COMPONENTS
       type: string
@@ -814,7 +814,7 @@ spec:
             description: Namespace name to deploy the application to
           - name: PULP_CREDENTIALS
             type: string
-            default: pulp-python-bindings
+            default: pulp-sa-cert
           - name: PULP_DOMAIN
             type: string
             default: python-bindings
@@ -822,29 +822,19 @@ spec:
             type: string
             default: python-bindings
         steps:
-          - name: get-token
-            image: "$(params.BONFIRE_IMAGE)"
-            env:
-              - name: PULP_CLIENT_ID
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.PULP_CREDENTIALS)
-                    key: client-id
-              - name: PULP_CLIENT_SECRET
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.PULP_CREDENTIALS)
-                    key: client-secret
-            script: |
-              curl -s -XPOST -H 'content-type: application/x-www-form-urlencoded' -u "${PULP_CLIENT_ID}:${PULP_CLIENT_SECRET}" https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token/ -d 'grant_type=client_credentials&scope=api.console' |python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])" > /workspace/token
           - name: get-file-repo
             image: "$(params.BONFIRE_IMAGE)"
             env:
               - name: PULP_DOMAIN
                 value: $(params.PULP_DOMAIN)
+              - name: PULP_CREDENTIALS
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: pulp-sa-cert.pem
             script: |
-              PULP_TOKEN=$(cat /workspace/token)
-              curl -s -H "Authorization: Bearer $PULP_TOKEN" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/repositories/file/file/?name=${PULP_FILE_REPO_NAME}|python3 -c "import json,sys;print(json.load(sys.stdin)['results'][0]['pulp_href'])" | tee /workspace/file_repo
+              echo "$PULP_CREDENTIALS" > /workspace/pulp-sa-cert.pem
+              curl -s --cert /workspace/pulp-sa-cert.pem https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/repositories/file/file/?name=${PULP_FILE_REPO_NAME}|python3 -c "import json,sys;print(json.load(sys.stdin)['results'][0]['pulp_href'])" | tee /workspace/file_repo
           - name: get-current-postn-and-increment-it
             image: "$(params.BONFIRE_IMAGE)"
             env:
@@ -852,8 +842,7 @@ spec:
                 value: $(params.PULP_DOMAIN)
             script: |
               CUR_DATE=$(date +%Y%m%d)
-              PULP_TOKEN=$(cat /workspace/token)
-              postN=$(curl -sH "Authorization: Bearer $PULP_TOKEN" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/?relative_path__contains="pulpcore-$CUR_DATE" |python3 -c "import json,sys;results=json.load(sys.stdin)['results'];print(len(results))")
+              postN=$(curl -s --cert /workspace/pulp-sa-cert.pem https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/?relative_path__contains="pulpcore-$CUR_DATE" |python3 -c "import json,sys;results=json.load(sys.stdin)['results'];print(len(results))")
               postN=$((postN + 1))
               echo $postN | tee /workspace/postN
           - name: get-commit-hash
@@ -888,6 +877,11 @@ spec:
                 value: $(params.PULP_DOMAIN)
               - name: PULP_BINDINGS_COMPONENTS
                 value: $(params.PULP_BINDINGS_COMPONENTS)
+              - name: PULP_CREDENTIALS
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: pulp-sa-cert.pem
             script: |
               set -ex
               login.sh
@@ -900,14 +894,16 @@ spec:
               echo "Namespace is $NS"
 
               CUR_DATE=$(date +%Y%m%d)
-              PULP_TOKEN=$(cat /workspace/token)
               POSTN=$(cat /workspace/postN)
               SHORT_COMMIT_SHA=$(cat /workspace/commit_sha)
               PULP_FILE_REPO=$(cat /workspace/file_repo)
+
+              # copy pulp certificate into API container
+              oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "echo \"$PULP_CREDENTIALS\" > /tmp/pulp-sa-cert.pem"
               
               # UPLOAD FILES TO PULP
               for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
-                oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "curl -s -XPOST -H \"Authorization: Bearer $PULP_TOKEN\" -F \"file=@/data/api-${PACKAGE//_/-}.json\" https://console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/  -F \"relative_path=${PACKAGE}-${CUR_DATE}.${POSTN}+${SHORT_COMMIT_SHA}\" -F \"repository=${PULP_FILE_REPO}\""
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "curl -s -XPOST --cert /tmp/pulp-sa-cert.pem -F \"file=@/data/api-${PACKAGE//_/-}.json\" https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/  -F \"relative_path=${PACKAGE}-${CUR_DATE}.${POSTN}+${SHORT_COMMIT_SHA}\" -F \"repository=${PULP_FILE_REPO}\""
               done
 
     - name: publish-bindings-to-pypi
@@ -930,7 +926,7 @@ spec:
             default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
           - name: PULP_CREDENTIALS
             type: string
-            default: pulp-python-bindings
+            default: pulp-sa-cert
           - name: PULP_DOMAIN
             type: string
             default: python-bindings
@@ -941,21 +937,17 @@ spec:
           - name: TEST_OUTPUT
             description: The output of the step
         steps:
-          - name: get-pulp-token
+          - name: get-pulp-cert
             image: "$(params.BONFIRE_IMAGE)"
             env:
-              - name: PULP_CLIENT_ID
+              - name: PULP_CREDENTIALS
                 valueFrom:
                   secretKeyRef:
                     name: $(params.PULP_CREDENTIALS)
-                    key: client-id
-              - name: PULP_CLIENT_SECRET
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.PULP_CREDENTIALS)
-                    key: client-secret
+                    key: pulp-sa-cert.pem
             script: |
-              curl -s -XPOST -H 'content-type: application/x-www-form-urlencoded' -u "${PULP_CLIENT_ID}:${PULP_CLIENT_SECRET}" https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token/ -d 'grant_type=client_credentials&scope=api.console' |python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])" > /workspace/token
+              # store the cert+key in a file, so that we can use it in python requests
+              echo "$PULP_CREDENTIALS" > /workspace/pulp-sa-cert.pem
 
           - name: get-commit-hash
             image: "$(params.BONFIRE_IMAGE)"
@@ -1001,17 +993,14 @@ spec:
                 commit_sha = file.read().strip()
                 print(commit_sha)
 
-              with open("/workspace/token", "r") as file:
-                token = file.read().strip()
-
+              pulp_cert_file="/workspace/pulp-sa-cert.pem"
               pulp_domain=os.getenv("PULP_DOMAIN","")
               components = os.getenv("PULP_BINDINGS_COMPONENTS","")
-              headers = {"Authorization": f"Bearer {token}"}
               with open("/workspace/list-of-api.json","w") as file:
                 for component in components.split(" "):
-                  files_url = f'https://console.redhat.com/api/pulp/{pulp_domain}/api/v3/content/file/files/?relative_path__regex={component}-.*{commit_sha}'
+                  files_url = f'https://mtls.internal.console.redhat.com/api/pulp/{pulp_domain}/api/v3/content/file/files/?relative_path__regex={component}-.*{commit_sha}'
                   try:
-                    response = requests.get(url=files_url,headers=headers)
+                    response = requests.get(url=files_url,cert=pulp_cert_file)
                     response.raise_for_status()
                   except requests.exceptions.HTTPError as err:
                     print(err)
@@ -1036,8 +1025,6 @@ spec:
           - name: download-api-json-files-from-pulp
             image: "$(params.BONFIRE_IMAGE)"
             env:
-              - name: PULP_PROD_FILE_DISTRIBUTION_URL
-                value: "https://cert.console.redhat.com/api/pulp-content/python-bindings/python-bindings/"
               - name: PULP_DOMAIN
                 value: $(params.PULP_DOMAIN)
               - name: TASK_RESULT_NOT_FOUND_NOTE
@@ -1054,7 +1041,7 @@ spec:
 
               mkdir -p /workspace/api-json-files ; cd $_
               while read FILE ; do
-                curl -sLO -H "Authorization: Bearer $(cat /workspace/token)" https://cert.console.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
+                curl -sLO --cert /workspace/pulp-sa-cert.pem https://mtls.internal.console.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
                 if [ $? -ne 0 ]; then
                   echo "Error: Failed to download ${FILE} from Pulp"
                   exit 1
