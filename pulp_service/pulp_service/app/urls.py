@@ -3,6 +3,7 @@ from django.urls import path, include
 from .admin import admin_site
 from .viewsets import (
     CreateDomainView,
+    DatabaseTriggersView,
     DebugAuthenticationHeadersView,
     InternalServerErrorCheck,
     InternalServerErrorCheckWithException,
@@ -21,6 +22,7 @@ urlpatterns = [
     path("api/pulp/internal-server-error-check/", InternalServerErrorCheck.as_view()),
     path("api/pulp/raise-exception-check/", InternalServerErrorCheckWithException.as_view()),
     path("api/pulp/debug_auth_header/", DebugAuthenticationHeadersView.as_view()),
+    path("api/pulp/debug/database-triggers/", DatabaseTriggersView.as_view()),
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
     path("api/pulp/test/tasks/", TaskIngestionDispatcherView.as_view()),
     path("api/pulp/test/random_lock_tasks/", TaskIngestionRandomResourceLockDispatcherView.as_view()),
