@@ -555,13 +555,18 @@ class NewPulpcoreWorker:
 
                 if acquired:
                     # Successfully claimed the task lock!
+                    _logger.info(
+                        "Worker %s acquired task lock for task %s in domain: %s",
+                        self.name,
+                        task.pk,
+                        task.pulp_domain.name
+                    )
                     # Now try to acquire resource locks for exclusive resources only
                     # Shared resources are never locked
                     if exclusive_resources:
                         if self._try_acquire_resource_locks(exclusive_resources):
-                            # Got both task lock and resource locks!
                             _logger.info(
-                                "Worker %s acquired task lock and resource locks for task %s in domain: %s",
+                                "Worker %s acquired exclusive resources for task %s in domain: %s",
                                 self.name,
                                 task.pk,
                                 task.pulp_domain.name
@@ -583,13 +588,6 @@ class NewPulpcoreWorker:
                             for resource in exclusive_resources:
                                 blocked_resources.add(resource)
                     else:
-                        # No exclusive resources needed, just task lock is enough
-                        _logger.info(
-                            "Worker %s acquired task lock for task %s (no exclusive resources) in domain: %s",
-                            self.name,
-                            task.pk,
-                            task.pulp_domain.name
-                        )
                         task._locked_resources = []
                         return task
                 else:
@@ -692,31 +690,14 @@ class NewPulpcoreWorker:
     def handle_tasks(self):
         """Pick and supervise tasks until there are no more available tasks."""
         while not self.shutdown_requested:
+            task = None
             try:
                 task = self.fetch_task()
                 if task is None:
                     # No task found
                     break
 
-                if self.is_compatible(task):
-                    # Task is compatible, execute it
-                    if task.immediate:
-                        self.supervise_immediate_task(task)
-                    else:
-                        self.supervise_task(task)
-
-                    # Release resource locks if subprocess didn't release them
-                    # For deferred tasks running in subprocess, the subprocess doesn't have
-                    # _locked_resources attribute, so locks aren't released there.
-                    # For immediate tasks, _execute_task() releases locks and deletes this attribute.
-                    if hasattr(task, '_locked_resources') and task._locked_resources:
-                        self._release_resource_locks(task._locked_resources)
-                        _logger.debug(
-                            "Worker %s released resource locks for task %s after subprocess completion",
-                            self.name,
-                            task.pk
-                        )
-                else:
+                if not self.is_compatible(task):
                     # Incompatible task, add to ignored list
                     self.ignored_task_ids.append(task.pk)
                     # Release both resource locks and task lock since we're not executing this task
@@ -725,10 +706,29 @@ class NewPulpcoreWorker:
                     # Release the task lock so other workers can attempt it
                     task_lock_key = f"task:{task.pk}"
                     self.redis_conn.delete(task_lock_key)
+                    break
+
+                # Task is compatible, execute it
+                if task.immediate:
+                    self.supervise_immediate_task(task)
+                else:
+                    self.supervise_task(task)
+
+                # Release resource locks if subprocess didn't release them
+                # For deferred tasks running in subprocess, the subprocess doesn't have
+                # _locked_resources attribute, so locks aren't released there.
+                # For immediate tasks, _execute_task() releases locks and deletes this attribute.
+                if hasattr(task, '_locked_resources') and task._locked_resources:
+                    self._release_resource_locks(task._locked_resources)
+                    _logger.debug(
+                        "Worker %s released resource locks for task %s after subprocess completion",
+                        self.name,
+                        task.pk
+                    )
             finally:
                 # If _execute_task() ran, it will have released resource locks and deleted
                 # the _locked_resources attribute. Only release if attribute still exists.
-                if hasattr(task, '_locked_resources'):
+                if task and hasattr(task, '_locked_resources'):
                     self._release_resource_locks(task._locked_resources)
 
 
