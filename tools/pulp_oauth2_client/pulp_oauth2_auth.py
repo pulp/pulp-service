@@ -1,4 +1,9 @@
 """
+
+WARNING:
+Pulp authentication using a console.redhat.com service account is no longer supported!
+Use Red Hat IT Service Account instead.
+
 OAuth2 Client Credentials Authentication Library for Pulp API
 
 This library provides OAuth2 client credentials authentication for the Red Hat Console Pulp API,
