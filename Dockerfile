@@ -163,6 +163,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0034-Fix-profile-artifact-being-stored-in-default-domain.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0034-Fix-profile-artifact-being-stored-in-default-domain.patch
 
+COPY images/assets/patches/0035-Rollback-the-MAX_CONCURRENT_CONTENT-in-ArtifactSaver.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0035-Rollback-the-MAX_CONCURRENT_CONTENT-in-ArtifactSaver.patch
+
 COPY images/assets/gunicorn_config.py /tmp/
 
 RUN mkdir /licenses
