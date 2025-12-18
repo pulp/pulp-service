@@ -16,6 +16,7 @@ from .models import DomainOrg
 import re
 
 from pulpcore.plugin.models import Domain, Group
+from pulpcore.app.models import Task
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
 
 USERNAME_PATTERN = r'^[\w.@+=/-]+$'
@@ -507,7 +508,92 @@ class DomainAdmin(admin.ModelAdmin):
         """
         Allow any authenticated user to access the Domain module.
         """
-        return request.user.is_authenticated and request.user.is_active 
+        return request.user.is_authenticated and request.user.is_active
+
+
+class TaskAdmin(admin.ModelAdmin):
+    """
+    Admin interface for Task model - restricted to superusers only.
+    Only the state field is editable.
+    """
+    list_display = ["pk", "name", "state", "domain_name", "pulp_created"]
+    list_filter = ["state", "pulp_domain", "pulp_created", "started_at"]
+    search_fields = ["name", "pk"]
+
+    # Only show date fields, name, state, uuid, and domain on detail page
+    fields = [
+        "pk",
+        "name",
+        "state",
+        "pulp_domain",
+        "pulp_created_display",
+        "pulp_last_updated_display",
+        "unblocked_at_display",
+        "started_at_display",
+        "finished_at_display",
+    ]
+
+    # Make all fields readonly except state
+    readonly_fields = [
+        "pk",
+        "name",
+        "pulp_domain",
+        "pulp_created_display",
+        "pulp_last_updated_display",
+        "unblocked_at_display",
+        "started_at_display",
+        "finished_at_display",
+    ]
+
+    @admin.display(description="Domain", ordering="pulp_domain__name")
+    def domain_name(self, obj):
+        """Display just the domain name."""
+        return obj.pulp_domain.name if obj.pulp_domain else "-"
+
+    @admin.display(description="Created")
+    def pulp_created_display(self, obj):
+        """Display pulp_created with full precision."""
+        return obj.pulp_created.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.pulp_created else "-"
+
+    @admin.display(description="Last Updated")
+    def pulp_last_updated_display(self, obj):
+        """Display pulp_last_updated with full precision."""
+        return obj.pulp_last_updated.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.pulp_last_updated else "-"
+
+    @admin.display(description="Unblocked At")
+    def unblocked_at_display(self, obj):
+        """Display unblocked_at with full precision."""
+        return obj.unblocked_at.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.unblocked_at else "-"
+
+    @admin.display(description="Started At")
+    def started_at_display(self, obj):
+        """Display started_at with full precision."""
+        return obj.started_at.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.started_at else "-"
+
+    @admin.display(description="Finished At")
+    def finished_at_display(self, obj):
+        """Display finished_at with full precision."""
+        return obj.finished_at.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.finished_at else "-"
+
+    def has_view_permission(self, request, obj=None):
+        """Only superusers can view tasks."""
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        """Only superusers can change tasks."""
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        """Only superusers can delete tasks."""
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        """Only superusers can add tasks."""
+        return request.user.is_superuser
+
+    def has_module_permission(self, request):
+        """Only superusers can access the Task module."""
+        return request.user.is_superuser
 
 
 admin_site = PulpAdminSite(name="myadmin")
@@ -516,3 +602,4 @@ admin_site.register(DomainOrg, DomainOrgAdmin)
 admin_site.register(User, PulpUserAdmin)
 admin_site.register(Group, PulpGroupAdmin)
 admin_site.register(Domain, DomainAdmin)
+admin_site.register(Task, TaskAdmin)
