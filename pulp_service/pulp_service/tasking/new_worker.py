@@ -321,15 +321,17 @@ class NewPulpcoreWorker:
             resources (list): List of resource names
 
         Returns:
-            bool: True if all locks were acquired, False otherwise
+            tuple: (success: bool, blocked_resources: list)
+                - If all locks acquired: (True, [])
+                - If a lock failed: (False, [resource_name])
         """
         if not resources:
             # No resources means no locks needed
-            return True
+            return (True, [])
 
         if not self.redis_conn:
             _logger.error("Redis connection not available for locking")
-            return False
+            return (False, [])
 
         # Sort resources deterministically to prevent deadlocks
         sorted_resources = sorted(resources)
@@ -350,19 +352,19 @@ class NewPulpcoreWorker:
                     )
                     # Release any locks we acquired so far
                     self._release_resource_locks(sorted_resources[:sorted_resources.index(resource)])
-                    return False
+                    return (False, [resource])
 
                 _logger.debug("Acquired lock for resource: %s", resource)
 
             # All locks acquired successfully
             _logger.debug("Successfully acquired all locks for %d resources", len(resources))
-            return True
+            return (True, [])
 
         except Exception as e:
             _logger.error("Error acquiring locks: %s", e)
             # Try to release any locks we may have acquired
             self._release_resource_locks(sorted_resources)
-            return False
+            return (False, [])
 
     def _release_resource_locks(self, resources):
         """
@@ -564,7 +566,8 @@ class NewPulpcoreWorker:
                     # Now try to acquire resource locks for exclusive resources only
                     # Shared resources are never locked
                     if exclusive_resources:
-                        if self._try_acquire_resource_locks(exclusive_resources):
+                        success, blocked = self._try_acquire_resource_locks(exclusive_resources)
+                        if success:
                             _logger.info(
                                 "Worker %s acquired exclusive resources for task %s in domain: %s",
                                 self.name,
@@ -584,8 +587,8 @@ class NewPulpcoreWorker:
                                 self.name,
                                 task.pk
                             )
-                            # Add resources to blocked set so we skip other tasks needing them
-                            for resource in exclusive_resources:
+                            # Add only the actually blocked resources to the blocked set
+                            for resource in blocked:
                                 blocked_resources.add(resource)
                     else:
                         task._locked_resources = []
