@@ -718,13 +718,16 @@ class NewPulpcoreWorker:
                 # For deferred tasks running in subprocess, the subprocess doesn't have
                 # _locked_resources attribute, so locks aren't released there.
                 # For immediate tasks, _execute_task() releases locks and deletes this attribute.
-                if hasattr(task, '_locked_resources') and task._locked_resources:
-                    self._release_resource_locks(task._locked_resources)
-                    _logger.debug(
-                        "Worker %s released resource locks for task %s after subprocess completion",
-                        self.name,
-                        task.pk
-                    )
+                if hasattr(task, '_locked_resources'):
+                    if task._locked_resources:
+                        self._release_resource_locks(task._locked_resources)
+                        _logger.debug(
+                            "Worker %s released resource locks for task %s after subprocess completion",
+                            self.name,
+                            task.pk
+                        )
+                    # Delete attribute to prevent finally block from trying to release again
+                    del task._locked_resources
             finally:
                 # If _execute_task() ran, it will have released resource locks and deleted
                 # the _locked_resources attribute. Only release if attribute still exists.
