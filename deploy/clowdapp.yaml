@@ -1202,7 +1202,7 @@ parameters:
     value: "@merge ['django.contrib.auth.backends.RemoteUserBackend','pulp_service.app.authentication.RHSamlAuthentication']"
   - name: PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES
     description: The default authentication classes for Pulp.
-    value: "['pulp_service.app.authentication.RHServiceAccountCertAuthentication','pulpcore.app.authentication.JSONHeaderRemoteAuthentication','rest_framework.authentication.BasicAuthentication','rest_framework.authentication.SessionAuthentication','pulp_service.app.authentication.RHEntitlementCertAuthentication']"
+    value: "['pulp_service.app.authentication.RHServiceAccountCertAuthentication','pulp_service.app.authentication.DeprecateCRHCSA','pulpcore.app.authentication.JSONHeaderRemoteAuthentication','rest_framework.authentication.BasicAuthentication','rest_framework.authentication.SessionAuthentication','pulp_service.app.authentication.RHEntitlementCertAuthentication']"
   - name: PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES
     description: The default permission classes for the REST API
     value: "['pulp_service.app.authorization.DomainBasedPermission']"
