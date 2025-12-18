@@ -1,0 +1,40 @@
+From 88996b4ca96b58a7a300a42a045e2cf6eb73071a Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Thu, 18 Dec 2025 09:53:31 -0300
+Subject: [PATCH] Revert "Mitigate a disk consumption issue during sync"
+
+This reverts commit d5136c36ecd47c99fccff1cd41ac02438e58366c.
+---
+ pulpcore/app/settings.py                  | 2 +-
+ pulpcore/plugin/stages/artifact_stages.py | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pulpcore/app/settings.py b/pulpcore/app/settings.py
+index b6000c7da..2b68d8f8c 100644
+--- a/pulpcore/app/settings.py
++++ b/pulpcore/app/settings.py
+@@ -383,7 +383,7 @@ HIDE_GUARDED_DISTRIBUTIONS = False
+ 
+ DOMAIN_ENABLED = False
+ 
+-MAX_CONCURRENT_CONTENT = 25
++MAX_CONCURRENT_CONTENT = 200
+ 
+ SHELL_PLUS_IMPORTS = [
+     "from pulpcore.app.util import get_domain, get_domain_pk, set_domain, get_url, extract_pk",
+diff --git a/pulpcore/plugin/stages/artifact_stages.py b/pulpcore/plugin/stages/artifact_stages.py
+index f67664ce8..4a7140020 100644
+--- a/pulpcore/plugin/stages/artifact_stages.py
++++ b/pulpcore/plugin/stages/artifact_stages.py
+@@ -269,7 +269,7 @@ class ArtifactSaver(Stage):
+         Returns:
+             The coroutine for this stage.
+         """
+-        async for batch in self.batches(minsize=settings.MAX_CONCURRENT_CONTENT):
++        async for batch in self.batches():
+             da_to_save = []
+             for d_content in batch:
+                 for d_artifact in d_content.d_artifacts:
+-- 
+2.46.2
+
