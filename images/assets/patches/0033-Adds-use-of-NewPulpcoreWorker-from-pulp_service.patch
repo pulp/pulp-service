@@ -1,7 +1,7 @@
 From f721dcadf3fd422743f7ee83b5e36ef8ca6fd197 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
-Subject: [PATCH 1/4] Adds use of NewPulpcoreWorker from pulp_service.
+Subject: [PATCH 1/5] Adds use of NewPulpcoreWorker from pulp_service.
 
 This also adds Redis based locking for tasks and resources.
 ---
@@ -570,7 +570,7 @@ index c187bd919..3ef86ba19 100644
 From 6ac2f55c2aae9ee53da0d5f4cac4384bff84feb7 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:27:32 -0500
-Subject: [PATCH 2/4] fix releasing of locks for immediate tasks
+Subject: [PATCH 2/5] fix releasing of locks for immediate tasks
 
 ---
  pulpcore/tasking/tasks.py | 94 ++++++++++++++++++++++++++++++++++++---
@@ -727,7 +727,7 @@ index 3ef86ba19..6b7466980 100644
 From e70783f2bc64a99dda25c829ff133a0d059585e2 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:51:11 -0500
-Subject: [PATCH 3/4] Release locks in execute task
+Subject: [PATCH 3/5] Release locks in execute task
 
 ---
  pulpcore/tasking/tasks.py | 66 ++++++++++++---------------------------
@@ -828,7 +828,7 @@ index 6b7466980..9e9e6f6d7 100644
 From 75f249190eeef4acbae366bb2b5392d01643e41a Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Sat, 13 Dec 2025 05:46:49 -0500
-Subject: [PATCH 4/4] Make sure locks are released even if exceptions occur
+Subject: [PATCH 4/5] Make sure locks are released even if exceptions occur
  outside of execute_task.
 
 ---
@@ -925,6 +925,187 @@ index 9e9e6f6d7..2d854099c 100644
          elif deferred:  # Resources are blocked and can be deferred
              task.app_lock = None
              await task.asave()
+-- 
+2.52.0
+
+
+From ab0cd196500334388f63087714bdb6b235ef7c50 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Fri, 19 Dec 2025 14:26:52 -0500
+Subject: [PATCH 5/5] API workers acquire Task lock before executing task
+
+---
+ pulpcore/tasking/tasks.py | 142 +++++++++++++++++++++++++++-----------
+ 1 file changed, 102 insertions(+), 40 deletions(-)
+
+diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
+index 2d854099c..3e7ee72d6 100644
+--- a/pulpcore/tasking/tasks.py
++++ b/pulpcore/tasking/tasks.py
+@@ -344,30 +344,61 @@ def dispatch(
+     task = Task.objects.create(**task_payload)
+     task.refresh_from_db()  # The database will have assigned a timestamp for us.
+     if execute_now:
+-        if are_resources_available(colliding_resources, task):
+-            try:
+-                current_app = AppStatus.objects.current()
++        # Try to acquire Redis task lock to prevent workers from picking up this task
++        redis_conn = get_redis_connection()
++        task_lock_key = f"task:{task.pk}"
++        current_app = AppStatus.objects.current()
++        lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++
++        # Use SET with NX (only set if not exists) and EX (expiration in seconds)
++        # 24 hours = 86400 seconds
++        task_lock_acquired = redis_conn.set(task_lock_key, lock_owner, nx=True, ex=86400)
++
++        if task_lock_acquired:
++            # Try to acquire resource locks
++            if are_resources_available(colliding_resources, task):
++                try:
++                    _logger.info(
++                        "IMMEDIATE DISPATCH: Task %s acquired task lock and resources available, executing immediately in API process (AppStatus.current=%s)",
++                        task.pk,
++                        lock_owner
++                    )
++                    with using_workdir():
++                        execute_task(task)
++                except Exception:
++                    # Exception before execute_task() completed
++                    # Release locks if they weren't already released by _execute_task()
++                    if hasattr(task, '_locked_resources') and task._locked_resources:
++                        redis_conn = get_redis_connection()
++                        release_resource_locks(redis_conn, lock_owner, task._locked_resources)
++                        del task._locked_resources
++                        # Also release task lock since we couldn't complete execution
++                        redis_conn.delete(task_lock_key)
++                    raise
++            elif deferred:
++                # Resources not available, release task lock and defer to worker
++                redis_conn.delete(task_lock_key)
+                 _logger.info(
+-                    "IMMEDIATE DISPATCH: Task %s will execute immediately in API process (AppStatus.current=%s)",
+-                    task.pk,
+-                    current_app.name if current_app else "None"
++                    "IMMEDIATE DISPATCH: Task %s resources not available, released task lock and deferring to worker",
++                    task.pk
+                 )
+-                with using_workdir():
+-                    execute_task(task)
+-            except Exception:
+-                # Exception before execute_task() completed
+-                # Release locks if they weren't already released by _execute_task()
+-                if hasattr(task, '_locked_resources') and task._locked_resources:
+-                    current_app = AppStatus.objects.current()
+-                    redis_conn = get_redis_connection()
+-                    lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
+-                    release_resource_locks(redis_conn, lock_owner, task._locked_resources)
+-                    del task._locked_resources
+-                raise
+-        elif deferred:  # Resources are blocked and can be deferred
++                task.app_lock = None
++                task.save()
++            else:
++                # Resources not available and can't be deferred
++                redis_conn.delete(task_lock_key)
++                task.set_canceling()
++                task.set_canceled(TASK_STATES.CANCELED, "Resources temporarily unavailable.")
++        elif deferred:
++            # Another process acquired the task lock, defer to worker
++            _logger.info(
++                "IMMEDIATE DISPATCH: Task %s could not acquire task lock, deferring to worker",
++                task.pk
++            )
+             task.app_lock = None
+             task.save()
+-        else:  # Can't be deferred
++        else:
++            # Can't acquire task lock and can't be deferred
+             task.set_canceling()
+             task.set_canceled(TASK_STATES.CANCELED, "Resources temporarily unavailable.")
+     return task
+@@ -398,30 +429,61 @@ async def adispatch(
+     await task.arefresh_from_db()  # The database will have assigned a timestamp for us.
+     task.pulp_domain = get_domain()
+     if execute_now:
+-        if await async_are_resources_available(colliding_resources, task):
+-            try:
+-                current_app = await sync_to_async(AppStatus.objects.current)()
++        # Try to acquire Redis task lock to prevent workers from picking up this task
++        redis_conn = get_redis_connection()
++        task_lock_key = f"task:{task.pk}"
++        current_app = await sync_to_async(AppStatus.objects.current)()
++        lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++
++        # Use SET with NX (only set if not exists) and EX (expiration in seconds)
++        # 24 hours = 86400 seconds
++        task_lock_acquired = redis_conn.set(task_lock_key, lock_owner, nx=True, ex=86400)
++
++        if task_lock_acquired:
++            # Try to acquire resource locks
++            if await async_are_resources_available(colliding_resources, task):
++                try:
++                    _logger.info(
++                        "IMMEDIATE DISPATCH (async): Task %s acquired task lock and resources available, executing immediately in API process (AppStatus.current=%s)",
++                        task.pk,
++                        lock_owner
++                    )
++                    with using_workdir():
++                        await aexecute_task(task)
++                except Exception:
++                    # Exception before aexecute_task() completed
++                    # Release locks if they weren't already released by _aexecute_task()
++                    if hasattr(task, '_locked_resources') and task._locked_resources:
++                        redis_conn = get_redis_connection()
++                        await async_release_resource_locks(redis_conn, lock_owner, task._locked_resources)
++                        del task._locked_resources
++                        # Also release task lock since we couldn't complete execution
++                        redis_conn.delete(task_lock_key)
++                    raise
++            elif deferred:
++                # Resources not available, release task lock and defer to worker
++                redis_conn.delete(task_lock_key)
+                 _logger.info(
+-                    "IMMEDIATE DISPATCH (async): Task %s will execute immediately in API process (AppStatus.current=%s)",
+-                    task.pk,
+-                    current_app.name if current_app else "None"
++                    "IMMEDIATE DISPATCH (async): Task %s resources not available, released task lock and deferring to worker",
++                    task.pk
+                 )
+-                with using_workdir():
+-                    await aexecute_task(task)
+-            except Exception:
+-                # Exception before aexecute_task() completed
+-                # Release locks if they weren't already released by _aexecute_task()
+-                if hasattr(task, '_locked_resources') and task._locked_resources:
+-                    current_app = await sync_to_async(AppStatus.objects.current)()
+-                    redis_conn = get_redis_connection()
+-                    lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
+-                    await async_release_resource_locks(redis_conn, lock_owner, task._locked_resources)
+-                    del task._locked_resources
+-                raise
+-        elif deferred:  # Resources are blocked and can be deferred
++                task.app_lock = None
++                await task.asave()
++            else:
++                # Resources not available and can't be deferred
++                redis_conn.delete(task_lock_key)
++                task.set_canceling()
++                task.set_canceled(TASK_STATES.CANCELED, "Resources temporarily unavailable.")
++        elif deferred:
++            # Another process acquired the task lock, defer to worker
++            _logger.info(
++                "IMMEDIATE DISPATCH (async): Task %s could not acquire task lock, deferring to worker",
++                task.pk
++            )
+             task.app_lock = None
+             await task.asave()
+-        else:  # Can't be deferred
++        else:
++            # Can't acquire task lock and can't be deferred
+             task.set_canceling()
+             task.set_canceled(TASK_STATES.CANCELED, "Resources temporarily unavailable.")
+     return task
 -- 
 2.52.0
 
