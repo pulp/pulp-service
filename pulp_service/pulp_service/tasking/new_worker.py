@@ -7,6 +7,7 @@ for the unblocking mechanism and all task cancellation support.
 """
 
 from gettext import gettext as _
+import asyncio
 import functools
 import hashlib
 import logging
@@ -44,7 +45,7 @@ from pulpcore.tasking._util import (
     resource_to_lock_key,
     release_resource_locks,
 )
-from pulpcore.tasking.tasks import using_workdir, execute_task
+from pulpcore.tasking.tasks import using_workdir, execute_task, aexecute_task
 
 
 _logger = logging.getLogger(__name__)
@@ -621,7 +622,8 @@ class NewPulpcoreWorker:
             task.pulp_domain.name
         )
         with using_workdir():
-            execute_task(task)
+            # Immediate tasks are always async, so use aexecute_task
+            asyncio.run(aexecute_task(task))
         self.task = None
 
     def supervise_task(self, task):
