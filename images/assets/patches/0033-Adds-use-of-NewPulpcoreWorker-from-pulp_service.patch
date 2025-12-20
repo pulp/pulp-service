@@ -1,7 +1,7 @@
 From f721dcadf3fd422743f7ee83b5e36ef8ca6fd197 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
-Subject: [PATCH 1/6] Adds use of NewPulpcoreWorker from pulp_service.
+Subject: [PATCH 1/8] Adds use of NewPulpcoreWorker from pulp_service.
 
 This also adds Redis based locking for tasks and resources.
 ---
@@ -570,7 +570,7 @@ index c187bd919..3ef86ba19 100644
 From 6ac2f55c2aae9ee53da0d5f4cac4384bff84feb7 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:27:32 -0500
-Subject: [PATCH 2/6] fix releasing of locks for immediate tasks
+Subject: [PATCH 2/8] fix releasing of locks for immediate tasks
 
 ---
  pulpcore/tasking/tasks.py | 94 ++++++++++++++++++++++++++++++++++++---
@@ -727,7 +727,7 @@ index 3ef86ba19..6b7466980 100644
 From e70783f2bc64a99dda25c829ff133a0d059585e2 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:51:11 -0500
-Subject: [PATCH 3/6] Release locks in execute task
+Subject: [PATCH 3/8] Release locks in execute task
 
 ---
  pulpcore/tasking/tasks.py | 66 ++++++++++++---------------------------
@@ -828,7 +828,7 @@ index 6b7466980..9e9e6f6d7 100644
 From 75f249190eeef4acbae366bb2b5392d01643e41a Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Sat, 13 Dec 2025 05:46:49 -0500
-Subject: [PATCH 4/6] Make sure locks are released even if exceptions occur
+Subject: [PATCH 4/8] Make sure locks are released even if exceptions occur
  outside of execute_task.
 
 ---
@@ -932,7 +932,7 @@ index 9e9e6f6d7..2d854099c 100644
 From ab0cd196500334388f63087714bdb6b235ef7c50 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 14:26:52 -0500
-Subject: [PATCH 5/6] API workers acquire Task lock before executing task
+Subject: [PATCH 5/8] API workers acquire Task lock before executing task
 
 ---
  pulpcore/tasking/tasks.py | 142 +++++++++++++++++++++++++++-----------
@@ -1113,7 +1113,7 @@ index 2d854099c..3e7ee72d6 100644
 From 5b024ec6e69c53ca897b2697507c0af1b1b70c83 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 14:59:28 -0500
-Subject: [PATCH 6/6] Improve logging for resource lock release
+Subject: [PATCH 6/8] Improve logging for resource lock release
 
 ---
  pulpcore/tasking/tasks.py | 10 +++++++---
@@ -1166,6 +1166,97 @@ index 3e7ee72d6..a9e5c4885 100644
                  task.pk,
                  lock_owner,
                  current_app.name if current_app else "None",
+-- 
+2.52.0
+
+
+From d384eecf3d640cfb800a8aa7a80f1847b0d87ac1 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Fri, 19 Dec 2025 21:23:28 -0500
+Subject: [PATCH 7/8] Revert the set_guid() in immediate tasks
+
+---
+ pulpcore/tasking/tasks.py | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
+index a9e5c4885..23a3641ad 100644
+--- a/pulpcore/tasking/tasks.py
++++ b/pulpcore/tasking/tasks.py
+@@ -14,7 +14,7 @@ from asgiref.sync import sync_to_async, async_to_sync
+ from django.conf import settings
+ from django.db import connection
+ from django.db.models import Model
+-from django_guid import get_guid, set_guid
++from django_guid import get_guid
+ from pulpcore.app.apps import MODULE_PLUGIN_VERSIONS
+ from pulpcore.app.models import Task, TaskGroup, AppStatus
+ from pulpcore.app.redis_connection import get_redis_connection
+@@ -104,8 +104,6 @@ def _execute_task(task):
+                 return result
+             return None
+     finally:
+-        # Restore the task's GUID for proper logging (contexts.py bug workaround)
+-        set_guid(task.logging_cid)
+         # Release Redis locks if this was an immediate task
+         if hasattr(task, '_locked_resources') and task._locked_resources:
+             current_app = AppStatus.objects.current()
+@@ -163,8 +161,6 @@ async def _aexecute_task(task):
+                 return result
+             return None
+     finally:
+-        # Restore the task's GUID for proper logging (contexts.py bug workaround)
+-        set_guid(task.logging_cid)
+         # Release Redis locks if this was an immediate task
+         if hasattr(task, '_locked_resources') and task._locked_resources:
+             current_app = await sync_to_async(AppStatus.objects.current)()
+-- 
+2.52.0
+
+
+From 46c224559161991c4ae29a537e94065acd18e73b Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Fri, 19 Dec 2025 23:00:16 -0500
+Subject: [PATCH 8/8] Log task state after setting to running.
+
+---
+ pulpcore/tasking/tasks.py | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
+index 23a3641ad..e52be163d 100644
+--- a/pulpcore/tasking/tasks.py
++++ b/pulpcore/tasking/tasks.py
+@@ -87,6 +87,14 @@ def _execute_task(task):
+ 
+         with with_task_context(task):
+             task.set_running()
++            # Verify task state was actually updated in database
++            db_task = Task.objects.get(pk=task.pk)
++            _logger.info(
++                "TASK STATE VERIFICATION: Task %s local state=%s, database state=%s",
++                task.pk,
++                task.state,
++                db_task.state
++            )
+             domain = get_domain()
+             try:
+                 log_task_start(task, domain)
+@@ -145,6 +153,14 @@ async def _aexecute_task(task):
+ 
+         async with awith_task_context(task):
+             await sync_to_async(task.set_running)()
++            # Verify task state was actually updated in database
++            db_task = await sync_to_async(Task.objects.get)(pk=task.pk)
++            _logger.info(
++                "TASK STATE VERIFICATION (async): Task %s local state=%s, database state=%s",
++                task.pk,
++                task.state,
++                db_task.state
++            )
+             domain = get_domain()
+             try:
+                 task_coroutine_fn = await aget_task_function(task)
 -- 
 2.52.0
 
