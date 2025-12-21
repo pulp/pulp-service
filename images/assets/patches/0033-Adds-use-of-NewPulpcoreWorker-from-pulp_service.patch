@@ -1,7 +1,7 @@
 From f721dcadf3fd422743f7ee83b5e36ef8ca6fd197 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
-Subject: [PATCH 1/8] Adds use of NewPulpcoreWorker from pulp_service.
+Subject: [PATCH 1/9] Adds use of NewPulpcoreWorker from pulp_service.
 
 This also adds Redis based locking for tasks and resources.
 ---
@@ -570,7 +570,7 @@ index c187bd919..3ef86ba19 100644
 From 6ac2f55c2aae9ee53da0d5f4cac4384bff84feb7 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:27:32 -0500
-Subject: [PATCH 2/8] fix releasing of locks for immediate tasks
+Subject: [PATCH 2/9] fix releasing of locks for immediate tasks
 
 ---
  pulpcore/tasking/tasks.py | 94 ++++++++++++++++++++++++++++++++++++---
@@ -727,7 +727,7 @@ index 3ef86ba19..6b7466980 100644
 From e70783f2bc64a99dda25c829ff133a0d059585e2 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:51:11 -0500
-Subject: [PATCH 3/8] Release locks in execute task
+Subject: [PATCH 3/9] Release locks in execute task
 
 ---
  pulpcore/tasking/tasks.py | 66 ++++++++++++---------------------------
@@ -828,7 +828,7 @@ index 6b7466980..9e9e6f6d7 100644
 From 75f249190eeef4acbae366bb2b5392d01643e41a Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Sat, 13 Dec 2025 05:46:49 -0500
-Subject: [PATCH 4/8] Make sure locks are released even if exceptions occur
+Subject: [PATCH 4/9] Make sure locks are released even if exceptions occur
  outside of execute_task.
 
 ---
@@ -932,7 +932,7 @@ index 9e9e6f6d7..2d854099c 100644
 From ab0cd196500334388f63087714bdb6b235ef7c50 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 14:26:52 -0500
-Subject: [PATCH 5/8] API workers acquire Task lock before executing task
+Subject: [PATCH 5/9] API workers acquire Task lock before executing task
 
 ---
  pulpcore/tasking/tasks.py | 142 +++++++++++++++++++++++++++-----------
@@ -1113,7 +1113,7 @@ index 2d854099c..3e7ee72d6 100644
 From 5b024ec6e69c53ca897b2697507c0af1b1b70c83 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 14:59:28 -0500
-Subject: [PATCH 6/8] Improve logging for resource lock release
+Subject: [PATCH 6/9] Improve logging for resource lock release
 
 ---
  pulpcore/tasking/tasks.py | 10 +++++++---
@@ -1173,7 +1173,7 @@ index 3e7ee72d6..a9e5c4885 100644
 From d384eecf3d640cfb800a8aa7a80f1847b0d87ac1 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 21:23:28 -0500
-Subject: [PATCH 7/8] Revert the set_guid() in immediate tasks
+Subject: [PATCH 7/9] Revert the set_guid() in immediate tasks
 
 ---
  pulpcore/tasking/tasks.py | 6 +-----
@@ -1217,7 +1217,7 @@ index a9e5c4885..23a3641ad 100644
 From 46c224559161991c4ae29a537e94065acd18e73b Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 23:00:16 -0500
-Subject: [PATCH 8/8] Log task state after setting to running.
+Subject: [PATCH 8/9] Log task state after setting to running.
 
 ---
  pulpcore/tasking/tasks.py | 16 ++++++++++++++++
@@ -1257,6 +1257,60 @@ index 23a3641ad..e52be163d 100644
              domain = get_domain()
              try:
                  task_coroutine_fn = await aget_task_function(task)
+-- 
+2.52.0
+
+
+From 24f1d953a03bf7145e506fbcbabd920f822fead7 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Sun, 21 Dec 2025 07:53:12 -0500
+Subject: [PATCH 9/9] Don't save immediate Tasks a second time when resources
+ are not available
+
+---
+ pulpcore/tasking/tasks.py | 8 --------
+ 1 file changed, 8 deletions(-)
+
+diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
+index e52be163d..8725c3055 100644
+--- a/pulpcore/tasking/tasks.py
++++ b/pulpcore/tasking/tasks.py
+@@ -398,8 +398,6 @@ def dispatch(
+                     "IMMEDIATE DISPATCH: Task %s resources not available, released task lock and deferring to worker",
+                     task.pk
+                 )
+-                task.app_lock = None
+-                task.save()
+             else:
+                 # Resources not available and can't be deferred
+                 redis_conn.delete(task_lock_key)
+@@ -411,8 +409,6 @@ def dispatch(
+                 "IMMEDIATE DISPATCH: Task %s could not acquire task lock, deferring to worker",
+                 task.pk
+             )
+-            task.app_lock = None
+-            task.save()
+         else:
+             # Can't acquire task lock and can't be deferred
+             task.set_canceling()
+@@ -483,8 +479,6 @@ async def adispatch(
+                     "IMMEDIATE DISPATCH (async): Task %s resources not available, released task lock and deferring to worker",
+                     task.pk
+                 )
+-                task.app_lock = None
+-                await task.asave()
+             else:
+                 # Resources not available and can't be deferred
+                 redis_conn.delete(task_lock_key)
+@@ -496,8 +490,6 @@ async def adispatch(
+                 "IMMEDIATE DISPATCH (async): Task %s could not acquire task lock, deferring to worker",
+                 task.pk
+             )
+-            task.app_lock = None
+-            await task.asave()
+         else:
+             # Can't acquire task lock and can't be deferred
+             task.set_canceling()
 -- 
 2.52.0
 
