@@ -43,6 +43,7 @@ from pulpcore.tasking._util import (
     REDIS_LOCK_PREFIX,
     resource_to_lock_key,
     release_resource_locks,
+    acquire_locks,
 )
 from pulpcore.tasking.tasks import using_workdir, execute_task
 
@@ -366,16 +367,17 @@ class NewPulpcoreWorker:
             self._release_resource_locks(sorted_resources)
             return (False, [])
 
-    def _release_resource_locks(self, resources):
+    def _release_resource_locks(self, resources, shared_resources=None):
         """
-        Release Redis distributed locks for the given resources.
+        Release Redis distributed locks for exclusive and shared resources.
 
         Uses a Lua script to ensure we only release locks that we own.
 
         Args:
-            resources (list): List of resource names to release locks for
+            resources (list): List of exclusive resource names to release locks for
+            shared_resources (list): Optional list of shared resource names
         """
-        release_resource_locks(self.redis_conn, self.name, resources)
+        release_resource_locks(self.redis_conn, self.name, resources, shared_resources)
 
     def is_compatible(self, task):
         """
@@ -427,17 +429,6 @@ class NewPulpcoreWorker:
             pk__in=self.ignored_task_ids
         ).order_by('pulp_created').select_related('pulp_domain')[:FETCH_TASK_LIMIT]
 
-        # Build a set of all resources currently in shared use by RUNNING tasks
-        # This query only happens once per fetch_task() call for efficiency
-        resources_in_shared_use = set()
-        running_tasks = Task.objects.filter(state=TASK_STATES.RUNNING).only('reserved_resources_record', 'pk')
-        for running_task in running_tasks:
-            running_resources = running_task.reserved_resources_record or []
-            for resource in running_resources:
-                if resource.startswith("shared:"):
-                    # Strip "shared:" prefix to get the actual resource name
-                    resources_in_shared_use.add(resource[7:])
-
         # Track resources that are blocked during this iteration
         # If we find a resource is blocked, skip all tasks needing that resource
         blocked_resources = set()
@@ -487,75 +478,19 @@ class NewPulpcoreWorker:
                     # Skip this task, try next one
                     continue
 
-                # Check if any shared resources have exclusive locks
-                # Shared resources are NOT locked, but we can't claim a task if someone
-                # has an exclusive lock on a resource we need shared access to
-                blocked_by_exclusive = False
-                _logger.debug(
-                    "Task %s checking shared resources %s for exclusive locks",
-                    task.pk,
-                    shared_resources
-                )
-                for resource in shared_resources:
-                    lock_key = resource_to_lock_key(resource)
-                    exists = self.redis_conn.exists(lock_key)
-                    _logger.debug(
-                        "Task %s: checking lock %s for resource %s, exists=%s",
-                        task.pk,
-                        lock_key,
-                        resource,
-                        exists
-                    )
-                    if exists:
-                        # Someone has an exclusive lock on a resource we need shared access to
-                        blocked_by_exclusive = True
-                        lock_holder = self.redis_conn.get(lock_key)
-                        _logger.debug(
-                            "Task %s blocked: resource %s has exclusive lock held by %s",
-                            task.pk,
-                            resource,
-                            lock_holder.decode('utf-8') if lock_holder else 'unknown'
-                        )
-                        # Add this resource to blocked set so we skip other tasks needing it
-                        blocked_resources.add(resource)
-                        break
-
-                if blocked_by_exclusive:
-                    # Can't claim this task, try next one
-                    continue
-
-                # For exclusive resources, check if they're in shared use by any RUNNING task
-                # We can't acquire exclusive access to a resource if someone is using it in shared mode
-                blocked_by_shared_usage = False
-                if exclusive_resources:
-                    for excl_resource in exclusive_resources:
-                        if excl_resource in resources_in_shared_use:
-                            blocked_by_shared_usage = True
-                            _logger.debug(
-                                "Task %s blocked: resource %s is in shared use by a running task",
-                                task.pk,
-                                excl_resource
-                            )
-                            blocked_resources.add(excl_resource)
-                            break
-
-                if blocked_by_shared_usage:
-                    # Can't claim this task, try next one
-                    continue
-
                 # First try to acquire task lock (lightweight single Redis operation)
                 # This prevents wasting time on resource locks if another worker already has the task
                 task_lock_key = f"task:{task.pk}"
                 # Use SET with NX (only set if not exists) and EX (expiration in seconds)
                 # 24 hours = 86400 seconds
-                acquired = self.redis_conn.set(
+                task_lock_acquired = self.redis_conn.set(
                     task_lock_key,
                     self.name,
                     nx=True,
                     ex=86400
                 )
 
-                if acquired:
+                if task_lock_acquired:
                     # Successfully claimed the task lock!
                     _logger.info(
                         "Worker %s acquired task lock for task %s in domain: %s",
@@ -563,36 +498,41 @@ class NewPulpcoreWorker:
                         task.pk,
                         task.pulp_domain.name
                     )
-                    # Now try to acquire resource locks for exclusive resources only
-                    # Shared resources are never locked
-                    if exclusive_resources:
-                        success, blocked = self._try_acquire_resource_locks(exclusive_resources)
-                        if success:
-                            _logger.info(
-                                "Worker %s acquired exclusive resources for task %s in domain: %s",
-                                self.name,
-                                task.pk,
-                                task.pulp_domain.name
-                            )
-                            # Store resources so we can release them later
-                            # Note: We don't store the task lock since it auto-expires in 24h
-                            task._locked_resources = exclusive_resources
-                            return task
-                        else:
-                            # Failed to acquire resource locks
-                            # Release the task lock since we can't execute this task
-                            self.redis_conn.delete(task_lock_key)
-                            _logger.debug(
-                                "Worker %s acquired task lock but failed to acquire resource locks for task %s, released task lock",
-                                self.name,
-                                task.pk
-                            )
-                            # Add only the actually blocked resources to the blocked set
-                            for resource in blocked:
-                                blocked_resources.add(resource)
-                    else:
-                        task._locked_resources = []
+                    # Now try to acquire resource locks atomically using Lua script
+                    # This handles both exclusive and shared resources
+                    blocked_resource_list = acquire_locks(
+                        self.redis_conn,
+                        self.name,
+                        exclusive_resources,
+                        shared_resources
+                    )
+
+                    if not blocked_resource_list:
+                        # All locks acquired successfully!
+                        _logger.info(
+                            "Worker %s acquired all resources for task %s in domain: %s",
+                            self.name,
+                            task.pk,
+                            task.pulp_domain.name
+                        )
+                        # Store only exclusive resources for release later
+                        # Shared resources are in Redis sets and will be cleaned up separately
+                        task._locked_resources = exclusive_resources
+                        task._locked_shared_resources = shared_resources
                         return task
+                    else:
+                        # Failed to acquire resource locks
+                        # Release the task lock since we can't execute this task
+                        self.redis_conn.delete(task_lock_key)
+                        _logger.debug(
+                            "Worker %s acquired task lock but failed to acquire resource locks for task %s (blocked: %s), released task lock",
+                            self.name,
+                            task.pk,
+                            blocked_resource_list
+                        )
+                        # Add blocked resources to the blocked set
+                        for resource in blocked_resource_list:
+                            blocked_resources.add(resource)
                 else:
                     # Another worker has the task lock, skip this task
                     _logger.debug(
@@ -703,9 +643,11 @@ class NewPulpcoreWorker:
                 if not self.is_compatible(task):
                     # Incompatible task, add to ignored list
                     self.ignored_task_ids.append(task.pk)
-                    # Release both resource locks and task lock since we're not executing this task
-                    if hasattr(task, '_locked_resources'):
-                        self._release_resource_locks(task._locked_resources)
+                    # Release both exclusive and shared resource locks since we're not executing this task
+                    exclusive_resources = getattr(task, '_locked_resources', [])
+                    shared_resources = getattr(task, '_locked_shared_resources', [])
+                    if exclusive_resources or shared_resources:
+                        self._release_resource_locks(exclusive_resources, shared_resources)
                     # Release the task lock so other workers can attempt it
                     task_lock_key = f"task:{task.pk}"
                     self.redis_conn.delete(task_lock_key)
@@ -718,9 +660,15 @@ class NewPulpcoreWorker:
                     self.supervise_task(task)
             finally:
                 # If _execute_task() ran, it will have released resource locks and deleted
-                # the _locked_resources attribute. Only release if attribute still exists.
-                if task and hasattr(task, '_locked_resources'):
-                    self._release_resource_locks(task._locked_resources)
+                # the _locked_resources attribute. Only release if attributes still exist.
+                if task:
+                    exclusive_resources = getattr(task, '_locked_resources', None)
+                    shared_resources = getattr(task, '_locked_shared_resources', None)
+                    if exclusive_resources or shared_resources:
+                        self._release_resource_locks(
+                            exclusive_resources or [],
+                            shared_resources or []
+                        )
 
 
     def sleep(self):

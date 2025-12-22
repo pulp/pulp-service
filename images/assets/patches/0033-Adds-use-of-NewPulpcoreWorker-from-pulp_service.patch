@@ -1,7 +1,7 @@
 From f721dcadf3fd422743f7ee83b5e36ef8ca6fd197 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
-Subject: [PATCH 1/9] Adds use of NewPulpcoreWorker from pulp_service.
+Subject: [PATCH 01/10] Adds use of NewPulpcoreWorker from pulp_service.
 
 This also adds Redis based locking for tasks and resources.
 ---
@@ -570,7 +570,7 @@ index c187bd919..3ef86ba19 100644
 From 6ac2f55c2aae9ee53da0d5f4cac4384bff84feb7 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:27:32 -0500
-Subject: [PATCH 2/9] fix releasing of locks for immediate tasks
+Subject: [PATCH 02/10] fix releasing of locks for immediate tasks
 
 ---
  pulpcore/tasking/tasks.py | 94 ++++++++++++++++++++++++++++++++++++---
@@ -727,7 +727,7 @@ index 3ef86ba19..6b7466980 100644
 From e70783f2bc64a99dda25c829ff133a0d059585e2 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 12 Dec 2025 21:51:11 -0500
-Subject: [PATCH 3/9] Release locks in execute task
+Subject: [PATCH 03/10] Release locks in execute task
 
 ---
  pulpcore/tasking/tasks.py | 66 ++++++++++++---------------------------
@@ -828,7 +828,7 @@ index 6b7466980..9e9e6f6d7 100644
 From 75f249190eeef4acbae366bb2b5392d01643e41a Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Sat, 13 Dec 2025 05:46:49 -0500
-Subject: [PATCH 4/9] Make sure locks are released even if exceptions occur
+Subject: [PATCH 04/10] Make sure locks are released even if exceptions occur
  outside of execute_task.
 
 ---
@@ -932,7 +932,7 @@ index 9e9e6f6d7..2d854099c 100644
 From ab0cd196500334388f63087714bdb6b235ef7c50 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 14:26:52 -0500
-Subject: [PATCH 5/9] API workers acquire Task lock before executing task
+Subject: [PATCH 05/10] API workers acquire Task lock before executing task
 
 ---
  pulpcore/tasking/tasks.py | 142 +++++++++++++++++++++++++++-----------
@@ -1113,7 +1113,7 @@ index 2d854099c..3e7ee72d6 100644
 From 5b024ec6e69c53ca897b2697507c0af1b1b70c83 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 14:59:28 -0500
-Subject: [PATCH 6/9] Improve logging for resource lock release
+Subject: [PATCH 06/10] Improve logging for resource lock release
 
 ---
  pulpcore/tasking/tasks.py | 10 +++++++---
@@ -1173,7 +1173,7 @@ index 3e7ee72d6..a9e5c4885 100644
 From d384eecf3d640cfb800a8aa7a80f1847b0d87ac1 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 21:23:28 -0500
-Subject: [PATCH 7/9] Revert the set_guid() in immediate tasks
+Subject: [PATCH 07/10] Revert the set_guid() in immediate tasks
 
 ---
  pulpcore/tasking/tasks.py | 6 +-----
@@ -1217,7 +1217,7 @@ index a9e5c4885..23a3641ad 100644
 From 46c224559161991c4ae29a537e94065acd18e73b Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 19 Dec 2025 23:00:16 -0500
-Subject: [PATCH 8/9] Log task state after setting to running.
+Subject: [PATCH 08/10] Log task state after setting to running.
 
 ---
  pulpcore/tasking/tasks.py | 16 ++++++++++++++++
@@ -1264,7 +1264,7 @@ index 23a3641ad..e52be163d 100644
 From 24f1d953a03bf7145e506fbcbabd920f822fead7 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Sun, 21 Dec 2025 07:53:12 -0500
-Subject: [PATCH 9/9] Don't save immediate Tasks a second time when resources
+Subject: [PATCH 09/10] Don't save immediate Tasks a second time when resources
  are not available
 
 ---
@@ -1311,6 +1311,229 @@ index e52be163d..8725c3055 100644
          else:
              # Can't acquire task lock and can't be deferred
              task.set_canceling()
+-- 
+2.52.0
+
+
+From 93f91370dbb4f007598ec9ab2bcddd404f4ac658 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Mon, 22 Dec 2025 14:48:06 -0500
+Subject: [PATCH 10/10] Move exclusive and shared lock acquisitin to a Lua
+ script
+
+This acquires resource locks using a Lua script which executes in Redis.
+---
+ pulpcore/tasking/_util.py | 178 ++++++++++++++++++++++++++++++++++----
+ 1 file changed, 162 insertions(+), 16 deletions(-)
+
+diff --git a/pulpcore/tasking/_util.py b/pulpcore/tasking/_util.py
+index cdc3303ef..d257323f0 100644
+--- a/pulpcore/tasking/_util.py
++++ b/pulpcore/tasking/_util.py
+@@ -45,6 +45,72 @@ else
+ end
+ """
+ 
++REDIS_ACQUIRE_LOCKS_SCRIPT = """
++-- KEYS: [exclusive_lock_keys..., shared_lock_keys...]
++-- ARGV[1]: lock_owner (task identifier)
++-- ARGV[2]: number of exclusive resources
++-- ARGV[3...]: exclusive resource names (for error reporting)
++-- Returns: empty table if success, table of blocked exclusive resource names if failed
++
++local num_exclusive = tonumber(ARGV[2])
++local lock_owner = ARGV[1]
++local acquired_exclusive = {}
++local acquired_shared = {}
++local blocked_resources = {}
++
++-- Try to acquire exclusive locks
++for i = 1, num_exclusive do
++    local key = KEYS[i]
++    local resource_name = ARGV[2 + i]
++
++    -- Check if lock exists
++    if redis.call("exists", key) == 1 then
++        -- Lock already held, add to blocked list
++        table.insert(blocked_resources, resource_name)
++    end
++end
++
++-- If any exclusive locks were blocked, don't proceed
++if #blocked_resources > 0 then
++    return blocked_resources
++end
++
++-- Check shared resources - ensure no exclusive locks exist
++for i = num_exclusive + 1, #KEYS do
++    local key = KEYS[i]
++    local shared_resource_name = ARGV[2 + i]
++
++    -- Check if there's an exclusive lock (string value)
++    local lock_type = redis.call("type", key)
++    if lock_type["ok"] == "string" then
++        -- Exclusive lock exists on a shared resource we need
++        -- This counts as a blocked resource
++        table.insert(blocked_resources, shared_resource_name)
++    end
++end
++
++-- If any shared resources are blocked by exclusive locks, fail
++if #blocked_resources > 0 then
++    return blocked_resources
++end
++
++-- All checks passed, acquire the locks
++for i = 1, num_exclusive do
++    local key = KEYS[i]
++    redis.call("set", key, lock_owner)
++    table.insert(acquired_exclusive, key)
++end
++
++for i = num_exclusive + 1, #KEYS do
++    local key = KEYS[i]
++    redis.call("sadd", key, lock_owner)
++    table.insert(acquired_shared, key)
++end
++
++-- Return empty table to indicate success
++return {}
++"""
++
+ 
+ def resource_to_lock_key(resource_name):
+     """
+@@ -59,34 +125,114 @@ def resource_to_lock_key(resource_name):
+     return f"{REDIS_LOCK_PREFIX}{resource_name}"
+ 
+ 
+-def release_resource_locks(redis_conn, lock_owner, resources):
++def acquire_locks(redis_conn, lock_owner, exclusive_resources, shared_resources):
+     """
+-    Release Redis distributed locks for the given resources.
+-
+-    Uses a Lua script to ensure we only release locks that we own.
++    Atomically try to acquire exclusive and shared locks for resources.
+ 
+     Args:
+         redis_conn: Redis connection
+-        lock_owner (str): The identifier of the lock owner
+-        resources (list): List of resource names to release locks for
++        lock_owner (str): The identifier of the lock owner (worker/task)
++        exclusive_resources (list): List of exclusive resource names
++        shared_resources (list): List of shared resource names
++
++    Returns:
++        list: Empty list if all locks acquired successfully,
++              list of blocked resource names if acquisition failed
+     """
+     if not redis_conn:
+-        return
++        return []
++
++    # Sort resources deterministically to prevent deadlocks
++    exclusive_resources = sorted(exclusive_resources) if exclusive_resources else []
++    shared_resources = sorted(shared_resources) if shared_resources else []
++
++    if not exclusive_resources and not shared_resources:
++        return []
++
++    # Build KEYS list: exclusive lock keys + shared lock keys
++    keys = []
++    for resource in exclusive_resources:
++        keys.append(resource_to_lock_key(resource))
++    for resource in shared_resources:
++        keys.append(resource_to_lock_key(resource))
++
++    # Build ARGV list: lock_owner, num_exclusive, resource names (for error reporting)
++    args = [lock_owner, str(len(exclusive_resources))]
++    args.extend(exclusive_resources)
++    args.extend(shared_resources)
++
++    # Register and execute the Lua script
++    acquire_script = redis_conn.register_script(REDIS_ACQUIRE_LOCKS_SCRIPT)
++    try:
++        blocked_resources = acquire_script(keys=keys, args=args)
++        # Redis returns list of blocked resources or empty list
++        return blocked_resources if blocked_resources else []
++    except Exception as e:
++        _logger.error("Error acquiring locks: %s", e)
++        return ["error"]  # Return non-empty list to indicate failure
++
++
++def release_shared_resource_locks(redis_conn, lock_owner, shared_resources):
++    """
++    Release shared resource locks by removing task from Redis sets.
+ 
+-    # Register the unlock script
+-    unlock_script = redis_conn.register_script(REDIS_UNLOCK_SCRIPT)
++    Args:
++        redis_conn: Redis connection
++        lock_owner (str): The identifier of the lock owner (task ID)
++        shared_resources (list): List of shared resource names
++    """
++    if not redis_conn or not shared_resources:
++        return
+ 
+-    for resource in resources:
++    for resource in shared_resources:
+         try:
+             lock_key = resource_to_lock_key(resource)
+-            # Use Lua script to atomically check and delete only if we own the lock
+-            released = unlock_script(keys=[lock_key], args=[lock_owner])
+-            if released:
+-                _logger.debug("Released lock for resource: %s", resource)
++            # Remove this task from the shared resource set
++            removed = redis_conn.srem(lock_key, lock_owner)
++            if removed:
++                _logger.debug("Released shared resource: %s", resource)
+             else:
+-                _logger.warning("Lock for resource %s was not owned by %s", resource, lock_owner)
++                _logger.warning("Shared resource %s did not contain %s", resource, lock_owner)
+         except Exception as e:
+-            _logger.error("Error releasing lock for resource %s: %s", resource, e)
++            _logger.error("Error releasing shared resource %s: %s", resource, e)
++
++
++def release_resource_locks(redis_conn, lock_owner, resources, shared_resources=None):
++    """
++    Release Redis distributed locks for exclusive and shared resources.
++
++    Uses a Lua script to ensure we only release exclusive locks that we own.
++    Removes task from shared resource sets.
++
++    Args:
++        redis_conn: Redis connection
++        lock_owner (str): The identifier of the lock owner
++        resources (list): List of exclusive resource names to release locks for
++        shared_resources (list): Optional list of shared resource names
++    """
++    if not redis_conn:
++        return
++
++    # Release exclusive locks
++    if resources:
++        # Register the unlock script
++        unlock_script = redis_conn.register_script(REDIS_UNLOCK_SCRIPT)
++
++        for resource in resources:
++            try:
++                lock_key = resource_to_lock_key(resource)
++                # Use Lua script to atomically check and delete only if we own the lock
++                released = unlock_script(keys=[lock_key], args=[lock_owner])
++                if released:
++                    _logger.debug("Released exclusive lock for resource: %s", resource)
++                else:
++                    _logger.warning("Lock for resource %s was not owned by %s", resource, lock_owner)
++            except Exception as e:
++                _logger.error("Error releasing lock for resource %s: %s", resource, e)
++
++    # Release shared resources
++    if shared_resources:
++        release_shared_resource_locks(redis_conn, lock_owner, shared_resources)
+ 
+ 
+ async def async_release_resource_locks(redis_conn, lock_owner, resources):
 -- 
 2.52.0
 
