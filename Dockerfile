@@ -131,9 +131,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
-COPY images/assets/patches/0023-Add-auth-override-pulp-python.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0023-Add-auth-override-pulp-python.patch
-
 COPY images/assets/patches/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch
 
