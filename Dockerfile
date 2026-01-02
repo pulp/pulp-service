@@ -101,6 +101,7 @@ COPY images/assets/pulp-api /usr/bin/pulp-api
 COPY images/assets/pulp-content /usr/bin/pulp-content
 COPY images/assets/pulp-resource-manager /usr/bin/pulp-resource-manager
 COPY images/assets/pulp-worker /usr/bin/pulp-worker
+COPY images/assets/log_middleware.py /usr/bin/log_middleware.py
 
 USER pulp:pulp
 RUN PULP_STATIC_ROOT=/var/lib/operator/static/ PULP_CONTENT_ORIGIN=localhost \
