@@ -32,18 +32,18 @@ class UserExtractionMiddleware:
                 
                 if 'identity' in identity_data:
                     identity = identity_data['identity']
-                    # User details (highest priority - most specific)
-                    if 'user' in identity and 'username' in identity['user']:
-                        username = identity['user']['username']
+                    # org_id (highest priority - most specific)
+                    if 'org_id' in identity:
+                        username = f"org:{identity['org_id']}"
                     # Service account (x509 certificate)
                     elif 'x509' in identity and 'subject_dn' in identity['x509']:
                         username = identity['x509']['subject_dn']
                     # SAML user
                     elif 'associate' in identity and 'email' in identity['associate']:
                         username = identity['associate']['email']
-                    # Org ID (fallback)
-                    elif 'org_id' in identity:
-                        username = f"org:{identity['org_id']}"
+                    # username (fallback)
+                    elif 'user' in identity and 'username' in identity['user']:
+                        username = identity['user']['username']
                 
                 if not username:
                     log.warning(f"X-RH-IDENTITY present but no username found.")
