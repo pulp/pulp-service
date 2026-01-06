@@ -8,14 +8,12 @@ for the unblocking mechanism and all task cancellation support.
 
 from gettext import gettext as _
 import functools
-import hashlib
 import logging
 import os
 import random
 import select
 import signal
 import time
-import uuid
 from datetime import timedelta
 from multiprocessing import Process
 from tempfile import TemporaryDirectory
@@ -30,7 +28,9 @@ from pulpcore.constants import (
     TASK_FINAL_STATES,
     TASK_SCHEDULING_LOCK,
     WORKER_CLEANUP_LOCK,
+    TASK_METRICS_LOCK,
 )
+from pulpcore.metrics import init_otel_meter
 from pulpcore.app.apps import pulp_plugin_configs
 from pulpcore.app.util import get_worker_name
 from pulpcore.app.models import Task, AppStatus
@@ -40,7 +40,6 @@ from pulpcore.tasking._util import (
     dispatch_scheduled_tasks,
     perform_task,
     startup_hook,
-    REDIS_LOCK_PREFIX,
     resource_to_lock_key,
     release_resource_locks,
     acquire_locks,
@@ -126,6 +125,9 @@ class NewPulpcoreWorker:
             int(WORKER_CLEANUP_INTERVAL / 10), WORKER_CLEANUP_INTERVAL
         )
 
+        # Metric recording interval (every 3 heartbeats)
+        self.metric_heartbeat_countdown = 3
+
         # Cache worker count for sleep calculation (updated during beat)
         self.num_workers = 1
 
@@ -138,9 +140,24 @@ class NewPulpcoreWorker:
         os.set_blocking(sentinel_w, False)
         signal.set_wakeup_fd(sentinel_w)
 
+        self._init_instrumentation()
+
         startup_hook()
 
         _logger.info("Initialized NewPulpcoreWorker with Redis lock-based algorithm")
+
+    def _init_instrumentation(self):
+        """Initialize OpenTelemetry instrumentation if enabled."""
+        if settings.OTEL_ENABLED:
+            meter = init_otel_meter("pulp-worker")
+            self.task_queue_size_meter = meter.create_gauge(
+                name="task_queue_size",
+                description="Number of running and waiting tasks older than 5 seconds.",
+                unit="tasks",
+            )
+            self.otel_enabled = True
+        else:
+            self.otel_enabled = False
 
     def _signal_handler(self, thesignal, frame):
         """Handle shutdown signals."""
@@ -290,6 +307,31 @@ class NewPulpcoreWorker:
         """Dispatch scheduled tasks."""
         dispatch_scheduled_tasks()
 
+    @exclusive(TASK_METRICS_LOCK)
+    def record_task_queue_size_metric(self):
+        """
+        Record metrics for running and waiting tasks older than 5 seconds.
+
+        This method counts tasks in RUNNING or WAITING state that were created
+        more than 5 seconds ago, providing visibility into task queue depth.
+        """
+        # Calculate the cutoff time (5 seconds ago)
+        cutoff_time = timezone.now() - timedelta(seconds=5)
+
+        # Count tasks in RUNNING or WAITING state older than 5 seconds
+        task_count = Task.objects.filter(
+            state__in=[TASK_STATES.RUNNING, TASK_STATES.WAITING],
+            pulp_created__lt=cutoff_time
+        ).count()
+
+        # Set the metric value
+        self.task_queue_size_meter.set(task_count)
+
+        _logger.debug(
+            "Task queue size metric: %d tasks (running or waiting, older than 5s)",
+            task_count
+        )
+
     def beat(self):
         """Periodic worker maintenance tasks (heartbeat, cleanup, etc.)."""
         now = timezone.now()
@@ -307,6 +349,13 @@ class NewPulpcoreWorker:
                 self.app_worker_cleanup()
 
             self.dispatch_scheduled_tasks()
+
+            # Record metrics every 3 heartbeats
+            if self.otel_enabled:
+                self.metric_heartbeat_countdown -= 1
+                if self.metric_heartbeat_countdown <= 0:
+                    self.metric_heartbeat_countdown = 3
+                    self.record_task_queue_size_metric()
 
             # Update cached worker count for sleep calculation
             self.num_workers = AppStatus.objects.online().filter(app_type='worker').count()
