@@ -35,7 +35,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 2,
-      "id": 1026002,
+      "id": null,
       "links": [],
       "panels": [],
       "preload": false,
