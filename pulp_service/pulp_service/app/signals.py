@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
@@ -8,20 +9,30 @@ from pulpcore.metrics import init_otel_meter
 from pulp_service.app.models import DomainOrg
 
 
-# Initialize OTEL meter and counter for new user tracking
-meter = init_otel_meter("pulp-api")
-new_users_counter = meter.create_counter(
-    name="users.new.count",
-    description="Total count of new users created",
-    unit="1",
-)
+# Lazy initialization for OTEL meter and counter
+_meter = None
+_new_users_counter = None
 
 
-@receiver(post_save, sender=get_user_model())
+def _get_new_users_counter():
+    """Lazily initialize and return the new users counter."""
+    global _meter, _new_users_counter
+    if _new_users_counter is None:
+        _meter = init_otel_meter("pulp-api")
+        _new_users_counter = _meter.create_counter(
+            name="users.new.count",
+            description="Total count of new users created",
+            unit="user",
+        )
+    return _new_users_counter
+
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def track_new_user(sender, instance, created, **kwargs):
     """Increment new user counter when User is created."""
     if created:
-        new_users_counter.add(1)
+        counter = _get_new_users_counter()
+        counter.add(1)
 
 
 @receiver(post_save, sender=Domain)
