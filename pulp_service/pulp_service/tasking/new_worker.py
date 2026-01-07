@@ -58,6 +58,8 @@ TASK_KILL_INTERVAL = 1
 WORKER_CLEANUP_INTERVAL = 50
 # Number of heartbeats between rechecking ignored tasks
 IGNORED_TASKS_CLEANUP_INTERVAL = 100
+# Number of heartbeats between recording metrics
+METRIC_HEARTBEAT_INTERVAL = 3
 # Number of tasks to fetch in each query
 FETCH_TASK_LIMIT = 20
 
@@ -125,8 +127,8 @@ class NewPulpcoreWorker:
             int(WORKER_CLEANUP_INTERVAL / 10), WORKER_CLEANUP_INTERVAL
         )
 
-        # Metric recording interval (every 3 heartbeats)
-        self.metric_heartbeat_countdown = 3
+        # Metric recording interval
+        self.metric_heartbeat_countdown = METRIC_HEARTBEAT_INTERVAL
 
         # Cache worker count for sleep calculation (updated during beat)
         self.num_workers = 1
@@ -150,9 +152,9 @@ class NewPulpcoreWorker:
         """Initialize OpenTelemetry instrumentation if enabled."""
         if settings.OTEL_ENABLED:
             meter = init_otel_meter("pulp-worker")
-            self.task_queue_size_meter = meter.create_gauge(
-                name="task_queue_size",
-                description="Number of running and waiting tasks older than 5 seconds.",
+            self.waiting_tasks_meter = meter.create_gauge(
+                name="waiting_tasks",
+                description="Number of waiting and running tasks minus the number of workers.",
                 unit="tasks",
             )
             self.otel_enabled = True
@@ -308,12 +310,13 @@ class NewPulpcoreWorker:
         dispatch_scheduled_tasks()
 
     @exclusive(TASK_METRICS_LOCK)
-    def record_task_queue_size_metric(self):
+    def record_waiting_tasks_metric(self):
         """
-        Record metrics for running and waiting tasks older than 5 seconds.
+        Record metrics for waiting tasks in the queue.
 
-        This method counts tasks in RUNNING or WAITING state that were created
-        more than 5 seconds ago, providing visibility into task queue depth.
+        This method counts all tasks in RUNNING or WAITING state that are older
+        than 5 seconds, then subtracts the number of active workers to get the
+        number of tasks waiting to be picked up by workers.
         """
         # Calculate the cutoff time (5 seconds ago)
         cutoff_time = timezone.now() - timedelta(seconds=5)
@@ -324,12 +327,17 @@ class NewPulpcoreWorker:
             pulp_created__lt=cutoff_time
         ).count()
 
+        # Calculate waiting tasks: total tasks - workers
+        waiting_tasks = task_count - self.num_workers
+
         # Set the metric value
-        self.task_queue_size_meter.set(task_count)
+        self.waiting_tasks_meter.set(waiting_tasks)
 
         _logger.debug(
-            "Task queue size metric: %d tasks (running or waiting, older than 5s)",
-            task_count
+            "Waiting tasks metric: %d tasks (%d total tasks older than 5s - %d workers)",
+            waiting_tasks,
+            task_count,
+            self.num_workers
         )
 
     def beat(self):
@@ -350,12 +358,12 @@ class NewPulpcoreWorker:
 
             self.dispatch_scheduled_tasks()
 
-            # Record metrics every 3 heartbeats
+            # Record metrics periodically
             if self.otel_enabled:
                 self.metric_heartbeat_countdown -= 1
                 if self.metric_heartbeat_countdown <= 0:
-                    self.metric_heartbeat_countdown = 3
-                    self.record_task_queue_size_metric()
+                    self.metric_heartbeat_countdown = METRIC_HEARTBEAT_INTERVAL
+                    self.record_waiting_tasks_metric()
 
             # Update cached worker count for sleep calculation
             self.num_workers = AppStatus.objects.online().filter(app_type='worker').count()
