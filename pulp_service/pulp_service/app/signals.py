@@ -1,25 +1,28 @@
+import logging
+
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 
 from pulpcore.plugin.models import Domain
-from pulpcore.metrics import init_otel_meter
 
 from pulp_service.app.models import DomainOrg
 
 
+_logger = logging.getLogger(__name__)
+
+
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def track_new_user(sender, instance, created, **kwargs):
-    """Increment new user counter when User is created."""
+def log_new_user(sender, instance, created, **kwargs):
+    """Log when a new user is created, including the route they first accessed."""
     if created:
-        meter = init_otel_meter("pulp-api")
-        counter = meter.create_counter(
-            name="users.new.count",
-            description="Total count of new users created",
-            unit="user",
+        from pulp_service.app.middleware import request_path_var
+
+        request_path = request_path_var.get(None)
+        _logger.info(
+            f"New user created: username={instance.username}, route={request_path or 'unknown'}"
         )
-        counter.add(1)
 
 
 @receiver(post_save, sender=Domain)
