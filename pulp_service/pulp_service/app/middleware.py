@@ -24,7 +24,7 @@ _logger = logging.getLogger(__name__)
 repository_name_var = ContextVar('repository_name')
 x_quay_auth_var = ContextVar('x_quay_auth')
 x_task_diagnostics_var = ContextVar('x_profile_task')
-request_path_var = ContextVar('request_path')
+request_path_var = ContextVar('request_path', default=None)
 
 
 class ProfilerMiddleware(MiddlewareMixin):
@@ -108,7 +108,14 @@ class RequestPathMiddleware(MiddlewareMixin):
     """
 
     def process_view(self, request, *args, **kwargs):
-        request_path_var.set(request.path)
+        request_path_var.set(request.get_full_path())
+
+    def process_response(self, request, response):
+        request_path_var.set(None)
+        return response
+
+    def process_exception(self, request, exception):
+        request_path_var.set(None)
 
 
 class ActiveConnectionsMetricMiddleware(MiddlewareMixin):
