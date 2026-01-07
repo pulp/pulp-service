@@ -40,3 +40,34 @@ def gen_group(pulpcore_bindings, gen_object_with_cleanup):
             pulpcore_bindings.GroupsApi, {"name": name}
         )
     return _gen_group
+
+
+@pytest.fixture()
+def cleanup_auth_headers(request, pulpcore_bindings):
+    """
+    Automatically clean up x-rh-identity headers before each test.
+
+    This prevents authentication headers from leaking between tests
+    and affecting other test results.
+    """
+    # Clean up after the test runs
+    if hasattr(pulpcore_bindings, "DomainsApi"):
+        pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+
+    # Try to clean up file_bindings if it was used in the test
+    if "file_bindings" in request.fixturenames:
+        file_bindings = request.getfixturevalue("file_bindings")
+        if hasattr(file_bindings, "RepositoriesFileApi"):
+            file_bindings.RepositoriesFileApi.api_client.default_headers.pop("x-rh-identity", None)
+
+    # Try to clean up python_bindings if it was used in the test
+    if "python_bindings" in request.fixturenames:
+        python_bindings = request.getfixturevalue("python_bindings")
+        if hasattr(python_bindings, "RepositoriesPythonApi"):
+            python_bindings.RepositoriesPythonApi.api_client.default_headers.pop(
+                "x-rh-identity", None
+            )
+        if hasattr(python_bindings, "DistributionsPypiApi"):
+            python_bindings.DistributionsPypiApi.api_client.default_headers.pop(
+                "x-rh-identity", None
+            )

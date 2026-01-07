@@ -781,6 +781,153 @@ spec:
               # Run pulp_npm functional tests
               cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_npm.tests.functional -k 'test_pull_through_install' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
+    - name: pulp-service-functional-tests
+      when:
+        - input: '$(tasks.test-metadata.results.test-event-type)'
+          operator: in
+          values: ["pull_request"]
+      runAfter:
+        - install-bindings
+      params:
+        - name: BONFIRE_IMAGE
+          value: "$(params.BONFIRE_IMAGE)"
+        - name: NS
+          value: "$(tasks.reserve-namespace.results.NS)"
+        - name: EPHEMERAL_ENV_PROVIDER_SECRET
+          value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
+      taskSpec:
+        params:
+          - name: BONFIRE_IMAGE
+            type: string
+            description: The container Bonfire image to use for the tekton tasks
+            default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
+          - name: EPHEMERAL_ENV_PROVIDER_SECRET
+            type: string
+            default: ephemeral-env-provider
+          - name: NS
+            type: string
+            description: Namespace name to deploy the application to
+        steps:
+          - name: functional-tests
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+            script: |
+              set -ex
+
+              login.sh
+
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              PASSWORD=$(oc_wrapper extract secret/pulp-admin-password --to=-)
+
+              POD=$(oc_wrapper get pod | grep -oE "pulp-api\S*")
+              echo $POD
+              oc_wrapper get pod $POD -o yaml | grep memory:
+
+              oc_wrapper get clowdenvironment env-$(oc_wrapper project | grep -oE 'ephemeral-......') -o yaml
+
+              oc_wrapper get clowdapp pulp -o yaml
+
+              ### Adapted from ./.github/workflows/scripts/utils.sh
+              # Run a command
+              cmd_prefix() {
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- "$@"
+              }
+
+              # Run a command, and pass STDIN
+              cmd_stdin_prefix() {
+                oc_wrapper exec -c pulp-api -i deployment/pulp-api -- "$@"
+              }
+              ### END Adapted from ./.github/workflows/scripts/utils.sh
+
+              debug_and_fail() {
+                oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-content\S*")
+                oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-api\S*")
+                echo "CURL OUTPUT"
+                curl https://env-${NS}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
+                echo "ROUTES"
+                oc_wrapper get route
+                exit 1
+              }
+
+              cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
+              cmd_prefix bash -c "HOME=/tmp/home pip3 install pulp-smash@git+https://github.com/pulp/pulp-smash.git@2ded6671e0f32c51e70681467199e8a195f7f5fe"
+
+              cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
+              cat << EOF >> pulp-smash.json
+              {
+                "pulp": {
+                  "auth": [
+                    "admin",
+                    "password"
+                  ],
+                  "selinux enabled": false,
+                  "version": "3"
+                },
+                "hosts": [
+                  {
+                    "hostname": "pulp-api",
+                    "roles": {
+                      "api": {
+                        "port": 8000,
+                        "scheme": "http",
+                        "service": "nginx"
+                      },
+                      "content": {
+                        "port": 8000,
+                        "scheme": "https",
+                        "service": "pulp-content"
+                      },
+                      "pulp resource manager": {},
+                      "pulp workers": {},
+                      "redis": {},
+                      "shell": {
+                        "transport": "local"
+                      }
+                    }
+                  }
+                ]
+              }
+              EOF
+              sed "s#password#${PASSWORD}#g" pulp-smash.json > pulp-smash.customized.json
+              sed -i "s/pulp-content/env-${NS}.apps.crc-eph.r9lp.p1.openshiftapps.com/g" pulp-smash.customized.json
+
+              echo "PULP-SMASH CONFIG:"
+              cat pulp-smash.customized.json
+
+              curl -o functest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/functest_requirements.txt
+              curl -o unittest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/unittest_requirements.txt
+
+              ### Adapted from ./.github/workflows/scripts/script.sh
+              cat unittest_requirements.txt | cmd_stdin_prefix bash -c "cat > /tmp/unittest_requirements.txt"
+              cat functest_requirements.txt | cmd_stdin_prefix bash -c "cat > /tmp/functest_requirements.txt"
+              cat pulp-smash.customized.json | cmd_stdin_prefix bash -c "cat > /tmp/home/.config/pulp_smash/settings.json"
+              cmd_prefix bash -c "HOME=/tmp/home pip3 install -r /tmp/unittest_requirements.txt -r /tmp/functest_requirements.txt"
+              # Because we pass the path to pytest -o cache_dir=/tmp/home/.cache/pytest_cache, pulpcore-manager must be in the same dir
+              cmd_prefix bash -c "ln -s /usr/local/lib/pulp/bin/pulpcore-manager /tmp/home/.local/bin/pulpcore-manager || /bin/true"
+              echo "CURL OUTPUT"
+              curl https://env-${NS}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
+              echo "ROUTES"
+              oc_wrapper get route
+              set +e
+
               # Run pulp_service functional tests
               cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_service.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
 
@@ -800,6 +947,7 @@ spec:
           value: "$(params.SNAPSHOT)"
       runAfter:
         - pulp-functional-tests
+        - pulp-service-functional-tests
       taskSpec:
         params:
           - name: BONFIRE_IMAGE

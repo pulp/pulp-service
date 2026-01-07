@@ -4,6 +4,7 @@ from binascii import Error as Base64DecodeError
 from django.db.models import Q
 import json
 import jq
+from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 from pulp_service.app.models import DomainOrg
 from rest_framework.permissions import BasePermission
@@ -117,3 +118,26 @@ class DomainBasedPermission(BasePermission):
                 return org_id_json_path.input_value(header_value).first()
             except json.JSONDecodeError:
                 return
+
+
+class PublicDomainPermission(BasePermission):
+    """
+    A Permission Class that grants permission to Domains with public- prefix
+    """
+
+    def has_permission(self, request, view):
+        # Only allow GET requests
+        if request.method != "GET":
+            return False
+
+        try:
+            domain_pk = get_domain_pk()
+            domain = Domain.objects.get(pk=domain_pk)
+            if domain.name.startswith("public-"):
+                return True
+        except Exception:
+            # If we can't get the domain, deny access
+            return False
+
+        # Not a public domain
+        return False
