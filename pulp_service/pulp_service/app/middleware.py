@@ -24,6 +24,7 @@ _logger = logging.getLogger(__name__)
 repository_name_var = ContextVar('repository_name')
 x_quay_auth_var = ContextVar('x_quay_auth')
 x_task_diagnostics_var = ContextVar('x_profile_task')
+request_path_var = ContextVar('request_path', default=None)
 
 
 class ProfilerMiddleware(MiddlewareMixin):
@@ -97,6 +98,24 @@ class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
                         _logger.info(f"User {user.username} authenticated for pulp-mgmt")
                     else:
                         _logger.warning("Failed to authenticate user from RH Identity header")
+
+
+class RequestPathMiddleware(MiddlewareMixin):
+    """
+    Middleware to store the request path in a context variable.
+
+    This allows signals to access the request path when processing model changes.
+    """
+
+    def process_view(self, request, *args, **kwargs):
+        request_path_var.set(request.get_full_path())
+
+    def process_response(self, request, response):
+        request_path_var.set(None)
+        return response
+
+    def process_exception(self, request, exception):
+        request_path_var.set(None)
 
 
 class ActiveConnectionsMetricMiddleware(MiddlewareMixin):
