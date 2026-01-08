@@ -776,7 +776,7 @@ objects:
             metadata:
               serverAddress: http://prometheus-app-sre.openshift-customer-monitoring.svc.cluster.local:9090
               metricName: pulp_waiting_tasks
-              query: pulp_waiting_tasks and on(pod) topk(1, max(timestamp(pulp_waiting_tasks)) by (pod))
+              query: clamp_min(pulp_waiting_tasks and on(pod) topk(1, max(timestamp(pulp_waiting_tasks)) by (pod)), 0)
               threshold: '1'
             metricType: Value
         advanced:
