@@ -15,8 +15,8 @@ index 79033d4..0e8a747 100644
      """View for the PyPI simple API."""
  
      endpoint_name = "simple"
-+    authentication_classes = []
-+    permission_classes = []
++    authentication_classes = ["PublicDomainReadAuthentication"]
++    permission_classes = ["PublicDomainReadPermission"]
      DEFAULT_ACCESS_POLICY = {
          "statements": [
              {

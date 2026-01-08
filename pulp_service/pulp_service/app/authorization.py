@@ -117,3 +117,29 @@ class DomainBasedPermission(BasePermission):
                 return org_id_json_path.input_value(header_value).first()
             except json.JSONDecodeError:
                 return
+
+
+class PublicDomainReadPermission(BasePermission):
+    """
+    Permission class that allows anonymous GET requests to domains starting with 'public-'.
+    
+    This should be used in conjunction with PublicDomainReadAuthentication.
+    
+    - Anonymous users: Allowed GET requests to public-* domains only
+    - Authenticated users: All requests pass (other permission classes handle authorization)
+    """
+
+    def has_permission(self, request, view):
+        # Authenticated users pass through to other permission classes
+        if request.user.is_authenticated:
+            return True
+        
+        # Anonymous users: only allow GET requests to public domains
+        if request.method == 'GET':
+            domain = getattr(request, 'pulp_domain', None)
+            if domain and domain.name.startswith('public-'):
+                _logger.debug(f"Granting anonymous GET permission to public domain: {domain.name}")
+                return True
+        
+        # Deny all other anonymous requests
+        return False
