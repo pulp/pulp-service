@@ -81,7 +81,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as daily_active_users by bin(24h)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as daily_active_users by bin(24h)"
               }
             ],
             "options": {
@@ -139,7 +139,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as weekly_active_users by bin(7d)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as weekly_active_users by bin(7d)"
               }
             ],
             "options": {
@@ -197,7 +197,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as monthly_active_users by bin(30d)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as monthly_active_users by bin(30d)"
               }
             ],
             "options": {
@@ -255,7 +255,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(24h) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(24h) as time"
               },
               {
                 "refId": "WAU",
@@ -272,7 +272,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(7d) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(7d) as time"
               },
               {
                 "refId": "MAU",
@@ -289,7 +289,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(30d) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(30d) as time"
               }
             ],
             "options": {
@@ -400,7 +400,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, first_route=*\" as username, route\n| parse route '/api/pypi/*/pypi/' as distribution\n| filter distribution = '${distribution}'\n| stats count() as new_users by bin(24h) as time"
+                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, first_route=*\" as username, route\n| parse route '/api/pypi/*/pypi/*' as distribution, rest\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count() as new_users by bin(24h) as time"
               }
             ],
             "options": {
@@ -448,7 +448,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| fields case(\n    user like /^\\/O=/, \"service_account\",\n    user like /^org:/, \"org_only\",\n    user like /@/, \"email\",\n    true, \"username\"\n  ) as user_type\n| stats count_distinct(user) as unique_users by user_type"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| fields case(\n    user like /^\\/O=/, \"service_account\",\n    user like /^org:/, \"org_only\",\n    user like /@/, \"email\",\n    true, \"username\"\n  ) as user_type\n| stats count_distinct(user) as unique_users by user_type"
               }
             ],
             "options": {
@@ -498,7 +498,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
               }
             ],
             "options": {
@@ -608,7 +608,7 @@ data:
                   "uid": "P1A97A9592CB7F392"
                 },
                 "dimensions": {},
-                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter distribution = '${distribution}'\n| stats count() as downloads by distribution, package\n| sort downloads desc\n| limit 10",
+                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter isnotnull(distribution)\n| filter distribution = '${distribution}'\n| stats count() as downloads by distribution, package\n| sort downloads desc\n| limit 10",
                 "id": "",
                 "label": "",
                 "logGroups": [
@@ -640,11 +640,7 @@ data:
             "type": "barchart"
           },
           {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "type": "table",
+            "type": "text",
             "title": "Tracked Package Usage (DISABLED)",
             "gridPos": {
               "h": 3,
@@ -653,90 +649,14 @@ data:
               "y": 33
             },
             "id": 13,
-            "description": "⚠️ DISABLED - Too many packages (397+) for filtering. Use table search in 'Top 10 Packages' instead.",
             "transparent": true,
-            "targets": [
-              {
-                "refId": "A",
-                "datasource": {
-                  "type": "cloudwatch",
-                  "uid": "P1A97A9592CB7F392"
-                },
-                "queryMode": "Logs",
-                "region": "default",
-                "logGroups": [
-                  {
-                    "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
-                    "name": "${log_group}"
-                  }
-                ],
-                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter distribution = '${distribution}'\n| filter package in [${package_filter:singlequote}]\n| stats count() as downloads by package\n| sort downloads desc"
-              }
-            ],
             "options": {
-              "showHeader": true,
-              "footer": {
-                "show": true,
-                "reducer": ["sum"],
-                "fields": ["downloads"]
-              }
-            },
-            "fieldConfig": {
-              "defaults": {
-                "custom": {
-                  "align": "auto",
-                  "filterable": true
-                }
-              },
-              "overrides": [
-                {
-                  "matcher": {
-                    "id": "byName",
-                    "options": "downloads"
-                  },
-                  "properties": [
-                    {
-                      "id": "custom.width",
-                      "value": 120
-                    },
-                    {
-                      "id": "color",
-                      "value": {
-                        "mode": "thresholds"
-                      }
-                    },
-                    {
-                      "id": "thresholds",
-                      "value": {
-                        "mode": "absolute",
-                        "steps": [
-                          {
-                            "value": null,
-                            "color": "red"
-                          },
-                          {
-                            "value": 1,
-                            "color": "yellow"
-                          },
-                          {
-                            "value": 100,
-                            "color": "green"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              ]
+              "mode": "markdown",
+              "content": "### ⚠️ Panel Disabled\n\nThis panel is **disabled** to avoid CloudWatch query costs.\n\n**Reason:** Too many packages (397+) exceed Grafana's variable filtering limits.\n\n**Alternative:** Use the table search feature in the **'Top 10 Packages'** panel to find specific package download counts."
             }
           },
           {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "type": "table",
+            "type": "text",
             "title": "80/20 Download Concentration (DISABLED)",
             "gridPos": {
               "h": 3,
@@ -745,106 +665,11 @@ data:
               "y": 41
             },
             "id": 14,
-            "description": "⚠️ DISABLED - Too many packages (397+). Manually analyze download data or use CloudWatch Insights for 80/20 analysis.",
             "transparent": true,
-            "targets": [
-              {
-                "refId": "A",
-                "datasource": {
-                  "type": "cloudwatch",
-                  "uid": "P1A97A9592CB7F392"
-                },
-                "queryMode": "Logs",
-                "region": "default",
-                "logGroups": [
-                  {
-                    "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
-                    "name": "${log_group}"
-                  }
-                ],
-                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter distribution = '${distribution}'\n| stats count() as downloads by package\n| sort downloads desc\n| limit 50"
-              }
-            ],
             "options": {
-              "showHeader": true,
-              "footer": {
-                "show": true,
-                "reducer": ["sum"],
-                "fields": ["downloads"]
-              }
-            },
-            "fieldConfig": {
-              "defaults": {
-                "custom": {
-                  "align": "auto",
-                  "filterable": true
-                }
-              },
-              "overrides": [
-                {
-                  "matcher": {
-                    "id": "byName",
-                    "options": "downloads"
-                  },
-                  "properties": [
-                    {
-                      "id": "custom.width",
-                      "value": 150
-                    },
-                    {
-                      "id": "unit",
-                      "value": "short"
-                    }
-                  ]
-                }
-              ]
-            },
-            "transformations": [
-              {
-                "id": "calculateField",
-                "options": {
-                  "mode": "reduceRow",
-                  "reduce": {
-                    "reducer": "sum"
-                  },
-                  "replaceFields": false,
-                  "alias": "total"
-                }
-              },
-              {
-                "id": "calculateField",
-                "options": {
-                  "mode": "binary",
-                  "binary": {
-                    "left": "downloads",
-                    "operator": "/",
-                    "right": "total"
-                  },
-                  "reduce": {
-                    "reducer": "sum"
-                  },
-                  "replaceFields": false,
-                  "alias": "percentage"
-                }
-              },
-              {
-                "id": "organize",
-                "options": {
-                  "excludeByName": {
-                    "total": true
-                  },
-                  "indexByName": {
-                    "package": 0,
-                    "downloads": 1,
-                    "percentage": 2
-                  },
-                  "renameByName": {
-                    "percentage": "% of Total"
-                  }
-                }
-              }
-            ]
+              "mode": "markdown",
+              "content": "### ⚠️ Panel Disabled\n\nThis panel is **disabled** to avoid CloudWatch query costs.\n\n**Reason:** Too many packages (397+) make Pareto analysis impractical in Grafana.\n\n**Alternative:** Run a custom CloudWatch Insights query for 80/20 analysis:\n\n```\nfields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter distribution = 'your-distribution-name'\n| stats count() as downloads by package\n| sort downloads desc\n```\n\nThen calculate cumulative percentages manually."
+            }
           },
           {
             "collapsed": true,
