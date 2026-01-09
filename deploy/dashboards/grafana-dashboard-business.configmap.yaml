@@ -866,6 +866,60 @@ data:
           "list": [
             {
               "type": "custom",
+              "name": "log_group",
+              "label": "Environment",
+              "query": "crcs02ue1.pulp-stage,crcp01ue1.pulp-prod",
+              "current": {
+                "selected": true,
+                "text": "crcp01ue1.pulp-prod",
+                "value": "crcp01ue1.pulp-prod"
+              },
+              "options": [
+                {
+                  "text": "Stage",
+                  "value": "crcs02ue1.pulp-stage",
+                  "selected": false
+                },
+                {
+                  "text": "Production",
+                  "value": "crcp01ue1.pulp-prod",
+                  "selected": true
+                }
+              ],
+              "includeAll": false,
+              "multi": false,
+              "skipUrlSync": false,
+              "hide": 0
+            },
+            {
+              "type": "custom",
+              "name": "distribution",
+              "label": "Distribution",
+              "query": "public-calunga,public-calunga-prod",
+              "current": {
+                "selected": true,
+                "text": "public-calunga-prod",
+                "value": "public-calunga-prod"
+              },
+              "options": [
+                {
+                  "text": "Calunga",
+                  "value": "public-calunga",
+                  "selected": false
+                },
+                {
+                  "text": "Calunga Prod",
+                  "value": "public-calunga-prod",
+                  "selected": true
+                }
+              ],
+              "includeAll": false,
+              "multi": false,
+              "skipUrlSync": false,
+              "hide": 0
+            },
+            {
+              "type": "custom",
               "name": "package_filter",
               "label": "Package Filter",
               "query": "Django,SecretStorage,aiodns,aiohttp,annotated-types,asgiref,cffi,crc-pulp_python-client,crc-pulpcore-client,cryptography,jaraco.classes,jaraco.context,jaraco.functools,jeepney,jq,keyring,more-itertools,pycparser,pydantic,pydantic_core,python-dateutil,six,sqlparse,typing-inspection,typing_extensions,urllib3",
