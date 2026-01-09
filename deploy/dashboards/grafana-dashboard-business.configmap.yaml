@@ -77,11 +77,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| stats count_distinct(user) as daily_active_users by bin(24h)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as daily_active_users by bin(24h)"
               }
             ],
             "options": {
@@ -135,11 +135,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| stats count_distinct(user) as weekly_active_users by bin(7d)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as weekly_active_users by bin(7d)"
               }
             ],
             "options": {
@@ -193,11 +193,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| stats count_distinct(user) as monthly_active_users by bin(30d)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as monthly_active_users by bin(30d)"
               }
             ],
             "options": {
@@ -251,11 +251,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| stats count_distinct(user) as value by bin(24h) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(24h) as time"
               },
               {
                 "refId": "WAU",
@@ -268,11 +268,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| stats count_distinct(user) as value by bin(7d) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(7d) as time"
               },
               {
                 "refId": "MAU",
@@ -285,11 +285,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| stats count_distinct(user) as value by bin(30d) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count_distinct(user) as value by bin(30d) as time"
               }
             ],
             "options": {
@@ -396,11 +396,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, first_route=*\" as username, route\n| stats count() as new_users by bin(24h) as time"
+                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, first_route=*\" as username, route\n| parse route '/api/pypi/*/pypi/' as distribution\n| filter distribution = '${distribution}'\n| stats count() as new_users by bin(24h) as time"
               }
             ],
             "options": {
@@ -444,11 +444,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| fields case(\n    user like /^\\/O=/, \"service_account\",\n    user like /^org:/, \"org_only\",\n    user like /@/, \"email\",\n    true, \"username\"\n  ) as user_type\n| stats count_distinct(user) as unique_users by user_type"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| fields case(\n    user like /^\\/O=/, \"service_account\",\n    user like /^org:/, \"org_only\",\n    user like /@/, \"email\",\n    true, \"username\"\n  ) as user_type\n| stats count_distinct(user) as unique_users by user_type"
               }
             ],
             "options": {
@@ -494,11 +494,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter distribution = '${distribution}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
               }
             ],
             "options": {
@@ -608,14 +608,14 @@ data:
                   "uid": "P1A97A9592CB7F392"
                 },
                 "dimensions": {},
-                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| stats count() as downloads by distribution, package\n| sort downloads desc\n| limit 10",
+                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter distribution = '${distribution}'\n| stats count() as downloads by distribution, package\n| sort downloads desc\n| limit 10",
                 "id": "",
                 "label": "",
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
                 "matchExact": true,
@@ -645,15 +645,16 @@ data:
               "uid": "P1A97A9592CB7F392"
             },
             "type": "table",
-            "title": "Tracked Package Usage (Zero Downloads Detection)",
+            "title": "Tracked Package Usage (DISABLED)",
             "gridPos": {
-              "h": 8,
+              "h": 3,
               "w": 12,
               "x": 12,
               "y": 33
             },
             "id": 13,
-            "description": "Shows download counts for tracked packages. Packages not listed have zero downloads in the selected time range.",
+            "description": "⚠️ DISABLED - Too many packages (397+) for filtering. Use table search in 'Top 10 Packages' instead.",
+            "transparent": true,
             "targets": [
               {
                 "refId": "A",
@@ -666,11 +667,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter package in [${package_filter:singlequote}]\n| stats count() as downloads by package\n| sort downloads desc"
+                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter distribution = '${distribution}'\n| filter package in [${package_filter:singlequote}]\n| stats count() as downloads by package\n| sort downloads desc"
               }
             ],
             "options": {
@@ -736,15 +737,16 @@ data:
               "uid": "P1A97A9592CB7F392"
             },
             "type": "table",
-            "title": "80/20 Download Concentration",
+            "title": "80/20 Download Concentration (DISABLED)",
             "gridPos": {
-              "h": 8,
+              "h": 3,
               "w": 24,
               "x": 0,
               "y": 41
             },
             "id": 14,
-            "description": "Shows package download distribution. Top packages typically represent 80% of total downloads (Pareto principle).",
+            "description": "⚠️ DISABLED - Too many packages (397+). Manually analyze download data or use CloudWatch Insights for 80/20 analysis.",
+            "transparent": true,
             "targets": [
               {
                 "refId": "A",
@@ -757,11 +759,11 @@ data:
                 "logGroups": [
                   {
                     "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:crcp01ue1.pulp-prod:*",
-                    "name": "crcp01ue1.pulp-prod"
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| stats count() as downloads by package\n| sort downloads desc\n| limit 50"
+                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter distribution = '${distribution}'\n| stats count() as downloads by package\n| sort downloads desc\n| limit 50"
               }
             ],
             "options": {
