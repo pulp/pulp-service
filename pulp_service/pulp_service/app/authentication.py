@@ -1,7 +1,13 @@
+import jq
+import json
 import logging
 
+from base64 import b64decode
+from binascii import Error as Base64DecodeError
 from django.contrib.auth import get_user_model
+from gettext import gettext as _
 from pulpcore.app.authentication import JSONHeaderRemoteAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 
 
 _logger = logging.getLogger(__name__)
@@ -45,3 +51,34 @@ class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
         except User.DoesNotExist:
             _logger.warning(f"User with id {user_id} not found in get_user()")
             return None
+
+class DeprecateCRHCSA(JSONHeaderRemoteAuthentication):
+
+    header = "HTTP_X_RH_IDENTITY"
+    jq_filter = ".identity.service_account.username"
+
+    def authenticate(self, request):
+        if self.header not in request.META:
+            return None
+
+        try:
+            header_content = request.META.get(self.header)
+            header_decoded_content = b64decode(header_content)
+        except Base64DecodeError:
+            _logger.debug(_("Access not allowed - Header content is not Base64 encoded."))
+            raise AuthenticationFailed(_("Access denied."))
+
+        try:
+            header_value = json.loads(header_decoded_content)
+            json_path = jq.compile(self.jq_filter)
+
+            remote_user = json_path.input_value(header_value).first()
+        except json.JSONDecodeError:
+            _logger.debug(_("Access not allowed - Invalid JSON."))
+            raise AuthenticationFailed(_("Access denied. Invalid JSON."))
+
+        if remote_user:
+            _logger.warning(f"Deprecated c.rh.c SA authentication method attempted by user: {remote_user}")
+            return None
+
+        return None
