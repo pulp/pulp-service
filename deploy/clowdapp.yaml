@@ -442,6 +442,8 @@ objects:
             value: ${PULP_API_APP_TTL}
           - name: PULP_RDS_CONNECTION_TESTS_ENABLED
             value: ${PULP_RDS_CONNECTION_TESTS_ENABLED}
+          - name: PULP_WORKER_TYPE
+            value: ${PULP_WORKER_TYPE}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -574,6 +576,8 @@ objects:
             value: ${PULP_CLAMAV_SVC_NAME}.$(NAMESPACE).svc
           - name: PULP_CLAMAV_PORT
             value: ${PULP_CLAMAV_SVC_PORT}
+          - name: PULP_WORKER_TYPE
+            value: ${PULP_WORKER_TYPE}
 
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
@@ -671,6 +675,8 @@ objects:
             value: ${PULP_UPLOAD_PROTECTION_TIME}
           - name: PULP_MAX_CONCURRENT_CONTENT
             value: ${PULP_MAX_CONCURRENT_CONTENT}
+          - name: PULP_WORKER_TYPE
+            value: ${PULP_WORKER_TYPE}
 
     - name: worker-auxiliary
       replicas: ${{PULP_WORKER_AUXILIARY_REPLICAS}}
@@ -766,6 +772,8 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
+          - name: PULP_WORKER_TYPE
+            value: ${PULP_WORKER_TYPE}
       autoScaler:
         minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
         maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
@@ -1371,3 +1379,6 @@ parameters:
   - name: PULP_RDS_CONNECTION_TESTS_ENABLED
     description: Enable RDS Connection tests endpoints.
     value: "false"
+  - name: PULP_WORKER_TYPE
+    description: Worker implementation type (pulpcore or redis).
+    value: "redis"
