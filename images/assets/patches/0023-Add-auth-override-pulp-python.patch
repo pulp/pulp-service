@@ -1,7 +1,7 @@
 From 6632cb10ac66d70091b4b42ec0469b963fdcc32d Mon Sep 17 00:00:00 2001
 From: Yasen <yasen@trahnov.eu>
 Date: Fri, 8 Aug 2025 15:44:15 +0200
-Subject: [PATCH 1/2] Add auth override to pulp-python SimpleView
+Subject: [PATCH 1/3] Add auth override to pulp-python SimpleView
 
 ---
  pulp_python/app/pypi/views.py | 2 ++
@@ -27,7 +27,7 @@ index b7808a9..3f44390 100644
 From 88bb3da0ef0a8ac1c0a51188bd31a7f72f2eb96e Mon Sep 17 00:00:00 2001
 From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
 Date: Wed, 7 Jan 2026 14:21:13 -0300
-Subject: [PATCH 2/2] Add PublicDomainPermission to SimpleView
+Subject: [PATCH 2/3] Add PublicDomainPermission to SimpleView
  permission_classes
 
 ---
@@ -53,6 +53,41 @@ index 3f44390..cf0f596 100644
 -    authentication_classes = []
 -    permission_classes = []
 +    permission_classes = [PublicDomainPermission|DomainBasedPermission]
+     DEFAULT_ACCESS_POLICY = {
+         "statements": [
+             {
+-- 
+2.46.2
+
+
+From 6c903ecd75b8d55e8aadece91cb22dce2a4de10a Mon Sep 17 00:00:00 2001
+From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
+Date: Tue, 13 Jan 2026 15:21:53 -0300
+Subject: [PATCH 3/3] Change PublicDomainPermission with AllowUnauthPull class
+
+---
+ pulp_python/app/pypi/views.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/pulp_python/app/pypi/views.py b/pulp_python/app/pypi/views.py
+index cf0f596..5ce8030 100644
+--- a/pulp_python/app/pypi/views.py
++++ b/pulp_python/app/pypi/views.py
+@@ -54,7 +54,7 @@ from pulp_python.app.utils import (
+ )
+ 
+ from pulp_python.app import tasks
+-from pulp_service.app.authorization import DomainBasedPermission, PublicDomainPermission
++from pulp_service.app.authorization import DomainBasedPermission, AllowUnauthPull
+ 
+ log = logging.getLogger(__name__)
+ 
+@@ -256,7 +256,7 @@ class SimpleView(PackageUploadMixin, ViewSet):
+     """View for the PyPI simple API."""
+ 
+     endpoint_name = "simple"
+-    permission_classes = [PublicDomainPermission|DomainBasedPermission]
++    permission_classes = [AllowUnauthPull|DomainBasedPermission]
      DEFAULT_ACCESS_POLICY = {
          "statements": [
              {
