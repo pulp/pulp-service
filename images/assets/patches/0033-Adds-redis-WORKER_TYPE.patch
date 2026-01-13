@@ -1,4 +1,4 @@
-From 5da34590481728f240fe08014864632342d6f9c2 Mon Sep 17 00:00:00 2001
+From 5edcb2647b96af1fbe8c394372f372aaafdd13ec Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -14,11 +14,11 @@ PostgreSQL database.
  pulpcore/tasking/_util.py                     |   9 +-
  pulpcore/tasking/entrypoint.py                |  13 +-
  pulpcore/tasking/redis_locks.py               | 245 ++++++
- pulpcore/tasking/redis_tasks.py               | 482 +++++++++++
+ pulpcore/tasking/redis_tasks.py               | 464 +++++++++++
  pulpcore/tasking/redis_worker.py              | 777 ++++++++++++++++++
  pulpcore/tasking/tasks.py                     |  17 +
  pulpcore/tests/functional/api/test_tasking.py | 288 +++++++
- 11 files changed, 1892 insertions(+), 8 deletions(-)
+ 11 files changed, 1874 insertions(+), 8 deletions(-)
  create mode 100644 pulpcore/tasking/redis_locks.py
  create mode 100644 pulpcore/tasking/redis_tasks.py
  create mode 100644 pulpcore/tasking/redis_worker.py
@@ -456,10 +456,10 @@ index 000000000..84e8c6a4b
 +            _logger.error("Error releasing lock for resource %s: %s", resource, e)
 diff --git a/pulpcore/tasking/redis_tasks.py b/pulpcore/tasking/redis_tasks.py
 new file mode 100644
-index 000000000..7f4396ba7
+index 000000000..4a3f4b85d
 --- /dev/null
 +++ b/pulpcore/tasking/redis_tasks.py
-@@ -0,0 +1,482 @@
+@@ -0,0 +1,464 @@
 +"""
 +Task dispatch functions for Redis-based worker implementation.
 +
@@ -526,14 +526,6 @@ index 000000000..7f4396ba7
 +
 +        with with_task_context(task):
 +            task.set_running()
-+            # Verify task state was actually updated in database
-+            db_task = Task.objects.get(pk=task.pk)
-+            _logger.info(
-+                "TASK STATE VERIFICATION: Task %s local state=%s, database state=%s",
-+                task.pk,
-+                task.state,
-+                db_task.state
-+            )
 +            domain = get_domain()
 +            try:
 +                log_task_start(task, domain)
@@ -593,14 +585,6 @@ index 000000000..7f4396ba7
 +
 +        async with awith_task_context(task):
 +            await sync_to_async(task.set_running)()
-+            # Verify task state was actually updated in database
-+            db_task = await sync_to_async(Task.objects.get)(pk=task.pk)
-+            _logger.info(
-+                "TASK STATE VERIFICATION (async): Task %s local state=%s, database state=%s",
-+                task.pk,
-+                task.state,
-+                db_task.state
-+            )
 +            domain = get_domain()
 +            try:
 +                task_coroutine_fn = await aget_task_function(task)
@@ -806,7 +790,6 @@ index 000000000..7f4396ba7
 +        function_name, task_group, args, kwargs, resources, versions, immediate, deferred, app_lock
 +    )
 +    task = Task.objects.create(**task_payload)
-+    task.refresh_from_db()  # The database will have assigned a timestamp for us.
 +    if execute_now:
 +        # Try to acquire Redis task lock to prevent workers from picking up this task
 +        redis_conn = get_redis_connection()
@@ -886,7 +869,6 @@ index 000000000..7f4396ba7
 +        function_name, task_group, args, kwargs, resources, versions, immediate, deferred, app_lock
 +    )
 +    task = await Task.objects.acreate(**task_payload)
-+    await task.arefresh_from_db()  # The database will have assigned a timestamp for us.
 +    if execute_now:
 +        # Try to acquire Redis task lock to prevent workers from picking up this task
 +        redis_conn = get_redis_connection()
