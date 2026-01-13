@@ -2,12 +2,14 @@ from contextvars import ContextVar
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from django.db.models import Q
+
+
 import json
 import jq
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 from pulp_service.app.models import DomainOrg
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 import logging
 
 
@@ -120,24 +122,11 @@ class DomainBasedPermission(BasePermission):
                 return
 
 
-class PublicDomainPermission(BasePermission):
+class AllowUnauthPull(BasePermission):
     """
-    A Permission Class that grants permission to Domains with public- prefix
+    A Permission Class that grants permission to make GET/HEAD/OPTIONS requests without authN/authZ
     """
 
     def has_permission(self, request, view):
-        # Only allow GET requests
-        if request.method != "GET":
-            return False
-
-        try:
-            domain_pk = get_domain_pk()
-            domain = Domain.objects.get(pk=domain_pk)
-            if domain.name.startswith("public-"):
-                return True
-        except Exception:
-            # If we can't get the domain, deny access
-            return False
-
-        # Not a public domain
-        return False
+        if request.method in SAFE_METHODS:
+            return True
