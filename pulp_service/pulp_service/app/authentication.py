@@ -25,8 +25,8 @@ class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
 class RHEntitlementCertAuthentication(JSONHeaderRemoteAuthentication):
 
     header = "HTTP_X_RH_IDENTITY"
-    # Combines org_id with username (tries user.username, then associate.email)
-    jq_filter = '.identity | select(.org_id) | select(.user.username or .associate.email) | "\(.org_id):\(.user.username // .associate.email)"'
+    # Combines org_id with username - returns null if either is missing
+    jq_filter = '.identity | if .org_id and .user.username then "\(.org_id):\(.user.username)" else null end'
 
     def authenticate_header(self, request):
         return "Bearer"
@@ -77,6 +77,9 @@ class DeprecateCRHCSA(JSONHeaderRemoteAuthentication):
         except json.JSONDecodeError:
             _logger.debug(_("Access not allowed - Invalid JSON."))
             raise AuthenticationFailed(_("Access denied. Invalid JSON."))
+        except StopIteration:
+            # jq filter didn't match anything in the header
+            return None
 
         if remote_user:
             _logger.warning(f"Deprecated c.rh.c SA authentication method attempted by user: {remote_user}")
