@@ -170,9 +170,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0035-Revert-Mitigate-a-disk-consumption-issue-during-sync.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0035-Revert-Mitigate-a-disk-consumption-issue-during-sync.patch
 
-COPY images/assets/patches/0036-HeartBeat-logging-and-retry.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0036-HeartBeat-logging-and-retry.patch
-
 COPY images/assets/gunicorn_config.py /tmp/
 
 RUN mkdir /licenses
