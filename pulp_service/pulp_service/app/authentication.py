@@ -26,7 +26,7 @@ class RHEntitlementCertAuthentication(JSONHeaderRemoteAuthentication):
 
     header = "HTTP_X_RH_IDENTITY"
     # Combines org_id with username (tries user.username, then associate.email)
-    jq_filter = '.identity | "\(.org_id):\(.user.username // .associate.email // "unknown")"'
+    jq_filter = '.identity | "\(.org_id):\(.user.username // .associate.email)"'
 
     def authenticate_header(self, request):
         return "Bearer"
