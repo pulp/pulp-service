@@ -1,4 +1,4 @@
-From 5f19010fce75f7f244607c47486b26b2622ba2ec Mon Sep 17 00:00:00 2001
+From 0e532c3869ccaf5312d2d485e8a3ee9632fc4399 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -7,7 +7,7 @@ This adds WORKER_TYPE setting. The default value is 'pulpcore'. When 'redis' is 
 the tasking system uses Redis to lock resources. Redis workers produce less load on the
 PostgreSQL database.
 ---
- pulpcore/app/models/task.py                   |  16 +-
+ pulpcore/app/models/task.py                   |  18 +-
  pulpcore/app/settings.py                      |   4 +
  pulpcore/app/tasks/test.py                    |  43 +
  pulpcore/app/viewsets/task.py                 |  22 +-
@@ -18,13 +18,13 @@ PostgreSQL database.
  pulpcore/tasking/redis_worker.py              | 826 ++++++++++++++++++
  pulpcore/tasking/tasks.py                     |  17 +
  pulpcore/tests/functional/api/test_tasking.py | 288 ++++++
- 11 files changed, 2079 insertions(+), 11 deletions(-)
+ 11 files changed, 2080 insertions(+), 12 deletions(-)
  create mode 100644 pulpcore/tasking/redis_locks.py
  create mode 100644 pulpcore/tasking/redis_tasks.py
  create mode 100644 pulpcore/tasking/redis_worker.py
 
 diff --git a/pulpcore/app/models/task.py b/pulpcore/app/models/task.py
-index ed0b2e87a..03c6e0be6 100644
+index ed0b2e87a..2b381e230 100644
 --- a/pulpcore/app/models/task.py
 +++ b/pulpcore/app/models/task.py
 @@ -7,6 +7,7 @@ import logging
@@ -59,6 +59,15 @@ index ed0b2e87a..03c6e0be6 100644
          )
          if rows == 1:
              self.state = TASK_STATES.RUNNING
+@@ -289,7 +295,7 @@ class Task(BaseModel, AutoAddObjPermsMixin):
+         rows = Task.objects.filter(
+             pk=self.pk,
+             state=TASK_STATES.RUNNING,
+-            app_lock=AppStatus.objects.current(),
++        #    app_lock=AppStatus.objects.current(),
+         ).update(
+             state=TASK_STATES.FAILED,
+             finished_at=finished_at,
 diff --git a/pulpcore/app/settings.py b/pulpcore/app/settings.py
 index b6000c7da..5e4b2305e 100644
 --- a/pulpcore/app/settings.py
