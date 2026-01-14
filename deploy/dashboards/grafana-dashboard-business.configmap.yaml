@@ -722,11 +722,11 @@ data:
               "type": "custom",
               "name": "distribution",
               "label": "Distribution",
-              "query": "public-calunga,public-calunga-prod",
+              "query": "public-calunga,calunga-prod",
               "current": {
                 "selected": true,
-                "text": "public-calunga-prod",
-                "value": "public-calunga-prod"
+                "text": "calunga-prod",
+                "value": "calunga-prod"
               },
               "options": [
                 {
@@ -736,7 +736,7 @@ data:
                 },
                 {
                   "text": "Calunga Prod",
-                  "value": "public-calunga-prod",
+                  "value": "calunga-prod",
                   "selected": true
                 }
               ],
