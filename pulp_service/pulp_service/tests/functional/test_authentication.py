@@ -48,17 +48,17 @@ def test_authentication_with_username_and_org_id(
         assert repo is not None
 
 
-def test_authentication_with_only_org_id(
+def test_authentication_with_org_id_and_username(
     anonymous_user,
     pulpcore_bindings,
     python_bindings,
     gen_object_with_cleanup,
     cleanup_auth_headers,
 ):
-    """Test that requests with only org_id in x-rh-identity header work."""
-    only_orgid = {"identity": {"org_id": 67890}}
+    """Test that requests with org_id and username in x-rh-identity header work."""
+    user_with_orgid = {"identity": {"org_id": 67890, "user": {"username": "testuser2"}}}
     with anonymous_user:
-        header_content = json.dumps(only_orgid)
+        header_content = json.dumps(user_with_orgid)
         auth_header = b64encode(bytes(header_content, "ascii"))
 
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
