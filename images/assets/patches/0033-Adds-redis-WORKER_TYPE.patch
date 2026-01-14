@@ -1,4 +1,4 @@
-From 0f3e6a375d2c8d4d24fe52232ecbb568f83dae5e Mon Sep 17 00:00:00 2001
+From 5f19010fce75f7f244607c47486b26b2622ba2ec Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -10,15 +10,15 @@ PostgreSQL database.
  pulpcore/app/models/task.py                   |  16 +-
  pulpcore/app/settings.py                      |   4 +
  pulpcore/app/tasks/test.py                    |  43 +
- pulpcore/app/viewsets/task.py                 |   6 +
+ pulpcore/app/viewsets/task.py                 |  22 +-
  pulpcore/tasking/_util.py                     |   9 +-
  pulpcore/tasking/entrypoint.py                |  13 +-
  pulpcore/tasking/redis_locks.py               | 245 ++++++
- pulpcore/tasking/redis_tasks.py               | 464 +++++++++++
- pulpcore/tasking/redis_worker.py              | 777 ++++++++++++++++++
+ pulpcore/tasking/redis_tasks.py               | 607 +++++++++++++
+ pulpcore/tasking/redis_worker.py              | 826 ++++++++++++++++++
  pulpcore/tasking/tasks.py                     |  17 +
- pulpcore/tests/functional/api/test_tasking.py | 288 +++++++
- 11 files changed, 1874 insertions(+), 8 deletions(-)
+ pulpcore/tests/functional/api/test_tasking.py | 288 ++++++
+ 11 files changed, 2079 insertions(+), 11 deletions(-)
  create mode 100644 pulpcore/tasking/redis_locks.py
  create mode 100644 pulpcore/tasking/redis_tasks.py
  create mode 100644 pulpcore/tasking/redis_worker.py
@@ -132,7 +132,7 @@ index c52b9dc2a..7c0616ae8 100644
 +    """
 +    raise RuntimeError(error_message)
 diff --git a/pulpcore/app/viewsets/task.py b/pulpcore/app/viewsets/task.py
-index a3f2f6d56..36c202385 100644
+index a3f2f6d56..5e57969f5 100644
 --- a/pulpcore/app/viewsets/task.py
 +++ b/pulpcore/app/viewsets/task.py
 @@ -1,5 +1,6 @@
@@ -142,18 +142,48 @@ index a3f2f6d56..36c202385 100644
  from django.db import transaction
  from django.db.models import Prefetch
  from django_filters.rest_framework import filters
-@@ -223,6 +224,11 @@ class TaskViewSet(
-         responses={200: TaskSerializer, 409: TaskSerializer},
-     )
-     def partial_update(self, request, pk=None, partial=True):
-+        # RedisWorker does not support task cancellation
-+        if settings.WORKER_TYPE == "redis":
-+            return Response(status=status.HTTP_501_NOT_IMPLEMENTED)
-+
-+        # PulpcoreWorker supports task cancellation
-         serializer = self.get_serializer(data=request.data)
+@@ -42,7 +43,7 @@ from pulpcore.app.viewsets.custom_filters import (
+     CreatedResourcesFilter,
+ )
+ from pulpcore.constants import TASK_INCOMPLETE_STATES, TASK_STATES
+-from pulpcore.tasking.tasks import dispatch, cancel_task, cancel_task_group
++from pulpcore.tasking.tasks import dispatch
+ from pulpcore.app.role_util import get_objects_for_user
+ 
+ 
+@@ -227,7 +228,15 @@ class TaskViewSet(
          serializer.is_valid(raise_exception=True)
  
+         task = self.get_object()
+-        task = cancel_task(task.pk)
++
++        # Call the appropriate cancel_task function based on worker type
++        if settings.WORKER_TYPE == "redis":
++            from pulpcore.tasking.redis_tasks import cancel_task
++            task = cancel_task(task.pk)
++        else:
++            from pulpcore.tasking.tasks import cancel_task
++            task = cancel_task(task.pk)
++
+         # Check whether task is actually canceled
+         http_status = (
+             None
+@@ -346,7 +355,14 @@ class TaskGroupViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, NamedMo
+                 ).count()
+             ):
+                 raise PermissionDenied()
+-        task_group = cancel_task_group(task_group.pk)
++
++        # Call the appropriate cancel_task_group function based on worker type
++        if settings.WORKER_TYPE == "redis":
++            from pulpcore.tasking.redis_tasks import cancel_task_group
++            task_group = cancel_task_group(task_group.pk)
++        else:
++            from pulpcore.tasking.tasks import cancel_task_group
++            task_group = cancel_task_group(task_group.pk)
+         # Check whether task group is actually canceled
+         serializer = TaskGroupSerializer(task_group, context={"request": request})
+         task_statuses = (
 diff --git a/pulpcore/tasking/_util.py b/pulpcore/tasking/_util.py
 index 49ecaecdb..341602053 100644
 --- a/pulpcore/tasking/_util.py
@@ -456,10 +486,10 @@ index 000000000..84e8c6a4b
 +            _logger.error("Error releasing lock for resource %s: %s", resource, e)
 diff --git a/pulpcore/tasking/redis_tasks.py b/pulpcore/tasking/redis_tasks.py
 new file mode 100644
-index 000000000..4a3f4b85d
+index 000000000..8c759c5db
 --- /dev/null
 +++ b/pulpcore/tasking/redis_tasks.py
-@@ -0,0 +1,464 @@
+@@ -0,0 +1,607 @@
 +"""
 +Task dispatch functions for Redis-based worker implementation.
 +
@@ -472,11 +502,11 @@ index 000000000..4a3f4b85d
 +import sys
 +from asgiref.sync import sync_to_async
 +
-+from pulpcore.app.models import Task, AppStatus
++from pulpcore.app.models import Task, TaskGroup, AppStatus
 +from pulpcore.app.redis_connection import get_redis_connection
 +from pulpcore.app.util import get_domain
 +from pulpcore.app.contexts import with_task_context, awith_task_context
-+from pulpcore.constants import TASK_STATES
++from pulpcore.constants import TASK_STATES, TASK_FINAL_STATES
 +from pulpcore.tasking.redis_locks import (
 +    resource_to_lock_key,
 +    release_resource_locks,
@@ -499,6 +529,149 @@ index 000000000..4a3f4b85d
 +
 +
 +_logger = logging.getLogger(__name__)
++
++# Redis key prefix for task cancellation
++REDIS_CANCEL_PREFIX = "pulp:task:cancel:"
++
++
++def publish_cancel_signal(task_id):
++    """
++    Publish a cancellation signal for a task via Redis.
++
++    Args:
++        task_id (str): The task ID to cancel
++
++    Returns:
++        bool: True if signal was published, False otherwise
++    """
++    redis_conn = get_redis_connection()
++    if not redis_conn:
++        _logger.error("Redis connection not available for task cancellation")
++        return False
++
++    try:
++        # Publish to the task-specific cancellation channel
++        cancel_key = f"{REDIS_CANCEL_PREFIX}{task_id}"
++        # Set a value with expiration (24 hours) in case worker missed it
++        redis_conn.setex(cancel_key, 86400, "cancel")
++        _logger.info("Published cancellation signal for task %s", task_id)
++        return True
++    except Exception as e:
++        _logger.error("Error publishing cancellation signal for task %s: %s", task_id, e)
++        return False
++
++
++def check_cancel_signal(task_id):
++    """
++    Check if a cancellation signal exists for a task.
++
++    Args:
++        task_id (str): The task ID to check
++
++    Returns:
++        bool: True if cancellation signal exists, False otherwise
++    """
++    redis_conn = get_redis_connection()
++    if not redis_conn:
++        return False
++
++    try:
++        cancel_key = f"{REDIS_CANCEL_PREFIX}{task_id}"
++        return redis_conn.exists(cancel_key) > 0
++    except Exception as e:
++        _logger.error("Error checking cancellation signal for task %s: %s", task_id, e)
++        return False
++
++
++def clear_cancel_signal(task_id):
++    """
++    Clear a cancellation signal for a task.
++
++    Args:
++        task_id (str): The task ID to clear cancellation signal for
++    """
++    redis_conn = get_redis_connection()
++    if not redis_conn:
++        return
++
++    try:
++        cancel_key = f"{REDIS_CANCEL_PREFIX}{task_id}"
++        redis_conn.delete(cancel_key)
++        _logger.debug("Cleared cancellation signal for task %s", task_id)
++    except Exception as e:
++        _logger.error("Error clearing cancellation signal for task %s: %s", task_id, e)
++
++
++def cancel_task(task_id):
++    """
++    Cancel a task using Redis-based signaling.
++
++    This method cancels only the task with given task_id, not the spawned tasks.
++    This also updates task's state to 'canceling'.
++
++    Args:
++        task_id (str): The ID of the task you wish to cancel
++
++    Returns:
++        Task: The task object
++
++    Raises:
++        Task.DoesNotExist: If a task with given task_id does not exist
++    """
++    task = Task.objects.select_related("pulp_domain").get(pk=task_id)
++
++    if task.state in TASK_FINAL_STATES:
++        # If the task is already done, just stop.
++        _logger.debug(
++            "Task [%s] in domain: %s already in a final state: %s",
++            task_id,
++            task.pulp_domain.name,
++            task.state
++        )
++        return task
++
++    _logger.info(
++        "Canceling task: %s in domain: %s",
++        task_id,
++        task.pulp_domain.name
++    )
++
++    # This is the only valid transition without holding the task lock.
++    task.set_canceling()
++
++    # Publish cancellation signal via Redis
++    publish_cancel_signal(task.pk)
++
++    return task
++
++
++def cancel_task_group(task_group_id):
++    """
++    Cancel the task group that is represented by the given task_group_id using Redis.
++
++    This method attempts to cancel all tasks in the task group.
++
++    Args:
++        task_group_id (str): The ID of the task group you wish to cancel
++
++    Returns:
++        TaskGroup: The task group object
++
++    Raises:
++        TaskGroup.DoesNotExist: If a task group with given task_group_id does not exist
++    """
++    task_group = TaskGroup.objects.get(pk=task_group_id)
++    task_group.all_tasks_dispatched = True
++    task_group.save(update_fields=["all_tasks_dispatched"])
++
++    TASK_RUNNING_STATES = (TASK_STATES.RUNNING, TASK_STATES.WAITING)
++    tasks = task_group.tasks.filter(state__in=TASK_RUNNING_STATES).values_list("pk", flat=True)
++    for task_id in tasks:
++        try:
++            cancel_task(task_id)
++        except RuntimeError:
++            pass
++    return task_group
 +
 +
 +def execute_task(task):
@@ -926,10 +1099,10 @@ index 000000000..4a3f4b85d
 +    return task
 diff --git a/pulpcore/tasking/redis_worker.py b/pulpcore/tasking/redis_worker.py
 new file mode 100644
-index 000000000..f980c17f4
+index 000000000..7e2931391
 --- /dev/null
 +++ b/pulpcore/tasking/redis_worker.py
-@@ -0,0 +1,777 @@
+@@ -0,0 +1,826 @@
 +"""
 +Redis-based worker implementation using distributed lock-based task fetching.
 +
@@ -1560,9 +1733,13 @@ index 000000000..f980c17f4
 +        """Call and supervise the task process while heart beating.
 +
 +        This function must only be called while holding the lock for that task.
-+        Note: This version does not support task cancellation."""
++        Supports task cancellation via Redis signals."""
++
++        from pulpcore.tasking.redis_tasks import check_cancel_signal, clear_cancel_signal
 +
 +        self.task = task
++        cancel_state = None
++        cancel_reason = None
 +        domain = task.pulp_domain
 +        _logger.info(
 +            "WORKER DEFERRED EXECUTION: Worker %s executing deferred task %s in domain: %s",
@@ -1576,6 +1753,20 @@ index 000000000..f980c17f4
 +
 +            # Heartbeat while waiting for task to complete
 +            while task_process.is_alive():
++                if cancel_state:
++                    if self.task_grace_timeout is None or self.task_grace_timeout > timezone.now():
++                        _logger.info("Wait for canceled task to abort.")
++                    else:
++                        self.task_grace_timeout = timezone.now() + timezone.timedelta(
++                            seconds=TASK_KILL_INTERVAL
++                        )
++                        _logger.info(
++                            "Aborting current task %s in domain: %s due to cancellation.",
++                            task.pk,
++                            domain.name,
++                        )
++                        os.kill(task_process.pid, signal.SIGUSR1)
++
 +                # Wait for a short period or until process completes
 +                r, w, x = select.select(
 +                    [self.sentinel, task_process.sentinel],
@@ -1585,6 +1776,16 @@ index 000000000..f980c17f4
 +                )
 +                # Call beat to keep worker heartbeat alive and perform periodic tasks
 +                self.beat()
++
++                # Check for cancellation signal
++                if check_cancel_signal(task.pk):
++                    _logger.info(
++                        _("Received signal to cancel current task %s in domain: %s."),
++                        task.pk,
++                        domain.name,
++                    )
++                    cancel_state = TASK_STATES.CANCELED
++                    clear_cancel_signal(task.pk)
 +
 +                if self.sentinel in r:
 +                    os.read(self.sentinel, 256)
@@ -1607,19 +1808,40 @@ index 000000000..f980c17f4
 +                            task.pk,
 +                            domain.name,
 +                        )
-+                        # Send SIGUSR1 to task process to trigger graceful abort
-+                        os.kill(task_process.pid, signal.SIGUSR1)
-+                        self.task_grace_timeout = timezone.now() + timezone.timedelta(
-+                            seconds=TASK_KILL_INTERVAL
-+                        )
++                        cancel_state = TASK_STATES.FAILED
++                        cancel_reason = "Aborted during worker shutdown."
 +
 +            task_process.join()
-+            if task_process.exitcode != 0:
++            if not cancel_state and task_process.exitcode != 0:
 +                _logger.warning(
 +                    "Task process for %s exited with non zero exitcode %i.",
 +                    task.pk,
 +                    task_process.exitcode,
 +                )
++                cancel_state = TASK_STATES.FAILED
++                if task_process.exitcode < 0:
++                    cancel_reason = "Killed by signal {sig_num}.".format(
++                        sig_num=-task_process.exitcode
++                    )
++
++        # Handle cancellation after task process has finished
++        if cancel_state:
++            from pulpcore.tasking._util import delete_incomplete_resources
++            # Reload task from database to get current state
++            task.refresh_from_db()
++            # Only clean up if task is not already in a final state
++            # (subprocess may have already handled cancellation)
++            if task.state not in TASK_FINAL_STATES:
++                task.set_canceling()
++                _logger.info(
++                    "Cleaning up task %s in domain: %s and marking as %s.",
++                    task.pk,
++                    domain.name,
++                    cancel_state,
++                )
++                delete_incomplete_resources(task)
++                task.set_canceled(final_state=cancel_state, reason=cancel_reason)
++
 +        self.task = None
 +
 +    def handle_tasks(self):
