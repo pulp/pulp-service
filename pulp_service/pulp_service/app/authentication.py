@@ -25,28 +25,11 @@ class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
 class RHEntitlementCertAuthentication(JSONHeaderRemoteAuthentication):
 
     header = "HTTP_X_RH_IDENTITY"
-    jq_filter = ".identity.org_id"
+    # Combines org_id with username (tries user.username, then associate.email)
+    jq_filter = '.identity | "\(.org_id):\(.user.username // .associate.email // "unknown")"'
 
     def authenticate_header(self, request):
         return "Bearer"
-
-    def authenticate(self, request):
-        if self.header not in request.META:
-            _logger.debug(f"Header {self.header} not present in request")
-            return None
-
-        header_content = request.META.get(self.header)
-        _logger.debug(f"Raw header content (base64): {header_content}")
-
-        try:
-            header_decoded_content = b64decode(header_content)
-            _logger.debug(f"Decoded header content: {header_decoded_content.decode('utf-8')}")
-        except Base64DecodeError:
-            _logger.debug(_("Access not allowed - Header content is not Base64 encoded."))
-            raise AuthenticationFailed(_("Access denied."))
-
-        # Call parent authenticate to continue with the standard flow
-        return super().authenticate(request)
 
 
 class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
