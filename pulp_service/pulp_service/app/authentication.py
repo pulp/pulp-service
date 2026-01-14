@@ -77,9 +77,6 @@ class DeprecateCRHCSA(JSONHeaderRemoteAuthentication):
         except json.JSONDecodeError:
             _logger.debug(_("Access not allowed - Invalid JSON."))
             raise AuthenticationFailed(_("Access denied. Invalid JSON."))
-        except StopIteration:
-            # jq filter didn't match anything in the header
-            return None
 
         if remote_user:
             _logger.warning(f"Deprecated c.rh.c SA authentication method attempted by user: {remote_user}")
