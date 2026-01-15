@@ -1,4 +1,4 @@
-From 07214cb62313cdeaba00ad41fd25c5db4df6c906 Mon Sep 17 00:00:00 2001
+From 30d49b1b5adf0acf72d331b2572f5e54af1c35fb Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -14,11 +14,11 @@ PostgreSQL database.
  pulpcore/tasking/_util.py                     |   9 +-
  pulpcore/tasking/entrypoint.py                |  13 +-
  pulpcore/tasking/redis_locks.py               | 245 ++++++
- pulpcore/tasking/redis_tasks.py               | 607 +++++++++++++
- pulpcore/tasking/redis_worker.py              | 826 ++++++++++++++++++
+ pulpcore/tasking/redis_tasks.py               | 607 ++++++++++++++
+ pulpcore/tasking/redis_worker.py              | 778 ++++++++++++++++++
  pulpcore/tasking/tasks.py                     |  17 +
- pulpcore/tests/functional/api/test_tasking.py | 288 ++++++
- 11 files changed, 2080 insertions(+), 12 deletions(-)
+ pulpcore/tests/functional/api/test_tasking.py | 288 +++++++
+ 11 files changed, 2032 insertions(+), 12 deletions(-)
  create mode 100644 pulpcore/tasking/redis_locks.py
  create mode 100644 pulpcore/tasking/redis_tasks.py
  create mode 100644 pulpcore/tasking/redis_worker.py
@@ -1108,10 +1108,10 @@ index 000000000..8c759c5db
 +    return task
 diff --git a/pulpcore/tasking/redis_worker.py b/pulpcore/tasking/redis_worker.py
 new file mode 100644
-index 000000000..63573a266
+index 000000000..31d45db39
 --- /dev/null
 +++ b/pulpcore/tasking/redis_worker.py
-@@ -0,0 +1,826 @@
+@@ -0,0 +1,778 @@
 +"""
 +Redis-based worker implementation using distributed lock-based task fetching.
 +
@@ -1367,13 +1367,21 @@ index 000000000..63573a266
 +                            if not resource.startswith("shared:")
 +                        ]
 +
++                        # Extract shared resources (strip "shared:" prefix)
++                        shared_resources = [
++                            resource[7:]  # Remove "shared:" prefix
++                            for resource in task.reserved_resources_record or []
++                            if resource.startswith("shared:")
++                        ]
++
 +                        # Release the resource locks
 +                        # Note: Use the missing worker's name as the lock owner, not self.name
-+                        if exclusive_resources:
-+                            release_resource_locks(self.redis_conn, worker_name, exclusive_resources)
++                        if exclusive_resources or shared_resources:
++                            release_resource_locks(self.redis_conn, worker_name, exclusive_resources, shared_resources)
 +                            _logger.info(
-+                                "Released %d resource locks for task %s from missing worker %s",
++                                "Released %d exclusive and %d shared resource locks for task %s from missing worker %s",
 +                                len(exclusive_resources),
++                                len(shared_resources),
 +                                task_uuid,
 +                                worker_name
 +                            )
@@ -1484,62 +1492,6 @@ index 000000000..63573a266
 +
 +            # Update cached worker count for sleep calculation
 +            self.num_workers = AppStatus.objects.online().filter(app_type='worker').count()
-+
-+    def _try_acquire_resource_locks(self, resources):
-+        """
-+        Try to acquire Redis distributed locks for all resources in deterministic order.
-+
-+        The lock value is set to the worker name, which allows the cleanup code to
-+        identify and remove locks from missing workers.
-+
-+        Args:
-+            resources (list): List of resource names
-+
-+        Returns:
-+            tuple: (success: bool, blocked_resources: list)
-+                - If all locks acquired: (True, [])
-+                - If a lock failed: (False, [resource_name])
-+        """
-+        if not resources:
-+            # No resources means no locks needed
-+            return (True, [])
-+
-+        if not self.redis_conn:
-+            _logger.error("Redis connection not available for locking")
-+            return (False, [])
-+
-+        # Sort resources deterministically to prevent deadlocks
-+        sorted_resources = sorted(resources)
-+
-+        try:
-+            for resource in sorted_resources:
-+                lock_key = resource_to_lock_key(resource)
-+
-+                # Try to acquire lock using SET with NX (only set if not exists)
-+                # The value is the worker name, so cleanup can identify stale locks
-+                acquired = self.redis_conn.set(lock_key, self.name, nx=True)
-+
-+                if not acquired:
-+                    _logger.debug(
-+                        "Failed to acquire lock for resource: %s (key: %s)",
-+                        resource,
-+                        lock_key
-+                    )
-+                    # Release any locks we acquired so far
-+                    self._release_resource_locks(sorted_resources[:sorted_resources.index(resource)])
-+                    return (False, [resource])
-+
-+                _logger.debug("Acquired lock for resource: %s", resource)
-+
-+            # All locks acquired successfully
-+            _logger.debug("Successfully acquired all locks for %d resources", len(resources))
-+            return (True, [])
-+
-+        except Exception as e:
-+            _logger.error("Error acquiring locks: %s", e)
-+            # Try to release any locks we may have acquired
-+            self._release_resource_locks(sorted_resources)
-+            return (False, [])
 +
 +    def _release_resource_locks(self, resources, shared_resources=None):
 +        """
