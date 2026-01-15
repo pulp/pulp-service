@@ -498,7 +498,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/pypi/' as method, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(distribution)\n| filter distribution = '${distribution}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, distribution\n| filter ispresent(user)\n| filter user != \"-\" and user != \"\"\n| filter ispresent(distribution)\n| filter distribution = '${distribution}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
               }
             ],
             "options": {
