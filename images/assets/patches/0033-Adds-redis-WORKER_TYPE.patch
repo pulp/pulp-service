@@ -1,4 +1,4 @@
-From 0e532c3869ccaf5312d2d485e8a3ee9632fc4399 Mon Sep 17 00:00:00 2001
+From 07214cb62313cdeaba00ad41fd25c5db4df6c906 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -1108,7 +1108,7 @@ index 000000000..8c759c5db
 +    return task
 diff --git a/pulpcore/tasking/redis_worker.py b/pulpcore/tasking/redis_worker.py
 new file mode 100644
-index 000000000..7e2931391
+index 000000000..63573a266
 --- /dev/null
 +++ b/pulpcore/tasking/redis_worker.py
 @@ -0,0 +1,826 @@
@@ -1666,7 +1666,7 @@ index 000000000..7e2931391
 +
 +                if task_lock_acquired:
 +                    # Successfully claimed the task lock!
-+                    _logger.info(
++                    _logger.debug(
 +                        "Worker %s acquired task lock for task %s in domain: %s",
 +                        self.name,
 +                        task.pk,
