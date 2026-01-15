@@ -400,7 +400,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, first_route=*\" as username, route\n| parse route '/api/pypi/*/pypi/*' as distribution, rest\n| filter ispresent(distribution)\n| filter distribution = '${distribution}'\n| stats count() as new_users by bin(24h) as time"
+                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, route=*\" as username, route\n| parse route '/api/pypi/*/*' as distribution, rest\n| filter ispresent(distribution)\n| filter distribution = '${distribution}'\n| stats count() as new_users by bin(24h) as time"
               }
             ],
             "options": {
