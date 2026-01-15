@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from rest_framework import status
 from rest_framework.exceptions import APIException
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
@@ -24,7 +25,7 @@ from pulpcore.plugin.viewsets import OperationPostponedResponse
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
 from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
-from pulpcore.app.models import Domain, Group
+from pulpcore.app.models import Domain, Group, Task
 from pulpcore.app.serializers import DomainSerializer
 
 
@@ -467,6 +468,134 @@ class DatabaseTriggersView(APIView):
             "trigger_count": len(triggers),
             "triggers": triggers
         })
+
+
+class ReleaseTaskLocksView(APIView):
+    """
+    Admin-only endpoint to manually release Redis locks for a task.
+
+    This endpoint is useful for debugging lock issues and cleaning up
+    orphaned locks when needed. Requires admin privileges.
+    """
+
+    # Require admin authentication
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        """
+        Release all Redis locks for a given task UUID.
+
+        Query parameters:
+            task_id: UUID of the task to release locks for
+
+        Returns:
+            200: Locks released successfully
+            400: Missing or invalid task_id parameter
+            404: Task not found
+            500: Error releasing locks
+        """
+        # Check if Redis worker type is enabled
+        if settings.WORKER_TYPE != "redis":
+            return Response(
+                {
+                    "error": "This endpoint only works with Redis workers.",
+                    "worker_type": settings.WORKER_TYPE
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get task_id from query parameters
+        task_id = request.GET.get('task_id')
+
+        if not task_id:
+            return Response(
+                {"error": "Missing required query parameter: task_id"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Import Redis-specific functions
+            from pulpcore.app.redis_connection import get_redis_connection
+            from pulpcore.tasking.redis_locks import resource_to_lock_key
+
+            # Get Redis connection
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return Response(
+                    {"error": "Redis connection not available"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # Look up the task
+            try:
+                task = Task.objects.select_related('pulp_domain').get(pk=task_id)
+            except Task.DoesNotExist:
+                return Response(
+                    {"error": f"Task {task_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Extract exclusive and shared resources from the task
+            exclusive_resources = [
+                resource
+                for resource in task.reserved_resources_record or []
+                if not resource.startswith("shared:")
+            ]
+
+            shared_resources = [
+                resource[7:]  # Remove "shared:" prefix
+                for resource in task.reserved_resources_record or []
+                if resource.startswith("shared:")
+            ]
+
+            # Check who holds the task lock (for informational purposes)
+            task_lock_key = f"task:{task_id}"
+            task_lock_holder = redis_conn.get(task_lock_key)
+            if task_lock_holder:
+                task_lock_holder = task_lock_holder.decode('utf-8')
+
+            # Delete exclusive resource locks directly (no ownership check)
+            exclusive_locks_deleted = 0
+            for resource in exclusive_resources:
+                lock_key = resource_to_lock_key(resource)
+                if redis_conn.delete(lock_key):
+                    exclusive_locks_deleted += 1
+                    _logger.info(f"Deleted exclusive lock for resource: {resource}")
+
+            # Delete shared resource locks directly (delete the entire set)
+            shared_locks_deleted = 0
+            for resource in shared_resources:
+                lock_key = resource_to_lock_key(resource)
+                if redis_conn.delete(lock_key):
+                    shared_locks_deleted += 1
+                    _logger.info(f"Deleted shared lock set for resource: {resource}")
+
+            # Delete the task lock
+            task_lock_deleted = redis_conn.delete(task_lock_key)
+
+            return Response({
+                "message": "Successfully released locks for task",
+                "task_id": str(task_id),
+                "task_state": task.state,
+                "task_lock_holder": task_lock_holder,
+                "task_lock_deleted": bool(task_lock_deleted),
+                "exclusive_resources": exclusive_resources,
+                "exclusive_resources_count": len(exclusive_resources),
+                "exclusive_locks_deleted": exclusive_locks_deleted,
+                "shared_resources": shared_resources,
+                "shared_resources_count": len(shared_resources),
+                "shared_locks_deleted": shared_locks_deleted
+            })
+
+        except Exception as e:
+            _logger.exception(f"Error releasing locks for task {task_id}")
+            return Response(
+                {
+                    "error": "Failed to release locks",
+                    "detail": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class CreateDomainView(APIView):
