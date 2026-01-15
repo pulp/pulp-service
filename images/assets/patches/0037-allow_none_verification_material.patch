@@ -1,0 +1,13 @@
+diff --git a/pypi_attestations/_impl.py b/pypi_attestations/_impl.py
+index 6566ec0..5ff01d2 100644
+--- a/pypi_attestations/_impl.py
++++ b/pypi_attestations/_impl.py
+@@ -161,7 +161,7 @@ class Attestation(BaseModel):
+     The attestation format's version, which is always 1.
+     """
+ 
+-    verification_material: VerificationMaterial
++    verification_material: VerificationMaterial | None = None
+     """
+     Cryptographic materials used to verify `message_signature`.
+     """

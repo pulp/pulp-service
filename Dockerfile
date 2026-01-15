@@ -173,6 +173,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0036-Ignore-attestation-verification.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0036-Ignore-attestation-verification.patch
 
+COPY images/assets/patches/0037-allow_none_verification_material.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0037-allow_none_verification_material.patch
+
 COPY images/assets/gunicorn_config.py /tmp/
 
 RUN mkdir /licenses
