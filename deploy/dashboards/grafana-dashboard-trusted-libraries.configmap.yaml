@@ -640,38 +640,6 @@ data:
             "type": "barchart"
           },
           {
-            "type": "text",
-            "title": "Tracked Package Usage (DISABLED)",
-            "gridPos": {
-              "h": 3,
-              "w": 12,
-              "x": 12,
-              "y": 33
-            },
-            "id": 13,
-            "transparent": true,
-            "options": {
-              "mode": "markdown",
-              "content": "### ⚠️ Panel Disabled\n\nThis panel is **disabled** due to CloudWatch limitations.\n\n**Reason:** Too many packages (397+) exceed Grafana's variable filtering limits.\n\n**Alternative:** Use the table search feature in the **'Top 10 Packages'** panel to find specific package download counts."
-            }
-          },
-          {
-            "type": "text",
-            "title": "80/20 Download Concentration (DISABLED)",
-            "gridPos": {
-              "h": 3,
-              "w": 24,
-              "x": 0,
-              "y": 41
-            },
-            "id": 14,
-            "transparent": true,
-            "options": {
-              "mode": "markdown",
-              "content": "### ⚠️ Panel Disabled\n\nThis panel is **disabled** due to CloudWatch limitations.\n\n**Reason:** Too many packages (397+) make Pareto analysis impractical in Grafana.\n\n**Alternative:** Run a custom CloudWatch Insights query for 80/20 analysis:\n\n```\nfields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/pypi\\/simple\\//\n| parse @message '\"GET /api/pypi/*/pypi/simple/*/ HTTP' as distribution, package\n| filter strlen(package) > 0\n| filter ispresent(distribution)\n| filter distribution = '${distribution}'\n| stats count() as downloads by package\n| sort downloads desc\n```\n\nThen calculate cumulative percentages manually."
-            }
-          },
-          {
             "collapsed": true,
             "gridPos": {
               "h": 1,
