@@ -1,0 +1,747 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: grafana-dashboard-aipcc-metrics
+  labels:
+    grafana_dashboard: "true"
+  annotations:
+    grafana-folder: /grafana-dashboard-definitions/Insights
+data:
+  aipcc_metrics.json: |-
+    {
+        "annotations": {
+          "list": [
+            {
+              "builtIn": 1,
+              "datasource": {
+                "type": "grafana",
+                "uid": "-- Grafana --"
+              },
+              "enable": true,
+              "hide": true,
+              "iconColor": "rgba(0, 211, 255, 1)",
+              "name": "Annotations & Alerts",
+              "target": {
+                "limit": 100,
+                "matchAny": false,
+                "tags": [],
+                "type": "dashboard"
+              },
+              "type": "dashboard"
+            }
+          ]
+        },
+        "editable": true,
+        "fiscalYearStartMonth": 0,
+        "graphTooltip": 2,
+        "id": 1100022,
+        "links": [],
+        "panels": [
+          {
+            "collapsed": false,
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 0
+            },
+            "id": 2,
+            "panels": [],
+            "title": "Adoption",
+            "type": "row"
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "type": "stat",
+            "title": "Daily Active Users (DAU)",
+            "gridPos": {
+              "h": 6,
+              "w": 8,
+              "x": 0,
+              "y": 1
+            },
+            "id": 6,
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count_distinct(user) as daily_active_users by bin(24h)"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value",
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"]
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "green"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "type": "stat",
+            "title": "Weekly Active Users (WAU)",
+            "gridPos": {
+              "h": 6,
+              "w": 8,
+              "x": 8,
+              "y": 1
+            },
+            "id": 7,
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count_distinct(user) as weekly_active_users by bin(7d)"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value",
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"]
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "blue"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "type": "stat",
+            "title": "Monthly Active Users (MAU)",
+            "gridPos": {
+              "h": 6,
+              "w": 8,
+              "x": 16,
+              "y": 1
+            },
+            "id": 8,
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count_distinct(user) as monthly_active_users by bin(30d)"
+              }
+            ],
+            "options": {
+              "graphMode": "area",
+              "colorMode": "value",
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"]
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "purple"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "type": "timeseries",
+            "title": "Active Users Trend (DAU/WAU/MAU)",
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 7
+            },
+            "id": 9,
+            "targets": [
+              {
+                "refId": "DAU",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count_distinct(user) as value by bin(24h) as time"
+              },
+              {
+                "refId": "WAU",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count_distinct(user) as value by bin(7d) as time"
+              },
+              {
+                "refId": "MAU",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count_distinct(user) as value by bin(30d) as time"
+              }
+            ],
+            "options": {
+              "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "showLegend": true,
+                "calcs": ["lastNotNull", "max", "min"]
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "drawStyle": "line",
+                  "lineInterpolation": "smooth",
+                  "fillOpacity": 10
+                }
+              },
+              "overrides": [
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "DAU"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "mode": "fixed",
+                        "fixedColor": "green"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "WAU"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "mode": "fixed",
+                        "fixedColor": "blue"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "matcher": {
+                    "id": "byName",
+                    "options": "MAU"
+                  },
+                  "properties": [
+                    {
+                      "id": "color",
+                      "value": {
+                        "mode": "fixed",
+                        "fixedColor": "purple"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "collapsed": true,
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 15
+            },
+            "id": 3,
+            "panels": [],
+            "title": "Engagement and Retention",
+            "type": "row"
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "type": "barchart",
+            "title": "New Users Per Day",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 16
+            },
+            "id": 10,
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, route=*\" as username, route\n| parse route '/api/pypi/*/*' as domain, rest\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as new_users by bin(24h) as time"
+              }
+            ],
+            "options": {
+              "orientation": "auto",
+              "showValue": "auto",
+              "legend": {
+                "showLegend": false
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            }
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "type": "piechart",
+            "title": "Active Users by Type",
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 16
+            },
+            "id": 11,
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| fields if(user like /^\\/O=/, \"service_account\", if(user like /^org:/, \"org_only\", if(user like /@/, \"email\", \"username\"))) as user_type\n| stats count_distinct(user) as unique_users by user_type"
+              }
+            ],
+            "options": {
+              "pieType": "donut",
+              "legend": {
+                "displayMode": "table",
+                "placement": "right",
+                "showLegend": true,
+                "values": ["value", "percent"]
+              }
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            }
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "type": "table",
+            "title": "Top Active Users",
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 24
+            },
+            "id": 12,
+            "targets": [
+              {
+                "refId": "A",
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "queryMode": "Logs",
+                "region": "default",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
+              }
+            ],
+            "options": {
+              "showHeader": true
+            },
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "align": "auto",
+                  "filterable": true
+                }
+              }
+            }
+          },
+          {
+            "collapsed": true,
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 32
+            },
+            "id": 4,
+            "panels": [],
+            "title": "Package Usage",
+            "type": "row"
+          },
+          {
+            "datasource": {
+              "type": "cloudwatch",
+              "uid": "P1A97A9592CB7F392"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                },
+                "custom": {
+                  "axisBorderShow": false,
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "fillOpacity": 80,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                    "legend": false,
+                    "tooltip": false,
+                    "viz": false
+                  },
+                  "lineWidth": 1,
+                  "scaleDistribution": {
+                    "type": "linear"
+                  },
+                  "thresholdsStyle": {
+                    "mode": "off"
+                  }
+                },
+                "mappings": [],
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green"
+                    }
+                  ]
+                }
+              },
+              "overrides": []
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 33
+            },
+            "id": 1,
+            "options": {
+              "barRadius": 0,
+              "barWidth": 0.97,
+              "fullHighlight": false,
+              "groupWidth": 0.7,
+              "legend": {
+                "calcs": [],
+                "displayMode": "list",
+                "placement": "bottom",
+                "showLegend": true
+              },
+              "orientation": "auto",
+              "showValue": "auto",
+              "stacking": "none",
+              "tooltip": {
+                "hideZeros": false,
+                "mode": "single",
+                "sort": "none"
+              },
+              "xField": "package",
+              "xTickLabelRotation": 0,
+              "xTickLabelSpacing": 0
+            },
+            "pluginVersion": "11.6.3",
+            "targets": [
+              {
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "dimensions": {},
+                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/simple\\//\n| parse @message '\"GET /api/pypi/*/' as domain\n| parse @message '/simple/*/ HTTP' as package\n| filter strlen(package) > 0\n| filter ispresent(domain)\n| filter ispresent(package)\n| filter domain = '${domain}'\n| stats count() as downloads by package\n| sort downloads desc\n| limit 10",
+                "id": "",
+                "label": "",
+                "logGroups": [
+                  {
+                    "accountId": "744086762512",
+                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                    "name": "${log_group}"
+                  }
+                ],
+                "matchExact": true,
+                "metricEditorMode": 0,
+                "metricName": "",
+                "metricQueryType": 0,
+                "namespace": "",
+                "period": "",
+                "queryLanguage": "CWLI",
+                "queryMode": "Logs",
+                "refId": "A",
+                "region": "default",
+                "sqlExpression": "",
+                "statistic": "Average",
+                "statsGroups": [
+                  "package"
+                ]
+              }
+            ],
+            "title": "Top 10 Packages downloaded",
+            "type": "barchart"
+          },
+          {
+            "collapsed": true,
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 49
+            },
+            "id": 5,
+            "panels": [],
+            "title": "User Demographics",
+            "type": "row"
+          }
+        ],
+        "preload": false,
+        "refresh": "",
+        "schemaVersion": 41,
+        "tags": [],
+        "templating": {
+          "list": [
+            {
+              "type": "custom",
+              "name": "log_group",
+              "label": "Environment",
+              "query": "crcs02ue1.pulp-stage,crcp01ue1.pulp-prod",
+              "current": {
+                "selected": true,
+                "text": "crcp01ue1.pulp-prod",
+                "value": "crcp01ue1.pulp-prod"
+              },
+              "options": [
+                {
+                  "text": "Stage",
+                  "value": "crcs02ue1.pulp-stage",
+                  "selected": false
+                },
+                {
+                  "text": "Production",
+                  "value": "crcp01ue1.pulp-prod",
+                  "selected": true
+                }
+              ],
+              "includeAll": false,
+              "multi": false,
+              "skipUrlSync": false,
+              "hide": 0
+            },
+            {
+              "type": "custom",
+              "name": "domain",
+              "label": "Domain",
+              "query": "rhai,public-rhai,rhai-stage,rhai-torch",
+              "current": {
+                "selected": true,
+                "text": "rhai",
+                "value": "rhai"
+              },
+              "options": [
+                {
+                  "text": "RHAI",
+                  "value": "rhai",
+                  "selected": true
+                },
+                {
+                  "text": "Public RHAI",
+                  "value": "public-rhai",
+                  "selected": false
+                },
+                {
+                  "text": "RHAI Stage",
+                  "value": "rhai-stage",
+                  "selected": false
+                },
+                {
+                  "text": "RHAI Torch",
+                  "value": "rhai-torch",
+                  "selected": false
+                }
+              ],
+              "includeAll": false,
+              "multi": false,
+              "skipUrlSync": false,
+              "hide": 0
+            }
+          ]
+        },
+        "time": {
+          "from": "now-30d",
+          "to": "now"
+        },
+        "timepicker": {
+          "refresh_intervals": [
+            "30s",
+            "1m",
+            "5m",
+            "15m",
+            "30m",
+            "1h",
+            "2h",
+            "1d"
+          ]
+        },
+        "timezone": "",
+        "title": "AIPCC Metrics",
+        "uid": "aipcc-metrics-dashboard",
+        "version": 1
+      }
