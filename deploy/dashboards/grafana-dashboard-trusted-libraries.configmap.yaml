@@ -711,23 +711,6 @@ data:
               "multi": false,
               "skipUrlSync": false,
               "hide": 0
-            },
-            {
-              "type": "custom",
-              "name": "package_filter",
-              "label": "Package Filter",
-              "query": "Django,SecretStorage,aiodns,aiohttp,annotated-types,asgiref,cffi,crc-pulp_python-client,crc-pulpcore-client,cryptography,jaraco.classes,jaraco.context,jaraco.functools,jeepney,jq,keyring,more-itertools,pycparser,pydantic,pydantic_core,python-dateutil,six,sqlparse,typing-inspection,typing_extensions,urllib3",
-              "current": {
-                "selected": true,
-                "text": "All",
-                "value": "$__all"
-              },
-              "options": [],
-              "includeAll": true,
-              "multi": true,
-              "allValue": null,
-              "skipUrlSync": false,
-              "hide": 0
             }
           ]
         },
