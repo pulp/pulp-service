@@ -1,4 +1,4 @@
-From 52efb38152f8a4386a7e289cd716741ff6f59f66 Mon Sep 17 00:00:00 2001
+From a547ee3083f0a70803d8088a799a7ba785e7627d Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -24,18 +24,18 @@ PostgreSQL database.
  create mode 100644 pulpcore/tasking/redis_worker.py
 
 diff --git a/pulpcore/app/models/task.py b/pulpcore/app/models/task.py
-index ed0b2e87a..2b381e230 100644
+index 75d05682d..b4fd26977 100644
 --- a/pulpcore/app/models/task.py
 +++ b/pulpcore/app/models/task.py
-@@ -7,6 +7,7 @@ import logging
- import traceback
+@@ -5,6 +5,7 @@ Django models related to the Tasking system
+ import logging
  from gettext import gettext as _
  
 +from django.conf import settings
  from django.contrib.postgres.fields import ArrayField, HStoreField
  from django.contrib.postgres.indexes import GinIndex
  from django.core.serializers.json import DjangoJSONEncoder
-@@ -207,13 +208,18 @@ class Task(BaseModel, AutoAddObjPermsMixin):
+@@ -205,13 +206,18 @@ class Task(BaseModel, AutoAddObjPermsMixin):
          This updates the :attr:`started_at` and sets the :attr:`state` to :attr:`RUNNING`.
          """
          started_at = timezone.now()
@@ -59,7 +59,7 @@ index ed0b2e87a..2b381e230 100644
          )
          if rows == 1:
              self.state = TASK_STATES.RUNNING
-@@ -289,7 +295,7 @@ class Task(BaseModel, AutoAddObjPermsMixin):
+@@ -275,7 +281,7 @@ class Task(BaseModel, AutoAddObjPermsMixin):
          rows = Task.objects.filter(
              pk=self.pk,
              state=TASK_STATES.RUNNING,
@@ -1933,10 +1933,10 @@ index 000000000..31d45db39
 +
 +            self.shutdown()
 diff --git a/pulpcore/tasking/tasks.py b/pulpcore/tasking/tasks.py
-index c187bd919..d0af31376 100644
+index eb270250c..dc2a05b4f 100644
 --- a/pulpcore/tasking/tasks.py
 +++ b/pulpcore/tasking/tasks.py
-@@ -261,7 +261,15 @@ def dispatch(
+@@ -277,7 +277,15 @@ def dispatch(
      Raises:
          ValueError: When `resources` is an unsupported type.
      """
@@ -1952,7 +1952,7 @@ index c187bd919..d0af31376 100644
      execute_now = immediate and not called_from_content_app()
      assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
      send_wakeup_signal = not execute_now
-@@ -303,6 +311,15 @@ async def adispatch(
+@@ -319,6 +327,15 @@ async def adispatch(
      versions=None,
  ):
      """Async version of dispatch."""
@@ -1969,7 +1969,7 @@ index c187bd919..d0af31376 100644
      assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
      function_name = get_function_name(func)
 diff --git a/pulpcore/tests/functional/api/test_tasking.py b/pulpcore/tests/functional/api/test_tasking.py
-index 183ec2f00..96d547a79 100644
+index 9906c2441..eef262a30 100644
 --- a/pulpcore/tests/functional/api/test_tasking.py
 +++ b/pulpcore/tests/functional/api/test_tasking.py
 @@ -86,6 +86,194 @@ def test_multi_resource_locking(dispatch_task, monitor_task):
@@ -2167,8 +2167,8 @@ index 183ec2f00..96d547a79 100644
  @pytest.mark.parallel
  def test_delete_cancel_waiting_task(dispatch_task, pulpcore_bindings):
      # Queue one task after a long running one
-@@ -487,6 +675,106 @@ class TestImmediateTaskWithNoResource:
-         assert "timed out after" in task.error["description"]
+@@ -490,6 +678,106 @@ class TestImmediateTaskWithNoResource:
+         assert "An internal error occurred." in task.error["description"]
  
  
 +@pytest.mark.parallel
