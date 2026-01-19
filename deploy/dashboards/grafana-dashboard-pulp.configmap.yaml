@@ -435,6 +435,397 @@ data:
             "x": 0,
             "y": 11
           },
+          "id": 48,
+          "panels": [],
+          "title": "REDIS/VALKEY",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 10,
+            "x": 0,
+            "y": 12
+          },
+          "id": 46,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PD4288CE6A02EB473"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-001"
+              },
+              "expression": "",
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "CPUUtilization",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "prod-001",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PD4288CE6A02EB473"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-002"
+              },
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "CPUUtilization",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "prod-002",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PB2EEA3F591968575"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-001"
+              },
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "CPUUtilization",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "stage-001",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PB2EEA3F591968575"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-002"
+              },
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "CPUUtilization",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "stage-002",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            }
+          ],
+          "title": "Redis/Valkey CPU avg utilization",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "-- Mixed --"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percent"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 10,
+            "x": 10,
+            "y": 12
+          },
+          "id": 47,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.6.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PD4288CE6A02EB473"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-001"
+              },
+              "expression": "",
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "DatabaseMemoryUsagePercentage",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "prod-001",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PD4288CE6A02EB473"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-002"
+              },
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "DatabaseMemoryUsagePercentage",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "prod-002",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PB2EEA3F591968575"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-001"
+              },
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "DatabaseMemoryUsagePercentage",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "stage-001",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "PB2EEA3F591968575"
+              },
+              "dimensions": {
+                "CacheClusterId": "pulp-cache-${cluster:text}-002"
+              },
+              "expression": "",
+              "hide": false,
+              "id": "",
+              "label": "",
+              "logGroups": [],
+              "matchExact": true,
+              "metricEditorMode": 0,
+              "metricName": "DatabaseMemoryUsagePercentage",
+              "metricQueryType": 0,
+              "namespace": "AWS/ElastiCache",
+              "period": "",
+              "queryLanguage": "CWLI",
+              "queryMode": "Metrics",
+              "refId": "stage-002",
+              "region": "default",
+              "sqlExpression": "",
+              "statistic": "Average"
+            }
+          ],
+          "title": "Redis/Valkey DB Mem avg usage",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 15
+          },
           "id": 13,
           "panels": [],
           "title": "Latency",
@@ -508,7 +899,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 0,
-            "y": 12
+            "y": 16
           },
           "id": 6,
           "options": {
@@ -650,7 +1041,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 10,
-            "y": 12
+            "y": 16
           },
           "id": 9,
           "options": {
@@ -827,7 +1218,7 @@ data:
             "h": 7,
             "w": 20,
             "x": 0,
-            "y": 20
+            "y": 24
           },
           "id": 32,
           "options": {
@@ -1010,7 +1401,7 @@ data:
             "h": 9,
             "w": 10,
             "x": 0,
-            "y": 27
+            "y": 31
           },
           "id": 43,
           "options": {
@@ -1122,7 +1513,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 36
+            "y": 40
           },
           "id": 12,
           "panels": [],
@@ -1256,7 +1647,7 @@ data:
             "h": 10,
             "w": 10,
             "x": 0,
-            "y": 37
+            "y": 41
           },
           "id": 16,
           "options": {
@@ -1493,7 +1884,7 @@ data:
             "h": 10,
             "w": 10,
             "x": 10,
-            "y": 37
+            "y": 41
           },
           "id": 17,
           "options": {
@@ -1615,7 +2006,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 47
+            "y": 51
           },
           "id": 19,
           "panels": [],
@@ -1686,7 +2077,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 0,
-            "y": 48
+            "y": 52
           },
           "id": 23,
           "options": {
@@ -1785,7 +2176,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 10,
-            "y": 48
+            "y": 52
           },
           "id": 21,
           "options": {
@@ -1924,7 +2315,7 @@ data:
             "h": 9,
             "w": 20,
             "x": 0,
-            "y": 56
+            "y": 60
           },
           "id": 42,
           "options": {
@@ -2046,7 +2437,7 @@ data:
             "h": 7,
             "w": 20,
             "x": 0,
-            "y": 65
+            "y": 69
           },
           "hideTimeOverride": false,
           "id": 30,
@@ -2165,7 +2556,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 0,
-            "y": 72
+            "y": 76
           },
           "id": 25,
           "options": {
@@ -2289,7 +2680,7 @@ data:
             "h": 7,
             "w": 10,
             "x": 10,
-            "y": 72
+            "y": 76
           },
           "id": 26,
           "options": {
@@ -2355,7 +2746,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 79
+            "y": 83
           },
           "id": 28,
           "panels": [],
@@ -2427,7 +2818,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 0,
-            "y": 80
+            "y": 84
           },
           "id": 27,
           "options": {
@@ -2575,7 +2966,7 @@ data:
             "h": 8,
             "w": 10,
             "x": 10,
-            "y": 80
+            "y": 84
           },
           "id": 29,
           "options": {
@@ -2764,7 +3155,7 @@ data:
             "h": 9,
             "w": 20,
             "x": 0,
-            "y": 88
+            "y": 92
           },
           "id": 38,
           "options": {
@@ -2880,7 +3271,7 @@ data:
             "h": 10,
             "w": 8,
             "x": 0,
-            "y": 97
+            "y": 101
           },
           "id": 37,
           "options": {
@@ -2967,7 +3358,7 @@ data:
             "h": 10,
             "w": 12,
             "x": 8,
-            "y": 97
+            "y": 101
           },
           "id": 40,
           "options": {
@@ -3116,7 +3507,7 @@ data:
             "h": 10,
             "w": 20,
             "x": 0,
-            "y": 107
+            "y": 111
           },
           "id": 39,
           "options": {
@@ -3316,7 +3707,7 @@ data:
             "h": 10,
             "w": 20,
             "x": 0,
-            "y": 117
+            "y": 121
           },
           "id": 41,
           "options": {
@@ -3453,7 +3844,7 @@ data:
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 127
+            "y": 131
           },
           "id": 44,
           "options": {
@@ -3513,7 +3904,7 @@ data:
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 135
+            "y": 139
           },
           "id": 33,
           "panels": [],
@@ -3584,7 +3975,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 0,
-            "y": 136
+            "y": 140
           },
           "id": 34,
           "options": {
@@ -3682,7 +4073,7 @@ data:
             "h": 7,
             "w": 6,
             "x": 6,
-            "y": 136
+            "y": 140
           },
           "id": 35,
           "options": {
@@ -3867,5 +4258,5 @@ data:
       "timezone": "",
       "title": "Pulp Metrics",
       "uid": "e50bb9f2-372c-4e94-aa61-fe1f1554812c",
-      "version": 90
+      "version": 47667
     }
