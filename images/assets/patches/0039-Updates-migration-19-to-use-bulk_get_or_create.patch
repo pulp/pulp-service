@@ -1,26 +1,39 @@
-From ee77b9b5a36393689efea4042010908b6ca96338 Mon Sep 17 00:00:00 2001
+From d868dfd963831e1f2ea86cbb6b01c893722b6ae1 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 20 Jan 2026 13:31:24 -0500
 Subject: [PATCH] Updates migration 19 to use bulk_get_or_create instead of
  bulk_create.
 
 ---
- .../app/migrations/0019_create_missing_metadata_artifacts.py    | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+ .../migrations/0019_create_missing_metadata_artifacts.py  | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
-index 2ed544db..9c1382fd 100644
+index 2ed544db..0420aac0 100644
 --- a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
 +++ b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
-@@ -182,7 +182,7 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+@@ -171,8 +171,8 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+             contentartifact_batch.append(contentartifact)
+
+             if len(artifact_batch) == BATCH_SIZE:
+-                Artifact.objects.bulk_create(artifact_batch, batch_size=BATCH_SIZE)
+-                ContentArtifact.objects.bulk_create(contentartifact_batch, batch_size=BATCH_SIZE)
++                Artifact.objects.bulk_get_or_create(artifact_batch, batch_size=BATCH_SIZE)
++                ContentArtifact.objects.bulk_get_or_create(contentartifact_batch, batch_size=BATCH_SIZE)
+                 artifact_batch.clear()
+                 contentartifact_batch.clear()
+             if len(packages_batch) == BATCH_SIZE:
+@@ -182,8 +182,8 @@ def create_missing_metadata_artifacts(apps, schema_editor):
                  packages_batch.clear()
- 
+
          if artifact_batch:
 -            Artifact.objects.bulk_create(artifact_batch, batch_size=BATCH_SIZE)
+-            ContentArtifact.objects.bulk_create(contentartifact_batch, batch_size=BATCH_SIZE)
 +            Artifact.objects.bulk_get_or_create(artifact_batch, batch_size=BATCH_SIZE)
-             ContentArtifact.objects.bulk_create(contentartifact_batch, batch_size=BATCH_SIZE)
++            ContentArtifact.objects.bulk_get_or_create(contentartifact_batch, batch_size=BATCH_SIZE)
          if packages_batch:
              PythonPackageContent.objects.bulk_update(
--- 
+                 packages_batch, ["metadata_sha256"], batch_size=BATCH_SIZE
+--
 2.52.0
 
