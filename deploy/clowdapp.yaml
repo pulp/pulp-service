@@ -286,7 +286,7 @@ objects:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-api
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '${PULP_API_GUNICORN_TIMEOUT}', '--max-requests', '${PULP_API_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_API_GUNICORN_MAX_REQUESTS_JITTER}', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s %({X-Forwarded-For}i)s)']
+        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '${PULP_API_GUNICORN_TIMEOUT}', '--max-requests', '${PULP_API_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_API_GUNICORN_MAX_REQUESTS_JITTER}', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s)']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -456,7 +456,7 @@ objects:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-content
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-content', '-b', '0.0.0.0:8000', '-c', '/tmp/gunicorn_config.py', '--max-requests', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS_JITTER}', '--timeout', '${PULP_CONTENT_GUNICORN_TIMEOUT}', '--graceful-timeout', '${PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT}', '--access-logfile', '-', '--access-logformat', '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" cache:"%{X-PULP-CACHE}o" artifact_size:"%{X-PULP-ARTIFACT-SIZE}o" rh_org_id:"%{X-RH-ORG-ID}o" x_forwarded_for:"%{X-Forwarded-For}i"']
+        command: ['pulpcore-content', '-b', '0.0.0.0:8000', '-c', '/tmp/gunicorn_config.py', '--max-requests', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_CONTENT_GUNICORN_MAX_REQUESTS_JITTER}', '--timeout', '${PULP_CONTENT_GUNICORN_TIMEOUT}', '--graceful-timeout', '${PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT}', '--access-logfile', '-', '--access-logformat', '%a %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" cache:"%{X-PULP-CACHE}o" artifact_size:"%{X-PULP-ARTIFACT-SIZE}o" rh_org_id:"%{X-RH-ORG-ID}o"']
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
