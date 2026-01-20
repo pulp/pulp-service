@@ -81,7 +81,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count_distinct(user) as daily_active_users by bin(24h)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count_distinct(user) as daily_active_users by bin(24h)"
               }
             ],
             "options": {
@@ -139,7 +139,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count_distinct(user) as weekly_active_users by bin(7d)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count_distinct(user) as weekly_active_users by bin(7d)"
               }
             ],
             "options": {
@@ -197,7 +197,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count_distinct(user) as monthly_active_users by bin(30d)"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count_distinct(user) as monthly_active_users by bin(30d)"
               }
             ],
             "options": {
@@ -255,7 +255,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count_distinct(user) as value by bin(24h) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count_distinct(user) as value by bin(24h) as time"
               },
               {
                 "refId": "WAU",
@@ -272,7 +272,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count_distinct(user) as value by bin(7d) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count_distinct(user) as value by bin(7d) as time"
               },
               {
                 "refId": "MAU",
@@ -289,7 +289,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count_distinct(user) as value by bin(30d) as time"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count_distinct(user) as value by bin(30d) as time"
               }
             ],
             "options": {
@@ -400,7 +400,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, route=*\" as username, route\n| parse route '/api/pypi/*/*/*' as domain, distribution, rest\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count() as new_users by bin(24h) as time"
+                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, route=*\" as username, route\n| parse route '/api/pypi/*/*/*' as domain, distribution, rest\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count() as new_users by bin(24h) as time"
               }
             ],
             "options": {
@@ -448,7 +448,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| fields if(user like /^\\/O=/, \"service_account\", if(user like /^org:/, \"org_only\", if(user like /@/, \"email\", \"username\"))) as user_type\n| stats count_distinct(user) as unique_users by user_type"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| fields if(user like /^\\/O=/, \"service_account\", if(user like /^org:/, \"org_only\", if(user like /@/, \"email\", \"username\"))) as user_type\n| stats count_distinct(user) as unique_users by user_type"
               }
             ],
             "options": {
@@ -498,7 +498,7 @@ data:
                     "name": "${log_group}"
                   }
                 ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /${distribution}/\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
+                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
               }
             ],
             "options": {
@@ -608,7 +608,7 @@ data:
                   "uid": "P1A97A9592CB7F392"
                 },
                 "dimensions": {},
-                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/simple\\//\n| parse @message '\"GET /api/pypi/*/*/simple/*/ HTTP' as domain, distribution, package\n| filter strlen(package) > 0\n| filter ispresent(domain)\n| filter ispresent(distribution)\n| filter ispresent(package)\n| filter domain = '${domain}'\n| filter distribution like /${distribution}/\n| stats count() as downloads by package\n| sort downloads desc\n| limit 10",
+                "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\/.*\\/simple\\//\n| parse @message '\"GET /api/pypi/*/*/simple/*/ HTTP' as domain, distribution, package\n| filter strlen(package) > 0\n| filter ispresent(domain)\n| filter ispresent(distribution)\n| filter ispresent(package)\n| filter domain = '${domain}'\n| filter distribution like /^${distribution}$/\n| stats count() as downloads by package\n| sort downloads desc\n| limit 10",
                 "id": "",
                 "label": "",
                 "logGroups": [
@@ -726,7 +726,7 @@ data:
               "type": "custom",
               "name": "distribution",
               "label": "Distribution",
-              "query": ".*,rhoai-3.3-cuda12.9-ubi9-sdists,rhoai-3.3-cuda12.9-ubi9,rhoai-3.3-rocm6.4-ubi9-sdists,rhoai-3.3-rocm6.4-ubi9,rhoai-3.3-cuda13.0-ubi9-sdists,rhoai-3.3-cuda13.0-ubi9,rhoai-3.3-cpu-ubi9-sdists,rhoai-3.3-cpu-ubi9,rhoai-3.3-cuda13.0-ubi9-sdists-test,rhoai-3.3-cuda13.0-ubi9-test,rhoai-3.3-rocm6.4-ubi9-sdists-test,rhoai-3.3-rocm6.4-ubi9-test,rhoai-3.3-cuda12.9-ubi9-sdists-test,rhoai-3.3-cuda12.9-ubi9-test,rhoai-3.3-cpu-ubi9-sdists-test,rhoai-3.3-cpu-ubi9-test,rhoai-3.2-rocm6.4-ubi9-sdists,rhoai-3.2-rocm6.4-ubi9,rhoai-3.2-rocm6.4-ubi9-sdists-test,rhoai-3.2-rocm6.4-ubi9-test,rhoai-3.2-rocm7.0-ubi9-sdists,rhoai-3.2-rocm7.0-ubi9,rhoai-3.2-cuda12.9-ubi9-sdists,rhoai-3.2-cuda12.9-ubi9,rhoai-3.2-rocm7.0-ubi9-sdists-test,rhoai-3.2-rocm7.0-ubi9-test,rhoai-3.2-cuda12.9-ubi9-sdists-test,rhoai-3.2-cuda12.9-ubi9-test,rhoai-3.2-rocm-ubi9-sdists,rhoai-3.2-rocm-ubi9,rhoai-3.2-cuda-ubi9-sdists,rhoai-3.2-cuda-ubi9,rhoai-3.2-cpu-ubi9-sdists,rhoai-3.2-cpu-ubi9,rhoai-3.2-rocm-ubi9-sdists-test,rhoai-3.2-rocm-ubi9-test,rhoai-3.2-cuda-ubi9-sdists-test,rhoai-3.2-cuda-ubi9-test,rhoai-3.2-cpu-ubi9-sdists-test,rhoai-3.2-cpu-ubi9-test,rhoai-3.0-rocm-ubi9-sdists,rhoai-3.0-rocm-ubi9,rhoai-3.0-cuda-ubi9-sdists,rhoai-3.0-cuda-ubi9,rhoai-3.0-cpu-ubi9-sdists,rhoai-3.0-cpu-ubi9,rhoai-3.0-cuda-ubi9-sdists-test,rhoai-3.0-cpu-ubi9-sdists-test,rhoai-3.0-rocm-ubi9-sdists-test,rhoai-3.0-rocm-ubi9-test,rhoai-3.0-cuda-ubi9-test,rhoai-3.0-cpu-ubi9-test",
+              "query": ".*,rhoai\/3.3\/cuda12.9-ubi9-sdists,rhoai\/3.3\/cuda12.9-ubi9,rhoai\/3.3\/rocm6.4-ubi9-sdists,rhoai\/3.3\/rocm6.4-ubi9,rhoai\/3.3\/cuda13.0-ubi9-sdists,rhoai\/3.3\/cuda13.0-ubi9,rhoai\/3.3\/cpu-ubi9-sdists,rhoai\/3.3\/cpu-ubi9,rhoai\/3.3\/cuda13.0-ubi9-sdists-test,rhoai\/3.3\/cuda13.0-ubi9-test,rhoai\/3.3\/rocm6.4-ubi9-sdists-test,rhoai\/3.3\/rocm6.4-ubi9-test,rhoai\/3.3\/cuda12.9-ubi9-sdists-test,rhoai\/3.3\/cuda12.9-ubi9-test,rhoai\/3.3\/cpu-ubi9-sdists-test,rhoai\/3.3\/cpu-ubi9-test,rhoai\/3.2\/rocm6.4-ubi9-sdists,rhoai\/3.2\/rocm6.4-ubi9,rhoai\/3.2\/rocm6.4-ubi9-sdists-test,rhoai\/3.2\/rocm6.4-ubi9-test,rhoai\/3.2\/rocm7.0-ubi9-sdists,rhoai\/3.2\/rocm7.0-ubi9,rhoai\/3.2\/cuda12.9-ubi9-sdists,rhoai\/3.2\/cuda12.9-ubi9,rhoai\/3.2\/rocm7.0-ubi9-sdists-test,rhoai\/3.2\/rocm7.0-ubi9-test,rhoai\/3.2\/cuda12.9-ubi9-sdists-test,rhoai\/3.2\/cuda12.9-ubi9-test,rhoai\/3.2\/rocm-ubi9-sdists,rhoai\/3.2\/rocm-ubi9,rhoai\/3.2\/cuda-ubi9-sdists,rhoai\/3.2\/cuda-ubi9,rhoai\/3.2\/cpu-ubi9-sdists,rhoai\/3.2\/cpu-ubi9,rhoai\/3.2\/rocm-ubi9-sdists-test,rhoai\/3.2\/rocm-ubi9-test,rhoai\/3.2\/cuda-ubi9-sdists-test,rhoai\/3.2\/cuda-ubi9-test,rhoai\/3.2\/cpu-ubi9-sdists-test,rhoai\/3.2\/cpu-ubi9-test,rhoai\/3.0\/rocm-ubi9-sdists,rhoai\/3.0\/rocm-ubi9,rhoai\/3.0\/cuda-ubi9-sdists,rhoai\/3.0\/cuda-ubi9,rhoai\/3.0\/cpu-ubi9-sdists,rhoai\/3.0\/cpu-ubi9,rhoai\/3.0\/cuda-ubi9-sdists-test,rhoai\/3.0\/cpu-ubi9-sdists-test,rhoai\/3.0\/rocm-ubi9-sdists-test,rhoai\/3.0\/rocm-ubi9-test,rhoai\/3.0\/cuda-ubi9-test,rhoai\/3.0\/cpu-ubi9-test",
               "current": {
                 "selected": true,
                 "text": "All",
