@@ -16,6 +16,55 @@ This is a Django plugin for Pulp (Python package repository management system) t
 - **Task Queue**: Celery with Redis
 - **Storage**: S3-compatible object storage (configurable)
 
+## Quick Reference Index
+
+This index helps you quickly locate code for common development tasks.
+
+### Core Plugin Code
+
+| Component | File Path | Description |
+|-----------|-----------|-------------|
+| **Django Settings** | `pulp_service/pulp_service/app/settings.py` | Plugin Django settings overrides |
+| **Models** | `pulp_service/pulp_service/app/models.py` | Plugin-specific database models |
+| **ViewSets** | `pulp_service/pulp_service/app/viewsets.py` | REST API endpoints |
+| **Serializers** | `pulp_service/pulp_service/app/serializers.py` | API request/response serializers |
+| **Authentication** | `pulp_service/pulp_service/app/authentication.py` | Custom auth backends (X.509, SAML) |
+| **Authorization** | `pulp_service/pulp_service/app/authorization.py` | Permission and access control logic |
+| **Middleware** | `pulp_service/pulp_service/app/middleware.py` | Django middleware (profiling, headers, metrics) |
+| **Storage** | `pulp_service/pulp_service/app/storage.py` | Custom S3 storage backends |
+| **Signals** | `pulp_service/pulp_service/app/signals.py` | Django signal handlers |
+| **Tasks** | `pulp_service/pulp_service/app/tasks/` | Celery background tasks |
+| **Content Server** | `pulp_service/pulp_service/app/content.py` | aiohttp middleware for pulp-content |
+
+### Deployment & Configuration
+
+| Component | File Path | Description |
+|-----------|-----------|-------------|
+| **OpenShift Deploy** | `deploy/clowdapp.yaml` | Production deployment configuration |
+| **API Startup** | `images/assets/pulp-api` | Local dev API server startup script |
+| **Content Startup** | `images/assets/pulp-content` | Local dev content server startup script |
+| **Worker Startup** | `images/assets/pulp-worker` | Local dev worker startup script |
+| **WSGI Middleware** | `images/assets/log_middleware.py` | User extraction from X-RH-IDENTITY |
+| **Gunicorn Config** | `images/assets/gunicorn_config.py` | Gunicorn hooks and middleware registration |
+| **Dependencies** | `pulp_service/requirements.txt` | Python package dependencies with versions |
+
+### Monitoring & Observability
+
+| Component | File Path | Description |
+|-----------|-----------|-------------|
+| **OTEL Config** | `deploy/otel-config.yaml` (in clowdapp) | OpenTelemetry collector configuration |
+| **Grafana Dashboards** | `deploy/dashboards/*.configmap.yaml` | Pre-built Grafana dashboard definitions |
+
+### Common Development Tasks
+
+- **Adding new API endpoint**: Create viewset in `viewsets.py`, serializer in `serializers.py`, register URL
+- **Custom authentication**: Add class to `authentication.py`, register in Django settings
+- **New middleware**: Add class to `middleware.py`, register in `PULP_MIDDLEWARE` setting
+- **Background task**: Create task in `tasks/`, call from viewset or signal
+- **Modify logging**: Update `--access-logformat` in `images/assets/pulp-api` and `deploy/clowdapp.yaml`
+- **Add metrics**: Use `init_otel_meter()` from pulpcore.metrics in relevant module
+- **Database model**: Add to `models.py`, create migration with `pulpcore-manager makemigrations`
+
 ## Service Architecture
 
 ### pulp-api
@@ -253,104 +302,120 @@ Background tasks using Celery (in `pulp_service/pulp_service/app/tasks/`):
 
 ## Environment Variables
 
-### Core Configuration
+> **Note on Canonical Sources:**
+> - Default values shown here are examples and may drift from actual deployment
+> - Production values: See `deploy/clowdapp.yaml` for authoritative deployment configuration
+> - Version dependencies: See `pulp_service/requirements.txt` for pinned versions
+> - Variables marked with 🔧 are **plugin-specific** (defined in this plugin)
+> - Variables marked with ⬆️ are **upstream Pulpcore** (inherited from pulpcore)
+> - Variables marked with 🔌 are **upstream plugin** (from pulp-python, pulp-container, etc.)
 
-- `DJANGO_SETTINGS_MODULE=pulpcore.app.settings`
-- `PULP_SETTINGS=/etc/pulp/settings.py` - Path to Django settings file
-- `PULP_API_ROOT=/api/pulp/` - API root path
-- `PULP_CONTENT_ORIGIN` - Base URL for content delivery
-- `PULP_CONTENT_PATH_PREFIX=/api/pulp-content/` - Content path prefix
+### Core Configuration
+*⬆️ Upstream Pulpcore settings*
+
+- ⬆️ `DJANGO_SETTINGS_MODULE=pulpcore.app.settings`
+- ⬆️ `PULP_SETTINGS=/etc/pulp/settings.py` - Path to Django settings file
+- ⬆️ `PULP_API_ROOT=/api/pulp/` - API root path
+- ⬆️ `PULP_CONTENT_ORIGIN` - Base URL for content delivery
+- ⬆️ `PULP_CONTENT_PATH_PREFIX=/api/pulp-content/` - Content path prefix
 
 ### Database & Storage
+*⬆️ Upstream Pulpcore settings*
 
-- `PULP_DB_ENCRYPTION_KEY=/etc/pulp/keys/database_fields.symmetric.key` - DB field encryption
-- `PULP_CACHE_ENABLED=true` - Enable Redis caching
-- `PULP_REDIS_PORT=6379` - Redis port
-- `PULP_STORAGES__default__BACKEND` - Storage backend class
-- `PULP_STORAGES__default__OPTIONS__default_acl` - S3 ACL setting
-- `PULP_STORAGES__default__OPTIONS__signature_version=s3v4` - S3 signature version
-- `PULP_STORAGES__default__OPTIONS__addressing_style=path` - S3 addressing style
-- `PULP_MEDIA_ROOT` - Media files root (empty for S3)
+- ⬆️ `PULP_DB_ENCRYPTION_KEY=/etc/pulp/keys/database_fields.symmetric.key` - DB field encryption
+- ⬆️ `PULP_CACHE_ENABLED=true` - Enable Redis caching
+- ⬆️ `PULP_REDIS_PORT=6379` - Redis port
+- ⬆️ `PULP_STORAGES__default__BACKEND` - Storage backend class (🔧 set to plugin AIPCCStorageBackend)
+- ⬆️ `PULP_STORAGES__default__OPTIONS__default_acl` - S3 ACL setting
+- ⬆️ `PULP_STORAGES__default__OPTIONS__signature_version=s3v4` - S3 signature version
+- ⬆️ `PULP_STORAGES__default__OPTIONS__addressing_style=path` - S3 addressing style
+- ⬆️ `PULP_MEDIA_ROOT` - Media files root (empty for S3)
 
 ### Gunicorn Configuration
+*⬆️ Upstream Pulpcore settings, 🔧 plugin customizes via startup scripts*
 
-- `PULP_API_GUNICORN_TIMEOUT=1800` - API request timeout (seconds)
-- `PULP_API_GUNICORN_WORKERS=1` - Number of API workers
-- `PULP_API_GUNICORN_MAX_REQUESTS=20` - Max requests per worker before restart
-- `PULP_API_GUNICORN_MAX_REQUESTS_JITTER=5` - Jitter for max requests
-- `PULP_CONTENT_GUNICORN_TIMEOUT=90` - Content request timeout
-- `PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT=300` - Graceful shutdown timeout
-- `PULP_CONTENT_GUNICORN_MAX_REQUESTS=20` - Max requests per content worker
-- `GUNICORN_CMD_ARGS=--config /usr/bin/log_middleware.py` - Additional Gunicorn args
+- ⬆️ `PULP_API_GUNICORN_TIMEOUT=1800` - API request timeout (seconds)
+- ⬆️ `PULP_API_GUNICORN_WORKERS=1` - Number of API workers
+- ⬆️ `PULP_API_GUNICORN_MAX_REQUESTS=20` - Max requests per worker before restart
+- ⬆️ `PULP_API_GUNICORN_MAX_REQUESTS_JITTER=5` - Jitter for max requests
+- ⬆️ `PULP_CONTENT_GUNICORN_TIMEOUT=90` - Content request timeout
+- ⬆️ `PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT=300` - Graceful shutdown timeout
+- ⬆️ `PULP_CONTENT_GUNICORN_MAX_REQUESTS=20` - Max requests per content worker
+- 🔧 `GUNICORN_CMD_ARGS=--config /usr/bin/log_middleware.py` - Additional Gunicorn args (plugin-specific)
 
 ### Authentication & Authorization
+*🔧 Plugin-specific configuration with upstream base*
 
-- `PULP_AUTHENTICATION_BACKENDS` - List of Django authentication backends (Python list literal of dotted module paths)
-- `PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES` - DRF auth classes (Python list literal of dotted module paths)
-- `PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES` - DRF permission classes (Python list literal of dotted module paths)
-- `PULP_AUTHENTICATION_JSON_HEADER=HTTP_X_RH_IDENTITY` - Identity header name
-- `PULP_AUTHENTICATION_JSON_HEADER_JQ_FILTER=.identity.user.username` - JQ filter for username
-- `PULP_TOKEN_AUTH_DISABLED=true` - Disable container registry token auth
-- `PULP_USE_X_FORWARDED_HOST=true` - Use X-Forwarded-Host for URL building
-- `PULP_SECURE_PROXY_SSL_HEADER=['HTTP_X_FORWARDED_PROTO', 'https']` - SSL proxy header (Python list literal: [header_name, value])
+- ⬆️ `PULP_AUTHENTICATION_BACKENDS` - List of Django authentication backends (Python list literal of dotted module paths, 🔧 plugin adds custom backends)
+- ⬆️ `PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES` - DRF auth classes (Python list literal of dotted module paths, 🔧 plugin adds custom classes)
+- ⬆️ `PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES` - DRF permission classes (Python list literal of dotted module paths)
+- 🔧 `PULP_AUTHENTICATION_JSON_HEADER=HTTP_X_RH_IDENTITY` - Identity header name (plugin-specific)
+- 🔧 `PULP_AUTHENTICATION_JSON_HEADER_JQ_FILTER=.identity.user.username` - JQ filter for username (plugin-specific)
+- 🔌 `PULP_TOKEN_AUTH_DISABLED=true` - Disable container registry token auth (pulp-container setting)
+- ⬆️ `PULP_USE_X_FORWARDED_HOST=true` - Use X-Forwarded-Host for URL building
+- ⬆️ `PULP_SECURE_PROXY_SSL_HEADER=['HTTP_X_FORWARDED_PROTO', 'https']` - SSL proxy header (Python list literal: [header_name, value])
 
 ### Middleware
+*🔧 Plugin-specific configuration*
 
-- `PULP_MIDDLEWARE` - List of Django middleware classes (Python list literal of dotted module paths)
+- ⬆️/🔧 `PULP_MIDDLEWARE` - List of Django middleware classes (Python list literal of dotted module paths, plugin adds custom middleware)
 
 ### Security & Content
+*⬆️ Upstream Pulpcore settings*
 
-- `PULP_ALLOWED_CONTENT_CHECKSUMS=["sha224", "sha256", "sha384", "sha512"]` - Allowed checksums (Python list literal)
-- `PULP_CSRF_TRUSTED_ORIGINS` - List of trusted CSRF origins (Python list literal)
-- `PULP_DOMAIN_ENABLED=true` - Enable multi-domain support
+- ⬆️ `PULP_ALLOWED_CONTENT_CHECKSUMS=["sha224", "sha256", "sha384", "sha512"]` - Allowed checksums (Python list literal)
+- ⬆️ `PULP_CSRF_TRUSTED_ORIGINS` - List of trusted CSRF origins (Python list literal)
+- ⬆️ `PULP_DOMAIN_ENABLED=true` - Enable multi-domain support
 
 ### Worker Configuration
+*⬆️ Upstream Pulpcore settings with 🔧 plugin customizations*
 
-- `PULP_WORKER_TYPE=redis` - Worker implementation (redis or pulpcore)
-- `PULP_TASK_PROTECTION_TIME=20160` - Task retention time (minutes)
-- `PULP_TASK_DIAGNOSTICS=['memory', 'memray', 'pyinstrument']` - Available profilers (Python list literal)
-- `PULP_UPLOAD_PROTECTION_TIME=480` - Upload cleanup time (minutes)
-- `PULP_MAX_CONCURRENT_CONTENT=200` - Batch size for content sync
+- ⬆️ `PULP_WORKER_TYPE=redis` - Worker implementation (redis or pulpcore)
+- ⬆️ `PULP_TASK_PROTECTION_TIME=20160` - Task retention time (minutes)
+- ⬆️ `PULP_TASK_DIAGNOSTICS=['memory', 'memray', 'pyinstrument']` - Available profilers (Python list literal)
+- ⬆️ `PULP_UPLOAD_PROTECTION_TIME=480` - Upload cleanup time (minutes)
+- ⬆️ `PULP_MAX_CONCURRENT_CONTENT=200` - Batch size for content sync
 
-### OpenTelemetry
+### Observability (OpenTelemetry)
+*🔧 Plugin-specific configuration*
 
-- `PULP_OTEL_ENABLED=true` - Enable OpenTelemetry
-- `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` - OTLP protocol
-- `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:10000/` - Collector endpoint
-- `OTEL_METRIC_EXPORT_INTERVAL=7000` - Export interval (ms)
-- `OTEL_METRIC_EXPORT_TIMEOUT=7000` - Export timeout (ms)
-- `OTEL_TRACES_EXPORTER=none` - Disable trace export
-- `OTEL_PYTHON_EXCLUDED_URLS=.*livez,.*status` - Exclude URLs from metrics (comma-separated regex patterns)
-- `PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS=[100.0,250.0,500.0,1000.0,2500.0,5000.0]` - Histogram buckets in milliseconds (Python list literal)
+- 🔧 `PULP_OTEL_ENABLED=true` - Enable OpenTelemetry (plugin-specific)
+- 🔧 `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` - OTLP protocol
+- 🔧 `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:10000/` - Collector endpoint
+- 🔧 `OTEL_METRIC_EXPORT_INTERVAL=7000` - Export interval (ms)
+- 🔧 `OTEL_METRIC_EXPORT_TIMEOUT=7000` - Export timeout (ms)
+- 🔧 `OTEL_TRACES_EXPORTER=none` - Disable trace export
+- 🔧 `OTEL_PYTHON_EXCLUDED_URLS=.*livez,.*status` - Exclude URLs from metrics (comma-separated regex patterns)
+- 🔧 `PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS=[100.0,250.0,500.0,1000.0,2500.0,5000.0]` - Histogram buckets in milliseconds (Python list literal)
 
-### ClamAV Integration
+### External Services Integration
+*🔧 Plugin-specific configuration*
 
-- `PULP_CLAMAV_HOST` - ClamAV service hostname
-- `PULP_CLAMAV_PORT=10000` - ClamAV service port
-
-### External Services
-
-- `PULP_FEATURE_SERVICE_API_URL` - Feature service API URL
-- `PULP_FEATURE_SERVICE_API_CERT_PATH=/etc/pulp/certs/pulp-services-non-prod.pem` - Service cert
-- `PULP_PYPI_API_HOSTNAME` - PyPI API hostname for distribution URLs
-- `SENTRY_DSN` - Sentry/GlitchTip error tracking DSN (optional)
+- 🔧 `PULP_CLAMAV_HOST` - ClamAV service hostname (plugin-specific)
+- 🔧 `PULP_CLAMAV_PORT=10000` - ClamAV service port (plugin-specific)
+- 🔧 `PULP_FEATURE_SERVICE_API_URL` - Feature service API URL (plugin-specific)
+- 🔧 `PULP_FEATURE_SERVICE_API_CERT_PATH=/etc/pulp/certs/pulp-services-non-prod.pem` - Service cert (plugin-specific)
+- 🔧 `PULP_PYPI_API_HOSTNAME` - PyPI API hostname for distribution URLs (plugin-specific)
+- 🔧 `SENTRY_DSN` - Sentry/GlitchTip error tracking DSN (optional, plugin-specific)
 
 ### Feature Flags
+*🔧 Plugin-specific feature toggles*
 
-- `PULP_TEST_TASK_INGESTION=false` - Enable test task ingestion endpoint
-- `PULP_PYTHON_GROUP_UPLOADS=true` - Group Python package uploads
-- `PULP_UVLOOP_ENABLED=false` - Enable uvloop for content workers
-- `PULP_RDS_CONNECTION_TESTS_ENABLED=false` - Enable RDS connection test endpoints
-- `PULP_API_APP_TTL=120` - API application TTL (seconds)
+- 🔧 `PULP_TEST_TASK_INGESTION=false` - Enable test task ingestion endpoint
+- 🔌 `PULP_PYTHON_GROUP_UPLOADS=true` - Group Python package uploads (pulp-python)
+- 🔧 `PULP_UVLOOP_ENABLED=false` - Enable uvloop for content workers
+- 🔧 `PULP_RDS_CONNECTION_TESTS_ENABLED=false` - Enable RDS connection test endpoints
+- 🔧 `PULP_API_APP_TTL=120` - API application TTL (seconds)
 
 ### Deployment Parameters
+*🔧 Plugin-specific OpenShift deployment configuration (see deploy/clowdapp.yaml)*
 
-- `PULP_API_REPLICAS=1` - Number of API replicas
-- `PULP_CONTENT_REPLICAS=1` - Number of content replicas
-- `PULP_WORKER_REPLICAS=2` - Number of worker replicas
-- `PULP_WORKER_AUXILIARY_REPLICAS=1` - Number of auxiliary worker replicas
-- `PULP_MIGRATION_REPLICAS=1` - Number of migration replicas
-- `CLAMAV_REPLICAS=1` - Number of ClamAV replicas
+- 🔧 `PULP_API_REPLICAS=1` - Number of API replicas (default, can be overridden)
+- 🔧 `PULP_CONTENT_REPLICAS=1` - Number of content replicas (default, can be overridden)
+- 🔧 `PULP_WORKER_REPLICAS=2` - Number of worker replicas (default, can be overridden)
+- 🔧 `PULP_WORKER_AUXILIARY_REPLICAS=1` - Number of auxiliary worker replicas (default, can be overridden)
+- 🔧 `PULP_MIGRATION_REPLICAS=1` - Number of migration replicas
+- 🔧 `CLAMAV_REPLICAS=1` - Number of ClamAV replicas
 
 ## Development Patterns
 
@@ -398,6 +463,8 @@ Uses multi-stage Dockerfile with:
 The application is deployed using Red Hat's ClowdApp operator. Configuration: `deploy/clowdapp.yaml`
 
 #### Deployments
+
+> **Note**: Resource limits, replica counts, timeouts, and other configuration values shown below are examples from a reference deployment. For authoritative production values, always consult `deploy/clowdapp.yaml`.
 
 **1. pulp-api**
 - **Purpose**: REST API service for managing repositories, content, and permissions
@@ -589,9 +656,11 @@ Jobs are one-time or periodic tasks managed by ClowdJobInvocation:
 
 This service is a Django plugin built on top of Pulp (Python-based repository management) and extends it with Red Hat-specific features for multi-tenancy, authentication, and cloud deployment.
 
+> **Note**: Version numbers shown below are pinned in `pulp_service/requirements.txt`. Always check that file for the current authoritative versions in use.
+
 ### Pulpcore
 
-- **Version**: 3.95.0
+- **Version**: 3.95.0 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulpcore
 - **Documentation**: https://docs.pulpproject.org/pulpcore/
 
@@ -615,7 +684,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulp Python Plugin
 
-- **Version**: 3.22.1
+- **Version**: 3.22.1 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulp_python
 - **Documentation**: https://docs.pulpproject.org/pulp_python/
 
@@ -633,7 +702,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulp Container Plugin
 
-- **Version**: 2.26.2
+- **Version**: 2.26.2 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulp_container
 - **Documentation**: https://docs.pulpproject.org/pulp_container/
 
@@ -652,7 +721,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulp RPM Plugin
 
-- **Version**: 3.32.5
+- **Version**: 3.32.5 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulp_rpm
 - **Documentation**: https://docs.pulpproject.org/pulp_rpm/
 
@@ -670,19 +739,19 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Additional Pulp Plugins
 
-**Pulp Gem** (0.7.3):
+**Pulp Gem** (0.7.3, see requirements.txt):
 - RubyGems repository support
 - Documentation: https://docs.pulpproject.org/pulp_gem/
 
-**Pulp NPM** (0.4.0):
+**Pulp NPM** (0.4.0, see requirements.txt):
 - NPM registry support
 - Documentation: https://docs.pulpproject.org/pulp_npm/
 
-**Pulp Maven** (0.11.0):
+**Pulp Maven** (0.11.0, see requirements.txt):
 - Maven repository support
 - Documentation: https://docs.pulpproject.org/pulp_maven/
 
-**Pulp Hugging Face** (0.1.0):
+**Pulp Hugging Face** (0.1.0, see requirements.txt):
 - Hugging Face model repository support
 
 ### Key Architectural Boundaries
