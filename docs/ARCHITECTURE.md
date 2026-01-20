@@ -77,6 +77,8 @@ Response
 ## Middleware Stack
 
 ### WSGI Level (images/assets/log_middleware.py)
+*Plugin-specific middleware - not part of upstream Pulpcore*
+
 Applied via Gunicorn's `post_worker_init` hook:
 
 1. **UserExtractionMiddleware**
@@ -86,15 +88,19 @@ Applied via Gunicorn's `post_worker_init` hook:
    - Supports multiple identity types: user, x509, SAML
 
 ### Django Level (pulp_service/pulp_service/app/middleware.py)
+*Plugin-specific middleware - extends upstream Pulpcore Django middleware*
+
 Applied in order via Django settings:
 
-1. **ProfilerMiddleware** - Profiles requests when `X-Profile-Request` header present
+1. **ProfilerMiddleware** - Profiles requests when the `X-Profile-Request` header is present
 2. **RhEdgeHostMiddleware** - Maps `X-RH-EDGE-HOST` to `X-FORWARDED-HOST`
 3. **RHSamlAuthHeaderMiddleware** - Extracts user from `X-RH-IDENTITY` for `/pulp-mgmt/` paths
 4. **RequestPathMiddleware** - Stores request path in ContextVar for signals
 5. **ActiveConnectionsMetricMiddleware** - Tracks concurrent connections with OpenTelemetry
 
 ### aiohttp Level (pulp_service/pulp_service/app/content.py)
+*Plugin-specific middleware - extends upstream Pulpcore content server*
+
 For pulp-content service:
 
 1. **add_rh_org_id_resp_header** - Adds `X-RH-ORG-ID` response header from identity
@@ -159,11 +165,12 @@ These are accessible throughout the request lifecycle and in async tasks.
 ## Authentication & Authorization
 
 ### Authentication Classes (pulp_service/pulp_service/app/authentication.py)
+*Plugin-specific authentication - extends upstream Pulpcore auth classes*
 
-1. **RHServiceAccountCertAuthentication** - X.509 certificate authentication
-2. **RHSamlAuthentication** - SAML authentication via X-RH-IDENTITY header
-3. **SessionAuthentication** - Django session-based auth
-4. **BasicAuthentication** - HTTP Basic auth
+1. **RHServiceAccountCertAuthentication** - X.509 certificate authentication (plugin-specific)
+2. **RHSamlAuthentication** - SAML authentication via X-RH-IDENTITY header (plugin-specific)
+3. **SessionAuthentication** - Django session-based auth (upstream)
+4. **BasicAuthentication** - HTTP Basic auth (upstream)
 
 ### Header-based Identity
 The `X-RH-IDENTITY` header contains base64-encoded JSON:
@@ -180,6 +187,7 @@ The `X-RH-IDENTITY` header contains base64-encoded JSON:
 ## Storage Backend
 
 Custom S3 storage implementation in `pulp_service/pulp_service/app/storage.py`:
+*Plugin-specific - extends Django's S3Boto3Storage beyond upstream Pulpcore*
 
 - **AIPCCStorageBackend** - Extends Django's S3Boto3Storage
 - **OCIStorageBackend** - OCI-specific storage with manifest handling
@@ -188,6 +196,7 @@ Custom S3 storage implementation in `pulp_service/pulp_service/app/storage.py`:
 ## Database Models
 
 Key models in `pulp_service/pulp_service/app/models.py`:
+*Plugin-specific models - extend upstream Pulpcore models*
 
 - **RHCertGuardPermission** - Certificate-based access control
 - **PushRepository** - Repository configuration
@@ -197,6 +206,7 @@ Key models in `pulp_service/pulp_service/app/models.py`:
 ## API ViewSets
 
 Main API endpoints in `pulp_service/pulp_service/app/viewsets.py`:
+*Plugin-specific viewsets - extend upstream Pulpcore viewsets*
 
 - **RHCertGuardPermissionViewSet** - Manage cert guard permissions
 - **PushRepositoryViewSet** - Repository CRUD operations
@@ -275,30 +285,30 @@ Background tasks using Celery (in `pulp_service/pulp_service/app/tasks/`):
 
 ### Authentication & Authorization
 
-- `PULP_AUTHENTICATION_BACKENDS` - List of Django authentication backends
-- `PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES` - DRF auth classes
-- `PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES` - DRF permission classes
+- `PULP_AUTHENTICATION_BACKENDS` - List of Django authentication backends (Python list literal of dotted module paths)
+- `PULP_REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES` - DRF auth classes (Python list literal of dotted module paths)
+- `PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES` - DRF permission classes (Python list literal of dotted module paths)
 - `PULP_AUTHENTICATION_JSON_HEADER=HTTP_X_RH_IDENTITY` - Identity header name
 - `PULP_AUTHENTICATION_JSON_HEADER_JQ_FILTER=.identity.user.username` - JQ filter for username
 - `PULP_TOKEN_AUTH_DISABLED=true` - Disable container registry token auth
 - `PULP_USE_X_FORWARDED_HOST=true` - Use X-Forwarded-Host for URL building
-- `PULP_SECURE_PROXY_SSL_HEADER=['HTTP_X_FORWARDED_PROTO', 'https']` - SSL proxy header
+- `PULP_SECURE_PROXY_SSL_HEADER=['HTTP_X_FORWARDED_PROTO', 'https']` - SSL proxy header (Python list literal: [header_name, value])
 
 ### Middleware
 
-- `PULP_MIDDLEWARE` - List of Django middleware classes
+- `PULP_MIDDLEWARE` - List of Django middleware classes (Python list literal of dotted module paths)
 
 ### Security & Content
 
-- `PULP_ALLOWED_CONTENT_CHECKSUMS=["sha224", "sha256", "sha384", "sha512"]` - Allowed checksums
-- `PULP_CSRF_TRUSTED_ORIGINS` - List of trusted CSRF origins
+- `PULP_ALLOWED_CONTENT_CHECKSUMS=["sha224", "sha256", "sha384", "sha512"]` - Allowed checksums (Python list literal)
+- `PULP_CSRF_TRUSTED_ORIGINS` - List of trusted CSRF origins (Python list literal)
 - `PULP_DOMAIN_ENABLED=true` - Enable multi-domain support
 
 ### Worker Configuration
 
 - `PULP_WORKER_TYPE=redis` - Worker implementation (redis or pulpcore)
 - `PULP_TASK_PROTECTION_TIME=20160` - Task retention time (minutes)
-- `PULP_TASK_DIAGNOSTICS=['memory', 'memray', 'pyinstrument']` - Available profilers
+- `PULP_TASK_DIAGNOSTICS=['memory', 'memray', 'pyinstrument']` - Available profilers (Python list literal)
 - `PULP_UPLOAD_PROTECTION_TIME=480` - Upload cleanup time (minutes)
 - `PULP_MAX_CONCURRENT_CONTENT=200` - Batch size for content sync
 
@@ -310,8 +320,8 @@ Background tasks using Celery (in `pulp_service/pulp_service/app/tasks/`):
 - `OTEL_METRIC_EXPORT_INTERVAL=7000` - Export interval (ms)
 - `OTEL_METRIC_EXPORT_TIMEOUT=7000` - Export timeout (ms)
 - `OTEL_TRACES_EXPORTER=none` - Disable trace export
-- `OTEL_PYTHON_EXCLUDED_URLS=.*livez,.*status` - Exclude URLs from metrics
-- `PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS=[100.0,250.0,500.0,1000.0,2500.0,5000.0]` - Histogram buckets
+- `OTEL_PYTHON_EXCLUDED_URLS=.*livez,.*status` - Exclude URLs from metrics (comma-separated regex patterns)
+- `PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS=[100.0,250.0,500.0,1000.0,2500.0,5000.0]` - Histogram buckets in milliseconds (Python list literal)
 
 ### ClamAV Integration
 
@@ -353,10 +363,9 @@ When making changes that affect both local development and production:
 3. **Both environments**: Ensure changes are synchronized between both files
 
 Example: Adding X-Forwarded-For to logs requires updating:
-- `images/assets/pulp-api` (line 10)
-- `images/assets/pulp-content` (line 10)
-- `deploy/clowdapp.yaml` api deployment (line 289)
-- `deploy/clowdapp.yaml` content deployment (line 459)
+- `images/assets/pulp-api` - Update the `--access-logformat` option in the Gunicorn command
+- `images/assets/pulp-content` - Update the `--access-logformat` option in the Gunicorn command
+- `deploy/clowdapp.yaml` - Update the `--access-logformat` in both `pulp-api` and `pulp-content` deployment command args
 
 ### Adding New Headers to Logs
 
@@ -495,7 +504,7 @@ Jobs are one-time or periodic tasks managed by ClowdJobInvocation:
 - Managed by Clowder
 
 **Object Storage**:
-- S3-compatible storage (Minio or AWS S3)
+- S3-compatible storage (MinIO or AWS S3)
 - Bucket name: `pulp-default-domain-s3`
 - Managed by Clowder
 
