@@ -585,9 +585,132 @@ Jobs are one-time or periodic tasks managed by ClowdJobInvocation:
 - Repository-level access control
 - Content scanning with ClamAV
 
-## Related Services
+## Upstream Dependencies
 
-- **Pulpcore**: Core Pulp functionality (upstream dependency)
-- **Pulp Python Plugin**: Python package support
-- **Pulp Container Plugin**: Container image support
-- **Pulp RPM Plugin**: RPM package support
+This service is a Django plugin built on top of Pulp (Python-based repository management) and extends it with Red Hat-specific features for multi-tenancy, authentication, and cloud deployment.
+
+### Pulpcore
+
+- **Version**: 3.95.0
+- **Repository**: https://github.com/pulp/pulpcore
+- **Documentation**: https://docs.pulpproject.org/pulpcore/
+
+**What Pulpcore Provides:**
+- Core Django models: Content, Repository, Publication, Distribution, Domain
+- REST API framework built on Django REST Framework
+- Task queue system (Celery-based) for asynchronous operations
+- Content storage abstraction (local filesystem, S3, Azure)
+- Plugin API for extending functionality
+- RBAC (Role-Based Access Control) system
+- Content sync and versioning
+- Artifact management and deduplication
+
+**Plugin Integration Points:**
+- Extends core models with plugin-specific models (RHCertGuardPermission, PushRepository, RHServiceAccount)
+- Overrides authentication backends (RHServiceAccountCertAuthentication, RHSamlAuthentication)
+- Adds custom middleware (ProfilerMiddleware, RhEdgeHostMiddleware, ActiveConnectionsMetricMiddleware)
+- Extends storage backends (AIPCCStorageBackend, OCIStorageBackend)
+- Adds custom viewsets for Red Hat-specific functionality
+- Implements multi-domain support for tenant isolation
+
+### Pulp Python Plugin
+
+- **Version**: 3.22.1
+- **Repository**: https://github.com/pulp/pulp_python
+- **Documentation**: https://docs.pulpproject.org/pulp_python/
+
+**What It Provides:**
+- PyPI repository support (Simple API and JSON API)
+- Python package content models (PythonPackageContent)
+- Package upload and sync from PyPI
+- Distribution and publication models for Python repositories
+
+**Plugin Integration:**
+- Custom domain-based routing: `/api/pypi/{domain}/{distribution}/simple/`
+- Multi-tenant PyPI repositories with org_id isolation
+- Download tracking for business metrics (RpmPackageDownload model)
+- RHOAI distribution support with 50+ specialized distributions
+
+### Pulp Container Plugin
+
+- **Version**: 2.26.2
+- **Repository**: https://github.com/pulp/pulp_container
+- **Documentation**: https://docs.pulpproject.org/pulp_container/
+
+**What It Provides:**
+- OCI/Docker registry API (v2)
+- Container image and manifest models
+- Image layer storage and deduplication
+- Push and pull operations
+- Tag management
+
+**Plugin Integration:**
+- Custom storage backend (OCIStorageBackend) with manifest handling
+- Token authentication disabled (PULP_TOKEN_AUTH_DISABLED=true)
+- Certificate-based access control (RHCertGuardPermission)
+- Multi-tenant container registries with domain isolation
+
+### Pulp RPM Plugin
+
+- **Version**: 3.32.5
+- **Repository**: https://github.com/pulp/pulp_rpm
+- **Documentation**: https://docs.pulpproject.org/pulp_rpm/
+
+**What It Provides:**
+- RPM/DNF repository support
+- RPM package content models
+- Repository metadata generation (repodata)
+- Package signing support
+- Modular content support
+
+**Plugin Integration:**
+- Download tracking for business metrics (RpmPackageDownload)
+- Domain-based multi-tenant RPM repositories
+- Custom distribution configurations
+
+### Additional Pulp Plugins
+
+**Pulp Gem** (0.7.3):
+- RubyGems repository support
+- Documentation: https://docs.pulpproject.org/pulp_gem/
+
+**Pulp NPM** (0.4.0):
+- NPM registry support
+- Documentation: https://docs.pulpproject.org/pulp_npm/
+
+**Pulp Maven** (0.11.0):
+- Maven repository support
+- Documentation: https://docs.pulpproject.org/pulp_maven/
+
+**Pulp Hugging Face** (0.1.0):
+- Hugging Face model repository support
+
+### Key Architectural Boundaries
+
+**Upstream Pulpcore Responsibilities:**
+- Content storage and retrieval
+- Task execution and queuing
+- Basic RBAC and permissions
+- Content versioning and snapshots
+- Database models for content types
+- Plugin extension points
+
+**Plugin-Specific Responsibilities:**
+- Red Hat SSO/SAML integration via X-RH-IDENTITY
+- Multi-tenancy (org_id, domain-based isolation)
+- Custom authentication (X.509 certificates, service accounts)
+- OpenTelemetry metrics and profiling
+- Business metrics and analytics
+- ClamAV integration for content scanning
+- Cloud-native deployment (OpenShift/Clowder)
+- Custom access logging with correlation IDs
+
+### Version Compatibility
+
+This plugin requires:
+- Python 3.9+ (tested on 3.11, 3.12)
+- Django 4.2+
+- PostgreSQL 15+
+- Redis (for caching and Celery broker)
+
+Upstream Pulp plugins are version-locked in requirements.txt to ensure compatibility. When upgrading Pulpcore or plugins, all dependencies should be upgraded together and thoroughly tested.
