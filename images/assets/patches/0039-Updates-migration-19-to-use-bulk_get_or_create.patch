@@ -1,18 +1,84 @@
-From d868dfd963831e1f2ea86cbb6b01c893722b6ae1 Mon Sep 17 00:00:00 2001
+From 1a31a82a4d4f09ac918daee3716b44adde83efb3 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 20 Jan 2026 13:31:24 -0500
 Subject: [PATCH] Updates migration 19 to use bulk_get_or_create instead of
  bulk_create.
 
+Adds BulkCreateManager to migration 19 so the historical models can use it.
 ---
- .../migrations/0019_create_missing_metadata_artifacts.py  | 8 ++++----
- 1 file changed, 4 insertions(+), 4 deletions(-)
+ .../0019_create_missing_metadata_artifacts.py | 56 +++++++++++++++++--
+ 1 file changed, 51 insertions(+), 5 deletions(-)
 
 diff --git a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
-index 2ed544db..0420aac0 100644
+index 2ed544db..74bed6ab 100644
 --- a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
 +++ b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
-@@ -171,8 +171,8 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+@@ -1,10 +1,50 @@
+ # Generated manually on 2025-12-15 14:00 for creating missing metadata artifacts
+
+-from django.db import migrations
++from django.db import migrations, models, transaction, IntegrityError
+
+ BATCH_SIZE = 1000
+
+
++class BulkCreateManager(models.Manager):
++    """
++    A manager that provides a bulk_get_or_create()
++    Copied from pulpcore to use in migration.
++    """
++
++    def bulk_get_or_create(self, objs, batch_size=None):
++        """
++        Insert the list of objects into the database and get existing objects from the database.
++
++        Do *not* call save() on each of the instances, do not send any pre/post_save signals,
++        and do not set the primary key attribute if it is an autoincrement field (except if
++        features.can_return_ids_from_bulk_insert=True). Multi-table models are not supported.
++
++        If an IntegrityError is raised while performing a bulk insert, this method falls back to
++        inserting each instance individually. The already-existing instances are retrieved from
++        the database and returned with the other newly created instances.
++
++        Args:
++            objs (iterable of models.Model): an iterable of Django Model instances
++            batch_size (int): how many are created in a single query
++
++        Returns:
++            List of instances that were inserted into the database.
++        """
++
++        objs = list(objs)
++        try:
++            with transaction.atomic():
++                return super().bulk_create(objs, batch_size=batch_size)
++        except IntegrityError:
++            for i in range(len(objs)):
++                try:
++                    with transaction.atomic():
++                        objs[i].save()
++                except IntegrityError:
++                    objs[i] = objs[i].__class__.objects.get(objs[i].q())
++        return objs
++
++
+ def pulp_hashlib_new(name, *args, **kwargs):
+     """
+     Copied and updated (to comply with migrations) from pulpcore.
+@@ -123,6 +163,12 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+     ContentArtifact = apps.get_model("core", "ContentArtifact")
+     Artifact = apps.get_model("core", "Artifact")
+
++    # Assign BulkCreateManager to the models so they have bulk_get_or_create method
++    Artifact.objects = BulkCreateManager()
++    Artifact.objects.model = Artifact
++    ContentArtifact.objects = BulkCreateManager()
++    ContentArtifact.objects.model = ContentArtifact
++
+     packages = (
+         PythonPackageContent.objects.filter(
+             metadata_sha256__isnull=False,
+@@ -171,8 +217,8 @@ def create_missing_metadata_artifacts(apps, schema_editor):
              contentartifact_batch.append(contentartifact)
 
              if len(artifact_batch) == BATCH_SIZE:
@@ -23,7 +89,7 @@ index 2ed544db..0420aac0 100644
                  artifact_batch.clear()
                  contentartifact_batch.clear()
              if len(packages_batch) == BATCH_SIZE:
-@@ -182,8 +182,8 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+@@ -182,8 +228,8 @@ def create_missing_metadata_artifacts(apps, schema_editor):
                  packages_batch.clear()
 
          if artifact_batch:
