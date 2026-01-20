@@ -1,0 +1,26 @@
+From ee77b9b5a36393689efea4042010908b6ca96338 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Tue, 20 Jan 2026 13:31:24 -0500
+Subject: [PATCH] Updates migration 19 to use bulk_get_or_create instead of
+ bulk_create.
+
+---
+ .../app/migrations/0019_create_missing_metadata_artifacts.py    | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
+index 2ed544db..9c1382fd 100644
+--- a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
++++ b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
+@@ -182,7 +182,7 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+                 packages_batch.clear()
+ 
+         if artifact_batch:
+-            Artifact.objects.bulk_create(artifact_batch, batch_size=BATCH_SIZE)
++            Artifact.objects.bulk_get_or_create(artifact_batch, batch_size=BATCH_SIZE)
+             ContentArtifact.objects.bulk_create(contentartifact_batch, batch_size=BATCH_SIZE)
+         if packages_batch:
+             PythonPackageContent.objects.bulk_update(
+-- 
+2.52.0
+
