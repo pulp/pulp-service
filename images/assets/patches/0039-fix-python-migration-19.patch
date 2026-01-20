@@ -1,0 +1,14 @@
+diff --git a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
+index eb0d246..2ed544d 100644
+--- a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
++++ b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
+@@ -159,6 +159,9 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+                 package.metadata_sha256 = mismatched_sha256
+                 packages_batch.append(package)
+ 
++            # Set the domain on the metadata artifact to match the package's domain
++            metadata_artifact.pulp_domain = package._pulp_domain
++
+             contentartifact = ContentArtifact(
+                 artifact=metadata_artifact,
+                 content=package,
