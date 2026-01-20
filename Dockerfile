@@ -176,9 +176,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0038-readonly-pypi-endpoints.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0038-readonly-pypi-endpoints.patch
 
-COPY images/assets/patches/0039-fix-python-migration-19.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0039-fix-python-migration-19.patch
-
 COPY images/assets/gunicorn_config.py /tmp/
 
 RUN mkdir /licenses
