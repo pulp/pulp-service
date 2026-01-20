@@ -906,6 +906,13 @@ objects:
           initialDelaySeconds: 2
           periodSeconds: 2
           timeoutSeconds: 10
+        resources:
+          requests:
+            cpu: ${{PULP_MIGRATE_DB_CPU_REQUEST}}
+            memory: ${{PULP_MIGRATE_DB_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{PULP_MIGRATE_DB_CPU_LIMIT}}
+            memory: ${{PULP_MIGRATE_DB_MEMORY_LIMIT}}
         env:
           - name: PULP_CONTENT_ORIGIN
             value: ${{PULP_CONTENT_ORIGIN}}
@@ -1124,6 +1131,18 @@ parameters:
   - name: PULP_MIGRATION_REPLICAS
     description: Number of pulp migration replicas. This is a workaround to be able to deploy the migration pods only in one of the clusters.
     value: "1"
+  - name: PULP_MIGRATE_DB_CPU_REQUEST
+    description: Amount of CPU to request for the migrate-db pods
+    value: "150m"
+  - name: PULP_MIGRATE_DB_CPU_LIMIT
+    description: Limit of CPU use by migrate-db pods
+    value: "300m"
+  - name: PULP_MIGRATE_DB_MEMORY_REQUEST
+    description: Amount of memory to request for migrate-db pods
+    value: "512Mi"
+  - name: PULP_MIGRATE_DB_MEMORY_LIMIT
+    description: Limit of memory use by migrate-db pods
+    value: "1024Mi"
   - name: PULP_API_CPU_REQUEST
     description: Amount of CPU to request for the API pods
     value: "500m"
