@@ -1,43 +1,36 @@
-From bf66f2e5a1852aa7e2d4041fe90ec14474d7479b Mon Sep 17 00:00:00 2001
-From: Gerrod Ubben <gerrodubben@gmail.com>
-Date: Wed, 21 Jan 2026 00:45:12 -0500
-Subject: [PATCH] Fix migration 19 failing on duplicate artifact saves
+From baf48e435f62691ecf948ca5737d32995d8c2974 Mon Sep 17 00:00:00 2001
+From: Jitka Halova <jobselko@redhat.com>
+Date: Wed, 21 Jan 2026 15:46:06 +0100
+Subject: [PATCH] Rework migration 19
 
-fixes: #1071
 ---
- CHANGES/1071.bugfix                           |   1 +
- .../0019_create_missing_metadata_artifacts.py | 125 +++++++++++-------
- 2 files changed, 78 insertions(+), 48 deletions(-)
- create mode 100644 CHANGES/1071.bugfix
+ .../0019_create_missing_metadata_artifacts.py | 131 +++++++++++-------
+ 1 file changed, 82 insertions(+), 49 deletions(-)
 
-diff --git a/CHANGES/1071.bugfix b/CHANGES/1071.bugfix
-new file mode 100644
-index 0000000..b39361b
---- /dev/null
-+++ b/CHANGES/1071.bugfix
-@@ -0,0 +1 @@
-+Fixed migration 19 failing on duplicate metadata artifact saves.
 diff --git a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
-index 2ed544d..3d621bb 100644
+index 2ed544db..7b7646b4 100644
 --- a/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
 +++ b/pulp_python/app/migrations/0019_create_missing_metadata_artifacts.py
-@@ -1,6 +1,7 @@
+@@ -1,8 +1,9 @@
  # Generated manually on 2025-12-15 14:00 for creating missing metadata artifacts
- 
+
  from django.db import migrations
 +from itertools import groupby
- 
- BATCH_SIZE = 1000
- 
+
+-BATCH_SIZE = 1000
++BATCH_SIZE = 200
+
+
+ def pulp_hashlib_new(name, *args, **kwargs):
 @@ -118,6 +119,7 @@ def create_missing_metadata_artifacts(apps, schema_editor):
      import tempfile
      from django.conf import settings
      from django.db import models
 +    from django.db.utils import IntegrityError
- 
+
      PythonPackageContent = apps.get_model("python", "PythonPackageContent")
      ContentArtifact = apps.get_model("core", "ContentArtifact")
-@@ -132,62 +134,89 @@ def create_missing_metadata_artifacts(apps, schema_editor):
+@@ -132,62 +134,93 @@ def create_missing_metadata_artifacts(apps, schema_editor):
          )
          .exclude(metadata_sha256="")
          .prefetch_related("_artifacts")
@@ -49,7 +42,7 @@ index 2ed544d..3d621bb 100644
 +    artifact_batch = {}
      contentartifact_batch = []
      packages_batch = []
- 
+
 -    with tempfile.TemporaryDirectory(dir=settings.WORKING_DIRECTORY) as temp_dir:
 -        for package in packages:
 -            # Get the main artifact for package
@@ -79,9 +72,13 @@ index 2ed544d..3d621bb 100644
 -                content=package,
 -                relative_path=f"{filename}.metadata",
 +    def batch_save_artifacts(domain_id):
++        from django.db import transaction
++
++        sid = transaction.savepoint()  # Start a savepoint
 +        try:
 +            Artifact.objects.bulk_create(artifact_batch.values(), batch_size=BATCH_SIZE)
 +        except IntegrityError:
++            transaction.savepoint_rollback(sid)  # Only rollback this batch
 +            # Find the existing artifacts and update the contentartifacts to point to the existing artifacts
 +            digest_cas = {}
 +            for ca in contentartifact_batch:
@@ -114,11 +111,11 @@ index 2ed544d..3d621bb 100644
 +        artifact_batch.clear()
 +        contentartifact_batch.clear()
 +
-+    with tempfile.TemporaryDirectory(dir=settings.WORKING_DIRECTORY) as temp_dir:
-+        for domain_id, domain_packages in groupby(
-+            packages.iterator(chunk_size=BATCH_SIZE), key=lambda x: x.pulp_domain_id
-+        ):
-+            for package in domain_packages:
++    for domain_id, domain_packages in groupby(
++        packages.iterator(chunk_size=BATCH_SIZE), key=lambda x: x.pulp_domain_id
++    ):
++        for package in domain_packages:
++            with tempfile.TemporaryDirectory(dir=settings.WORKING_DIRECTORY) as temp_dir:
 +                # Get the main artifact for package
 +                main_artifact = package._artifacts.get()
 +
@@ -172,9 +169,6 @@ index 2ed544d..3d621bb 100644
 -            PythonPackageContent.objects.bulk_update(
 -                packages_batch, ["metadata_sha256"], batch_size=BATCH_SIZE
 -            )
- 
- 
- class Migration(migrations.Migration):
--- 
-2.46.2
 
+
+ class Migration(migrations.Migration):
