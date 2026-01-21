@@ -443,6 +443,7 @@ data:
                       }
                     ],
                     "matchExact": true,
+                    "queryLanguage": "CWLI",
                     "queryMode": "Logs",
                     "refId": "A",
                     "region": "default",
@@ -467,6 +468,7 @@ data:
                       }
                     ],
                     "matchExact": true,
+                    "queryLanguage": "CWLI",
                     "queryMode": "Logs",
                     "refId": "B",
                     "region": "default",
@@ -588,6 +590,7 @@ data:
                       }
                     ],
                     "matchExact": true,
+                    "queryLanguage": "CWLI",
                     "queryMode": "Logs",
                     "refId": "A",
                     "region": "default",
@@ -612,6 +615,7 @@ data:
                       }
                     ],
                     "matchExact": true,
+                    "queryLanguage": "CWLI",
                     "queryMode": "Logs",
                     "refId": "B",
                     "region": "default",
