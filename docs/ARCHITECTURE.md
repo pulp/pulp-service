@@ -160,12 +160,12 @@ For pulp-content service:
 
 **pulp-api** (Production):
 ```
-pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s "%({X-Forwarded-For}i)s"
+pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s x_forwarded_for:"%({X-Forwarded-For}i)s"
 ```
 
 **pulp-api** (Local/Dev):
 ```
-pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" "%({X-Forwarded-For}i)s"
+pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" x_forwarded_for:"%({X-Forwarded-For}i)s"
 ```
 
 **pulp-content** (Production):
@@ -186,9 +186,9 @@ pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s
 - `%(b)s` - Response size in bytes
 - `%(f)s` / `%{Referer}i` - Referer header
 - `%(a)s` / `%{User-Agent}i` - User agent
-- `%(M)s` - Request time in milliseconds
-- `%({X-Forwarded-For}i)s` - X-Forwarded-For header
-- `%{X-PULP-CACHE}o` - Cache hit/miss status
+- `%(M)s` - Request time in milliseconds (pulp-api only)
+- `x_forwarded_for:"%({X-Forwarded-For}i)s"` - X-Forwarded-For header (comma-separated list of IPs, first IP is original client)
+- `%{X-PULP-CACHE}o` - Cache hit/miss status (pulp-content only)
 - `%{X-PULP-ARTIFACT-SIZE}o` - Artifact size
 - `%{X-RH-ORG-ID}o` - Organization ID response header
 
