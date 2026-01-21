@@ -176,8 +176,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0038-readonly-pypi-endpoints.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0038-readonly-pypi-endpoints.patch
 
-COPY images/assets/patches/0039-Updates-migration-19-to-use-bulk_get_or_create.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0039-Updates-migration-19-to-use-bulk_get_or_create.patch
+COPY images/assets/patches/0039-Fix-migration-19-failing-on-duplicate-artifact-saves.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0039-Fix-migration-19-failing-on-duplicate-artifact-saves.patch
 
 COPY images/assets/gunicorn_config.py /tmp/
 
