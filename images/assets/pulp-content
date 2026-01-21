@@ -7,7 +7,7 @@ if which pulpcore-content
 then
   PULP_CONTENT_ENTRYPOINT=("pulpcore-content")
 else
-  PULP_CONTENT_ENTRYPOINT=("gunicorn" "pulpcore.content:server" "--worker-class" "aiohttp.GunicornWebWorker" "--name" "pulp-content" "--bind" "[::]:24816")
+  PULP_CONTENT_ENTRYPOINT=("gunicorn" "pulpcore.content:server" "--worker-class" "aiohttp.GunicornWebWorker" "--name" "pulp-content" "--bind" "[::]:24816" "--access-logformat" "pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" \"%({X-Forwarded-For}i)s\"")
 fi
 
 # NOTE: Due to the Linux dual-stack functionality, this will listen on both IPv4

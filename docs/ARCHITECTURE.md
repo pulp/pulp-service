@@ -160,12 +160,12 @@ For pulp-content service:
 
 **pulp-api** (Production):
 ```
-pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s %({X-Forwarded-For}i)s
+pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s "%({X-Forwarded-For}i)s"
 ```
 
 **pulp-api** (Local/Dev):
 ```
-pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %({X-Forwarded-For}i)s
+pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" "%({X-Forwarded-For}i)s"
 ```
 
 **pulp-content** (Production):

@@ -7,7 +7,7 @@ if which pulpcore-api
 then
   PULP_API_ENTRYPOINT=("pulpcore-api")
 else
-  PULP_API_ENTRYPOINT=("gunicorn" "pulpcore.app.wsgi:application" "--bind" "[::]:24817" "--name" "pulp-api" "--access-logformat" "pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\"")
+  PULP_API_ENTRYPOINT=("gunicorn" "pulpcore.app.wsgi:application" "--bind" "[::]:24817" "--name" "pulp-api" "--access-logformat" "pulp [%({correlation-id}o)s]: %(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" \"%({X-Forwarded-For}i)s\"")
 fi
 
 # NOTE: Due to the Linux dual-stack functionality, this will listen on both IPv4
