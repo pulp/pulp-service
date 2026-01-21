@@ -366,7 +366,298 @@ data:
               "y": 15
             },
             "id": 3,
-            "panels": [],
+            "panels": [
+              {
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {
+                      "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 30
+                        },
+                        {
+                          "color": "green",
+                          "value": 50
+                        }
+                      ]
+                    },
+                    "unit": "percent"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {
+                  "h": 8,
+                  "w": 6,
+                  "x": 0,
+                  "y": 16
+                },
+                "id": 13,
+                "options": {
+                  "colorMode": "value",
+                  "graphMode": "area",
+                  "justifyMode": "auto",
+                  "orientation": "auto",
+                  "percentChangeColorMode": "standard",
+                  "reduceOptions": {
+                    "calcs": [
+                      "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                  },
+                  "showPercentChange": false,
+                  "text": {},
+                  "textMode": "auto",
+                  "wideLayout": true
+                },
+                "pluginVersion": "11.6.3",
+                "targets": [
+                  {
+                    "datasource": {
+                      "type": "cloudwatch",
+                      "uid": "P1A97A9592CB7F392"
+                    },
+                    "dimensions": {},
+                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
+                    "id": "cohort",
+                    "label": "Cohort (Week -2)",
+                    "logGroups": [
+                      {
+                        "accountId": "744086762512",
+                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                        "name": "${log_group}"
+                      }
+                    ],
+                    "matchExact": true,
+                    "queryMode": "Logs",
+                    "refId": "A",
+                    "region": "default",
+                    "statsGroups": [
+                      "user"
+                    ]
+                  },
+                  {
+                    "datasource": {
+                      "type": "cloudwatch",
+                      "uid": "P1A97A9592CB7F392"
+                    },
+                    "dimensions": {},
+                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
+                    "id": "returnees",
+                    "label": "Returnees (Week -1)",
+                    "logGroups": [
+                      {
+                        "accountId": "744086762512",
+                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                        "name": "${log_group}"
+                      }
+                    ],
+                    "matchExact": true,
+                    "queryMode": "Logs",
+                    "refId": "B",
+                    "region": "default",
+                    "statsGroups": [
+                      "user"
+                    ]
+                  }
+                ],
+                "title": "7-Day User Retention",
+                "transformations": [
+                  {
+                    "id": "joinByField",
+                    "options": {
+                      "byField": "user",
+                      "mode": "inner"
+                    }
+                  },
+                  {
+                    "id": "reduce",
+                    "options": {
+                      "includeTimeField": false,
+                      "mode": "reduceFields",
+                      "reducers": [
+                        "count"
+                      ]
+                    }
+                  },
+                  {
+                    "id": "calculateField",
+                    "options": {
+                      "alias": "Retention %",
+                      "binary": {
+                        "left": "Count",
+                        "operator": "/",
+                        "right": "Count"
+                      },
+                      "mode": "binary",
+                      "reduce": {
+                        "reducer": "sum"
+                      }
+                    }
+                  }
+                ],
+                "type": "stat"
+              },
+              {
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {
+                      "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "red",
+                          "value": null
+                        },
+                        {
+                          "color": "yellow",
+                          "value": 30
+                        },
+                        {
+                          "color": "green",
+                          "value": 50
+                        }
+                      ]
+                    },
+                    "unit": "percent"
+                  },
+                  "overrides": []
+                },
+                "gridPos": {
+                  "h": 8,
+                  "w": 6,
+                  "x": 6,
+                  "y": 16
+                },
+                "id": 14,
+                "options": {
+                  "colorMode": "value",
+                  "graphMode": "area",
+                  "justifyMode": "auto",
+                  "orientation": "auto",
+                  "percentChangeColorMode": "standard",
+                  "reduceOptions": {
+                    "calcs": [
+                      "lastNotNull"
+                    ],
+                    "fields": "",
+                    "values": false
+                  },
+                  "showPercentChange": false,
+                  "text": {},
+                  "textMode": "auto",
+                  "wideLayout": true
+                },
+                "pluginVersion": "11.6.3",
+                "targets": [
+                  {
+                    "datasource": {
+                      "type": "cloudwatch",
+                      "uid": "P1A97A9592CB7F392"
+                    },
+                    "dimensions": {},
+                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
+                    "id": "cohort",
+                    "label": "Cohort (Month -2)",
+                    "logGroups": [
+                      {
+                        "accountId": "744086762512",
+                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                        "name": "${log_group}"
+                      }
+                    ],
+                    "matchExact": true,
+                    "queryMode": "Logs",
+                    "refId": "A",
+                    "region": "default",
+                    "statsGroups": [
+                      "user"
+                    ]
+                  },
+                  {
+                    "datasource": {
+                      "type": "cloudwatch",
+                      "uid": "P1A97A9592CB7F392"
+                    },
+                    "dimensions": {},
+                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
+                    "id": "returnees",
+                    "label": "Returnees (Month -1)",
+                    "logGroups": [
+                      {
+                        "accountId": "744086762512",
+                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                        "name": "${log_group}"
+                      }
+                    ],
+                    "matchExact": true,
+                    "queryMode": "Logs",
+                    "refId": "B",
+                    "region": "default",
+                    "statsGroups": [
+                      "user"
+                    ]
+                  }
+                ],
+                "title": "30-Day User Retention",
+                "transformations": [
+                  {
+                    "id": "joinByField",
+                    "options": {
+                      "byField": "user",
+                      "mode": "inner"
+                    }
+                  },
+                  {
+                    "id": "reduce",
+                    "options": {
+                      "includeTimeField": false,
+                      "mode": "reduceFields",
+                      "reducers": [
+                        "count"
+                      ]
+                    }
+                  },
+                  {
+                    "id": "calculateField",
+                    "options": {
+                      "alias": "Retention %",
+                      "binary": {
+                        "left": "Count",
+                        "operator": "/",
+                        "right": "Count"
+                      },
+                      "mode": "binary",
+                      "reduce": {
+                        "reducer": "sum"
+                      }
+                    }
+                  }
+                ],
+                "type": "stat"
+              }
+            ],
             "title": "Engagement and Retention",
             "type": "row"
           },
