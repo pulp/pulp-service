@@ -646,6 +646,117 @@ data:
               "x": 0,
               "y": 49
             },
+            "id": 11,
+            "panels": [
+              {
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {
+                      "mode": "palette-classic"
+                    },
+                    "custom": {
+                      "hideFrom": {
+                        "legend": false,
+                        "tooltip": false,
+                        "viz": false
+                      }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green"
+                        }
+                      ]
+                    }
+                  },
+                  "overrides": []
+                },
+                "gridPos": {
+                  "h": 8,
+                  "w": 12,
+                  "x": 0,
+                  "y": 50
+                },
+                "id": 12,
+                "options": {
+                  "barRadius": 0,
+                  "barWidth": 0.97,
+                  "fullHighlight": false,
+                  "groupWidth": 0.7,
+                  "legend": {
+                    "calcs": [],
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": true
+                  },
+                  "orientation": "auto",
+                  "showValue": "auto",
+                  "stacking": "none",
+                  "tooltip": {
+                    "hideZeros": false,
+                    "mode": "single",
+                    "sort": "none"
+                  },
+                  "xField": "org_id",
+                  "xTickLabelRotation": 0,
+                  "xTickLabelSpacing": 0
+                },
+                "pluginVersion": "11.6.3",
+                "targets": [
+                  {
+                    "datasource": {
+                      "type": "cloudwatch",
+                      "uid": "P1A97A9592CB7F392"
+                    },
+                    "dimensions": {},
+                    "expression": "fields @timestamp, @message\n| filter @message like /\\/api\\/pypi\\//\n| parse @message 'org_id:* ' as org_id\n| filter ispresent(org_id)\n| filter org_id != \"-\" and org_id != \"\"\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as requests by org_id\n| sort requests desc\n| limit 20",
+                    "id": "",
+                    "label": "",
+                    "logGroups": [
+                      {
+                        "accountId": "744086762512",
+                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                        "name": "${log_group}"
+                      }
+                    ],
+                    "matchExact": true,
+                    "metricEditorMode": 0,
+                    "metricName": "",
+                    "metricQueryType": 0,
+                    "namespace": "",
+                    "period": "",
+                    "queryLanguage": "CWLI",
+                    "queryMode": "Logs",
+                    "refId": "A",
+                    "region": "default",
+                    "sqlExpression": "",
+                    "statistic": "Average",
+                    "statsGroups": [
+                      "org_id"
+                    ]
+                  }
+                ],
+                "title": "Top 20 Organizations by Usage",
+                "type": "barchart"
+              }
+            ],
+            "title": "Organizational Metrics",
+            "type": "row"
+          },
+          {
+            "collapsed": true,
+            "gridPos": {
+              "h": 1,
+              "w": 24,
+              "x": 0,
+              "y": 50
+            },
             "id": 5,
             "panels": [],
             "title": "User Demographics",
