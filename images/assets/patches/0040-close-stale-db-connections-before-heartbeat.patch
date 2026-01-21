@@ -1,0 +1,21 @@
+diff --git a/pulpcore/content/__init__.py b/pulpcore/content/__init__.py
+index 29c55ba13..ac6798e19 100644
+--- a/pulpcore/content/__init__.py
++++ b/pulpcore/content/__init__.py
+@@ -15,6 +15,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
+ django.setup()
+ 
+ from django.conf import settings  # noqa: E402: module level not at top of file
++from django.db import close_old_connections  # noqa: E402: module level not at top of file
+ from django.db.utils import (  # noqa: E402: module level not at top of file
+     IntegrityError,
+     InterfaceError,
+@@ -69,6 +70,8 @@ async def _heartbeat():
+     try:
+         while True:
+             await asyncio.sleep(heartbeat_interval)
++            # Close stale DB connections before heartbeat to prevent InterfaceError
++            await sync_to_async(close_old_connections)()
+             try:
+                 await app_status.asave_heartbeat()
+                 log.debug(msg)
