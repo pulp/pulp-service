@@ -176,9 +176,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0038-readonly-pypi-endpoints.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0038-readonly-pypi-endpoints.patch
 
-COPY images/assets/patches/0039-Turn-migration-19-into-a-noop.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0039-Turn-migration-19-into-a-noop.patch
-
 COPY images/assets/patches/0040-close-stale-db-connections-before-heartbeat.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0040-close-stale-db-connections-before-heartbeat.patch
 
