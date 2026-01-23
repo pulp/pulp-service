@@ -372,94 +372,24 @@ data:
                   "type": "cloudwatch",
                   "uid": "P1A97A9592CB7F392"
                 },
-                "fieldConfig": {
-                  "defaults": {
-                    "color": {
-                      "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                      "mode": "absolute",
-                      "steps": [
-                        {
-                          "color": "red",
-                          "value": null
-                        },
-                        {
-                          "color": "yellow",
-                          "value": 30
-                        },
-                        {
-                          "color": "green",
-                          "value": 50
-                        }
-                      ]
-                    },
-                    "unit": "percent"
-                  },
-                  "overrides": []
-                },
+                "type": "barchart",
+                "title": "New Users Per Day",
                 "gridPos": {
                   "h": 8,
-                  "w": 6,
+                  "w": 12,
                   "x": 0,
                   "y": 16
                 },
-                "id": 13,
-                "options": {
-                  "colorMode": "value",
-                  "graphMode": "area",
-                  "justifyMode": "auto",
-                  "orientation": "auto",
-                  "percentChangeColorMode": "standard",
-                  "reduceOptions": {
-                    "calcs": [
-                      "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                  },
-                  "showPercentChange": false,
-                  "text": {},
-                  "textMode": "auto",
-                  "wideLayout": true
-                },
-                "pluginVersion": "11.6.3",
+                "id": 10,
                 "targets": [
                   {
-                    "datasource": {
-                      "type": "cloudwatch",
-                      "uid": "P1A97A9592CB7F392"
-                    },
-                    "dimensions": {},
-                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
-                    "id": "cohort",
-                    "label": "Cohort (Week -2)",
-                    "logGroups": [
-                      {
-                        "accountId": "744086762512",
-                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
-                        "name": "${log_group}"
-                      }
-                    ],
-                    "matchExact": true,
-                    "queryLanguage": "CWLI",
-                    "queryMode": "Logs",
                     "refId": "A",
-                    "region": "default",
-                    "statsGroups": [
-                      "user"
-                    ]
-                  },
-                  {
                     "datasource": {
                       "type": "cloudwatch",
                       "uid": "P1A97A9592CB7F392"
                     },
-                    "dimensions": {},
-                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
-                    "id": "returnees",
-                    "label": "Returnees (Week -1)",
+                    "queryMode": "Logs",
+                    "region": "default",
                     "logGroups": [
                       {
                         "accountId": "744086762512",
@@ -467,146 +397,97 @@ data:
                         "name": "${log_group}"
                       }
                     ],
-                    "matchExact": true,
-                    "queryLanguage": "CWLI",
-                    "queryMode": "Logs",
-                    "refId": "B",
-                    "region": "default",
-                    "statsGroups": [
-                      "user"
-                    ]
+                    "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, route=*\" as username, route\n| parse route '/api/pypi/*/*' as domain, rest\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as new_users by bin(24h) as time"
                   }
                 ],
-                "title": "7-Day User Retention",
-                "transformations": [
-                  {
-                    "id": "joinByField",
-                    "options": {
-                      "byField": "user",
-                      "mode": "inner"
-                    }
-                  },
-                  {
-                    "id": "reduce",
-                    "options": {
-                      "includeTimeField": false,
-                      "mode": "reduceFields",
-                      "reducers": [
-                        "count"
-                      ]
-                    }
-                  },
-                  {
-                    "id": "calculateField",
-                    "options": {
-                      "alias": "Retention %",
-                      "binary": {
-                        "left": "Count",
-                        "operator": "/",
-                        "right": "Count"
-                      },
-                      "mode": "binary",
-                      "reduce": {
-                        "reducer": "sum"
-                      }
+                "options": {
+                  "orientation": "auto",
+                  "showValue": "auto",
+                  "legend": {
+                    "showLegend": false
+                  }
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": {
+                      "mode": "palette-classic"
                     }
                   }
-                ],
-                "type": "stat"
+                }
               },
               {
                 "datasource": {
                   "type": "cloudwatch",
                   "uid": "P1A97A9592CB7F392"
                 },
+                "type": "piechart",
+                "title": "Active Users by Type",
+                "gridPos": {
+                  "h": 8,
+                  "w": 12,
+                  "x": 12,
+                  "y": 16
+                },
+                "id": 11,
+                "targets": [
+                  {
+                    "refId": "A",
+                    "datasource": {
+                      "type": "cloudwatch",
+                      "uid": "P1A97A9592CB7F392"
+                    },
+                    "queryMode": "Logs",
+                    "region": "default",
+                    "logGroups": [
+                      {
+                        "accountId": "744086762512",
+                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                        "name": "${log_group}"
+                      }
+                    ],
+                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| fields if(user like /^\\/O=/, \"service_account\", if(user like /^org:/, \"org_only\", if(user like /@/, \"email\", \"username\"))) as user_type\n| stats count_distinct(user) as unique_users by user_type"
+                  }
+                ],
+                "options": {
+                  "pieType": "donut",
+                  "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "showLegend": true,
+                    "values": ["value", "percent"]
+                  }
+                },
                 "fieldConfig": {
                   "defaults": {
                     "color": {
-                      "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                      "mode": "absolute",
-                      "steps": [
-                        {
-                          "color": "red",
-                          "value": null
-                        },
-                        {
-                          "color": "yellow",
-                          "value": 30
-                        },
-                        {
-                          "color": "green",
-                          "value": 50
-                        }
-                      ]
-                    },
-                    "unit": "percent"
-                  },
-                  "overrides": []
+                      "mode": "palette-classic"
+                    }
+                  }
+                }
+              },
+              {
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
                 },
+                "type": "table",
+                "title": "Top Active Users",
                 "gridPos": {
                   "h": 8,
-                  "w": 6,
-                  "x": 6,
-                  "y": 16
+                  "w": 24,
+                  "x": 0,
+                  "y": 24
                 },
-                "id": 14,
-                "options": {
-                  "colorMode": "value",
-                  "graphMode": "area",
-                  "justifyMode": "auto",
-                  "orientation": "auto",
-                  "percentChangeColorMode": "standard",
-                  "reduceOptions": {
-                    "calcs": [
-                      "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                  },
-                  "showPercentChange": false,
-                  "text": {},
-                  "textMode": "auto",
-                  "wideLayout": true
-                },
-                "pluginVersion": "11.6.3",
+                "id": 12,
                 "targets": [
                   {
-                    "datasource": {
-                      "type": "cloudwatch",
-                      "uid": "P1A97A9592CB7F392"
-                    },
-                    "dimensions": {},
-                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
-                    "id": "cohort",
-                    "label": "Cohort (Month -2)",
-                    "logGroups": [
-                      {
-                        "accountId": "744086762512",
-                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
-                        "name": "${log_group}"
-                      }
-                    ],
-                    "matchExact": true,
-                    "queryLanguage": "CWLI",
-                    "queryMode": "Logs",
                     "refId": "A",
-                    "region": "default",
-                    "statsGroups": [
-                      "user"
-                    ]
-                  },
-                  {
                     "datasource": {
                       "type": "cloudwatch",
                       "uid": "P1A97A9592CB7F392"
                     },
-                    "dimensions": {},
-                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() by user",
-                    "id": "returnees",
-                    "label": "Returnees (Month -1)",
+                    "queryMode": "Logs",
+                    "region": "default",
                     "logGroups": [
                       {
                         "accountId": "744086762512",
@@ -614,199 +495,24 @@ data:
                         "name": "${log_group}"
                       }
                     ],
-                    "matchExact": true,
-                    "queryLanguage": "CWLI",
-                    "queryMode": "Logs",
-                    "refId": "B",
-                    "region": "default",
-                    "statsGroups": [
-                      "user"
-                    ]
+                    "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
                   }
                 ],
-                "title": "30-Day User Retention",
-                "transformations": [
-                  {
-                    "id": "joinByField",
-                    "options": {
-                      "byField": "user",
-                      "mode": "inner"
-                    }
-                  },
-                  {
-                    "id": "reduce",
-                    "options": {
-                      "includeTimeField": false,
-                      "mode": "reduceFields",
-                      "reducers": [
-                        "count"
-                      ]
-                    }
-                  },
-                  {
-                    "id": "calculateField",
-                    "options": {
-                      "alias": "Retention %",
-                      "binary": {
-                        "left": "Count",
-                        "operator": "/",
-                        "right": "Count"
-                      },
-                      "mode": "binary",
-                      "reduce": {
-                        "reducer": "sum"
-                      }
+                "options": {
+                  "showHeader": true
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "custom": {
+                      "align": "auto",
+                      "filterable": true
                     }
                   }
-                ],
-                "type": "stat"
+                }
               }
             ],
             "title": "Engagement and Retention",
             "type": "row"
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "type": "barchart",
-            "title": "New Users Per Day",
-            "gridPos": {
-              "h": 8,
-              "w": 12,
-              "x": 0,
-              "y": 16
-            },
-            "id": 10,
-            "targets": [
-              {
-                "refId": "A",
-                "datasource": {
-                  "type": "cloudwatch",
-                  "uid": "P1A97A9592CB7F392"
-                },
-                "queryMode": "Logs",
-                "region": "default",
-                "logGroups": [
-                  {
-                    "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
-                    "name": "${log_group}"
-                  }
-                ],
-                "expression": "fields @timestamp, @message\n| filter @message like /New user created/\n| parse @message \"username=*, route=*\" as username, route\n| parse route '/api/pypi/*/*' as domain, rest\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as new_users by bin(24h) as time"
-              }
-            ],
-            "options": {
-              "orientation": "auto",
-              "showValue": "auto",
-              "legend": {
-                "showLegend": false
-              }
-            },
-            "fieldConfig": {
-              "defaults": {
-                "color": {
-                  "mode": "palette-classic"
-                }
-              }
-            }
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "type": "piechart",
-            "title": "Active Users by Type",
-            "gridPos": {
-              "h": 8,
-              "w": 12,
-              "x": 12,
-              "y": 16
-            },
-            "id": 11,
-            "targets": [
-              {
-                "refId": "A",
-                "datasource": {
-                  "type": "cloudwatch",
-                  "uid": "P1A97A9592CB7F392"
-                },
-                "queryMode": "Logs",
-                "region": "default",
-                "logGroups": [
-                  {
-                    "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
-                    "name": "${log_group}"
-                  }
-                ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| fields if(user like /^\\/O=/, \"service_account\", if(user like /^org:/, \"org_only\", if(user like /@/, \"email\", \"username\"))) as user_type\n| stats count_distinct(user) as unique_users by user_type"
-              }
-            ],
-            "options": {
-              "pieType": "donut",
-              "legend": {
-                "displayMode": "table",
-                "placement": "right",
-                "showLegend": true,
-                "values": ["value", "percent"]
-              }
-            },
-            "fieldConfig": {
-              "defaults": {
-                "color": {
-                  "mode": "palette-classic"
-                }
-              }
-            }
-          },
-          {
-            "datasource": {
-              "type": "cloudwatch",
-              "uid": "P1A97A9592CB7F392"
-            },
-            "type": "table",
-            "title": "Top Active Users",
-            "gridPos": {
-              "h": 8,
-              "w": 24,
-              "x": 0,
-              "y": 24
-            },
-            "id": 12,
-            "targets": [
-              {
-                "refId": "A",
-                "datasource": {
-                  "type": "cloudwatch",
-                  "uid": "P1A97A9592CB7F392"
-                },
-                "queryMode": "Logs",
-                "region": "default",
-                "logGroups": [
-                  {
-                    "accountId": "744086762512",
-                    "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
-                    "name": "${log_group}"
-                  }
-                ],
-                "expression": "fields @timestamp, @message\n| parse @message \"user:* org_id\" as user\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter user != \"-\" and user != \"\"\n| filter ispresent(user)\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as requests by user\n| sort requests desc\n| limit 20"
-              }
-            ],
-            "options": {
-              "showHeader": true
-            },
-            "fieldConfig": {
-              "defaults": {
-                "custom": {
-                  "align": "auto",
-                  "filterable": true
-                }
-              }
-            }
           },
           {
             "collapsed": true,
@@ -1053,7 +759,66 @@ data:
               "y": 50
             },
             "id": 5,
-            "panels": [],
+            "panels": [
+              {
+                "datasource": {
+                  "type": "cloudwatch",
+                  "uid": "P1A97A9592CB7F392"
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "custom": {
+                      "align": "auto",
+                      "filterable": true
+                    }
+                  },
+                  "overrides": []
+                },
+                "gridPos": {
+                  "h": 10,
+                  "w": 24,
+                  "x": 0,
+                  "y": 51
+                },
+                "id": 15,
+                "options": {
+                  "showHeader": true,
+                  "footer": {
+                    "show": false
+                  }
+                },
+                "pluginVersion": "11.6.3",
+                "targets": [
+                  {
+                    "datasource": {
+                      "type": "cloudwatch",
+                      "uid": "P1A97A9592CB7F392"
+                    },
+                    "dimensions": {},
+                    "expression": "fields @timestamp, @message\n| filter @message like /pulp \\[/\n| filter @message not like /livez/\n| filter @message not like /kube-probe/\n| parse @message 'x_forwarded_for:\"*\"' as xff\n| filter ispresent(xff) and xff != \"-\"\n| parse xff '*,*' as client_ip, rest\n| fields coalesce(client_ip, xff) as final_client_ip\n| parse @message '\"* /api/pypi/*/' as method, domain\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| stats count() as request_count by final_client_ip\n| sort request_count desc\n| limit 50",
+                    "id": "",
+                    "label": "",
+                    "logGroups": [
+                      {
+                        "accountId": "744086762512",
+                        "arn": "arn:aws:logs:us-east-1:744086762512:log-group:${log_group}:*",
+                        "name": "${log_group}"
+                      }
+                    ],
+                    "matchExact": true,
+                    "queryLanguage": "CWLI",
+                    "queryMode": "Logs",
+                    "refId": "A",
+                    "region": "default",
+                    "statsGroups": [
+                      "final_client_ip"
+                    ]
+                  }
+                ],
+                "title": "Top 50 Client IPs by Request Count",
+                "type": "table"
+              }
+            ],
             "title": "User Demographics",
             "type": "row"
           }
@@ -1121,7 +886,7 @@ data:
           ]
         },
         "time": {
-          "from": "now-30d",
+          "from": "now-7d",
           "to": "now"
         },
         "timepicker": {
