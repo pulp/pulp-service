@@ -796,7 +796,7 @@ data:
                       "uid": "P1A97A9592CB7F392"
                     },
                     "dimensions": {},
-                    "expression": "fields @timestamp, @message\n| filter @message like /pulp \\[/\n| filter @message not like /livez/\n| filter @message not like /kube-probe/\n| parse @message 'x_forwarded_for:\"*\"' as xff\n| filter ispresent(xff) and xff != \"-\"\n| parse xff '*,*' as client_ip, rest\n| fields coalesce(client_ip, xff) as final_client_ip\n| parse @message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count() as request_count by final_client_ip\n| sort request_count desc\n| limit 50",
+                    "expression": "fields @timestamp, message\n| filter message like /api\\/pypi/\n| parse message 'x_forwarded_for:\"*\"' as xff\n| filter ispresent(xff) and xff != \"-\"\n| parse xff '*,*' as client_ip, rest\n| fields coalesce(client_ip, xff) as final_client_ip\n| parse message '\"* /api/pypi/*/*/' as method, domain, distribution\n| filter ispresent(domain)\n| filter domain = '${domain}'\n| filter ispresent(distribution)\n| filter distribution like /^${distribution}$/\n| stats count() as request_count by final_client_ip\n| sort request_count desc\n| limit 50",
                     "id": "",
                     "label": "",
                     "logGroups": [
