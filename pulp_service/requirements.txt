@@ -11,7 +11,7 @@ pulp-cli-gem
 sentry-sdk
 app-common-python
 oras==0.2.38
-uvloop==0.21.0
+uvloop==0.22.1
 jsonschema
 memray
 pyinstrument
