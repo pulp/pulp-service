@@ -1,4 +1,4 @@
-From fcf66fd5b33055af30e1c9c333e6cf790ea686b7 Mon Sep 17 00:00:00 2001
+From 22431d631d54ba53ebb83ae80f6a8eabe8a7e63c Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -571,10 +571,10 @@ index 000000000..d2b4e8f6a
 +        _logger.error("Error releasing locks: %s", e)
 diff --git a/pulpcore/tasking/redis_tasks.py b/pulpcore/tasking/redis_tasks.py
 new file mode 100644
-index 000000000..184dcfcbe
+index 000000000..7fe8b4e9a
 --- /dev/null
 +++ b/pulpcore/tasking/redis_tasks.py
-@@ -0,0 +1,778 @@
+@@ -0,0 +1,779 @@
 +"""
 +Task dispatch functions for Redis-based worker implementation.
 +
@@ -596,6 +596,7 @@ index 000000000..184dcfcbe
 +    resource_to_lock_key,
 +    release_resource_locks,
 +    async_release_resource_locks,
++    acquire_locks,
 +)
 +from pulpcore.tasking.tasks import (
 +    called_from_content_app,
