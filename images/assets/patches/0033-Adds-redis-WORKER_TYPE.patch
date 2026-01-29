@@ -1,4 +1,4 @@
-From 22431d631d54ba53ebb83ae80f6a8eabe8a7e63c Mon Sep 17 00:00:00 2001
+From 2a3511111441fc9c17ed140d4bc831c42b4d7fc2 Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -7,7 +7,6 @@ This adds WORKER_TYPE setting. The default value is 'pulpcore'. When 'redis' is 
 the tasking system uses Redis to lock resources. Redis workers produce less load on the
 PostgreSQL database.
 
----
 diff --git a/pulpcore/app/models/task.py b/pulpcore/app/models/task.py
 index 75d05682d..b4fd26977 100644
 --- a/pulpcore/app/models/task.py
@@ -233,10 +232,10 @@ index fdc9b0de8..a3eb7e01c 100644
 +        raise ValueError(f"Invalid WORKER_TYPE: {worker_type}. Must be 'pulpcore' or 'redis'.")
 diff --git a/pulpcore/tasking/redis_locks.py b/pulpcore/tasking/redis_locks.py
 new file mode 100644
-index 000000000..d2b4e8f6a
+index 000000000..4046f552a
 --- /dev/null
 +++ b/pulpcore/tasking/redis_locks.py
-@@ -0,0 +1,332 @@
+@@ -0,0 +1,486 @@
 +"""
 +Redis distributed lock utilities for task resource coordination.
 +
@@ -401,6 +400,160 @@ index 000000000..d2b4e8f6a
 +        str: A Redis key for the resource lock
 +    """
 +    return f"{REDIS_LOCK_PREFIX}{resource_name}"
++
++
++def get_task_lock_key(task_id):
++    """
++    Get the Redis lock key for a task.
++
++    Args:
++        task_id: The task ID (task.pk or UUID string)
++
++    Returns:
++        str: A Redis key for the task lock
++    """
++    return f"task:{task_id}"
++
++
++def extract_task_resources(task):
++    """
++    Extract exclusive and shared resources from a task.
++
++    Args:
++        task: Task object with reserved_resources_record field
++
++    Returns:
++        tuple: (exclusive_resources, shared_resources)
++            exclusive_resources: List of exclusive resource names
++            shared_resources: List of shared resource names (with "shared:" prefix stripped)
++    """
++    reserved_resources_record = task.reserved_resources_record or []
++
++    exclusive_resources = [
++        resource
++        for resource in reserved_resources_record
++        if not resource.startswith("shared:")
++    ]
++
++    shared_resources = [
++        resource[7:]  # Remove "shared:" prefix
++        for resource in reserved_resources_record
++        if resource.startswith("shared:")
++    ]
++
++    return exclusive_resources, shared_resources
++
++
++def safe_release_task_locks(task, lock_owner=None):
++    """
++    Safely release all locks for a task with idempotency check.
++
++    This function:
++    1. Checks if locks have already been released (idempotent)
++    2. Extracts resources from task.reserved_resources_record
++    3. Determines lock owner (from AppStatus or task-specific identifier)
++    4. Releases task lock and all resource locks atomically
++    5. Marks locks as released to prevent double-release
++
++    Args:
++        task: The Task object to release locks for
++        lock_owner: Optional lock owner identifier. If not provided, will use
++            AppStatus.objects.current() or fall back to f"immediate-{task.pk}"
++
++    Returns:
++        bool: True if locks were released, False if already released or no Redis connection
++    """
++    from pulpcore.app.redis_connection import get_redis_connection
++    from pulpcore.app.models import AppStatus
++
++    # Check if locks already released (idempotent)
++    if getattr(task, '_all_locks_released', False):
++        return False
++
++    redis_conn = get_redis_connection()
++    if not redis_conn:
++        _logger.warning("Redis connection not available for releasing locks for task %s", task.pk)
++        return False
++
++    # Extract resources from task
++    exclusive_resources, shared_resources = extract_task_resources(task)
++
++    # Determine lock owner
++    if lock_owner is None:
++        current_app = AppStatus.objects.current()
++        lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++
++    # Build task lock key
++    task_lock_key = get_task_lock_key(task.pk)
++
++    # Release all locks atomically
++    release_resource_locks(
++        redis_conn,
++        lock_owner,
++        task_lock_key,
++        exclusive_resources,
++        shared_resources
++    )
++
++    # Mark all locks as released
++    task._all_locks_released = True
++    return True
++
++
++async def async_safe_release_task_locks(task, lock_owner=None):
++    """
++    Async version: Safely release all locks for a task with idempotency check.
++
++    This function:
++    1. Checks if locks have already been released (idempotent)
++    2. Extracts resources from task.reserved_resources_record
++    3. Determines lock owner (from AppStatus or task-specific identifier)
++    4. Releases task lock and all resource locks atomically
++    5. Marks locks as released to prevent double-release
++
++    Args:
++        task: The Task object to release locks for
++        lock_owner: Optional lock owner identifier. If not provided, will use
++            AppStatus.objects.current() or fall back to f"immediate-{task.pk}"
++
++    Returns:
++        bool: True if locks were released, False if already released or no Redis connection
++    """
++    from pulpcore.app.redis_connection import get_redis_connection
++    from pulpcore.app.models import AppStatus
++
++    # Check if locks already released (idempotent)
++    if getattr(task, '_all_locks_released', False):
++        return False
++
++    redis_conn = get_redis_connection()
++    if not redis_conn:
++        _logger.warning("Redis connection not available for releasing locks for task %s", task.pk)
++        return False
++
++    # Extract resources from task
++    exclusive_resources, shared_resources = extract_task_resources(task)
++
++    # Determine lock owner
++    if lock_owner is None:
++        current_app = await sync_to_async(AppStatus.objects.current)()
++        lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
++
++    # Build task lock key
++    task_lock_key = get_task_lock_key(task.pk)
++
++    # Release all locks atomically
++    await async_release_resource_locks(
++        redis_conn,
++        lock_owner,
++        task_lock_key,
++        exclusive_resources,
++        shared_resources
++    )
++
++    # Mark all locks as released
++    task._all_locks_released = True
++    return True
 +
 +
 +def acquire_locks(redis_conn, lock_owner, task_lock_key, exclusive_resources, shared_resources):
@@ -571,10 +724,10 @@ index 000000000..d2b4e8f6a
 +        _logger.error("Error releasing locks: %s", e)
 diff --git a/pulpcore/tasking/redis_tasks.py b/pulpcore/tasking/redis_tasks.py
 new file mode 100644
-index 000000000..7fe8b4e9a
+index 000000000..0ec6244d1
 --- /dev/null
 +++ b/pulpcore/tasking/redis_tasks.py
-@@ -0,0 +1,779 @@
+@@ -0,0 +1,603 @@
 +"""
 +Task dispatch functions for Redis-based worker implementation.
 +
@@ -597,6 +750,10 @@ index 000000000..7fe8b4e9a
 +    release_resource_locks,
 +    async_release_resource_locks,
 +    acquire_locks,
++    extract_task_resources,
++    get_task_lock_key,
++    safe_release_task_locks,
++    async_safe_release_task_locks,
 +)
 +from pulpcore.tasking.tasks import (
 +    called_from_content_app,
@@ -799,48 +956,7 @@ index 000000000..7fe8b4e9a
 +
 +            # Release locks BEFORE transitioning to final state
 +            # This ensures resources are freed even if we crash during state transition
-+            # Always release all locks atomically (task lock + resource locks)
-+            if not getattr(task, '_all_locks_released', False):
-+                # Extract resources from task.reserved_resources_record
-+                # (can't rely on _locked_resources/_locked_shared_resources attributes
-+                # because subprocess reloads task from DB and those are in-memory only)
-+                reserved_resources_record = task.reserved_resources_record or []
-+
-+                exclusive_resources = [
-+                    resource
-+                    for resource in reserved_resources_record
-+                    if not resource.startswith("shared:")
-+                ]
-+
-+                shared_resources = [
-+                    resource[7:]  # Remove "shared:" prefix
-+                    for resource in reserved_resources_record
-+                    if resource.startswith("shared:")
-+                ]
-+
-+                current_app = AppStatus.objects.current()
-+                redis_conn = get_redis_connection()
-+                lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
-+                task_lock_key = f"task:{task.pk}"
-+
-+                _logger.info(
-+                    "LOCK RELEASE: Task %s atomically releasing task lock + %d exclusive + %d shared resource locks (owner=%s)",
-+                    task.pk,
-+                    len(exclusive_resources) if exclusive_resources else 0,
-+                    len(shared_resources) if shared_resources else 0,
-+                    lock_owner
-+                )
-+
-+                release_resource_locks(
-+                    redis_conn,
-+                    lock_owner,
-+                    task_lock_key,
-+                    exclusive_resources or [],
-+                    shared_resources or []
-+                )
-+
-+                # Mark all locks as released
-+                task._all_locks_released = True
++            safe_release_task_locks(task)
 +
 +            # NOW transition to final state after locks are released
 +            if exception_info:
@@ -857,41 +973,11 @@ index 000000000..7fe8b4e9a
 +    finally:
 +        # Safety net: if we crashed before reaching the lock release above,
 +        # still try to release locks here (e.g., if crash during task execution)
-+        if not getattr(task, '_all_locks_released', False):
-+            # Extract resources from task.reserved_resources_record
-+            reserved_resources_record = task.reserved_resources_record or []
-+
-+            exclusive_resources = [
-+                resource
-+                for resource in reserved_resources_record
-+                if not resource.startswith("shared:")
-+            ]
-+
-+            shared_resources = [
-+                resource[7:]  # Remove "shared:" prefix
-+                for resource in reserved_resources_record
-+                if resource.startswith("shared:")
-+            ]
-+
-+            current_app = AppStatus.objects.current()
-+            redis_conn = get_redis_connection()
-+            lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
-+            task_lock_key = f"task:{task.pk}"
-+
++        if safe_release_task_locks(task):
 +            _logger.warning(
 +                "SAFETY NET: Task %s releasing all locks in finally block (this shouldn't normally happen)",
 +                task.pk
 +            )
-+
-+            release_resource_locks(
-+                redis_conn,
-+                lock_owner,
-+                task_lock_key,
-+                exclusive_resources or [],
-+                shared_resources or []
-+            )
-+
-+            task._all_locks_released = True
 +
 +
 +async def aexecute_task(task):
@@ -931,47 +1017,7 @@ index 000000000..7fe8b4e9a
 +                exception_info = sys.exc_info()
 +
 +            # Release locks BEFORE transitioning to final state
-+            # Always release all locks atomically (task lock + resource locks)
-+            if not getattr(task, '_all_locks_released', False):
-+                # Extract resources from task.reserved_resources_record
-+                reserved_resources_record = task.reserved_resources_record or []
-+
-+                exclusive_resources = [
-+                    resource
-+                    for resource in reserved_resources_record
-+                    if not resource.startswith("shared:")
-+                ]
-+
-+                shared_resources = [
-+                    resource[7:]  # Remove "shared:" prefix
-+                    for resource in reserved_resources_record
-+                    if resource.startswith("shared:")
-+                ]
-+
-+                current_app = await sync_to_async(AppStatus.objects.current)()
-+                redis_conn = get_redis_connection()
-+                lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
-+                task_lock_key = f"task:{task.pk}"
-+
-+                _logger.info(
-+                    "LOCK RELEASE (async): Task %s releasing task lock + %d exclusive + %d shared resource locks with owner=%s (AppStatus.current=%s)",
-+                    task.pk,
-+                    len(exclusive_resources) if exclusive_resources else 0,
-+                    len(shared_resources) if shared_resources else 0,
-+                    lock_owner,
-+                    current_app.name if current_app else "None"
-+                )
-+
-+                await async_release_resource_locks(
-+                    redis_conn,
-+                    lock_owner,
-+                    task_lock_key,
-+                    exclusive_resources or [],
-+                    shared_resources or []
-+                )
-+
-+                # Mark all locks as released (single flag for atomic operation)
-+                task._all_locks_released = True
++            await async_safe_release_task_locks(task)
 +
 +            # NOW transition to final state after locks are released
 +            if exception_info:
@@ -988,69 +1034,33 @@ index 000000000..7fe8b4e9a
 +    finally:
 +        # Safety net: if we crashed before reaching the lock release above,
 +        # release all locks atomically here (task lock + resource locks)
-+        if not getattr(task, '_all_locks_released', False):
-+            # Extract resources from task.reserved_resources_record
-+            reserved_resources_record = task.reserved_resources_record or []
-+
-+            exclusive_resources = [
-+                resource
-+                for resource in reserved_resources_record
-+                if not resource.startswith("shared:")
-+            ]
-+
-+            shared_resources = [
-+                resource[7:]  # Remove "shared:" prefix
-+                for resource in reserved_resources_record
-+                if resource.startswith("shared:")
-+            ]
-+
-+            current_app = await sync_to_async(AppStatus.objects.current)()
-+            redis_conn = get_redis_connection()
-+            lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
-+            task_lock_key = f"task:{task.pk}"
-+
++        if await async_safe_release_task_locks(task):
 +            _logger.warning(
 +                "SAFETY NET (async): Task %s releasing all locks in finally block (this shouldn't normally happen)",
 +                task.pk
 +            )
 +
-+            await async_release_resource_locks(
-+                redis_conn,
-+                lock_owner,
-+                task_lock_key,
-+                exclusive_resources or [],
-+                shared_resources or []
-+            )
 +
-+            # Mark all locks as released
-+            task._all_locks_released = True
-+
-+
-+def are_resources_available(colliding_resources, task: Task) -> bool:
++def are_resources_available(task: Task) -> bool:
 +    """
 +    Atomically try to acquire task lock and resource locks for immediate task.
 +
-+    Returns True if all locks were acquired, False otherwise.
-+    Stores acquired locks on the task object for later release.
++    Resource conflicts are handled by Redis lock acquisition - if another task
++    holds conflicting resource locks, acquire_locks() will fail atomically.
++
++    Args:
++        task: The task to acquire locks for.
++
++    Returns:
++        bool: True if all locks were acquired, False otherwise.
 +    """
 +    redis_conn = get_redis_connection()
 +    if not redis_conn:
 +        _logger.error("Redis connection not available for immediate task locking")
 +        return False
 +
-+    # Extract exclusive resources (non-shared)
-+    exclusive_resources = [
-+        resource
-+        for resource in task.reserved_resources_record or []
-+        if not resource.startswith("shared:")
-+    ]
-+
-+    # Extract shared resources (strip "shared:" prefix)
-+    shared_resources = [
-+        resource[7:]  # Remove "shared:" prefix
-+        for resource in task.reserved_resources_record or []
-+        if resource.startswith("shared:")
-+    ]
++    # Extract resources from task
++    exclusive_resources, shared_resources = extract_task_resources(task)
 +
 +    # Use AppStatus.current() to get a worker identifier for the lock value
 +    # For immediate tasks, we use a special identifier
@@ -1058,7 +1068,7 @@ index 000000000..7fe8b4e9a
 +    lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
 +
 +    # Build task lock key
-+    task_lock_key = f"task:{task.pk}"
++    task_lock_key = get_task_lock_key(task.pk)
 +
 +    try:
 +        # Atomically acquire task lock + all resource locks
@@ -1072,8 +1082,6 @@ index 000000000..7fe8b4e9a
 +
 +        if not blocked_resource_list:
 +            # All locks acquired successfully
-+            task._locked_resources = exclusive_resources
-+            task._locked_shared_resources = shared_resources
 +            _logger.debug(
 +                "Successfully acquired task lock and all resource locks for immediate task %s",
 +                task.pk
@@ -1093,31 +1101,26 @@ index 000000000..7fe8b4e9a
 +        return False
 +
 +
-+async def async_are_resources_available(colliding_resources, task: Task) -> bool:
++async def async_are_resources_available(task: Task) -> bool:
 +    """
 +    Atomically try to acquire task lock and resource locks for immediate task (async version).
 +
-+    Returns True if all locks were acquired, False otherwise.
-+    Stores acquired locks on the task object for later release.
++    Resource conflicts are handled by Redis lock acquisition - if another task
++    holds conflicting resource locks, acquire_locks() will fail atomically.
++
++    Args:
++        task: The task to acquire locks for.
++
++    Returns:
++        bool: True if all locks were acquired, False otherwise.
 +    """
 +    redis_conn = get_redis_connection()
 +    if not redis_conn:
 +        _logger.error("Redis connection not available for immediate task locking")
 +        return False
 +
-+    # Extract exclusive resources (non-shared)
-+    exclusive_resources = [
-+        resource
-+        for resource in task.reserved_resources_record or []
-+        if not resource.startswith("shared:")
-+    ]
-+
-+    # Extract shared resources (strip "shared:" prefix)
-+    shared_resources = [
-+        resource[7:]  # Remove "shared:" prefix
-+        for resource in task.reserved_resources_record or []
-+        if resource.startswith("shared:")
-+    ]
++    # Extract resources from task
++    exclusive_resources, shared_resources = extract_task_resources(task)
 +
 +    # Use AppStatus.current() to get a worker identifier for the lock value
 +    # For immediate tasks, we use a special identifier
@@ -1125,7 +1128,7 @@ index 000000000..7fe8b4e9a
 +    lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
 +
 +    # Build task lock key
-+    task_lock_key = f"task:{task.pk}"
++    task_lock_key = get_task_lock_key(task.pk)
 +
 +    try:
 +        # Atomically acquire task lock + all resource locks
@@ -1139,8 +1142,6 @@ index 000000000..7fe8b4e9a
 +
 +        if not blocked_resource_list:
 +            # All locks acquired successfully
-+            task._locked_resources = exclusive_resources
-+            task._locked_shared_resources = shared_resources
 +            _logger.debug(
 +                "Successfully acquired task lock and all resource locks for immediate task %s",
 +                task.pk
@@ -1204,7 +1205,7 @@ index 000000000..7fe8b4e9a
 +    assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
 +    function_name = get_function_name(func)
 +    versions = get_version(versions, function_name)
-+    colliding_resources, resources = get_resources(exclusive_resources, shared_resources, immediate)
++    _, resources = get_resources(exclusive_resources, shared_resources, immediate)
 +    app_lock = None if not execute_now else AppStatus.objects.current()  # Lazy evaluation...
 +    task_payload = get_task_payload(
 +        function_name, task_group, args, kwargs, resources, versions, immediate, deferred, app_lock
@@ -1213,8 +1214,23 @@ index 000000000..7fe8b4e9a
 +    if execute_now:
 +        # Try to atomically acquire task lock and resource locks
 +        # are_resources_available() now acquires ALL locks atomically
-+        if are_resources_available(colliding_resources, task):
-+            # All locks acquired successfully, execute immediately
++        if are_resources_available(task):
++            # All locks acquired successfully
++            # Reload task state from database to check if it's still WAITING
++            # (a worker might have executed it between creation and lock acquisition)
++            task.refresh_from_db()
++
++            if task.state != TASK_STATES.WAITING:
++                # Task was already executed by a worker, release locks and return
++                _logger.info(
++                    "IMMEDIATE DISPATCH: Task %s already in state '%s', releasing locks without execution",
++                    task.pk,
++                    task.state
++                )
++                safe_release_task_locks(task)
++                return task
++
++            # Task is still WAITING, proceed with execution
 +            current_app = AppStatus.objects.current()
 +            lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
 +            try:
@@ -1228,34 +1244,7 @@ index 000000000..7fe8b4e9a
 +            except Exception:
 +                # Exception during execute_task()
 +                # Atomically release all locks as safety net
-+                if not getattr(task, '_all_locks_released', False):
-+                    # Extract resources from task.reserved_resources_record
-+                    reserved_resources_record = task.reserved_resources_record or []
-+
-+                    exclusive_resources = [
-+                        resource
-+                        for resource in reserved_resources_record
-+                        if not resource.startswith("shared:")
-+                    ]
-+
-+                    shared_resources = [
-+                        resource[7:]  # Remove "shared:" prefix
-+                        for resource in reserved_resources_record
-+                        if resource.startswith("shared:")
-+                    ]
-+
-+                    redis_conn = get_redis_connection()
-+                    task_lock_key = f"task:{task.pk}"
-+
-+                    release_resource_locks(
-+                        redis_conn,
-+                        lock_owner,
-+                        task_lock_key,
-+                        exclusive_resources or [],
-+                        shared_resources or []
-+                    )
-+
-+                    task._all_locks_released = True
++                safe_release_task_locks(task, lock_owner)
 +                raise
 +        elif deferred:
 +            # Locks not available, defer to worker
@@ -1288,7 +1277,7 @@ index 000000000..7fe8b4e9a
 +    assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
 +    function_name = get_function_name(func)
 +    versions = get_version(versions, function_name)
-+    colliding_resources, resources = get_resources(exclusive_resources, shared_resources, immediate)
++    _, resources = get_resources(exclusive_resources, shared_resources, immediate)
 +    app_lock = None if not execute_now else AppStatus.objects.current()  # Lazy evaluation...
 +    task_payload = get_task_payload(
 +        function_name, task_group, args, kwargs, resources, versions, immediate, deferred, app_lock
@@ -1297,8 +1286,23 @@ index 000000000..7fe8b4e9a
 +    if execute_now:
 +        # Try to atomically acquire task lock and resource locks
 +        # async_are_resources_available() now acquires ALL locks atomically
-+        if await async_are_resources_available(colliding_resources, task):
-+            # All locks acquired successfully, execute immediately
++        if await async_are_resources_available(task):
++            # All locks acquired successfully
++            # Reload task state from database to check if it's still WAITING
++            # (a worker might have executed it between creation and lock acquisition)
++            await task.arefresh_from_db()
++
++            if task.state != TASK_STATES.WAITING:
++                # Task was already executed by a worker, release locks and return
++                _logger.info(
++                    "IMMEDIATE DISPATCH (async): Task %s already in state '%s', releasing locks without execution",
++                    task.pk,
++                    task.state
++                )
++                await async_safe_release_task_locks(task)
++                return task
++
++            # Task is still WAITING, proceed with execution
 +            current_app = await sync_to_async(AppStatus.objects.current)()
 +            lock_owner = current_app.name if current_app else f"immediate-{task.pk}"
 +            try:
@@ -1312,34 +1316,7 @@ index 000000000..7fe8b4e9a
 +            except Exception:
 +                # Exception during aexecute_task()
 +                # Atomically release all locks as safety net
-+                if not getattr(task, '_all_locks_released', False):
-+                    # Extract resources from task.reserved_resources_record
-+                    reserved_resources_record = task.reserved_resources_record or []
-+
-+                    exclusive_resources = [
-+                        resource
-+                        for resource in reserved_resources_record
-+                        if not resource.startswith("shared:")
-+                    ]
-+
-+                    shared_resources = [
-+                        resource[7:]  # Remove "shared:" prefix
-+                        for resource in reserved_resources_record
-+                        if resource.startswith("shared:")
-+                    ]
-+
-+                    redis_conn = get_redis_connection()
-+                    task_lock_key = f"task:{task.pk}"
-+
-+                    await async_release_resource_locks(
-+                        redis_conn,
-+                        lock_owner,
-+                        task_lock_key,
-+                        exclusive_resources or [],
-+                        shared_resources or []
-+                    )
-+
-+                    task._all_locks_released = True
++                await async_safe_release_task_locks(task, lock_owner)
 +                raise
 +        elif deferred:
 +            # Locks not available, defer to worker
@@ -1356,10 +1333,10 @@ index 000000000..7fe8b4e9a
 +    return task
 diff --git a/pulpcore/tasking/redis_worker.py b/pulpcore/tasking/redis_worker.py
 new file mode 100644
-index 000000000..7fa1b2700
+index 000000000..d395677b6
 --- /dev/null
 +++ b/pulpcore/tasking/redis_worker.py
-@@ -0,0 +1,768 @@
+@@ -0,0 +1,741 @@
 +"""
 +Redis-based worker implementation using distributed lock-based task fetching.
 +
@@ -1407,6 +1384,8 @@ index 000000000..7fa1b2700
 +    resource_to_lock_key,
 +    release_resource_locks,
 +    acquire_locks,
++    extract_task_resources,
++    get_task_lock_key,
 +)
 +from pulpcore.tasking.tasks import using_workdir
 +from pulpcore.tasking.redis_tasks import execute_task
@@ -1608,23 +1587,12 @@ index 000000000..7fa1b2700
 +                        # Load the task
 +                        task = Task.objects.select_related('pulp_domain').get(pk=task_uuid)
 +
-+                        # Extract exclusive resources from the task
-+                        exclusive_resources = [
-+                            resource
-+                            for resource in task.reserved_resources_record or []
-+                            if not resource.startswith("shared:")
-+                        ]
-+
-+                        # Extract shared resources (strip "shared:" prefix)
-+                        shared_resources = [
-+                            resource[7:]  # Remove "shared:" prefix
-+                            for resource in task.reserved_resources_record or []
-+                            if resource.startswith("shared:")
-+                        ]
++                        # Extract resources from the task
++                        exclusive_resources, shared_resources = extract_task_resources(task)
 +
 +                        # Atomically release task lock + resource locks
 +                        # Note: Use the missing worker's name as the lock owner, not self.name
-+                        task_lock_key = f"task:{task_uuid}"
++                        task_lock_key = get_task_lock_key(task_uuid)
 +                        release_resource_locks(
 +                            self.redis_conn,
 +                            worker_name,
@@ -1759,6 +1727,30 @@ index 000000000..7fa1b2700
 +        """
 +        release_resource_locks(self.redis_conn, self.name, task_lock_key, resources, shared_resources)
 +
++    def _maybe_release_locks(self, task, mark_released=True):
++        """
++        Release locks for a task if not already released.
++
++        Args:
++            task: Task object to release locks for
++            mark_released (bool): Whether to mark locks as released (default: True)
++
++        Returns:
++            bool: True if locks were released, False if already released
++        """
++        if not getattr(task, '_all_locks_released', False):
++            exclusive_resources, shared_resources = extract_task_resources(task)
++            task_lock_key = get_task_lock_key(task.pk)
++            self._release_resource_locks(
++                task_lock_key,
++                exclusive_resources or [],
++                shared_resources or []
++            )
++            if mark_released:
++                task._all_locks_released = True
++            return True
++        return False
++
 +    def is_compatible(self, task):
 +        """
 +        Check if this worker is compatible with the task's version requirements.
@@ -1818,21 +1810,8 @@ index 000000000..7fa1b2700
 +        # Try to acquire locks for each task
 +        for task in waiting_tasks:
 +            try:
-+                reserved_resources_record = task.reserved_resources_record or []
-+
-+                # Extract exclusive resources (non-shared)
-+                exclusive_resources = [
-+                    resource
-+                    for resource in reserved_resources_record
-+                    if not resource.startswith("shared:")
-+                ]
-+
-+                # Extract shared resources (strip "shared:" prefix)
-+                shared_resources = [
-+                    resource[7:]  # Remove "shared:" prefix
-+                    for resource in reserved_resources_record
-+                    if resource.startswith("shared:")
-+                ]
++                # Extract resources from task
++                exclusive_resources, shared_resources = extract_task_resources(task)
 +
 +                # Check if this task should skip to preserve FIFO ordering
 +                should_skip = False
@@ -1854,7 +1833,7 @@ index 000000000..7fa1b2700
 +                    continue
 +
 +                # Atomically try to acquire task lock and resource locks in a single operation
-+                task_lock_key = f"task:{task.pk}"
++                task_lock_key = get_task_lock_key(task.pk)
 +
 +                blocked_resource_list = acquire_locks(
 +                    self.redis_conn,
@@ -1866,9 +1845,6 @@ index 000000000..7fa1b2700
 +
 +                if not blocked_resource_list:
 +                    # All locks acquired successfully (task lock + resource locks)!
-+                    # Store resources for release later
-+                    task._locked_resources = exclusive_resources
-+                    task._locked_shared_resources = shared_resources
 +                    return task
 +                else:
 +                    # Failed to acquire locks (task lock or resource locks blocked)
@@ -2013,19 +1989,7 @@ index 000000000..7fa1b2700
 +            if task.state not in TASK_FINAL_STATES:
 +                # Release locks BEFORE setting canceled state
 +                # Atomically release task lock + resource locks in a single operation
-+                if not getattr(task, '_all_locks_released', False):
-+                    exclusive_resources = getattr(task, '_locked_resources', None)
-+                    shared_resources = getattr(task, '_locked_shared_resources', None)
-+                    task_lock_key = f"task:{task.pk}"
-+
-+                    self._release_resource_locks(
-+                        task_lock_key,
-+                        exclusive_resources or [],
-+                        shared_resources or []
-+                    )
-+
-+                    # Mark all locks as released
-+                    task._all_locks_released = True
++                self._maybe_release_locks(task)
 +
 +                task.set_canceling()
 +                _logger.info(
@@ -2053,10 +2017,7 @@ index 000000000..7fa1b2700
 +                    # Incompatible task, add to ignored list
 +                    self.ignored_task_ids.append(task.pk)
 +                    # Atomically release task lock + resource locks so other workers can attempt it
-+                    exclusive_resources = getattr(task, '_locked_resources', [])
-+                    shared_resources = getattr(task, '_locked_shared_resources', [])
-+                    task_lock_key = f"task:{task.pk}"
-+                    self._release_resource_locks(task_lock_key, exclusive_resources, shared_resources)
++                    self._maybe_release_locks(task, mark_released=False)
 +                    break
 +
 +                # Task is compatible, execute it
@@ -2069,19 +2030,8 @@ index 000000000..7fa1b2700
 +                # atomically release all locks here (task lock + resource locks)
 +                # NOTE: Only for immediate tasks that execute in this process.
 +                # Deferred tasks execute in subprocess which handles its own lock release.
-+                if task and task.immediate and not getattr(task, '_all_locks_released', False):
-+                    exclusive_resources = getattr(task, '_locked_resources', None)
-+                    shared_resources = getattr(task, '_locked_shared_resources', None)
-+                    task_lock_key = f"task:{task.pk}"
-+
-+                    self._release_resource_locks(
-+                        task_lock_key,
-+                        exclusive_resources or [],
-+                        shared_resources or []
-+                    )
-+
-+                    # Mark all locks as released
-+                    task._all_locks_released = True
++                if task and task.immediate:
++                    self._maybe_release_locks(task)
 +
 +
 +    def sleep(self):
@@ -2165,7 +2115,7 @@ index eb270250c..dc2a05b4f 100644
      assert deferred or immediate, "A task must be at least `deferred` or `immediate`."
      function_name = get_function_name(func)
 diff --git a/pulpcore/tests/functional/api/test_tasking.py b/pulpcore/tests/functional/api/test_tasking.py
-index 9906c2441..21d4e96d0 100644
+index 9906c2441..8d9c9a6e0 100644
 --- a/pulpcore/tests/functional/api/test_tasking.py
 +++ b/pulpcore/tests/functional/api/test_tasking.py
 @@ -86,6 +86,61 @@ def test_multi_resource_locking(dispatch_task, monitor_task):
@@ -2337,3 +2287,49 @@ index 9906c2441..21d4e96d0 100644
  @pytest.fixture
  def resource_blocker(pulpcore_bindings, dispatch_task):
  
+@@ -513,6 +668,45 @@ def resource_blocker(pulpcore_bindings, dispatch_task):
+     return _resource_blocker
+ 
+ 
++@pytest.mark.parallel
++def test_immediate_task_with_available_resources(dispatch_task, pulpcore_bindings):
++    """
++    Test that immediate tasks with resources can execute when resources are available.
++
++    This test verifies that the are_resources_available() function correctly acquires
++    locks via acquire_locks() when resources are not blocked. This is important for
++    Redis worker implementation where immediate tasks need to acquire distributed locks.
++
++    GIVEN an immediate async task with exclusive and shared resource requirements
++    WHEN the resources are available (not blocked by other tasks)
++    THEN the task executes immediately and completes successfully
++    AND verifies that acquire_locks() is properly imported and callable
++    """
++    # Use unique resources to ensure they're not blocked
++    unique_exclusive = f"exclusive-{uuid4()}"
++    unique_shared = f"shared-{uuid4()}"
++
++    task_href = dispatch_task(
++        "pulpcore.app.tasks.test.asleep",
++        args=(0.1,),  # Quick execution
++        immediate=True,
++        deferred=False,
++        exclusive_resources=[unique_exclusive],
++        shared_resources=[unique_shared],
++    )
++
++    # Task should complete immediately since resources are available
++    task = pulpcore_bindings.TasksApi.read(task_href)
++    assert task.state == "completed", (
++        f"Task should have completed immediately with available resources, "
++        f"but is in state: {task.state}"
++    )
++
++    # Verify task executed successfully
++    assert task.finished_at is not None
++    assert task.error is None
++
++
+ class TestImmediateTaskWithBlockedResource:
+ 
+     @pytest.mark.parallel
