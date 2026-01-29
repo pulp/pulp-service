@@ -25,8 +25,8 @@ class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
 class RHEntitlementCertAuthentication(JSONHeaderRemoteAuthentication):
 
     header = "HTTP_X_RH_IDENTITY"
-    # Returns org_id|username if both exist, org_id alone if username missing, null if org_id missing
-    jq_filter = '.identity | if .org_id and .user.username then "\(.org_id)|\(.user.username)" elif .org_id then .org_id else null end'
+    # Combines org_id with username - returns null if either is missing
+    jq_filter = '.identity | if .org_id and .user.username then "\(.org_id)|\(.user.username)" else null end'
 
     def authenticate_header(self, request):
         return "Bearer"
