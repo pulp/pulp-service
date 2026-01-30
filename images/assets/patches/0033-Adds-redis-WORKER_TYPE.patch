@@ -1,4 +1,4 @@
-From 2a3511111441fc9c17ed140d4bc831c42b4d7fc2 Mon Sep 17 00:00:00 2001
+From 00867339aa39e50a6b1946e5f2dd79360ed0675c Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 25 Nov 2025 11:06:48 -0500
 Subject: [PATCH] Adds 'redis' WORKER_TYPE
@@ -1333,10 +1333,10 @@ index 000000000..0ec6244d1
 +    return task
 diff --git a/pulpcore/tasking/redis_worker.py b/pulpcore/tasking/redis_worker.py
 new file mode 100644
-index 000000000..d395677b6
+index 000000000..6141daca8
 --- /dev/null
 +++ b/pulpcore/tasking/redis_worker.py
-@@ -0,0 +1,741 @@
+@@ -0,0 +1,754 @@
 +"""
 +Redis-based worker implementation using distributed lock-based task fetching.
 +
@@ -2020,7 +2020,20 @@ index 000000000..d395677b6
 +                    self._maybe_release_locks(task, mark_released=False)
 +                    break
 +
-+                # Task is compatible, execute it
++                # Check if task is still WAITING after acquiring locks
++                # (an API process might have executed it between query and lock acquisition)
++                task.refresh_from_db()
++                if task.state != TASK_STATES.WAITING:
++                    # Task was already executed, release locks and skip
++                    _logger.info(
++                        "Task %s already in state '%s' after acquiring locks, skipping execution",
++                        task.pk,
++                        task.state
++                    )
++                    self._maybe_release_locks(task)
++                    continue
++
++                # Task is compatible and still waiting, execute it
 +                if task.immediate:
 +                    self.supervise_immediate_task(task)
 +                else:
