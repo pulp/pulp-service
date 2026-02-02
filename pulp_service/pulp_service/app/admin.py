@@ -38,7 +38,6 @@ User._meta.get_field('username').validators = [pulp_username_validator]
 User._meta.get_field('username').help_text = USERNAME_HELP_TEXT
 
 # Custom/Pulp forms to allow additional characters
-
 class PulpUserFormMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,11 +50,11 @@ class PulpUserFormMixin:
             raise forms.ValidationError(USERNAME_ERROR_MSG)
         return username
 
-class PulpUserCreationForm(UserCreationForm, PulpUserFormMixin):
+class PulpUserCreationForm(PulpUserFormMixin, UserCreationForm):
     pass
 
 
-class PulpUserChangeForm(UserChangeForm, PulpUserFormMixin):
+class PulpUserChangeForm(PulpUserFormMixin, UserChangeForm):
     pass
 
 
