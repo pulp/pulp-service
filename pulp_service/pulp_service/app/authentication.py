@@ -98,6 +98,6 @@ class DeprecateCRHCSA(JSONHeaderRemoteAuthentication):
 
         if remote_user:
             _logger.warning(f"Deprecated c.rh.c SA authentication method attempted by user: {remote_user}")
-            return None
+            raise AuthenticationFailed(_("Access denied. Auth method not supported!"))
 
         return None
