@@ -38,20 +38,7 @@ User._meta.get_field('username').validators = [pulp_username_validator]
 User._meta.get_field('username').help_text = USERNAME_HELP_TEXT
 
 # Custom/Pulp forms to allow additional characters
-class PulpUserCreationForm(UserCreationForm):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Override help_text in the form field
-        self.fields['username'].help_text = USERNAME_HELP_TEXT
-
-    def clean_username(self):
-        username = self.cleaned_data['username']
-        if not re.match(USERNAME_PATTERN, username):
-            raise forms.ValidationError(USERNAME_ERROR_MSG)
-        return username
-
-
-class PulpUserChangeForm(UserChangeForm):
+class PulpUserFormMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Override help_text in the form field
@@ -59,11 +46,16 @@ class PulpUserChangeForm(UserChangeForm):
         
     def clean_username(self):
         username = self.cleaned_data['username']
-        if not re.match(r'^[\w.@+=/-]+$', username):
-            raise forms.ValidationError(
-                "Username can only contain letters, numbers, and the characters @/./+/-/=/_"
-            )
+        if not re.match(USERNAME_PATTERN, username):
+            raise forms.ValidationError(USERNAME_ERROR_MSG)
         return username
+
+class PulpUserCreationForm(PulpUserFormMixin, UserCreationForm):
+    pass
+
+
+class PulpUserChangeForm(PulpUserFormMixin, UserChangeForm):
+    pass
 
 
 class PulpUserAdmin(HijackUserAdminMixin, UserAdmin):
