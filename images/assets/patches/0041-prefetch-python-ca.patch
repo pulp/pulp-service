@@ -1,0 +1,65 @@
+diff --git a/pulp_python/app/serializers.py b/pulp_python/app/serializers.py
+index 47a8b41..52bf92a 100644
+--- a/pulp_python/app/serializers.py
++++ b/pulp_python/app/serializers.py
+@@ -102,12 +102,11 @@ class PythonSingleContentArtifactField(core_serializers.SingleContentArtifactFie
+     """
+ 
+     def get_attribute(self, instance):
+-        # When content has multiple artifacts (wheel + metadata), return the main one
+-        if instance._artifacts.count() > 1:
++        artifacts = instance._artifacts.all()
++        if len(artifacts) > 1:
+             for ca in instance.contentartifact_set.all():
+                 if not ca.relative_path.endswith(".metadata"):
+                     return ca.artifact
+-
+         return super().get_attribute(instance)
+ 
+ 
+diff --git a/pulp_python/app/viewsets.py b/pulp_python/app/viewsets.py
+index a14f1fe..e9a3ceb 100644
+--- a/pulp_python/app/viewsets.py
++++ b/pulp_python/app/viewsets.py
+@@ -1,5 +1,6 @@
+ from bandersnatch.configuration import BandersnatchConfig
+ from django.db import transaction
++from django.db.models import Prefetch
+ from drf_spectacular.utils import extend_schema
+ from pathlib import Path
+ from rest_framework import status
+@@ -8,7 +9,7 @@ from rest_framework.response import Response
+ 
+ from pulpcore.plugin import viewsets as core_viewsets
+ from pulpcore.plugin.actions import ModifyRepositoryActionMixin
+-from pulpcore.plugin.models import RepositoryVersion
++from pulpcore.plugin.models import ContentArtifact,RepositoryVersion
+ from pulpcore.plugin.serializers import (
+     AsyncOperationResponseSerializer,
+     RepositorySyncURLSerializer,
+@@ -427,6 +428,25 @@ class PythonPackageSingleArtifactContentUploadViewSet(
+         headers = self.get_success_headers(serializer.data)
+         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+ 
++    def get_queryset(self):
++       """
++       Optimize queryset with prefetching to avoid N+1 queries when serializing.
++       """
++       qs = super().get_queryset()
++       # Only prefetch for list/retrieve actions that serialize full objects
++       if self.action in ['list', 'retrieve']:
++           # Clear any existing prefetches to avoid conflicts
++           qs = qs._clone()
++           qs._prefetch_related_lookups = ()
++           # Now add our optimized prefetches
++           qs = qs.prefetch_related(
++               '_artifacts',
++               Prefetch(
++                   'contentartifact_set',
++                   queryset=ContentArtifact.objects.select_related('artifact')
++               )
++           )
++       return qs
+ 
+ class PackageProvenanceFilter(core_viewsets.ContentFilter):
+     """
