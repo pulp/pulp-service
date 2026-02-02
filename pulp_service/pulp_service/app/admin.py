@@ -19,7 +19,7 @@ from pulpcore.plugin.models import Domain, Group
 from pulpcore.app.models import Task
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
 
-USERNAME_PATTERN = r'^[\w.@+=/-|]+$'
+USERNAME_PATTERN = r'^[\w.@+=/\-|]+$'
 USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these special characters: @, ., +, -, =, /, _, |"
 USERNAME_HELP_TEXT = "Required. 150 characters or fewer. Letters, numbers, and these special characters: @, ., +, -, =, /, _, |"
 
