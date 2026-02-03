@@ -1,5 +1,6 @@
 FROM registry.access.redhat.com/ubi9/ubi
 ARG PYTHON_VERSION=3.11
+ARG INCLUDE_GDB=1
 
 ENV PYTHONUNBUFFERED=0
 ENV DJANGO_SETTINGS_MODULE=pulpcore.app.settings
@@ -47,7 +48,7 @@ RUN dnf -y install python${PYTHON_VERSION} python${PYTHON_VERSION}-cryptography 
     dnf -y install ostree-libs ostree --allowerasing --nobest && \
     dnf -y install patch && \
     dnf -y install jq && \
-    dnf -y install zstd
+    dnf -y install zstd ${INCLUDE_GDB:+gdb}
 
 RUN dnf clean all
 
