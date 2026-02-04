@@ -48,8 +48,8 @@ index f46153f65..cb6103e23 100644
              try:
                  self.app_status.save_heartbeat()
                  logger.debug(self.beat_msg)
--            except (InterfaceError, DatabaseError):
--                logger.error(self.fail_beat_msg)
+-            except (InterfaceError, DatabaseError) as e:
+-                logger.error(f"{self.fail_beat_msg} Exception: {str(e)}")
 +            except (InterfaceError, DatabaseError) as e:
 +                logger.error(f"{self.fail_beat_msg}: {e}")
                  exit(Arbiter.WORKER_BOOT_ERROR)
