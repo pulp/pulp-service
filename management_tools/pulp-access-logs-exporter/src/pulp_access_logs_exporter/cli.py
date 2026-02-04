@@ -20,11 +20,6 @@ def parse_args(args=None):
     )
 
     parser.add_argument(
-        "--cloudwatch-stream",
-        help="CloudWatch stream name (optional)",
-    )
-
-    parser.add_argument(
         "--start-time",
         required=True,
         help='Start timestamp - ISO format (2026-02-04T14:00:00Z) or relative ("1 hour ago")',

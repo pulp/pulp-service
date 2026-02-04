@@ -22,24 +22,43 @@ def build_query(filter_paths: str = "/api/pypi/", exclude_paths: str = "/livez,/
     Returns:
         CloudWatch Logs Insights query string
     """
-    # Query uses both @message (raw field) and message (alias) for parsing
-    # @message for initial filters, message for parse operations
-    query = """
-    fields @timestamp, @message
-    | filter @message like /\\/api\\/pypi/
-    | filter @message not like /django.request:WARNING/
-    | parse @message "user:* org_id" as user
-    | parse @message "org_id:* " as org_id
-    | parse @message '/api/pypi/*/*/simple/' as domain, distribution
-    | parse @message '/simple/*/ ' as package
-    | filter ispresent(package)
-    | parse message ' HTTP/1.1" * ' as status_code
-    | parse message '"-" "*" ' as user_agent
-    | parse message ' x_forwarded_for:"*"' as xff
-    | parse xff '*,*' as client_ip, xff_rest
-    | fields @timestamp, @message, user, org_id, domain, distribution, package, status_code, user_agent, coalesce(client_ip, xff) as x_forwarded_for
-    """
-    return query.strip()
+    # Build filter for include paths (currently only supports single path)
+    # Escape forward slashes for CloudWatch Logs Insights regex
+    filter_pattern = filter_paths.replace('/', '\\/')
+
+    # Build exclude filters
+    exclude_filters = []
+    if exclude_paths:
+        for path in exclude_paths.split(','):
+            path = path.strip()
+            if path:
+                # Escape forward slashes
+                escaped_path = path.replace('/', '\\/')
+                exclude_filters.append(f"| filter @message not like /{escaped_path}/")
+
+    # Always exclude django warnings
+    exclude_filters.append("| filter @message not like /django.request:WARNING/")
+
+    # Build complete query
+    query_parts = [
+        "fields @timestamp, @message",
+        f"| filter @message like /{filter_pattern}/",
+    ]
+    query_parts.extend(exclude_filters)
+    query_parts.extend([
+        "| parse @message \"user:* org_id\" as user",
+        "| parse @message \"org_id:* \" as org_id",
+        "| parse @message '/api/pypi/*/*/simple/' as domain, distribution",
+        "| parse @message '/simple/*/ ' as package",
+        "| filter ispresent(package)",
+        "| parse message ' HTTP/1.1\" * ' as status_code",
+        "| parse message '\"-\" \"*\" ' as user_agent",
+        "| parse message ' x_forwarded_for:\"*\"' as xff",
+        "| parse xff '*,*' as client_ip, xff_rest",
+        "| fields @timestamp, @message, user, org_id, domain, distribution, package, status_code, user_agent, coalesce(client_ip, xff) as x_forwarded_for",
+    ])
+
+    return "\n    ".join(query_parts)
 
 
 def fetch_cloudwatch_logs(
@@ -92,8 +111,18 @@ def fetch_cloudwatch_logs(
 
         query_id = response['queryId']
 
-        # Poll until complete
+        # Poll until complete with timeout and exponential backoff
+        max_wait_seconds = 300  # Maximum total wait time (5 minutes)
+        poll_interval = 2       # Initial poll interval in seconds
+        max_poll_interval = 30  # Maximum poll interval in seconds
+        start_poll_time = time.time()
+
         while True:
+            if time.time() - start_poll_time > max_wait_seconds:
+                raise TimeoutError(
+                    f"Timed out after {max_wait_seconds} seconds waiting for query {query_id} to complete"
+                )
+
             result = logs_client.get_query_results(queryId=query_id)
             status = result['status']
 
@@ -102,7 +131,8 @@ def fetch_cloudwatch_logs(
             elif status in ['Failed', 'Cancelled']:
                 raise RuntimeError(f"Query {query_id} failed with status: {status}")
 
-            time.sleep(2)  # Poll every 2 seconds
+            time.sleep(poll_interval)
+            poll_interval = min(poll_interval * 2, max_poll_interval)
 
         # Process results
         chunk_results = result['results']
@@ -156,9 +186,10 @@ def convert_to_arrow_table(results: List[Dict[str, Any]]) -> pa.Table:
         if org_id == '-':
             org_id = None
 
-        # Parse timestamp from ISO format
+        # Parse timestamp from ISO format as timezone-naive UTC
+        # PyArrow schema uses pa.timestamp('ns') which is timezone-naive
         timestamp_str = result.get('@timestamp', '')
-        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')).replace(tzinfo=None)
 
         # Convert status_code to int
         status_code = int(result.get('status_code', 0))

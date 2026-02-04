@@ -99,10 +99,34 @@ def test_raw_log_parsing_validation(sample_cloudwatch_results, sample_parquet_pa
     assert actual_status == expected_status, f"Status code mismatch: {actual_status} != {expected_status}"
 
 
+@pytest.mark.unit
+def test_empty_cloudwatch_results(sample_parquet_path):
+    """Test conversion of empty CloudWatch results to ensure schema is preserved."""
+    from pulp_access_logs_exporter.cloudwatch import convert_to_arrow_table
+    from pulp_access_logs_exporter.writer import write_parquet, SCHEMA
+
+    # Convert empty results
+    table = convert_to_arrow_table([])
+
+    # Verify empty table with correct schema
+    assert len(table) == 0, "Empty results should produce zero-row table"
+    assert table.schema == SCHEMA, "Empty table should use SCHEMA"
+
+    # Write and verify it doesn't raise
+    write_parquet(table, sample_parquet_path)
+
+    # Read back and verify
+    read_table = pq.read_table(sample_parquet_path)
+    assert len(read_table) == 0
+    assert read_table.schema == SCHEMA
+
+
+@pytest.mark.unit
 def test_query_building():
     """Test CloudWatch Logs Insights query construction."""
     from pulp_access_logs_exporter.cloudwatch import build_query
 
+    # Test default query
     query = build_query()
 
     # Basic query structure checks
@@ -111,10 +135,27 @@ def test_query_building():
     assert '/api/pypi' in query or r'\/api\/pypi' in query
     assert 'parse' in query.lower()
 
+    # Assert key parsing expressions are present
+    assert 'parse @message "user:* org_id" as user' in query
+    assert 'parse @message "org_id:* " as org_id' in query
+    assert "parse @message '/api/pypi/*/*/simple/' as domain, distribution" in query
+    assert "parse @message '/simple/*/ ' as package" in query
+    assert 'coalesce(client_ip, xff) as x_forwarded_for' in query
+
+    # Assert filtering
+    assert 'filter @message not like /django.request:WARNING/' in query
+
+    # Test with custom filter_paths
+    query_custom = build_query(filter_paths='/custom/path', exclude_paths='/health,/status')
+
+    assert r'\/custom\/path' in query_custom, "Custom filter path should be in query"
+    assert 'filter @message not like /\\/health/' in query_custom, "Should exclude /health"
+    assert 'filter @message not like /\\/status/' in query_custom, "Should exclude /status"
+
 
 @pytest.mark.unit
 def test_schema_definition():
-    """Test that schema is properly defined."""
+    """Test that schema is properly defined with correct types and nullability."""
     from pulp_access_logs_exporter.writer import SCHEMA
     import pyarrow as pa
 
@@ -141,3 +182,12 @@ def test_schema_definition():
     assert SCHEMA.field('timestamp').type == pa.timestamp('ns')
     assert SCHEMA.field('status_code').type == pa.int16()
     assert SCHEMA.field('message').type == pa.string()
+
+    # Enforce Parquet schema nullability contract
+    # user and org_id are nullable to support unauthenticated users
+    assert SCHEMA.field('user').nullable is True, "user field should be nullable"
+    assert SCHEMA.field('org_id').nullable is True, "org_id field should be nullable"
+
+    # Note: In PyArrow, string fields are nullable by default
+    # All other fields should also be nullable for robustness
+    # (PyArrow default for pa.string() is nullable=True)
