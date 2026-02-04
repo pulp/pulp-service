@@ -963,6 +963,40 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
+      - name: export-access-logs-hourly
+        schedule: "15 * * * *"
+        restartPolicy: Never
+        concurrencyPolicy: Forbid
+        podSpec:
+          image: registry.access.redhat.com/ubi9/python-312:latest
+          command: ['/bin/bash', '-c']
+          args:
+            - |
+              pip install --index-url ${PULP_PYPI_URL}/simple/ \
+                pulp-access-logs-exporter && \
+              export-access-logs \
+                --cloudwatch-group ${CLOUDWATCH_LOG_GROUP} \
+                --start-time "1 hour ago" \
+                --end-time "15 minutes ago" \
+                --output-path ${ACCESS_LOGS_OUTPUT_PATH} \
+                --aws-region ${AWS_REGION}
+          env:
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: CLOUDWATCH_LOG_GROUP
+              value: "/aws/containerinsights/${ENV_NAME}/application"
+            - name: ACCESS_LOGS_OUTPUT_PATH
+              value: "${S3_BUCKET_NAME}/pypi-logs/"
+            - name: PULP_PYPI_URL
+              value: "${PULP_PYPI_URL}"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -1301,3 +1335,11 @@ parameters:
   - name: PULP_WORKER_TYPE
     description: Worker implementation type (pulpcore or redis).
     value: "redis"
+  - name: PULP_PYPI_URL
+    description: Internal Pulp PyPI instance URL for package installation
+    value: "https://pulp.example.com/api/pypi/internal"
+    required: false
+  - name: S3_BUCKET_NAME
+    description: S3 bucket for log archives
+    value: "s3://pulp-log-archives"
+    required: false
