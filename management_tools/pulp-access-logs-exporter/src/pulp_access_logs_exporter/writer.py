@@ -55,10 +55,16 @@ def write_parquet(table: pa.Table, output_path: str):
     else:
         # Local file
         print(f"Writing to local file: {output_path}")
+
+        import os
+        # Ensure parent directory exists for local file paths
+        parent_dir = os.path.dirname(output_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+
         pq.write_table(table, output_path, compression='snappy')
 
         # Print file size
-        import os
         file_size = os.path.getsize(output_path)
         file_size_kb = file_size / 1024
         print(f"Successfully wrote {len(table)} records ({file_size_kb:.2f} KB)")
