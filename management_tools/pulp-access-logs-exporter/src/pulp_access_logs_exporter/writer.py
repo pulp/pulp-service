@@ -38,9 +38,28 @@ def write_parquet(table: pa.Table, output_path: str):
         table: PyArrow Table with log data
         output_path: Local file path or S3 URI (s3://bucket/key)
     """
-    # TODO: Implement Parquet writing
-    # - Detect s3:// prefix for S3 upload
-    # - Use pyarrow.parquet.write_table for local files
-    # - Use pyarrow.fs.S3FileSystem for S3 uploads
-    # - Use snappy compression (default)
-    pass
+    import pyarrow.parquet as pq
+    import pyarrow.fs as fs
+
+    if output_path.startswith('s3://'):
+        # S3 upload using PyArrow filesystem
+        print(f"Writing to S3: {output_path}")
+        s3_fs = fs.S3FileSystem()
+        # Remove s3:// prefix for PyArrow
+        s3_path = output_path[5:]
+
+        with s3_fs.open_output_stream(s3_path) as f:
+            pq.write_table(table, f, compression='snappy')
+
+        print(f"Successfully wrote {len(table)} records to S3")
+    else:
+        # Local file
+        print(f"Writing to local file: {output_path}")
+        pq.write_table(table, output_path, compression='snappy')
+
+        # Print file size
+        import os
+        file_size = os.path.getsize(output_path)
+        file_size_kb = file_size / 1024
+        print(f"Successfully wrote {len(table)} records ({file_size_kb:.2f} KB)")
+

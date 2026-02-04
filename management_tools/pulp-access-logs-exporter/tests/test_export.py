@@ -2,6 +2,7 @@
 
 import re
 import pytest
+import pandas as pd
 import pyarrow.parquet as pq
 
 
