@@ -972,21 +972,30 @@ objects:
           command: ['/bin/bash', '-c']
           args:
             - |
+              # Generate timestamped output path to avoid overwriting
+              # Use the hour being exported (1 hour ago) for the path
+              EXPORT_TIMESTAMP=$(date -u -d '1 hour ago' '+%Y-%m-%d-%H')
+              YEAR=$(date -u -d '1 hour ago' '+%Y')
+              MONTH=$(date -u -d '1 hour ago' '+%m')
+              DAY=$(date -u -d '1 hour ago' '+%d')
+              HOUR=$(date -u -d '1 hour ago' '+%H')
+              OUTPUT_PATH="${S3_BUCKET_NAME}/pypi-logs/year=${YEAR}/month=${MONTH}/day=${DAY}/hour=${HOUR}/logs.parquet"
+
               pip install --index-url ${PULP_PYPI_URL}/simple/ \
                 pulp-access-logs-exporter && \
               export-access-logs \
                 --cloudwatch-group ${CLOUDWATCH_LOG_GROUP} \
                 --start-time "1 hour ago" \
                 --end-time "15 minutes ago" \
-                --output-path ${ACCESS_LOGS_OUTPUT_PATH} \
+                --output-path "${OUTPUT_PATH}" \
                 --aws-region ${AWS_REGION}
           env:
             - name: AWS_REGION
               value: "us-east-1"
             - name: CLOUDWATCH_LOG_GROUP
               value: "/aws/containerinsights/${ENV_NAME}/application"
-            - name: ACCESS_LOGS_OUTPUT_PATH
-              value: "${S3_BUCKET_NAME}/pypi-logs/"
+            - name: S3_BUCKET_NAME
+              value: "${S3_BUCKET_NAME}"
             - name: PULP_PYPI_URL
               value: "${PULP_PYPI_URL}"
           resources:
