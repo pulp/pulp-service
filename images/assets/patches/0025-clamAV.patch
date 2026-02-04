@@ -199,20 +199,24 @@ diff --git a/pulpcore/exceptions/__init__.py b/pulpcore/exceptions/__init__.py
 index 55d875dcb..f18625761 100644
 --- a/pulpcore/exceptions/__init__.py
 +++ b/pulpcore/exceptions/__init__.py
-@@ -13,4 +13,5 @@ from .validation import (
+@@ -21,6 +21,7 @@ from .validation import (
+     DigestValidationError,
+     InvalidSignatureError,
+     SizeValidationError,
++    MalwareError,
      ValidationError,
      MissingDigestValidationError,
      UnsupportedDigestValidationError,
-+    MalwareError,
  )
 diff --git a/pulpcore/exceptions/validation.py b/pulpcore/exceptions/validation.py
 index d5fcb23ad..43b923d7b 100644
 --- a/pulpcore/exceptions/validation.py
 +++ b/pulpcore/exceptions/validation.py
-@@ -61,6 +61,25 @@ class SizeValidationError(ValidationError):
-             return msg.format(expected=self.expected, actual=self.actual)
+@@ -73,6 +73,25 @@ class SizeValidationError(ValidationError):
+             )
+             return f"[{self.error_code}] " + msg.format(expected=self.expected, actual=self.actual)
  
- 
++
 +class MalwareError(ValidationError):
 +    """
 +    Raised when a virus is found in file.
@@ -231,28 +235,29 @@ index d5fcb23ad..43b923d7b 100644
 +            msg = _("ClamAV detected a virus ({signature})")
 +            return msg.format(signature=self.virus)
 +
-+
- class MissingDigestValidationError(Exception):
+ 
+ class MissingDigestValidationError(ValidationError):
      """
-     Raised when attempting to save() an Artifact with an incomplete set of checksums.
 diff --git a/pulpcore/plugin/exceptions.py b/pulpcore/plugin/exceptions.py
 index 59870dc62..b8362afe7 100644
 --- a/pulpcore/plugin/exceptions.py
 +++ b/pulpcore/plugin/exceptions.py
-@@ -6,6 +6,7 @@ from pulpcore.exceptions import (
-     MissingDigestValidationError,
-     TimeoutException,
-     UnsupportedDigestValidationError,
+@@ -1,6 +1,7 @@
+ from pulpcore.exceptions import (
+     ValidationError,
+     DigestValidationError,
 +    MalwareError,
- )
- 
- 
-@@ -17,4 +18,5 @@ __all__ = [
-     "MissingDigestValidationError",
-     "TimeoutException",
-     "UnsupportedDigestValidationError",
+     InvalidSignatureError,
+     PulpException,
+     SizeValidationError,
+@@ -16,6 +17,7 @@ from pulpcore.exceptions import (
+ __all__ = [
+     "ValidationError",
+     "DigestValidationError",
 +    "MalwareError",
- ]
+     "InvalidSignatureError",
+     "PulpException",
+     "SizeValidationError",
 -- 
 2.46.2
 
