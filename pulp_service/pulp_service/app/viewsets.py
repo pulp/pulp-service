@@ -124,6 +124,7 @@ class MemoryHeapSnapshotView(APIView):
     Memory profiling endpoint using guppy3 to analyze heap memory usage.
     Returns a snapshot of the current memory heap.
     """
+    permission_classes = []
 
     def get(self, request):
         """
@@ -200,6 +201,7 @@ class MemoryObjectTypesView(APIView):
     """
     Get memory usage grouped by object type.
     """
+    permission_classes = []
 
     def get(self, request):
         """
@@ -268,6 +270,7 @@ class PodInfoView(APIView):
     Returns information about the current pod.
     Useful for identifying which pod you're hitting through a load balancer.
     """
+    permission_classes = []
 
     def get(self, request):
         """
@@ -314,6 +317,7 @@ class ProxyMemoryProfileView(APIView):
         GET /api/pulp/debug/memory/proxy/?target_pod_ip=10.0.1.23&endpoint=heap
         GET /api/pulp/debug/memory/proxy/?target_pod_ip=10.0.1.23&endpoint=types&object_type=dict
     """
+    permission_classes = []
 
     @staticmethod
     def _validate_pod_ip(ip_address):
@@ -507,6 +511,7 @@ class MemrayProfileView(APIView):
         GET  /api/pulp/debug/memory/memray/status/ - Get profiling status
         GET  /api/pulp/debug/memory/memray/files/  - List output files
     """
+    permission_classes = []
 
     STATE_FILE = '/tmp/memray-state.txt'
     
@@ -1138,6 +1143,7 @@ class MemrayProxyProfileView(APIView):
         GET  /api/pulp/debug/memory/memray/proxy/?target_pod_ip=10.0.1.23&action=status
         GET  /api/pulp/debug/memory/memray/proxy/?target_pod_ip=10.0.1.23&action=files
     """
+    permission_classes = []
 
     @staticmethod
     def _validate_pod_ip(ip_address):
