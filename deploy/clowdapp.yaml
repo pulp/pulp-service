@@ -1211,6 +1211,9 @@ parameters:
   - name: PULP_MIDDLEWARE
     description: List of Middleware
     value: "@merge ['pulp_service.app.middleware.RequestPathMiddleware', 'pulp_service.app.middleware.ActiveConnectionsMetricMiddleware', 'pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.RhEdgeHostMiddleware', 'pulp_service.app.middleware.RHSamlAuthHeaderMiddleware']"
+  - name: PULP_PYPI_API_HOSTNAME
+    description: The hostname used to form the distribution's `base_url`.
+    value: "http://pulp-content:8000"
   - name: PULP_SECURE_PROXY_SSL_HEADER
     description: Check for the correct url scheme to use when building URLs
     value: "['HTTP_X_FORWARDED_PROTO', 'https']"
