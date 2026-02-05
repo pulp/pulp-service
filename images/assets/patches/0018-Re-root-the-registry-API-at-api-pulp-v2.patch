@@ -37,15 +37,6 @@ index 0c7a5898..fa4808cb 100644
              if settings.DOMAIN_ENABLED
              else "pulp/container"
          )
-@@ -33,7 +33,7 @@ class CommonRedirects:
- 
-         return self.distribution.redirect_to_content_app(
-             urljoin(
--                settings.CONTENT_ORIGIN,
-+                "https://mtls.internal.console.redhat.com",
-                 f"/{self.path_prefix}/{self.path}/{content_type}/{content_id}",
-             )
-         )
 diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
 index e3b0766c..4e9114be 100644
 --- a/pulp_container/app/registry_api.py
