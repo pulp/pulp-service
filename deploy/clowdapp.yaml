@@ -993,7 +993,7 @@ objects:
             - name: AWS_REGION
               value: "us-east-1"
             - name: CLOUDWATCH_LOG_GROUP
-              value: "/aws/containerinsights/${ENV_NAME}/application"
+              value: "${CLOUDWATCH_LOG_GROUP}"
             - name: S3_BUCKET_NAME
               value: "${S3_BUCKET_NAME}"
             - name: PULP_PYPI_URL
@@ -1346,9 +1346,10 @@ parameters:
     value: "redis"
   - name: PULP_PYPI_URL
     description: Internal Pulp PyPI instance URL for package installation
-    value: "https://pulp.example.com/api/pypi/internal"
+    required: false
+  - name: CLOUDWATCH_LOG_GROUP
+    description: CloudWatch log group name for access logs export
     required: false
   - name: S3_BUCKET_NAME
     description: S3 bucket for log archives
-    value: "s3://pulp-log-archives"
     required: false
