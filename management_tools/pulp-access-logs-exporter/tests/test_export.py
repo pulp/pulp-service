@@ -135,12 +135,16 @@ def test_query_building():
     assert '/api/pypi' in query or r'\/api\/pypi' in query
     assert 'parse' in query.lower()
 
-    # Assert key parsing expressions are present
-    assert 'parse @message "user:* org_id" as user' in query
-    assert 'parse @message "org_id:* " as org_id' in query
-    assert "parse @message '/api/pypi/*/*/simple/' as domain, distribution" in query
-    assert "parse @message '/simple/*/ ' as package" in query
+    # Assert key parsing expressions are present (using parsed_* intermediate names)
+    assert 'parse @message "user:* org_id" as parsed_user' in query
+    assert 'parse @message "org_id:* " as parsed_org_id' in query
+    assert "parse @message '/api/pypi/*/*/simple/' as parsed_domain, parsed_distribution" in query
+    assert "parse @message '/simple/*/ ' as parsed_package" in query
     assert 'coalesce(client_ip, xff) as x_forwarded_for' in query
+
+    # Assert final field aliasing
+    assert 'parsed_user as user' in query
+    assert 'parsed_org_id as org_id' in query
 
     # Assert filtering
     assert 'filter @message not like /django.request:WARNING/' in query
