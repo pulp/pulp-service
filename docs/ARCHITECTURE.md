@@ -355,6 +355,33 @@ Background tasks using Celery (in `pulp_service/pulp_service/app/tasks/`):
 - ⬆️ `PULP_USE_X_FORWARDED_HOST=true` - Use X-Forwarded-Host for URL building
 - ⬆️ `PULP_SECURE_PROXY_SSL_HEADER=['HTTP_X_FORWARDED_PROTO', 'https']` - SSL proxy header (Python list literal: [header_name, value])
 
+### Public Domain Access
+*🔧 Plugin-specific feature*
+
+Domains with names starting with `public-` (case-insensitive) allow unauthenticated GET/HEAD/OPTIONS requests to all API endpoints. This enables public read-only access to repository content and metadata.
+
+**Examples:**
+- `public-rhai` - Public RHAI packages
+- `public-calunga` - Public Calunga packages
+- `Public-demo` - Also treated as public (case-insensitive)
+- `PUBLIC-test` - Also treated as public (case-insensitive)
+
+**Security:**
+- Only safe HTTP methods (GET, HEAD, OPTIONS) are allowed without authentication
+- POST, PUT, PATCH, DELETE still require authentication even for public- domains
+- All unauthenticated access to public domains is logged for audit purposes
+- Domain names are case-insensitive for matching (public-, Public-, PUBLIC- all work)
+- Only domains with names **starting with** `public-` are public (not domains containing it elsewhere)
+
+**Implementation:**
+- Default permission class: `pulp_service.app.authorization.PublicDomainOrAuthenticatedPermission`
+- Configured via: `PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES`
+- See: `pulp_service/pulp_service/app/authorization.py` for permission class implementations
+
+**Testing:**
+- Test coverage in: `pulp_service/pulp_service/tests/functional/test_authentication.py`
+- Tests verify public domain access, private domain restrictions, and case-insensitive matching
+
 ### Middleware
 *🔧 Plugin-specific configuration*
 
