@@ -46,16 +46,16 @@ def build_query(filter_paths: str = "/api/pypi/", exclude_paths: str = "/livez,/
     ]
     query_parts.extend(exclude_filters)
     query_parts.extend([
-        "| parse @message \"user:* org_id\" as user",
-        "| parse @message \"org_id:* \" as org_id",
-        "| parse @message '/api/pypi/*/*/simple/' as domain, distribution",
-        "| parse @message '/simple/*/ ' as package",
-        "| filter ispresent(package)",
-        "| parse message ' HTTP/1.1\" * ' as status_code",
-        "| parse message '\"-\" \"*\" ' as user_agent",
+        "| parse @message \"user:* org_id\" as parsed_user",
+        "| parse @message \"org_id:* \" as parsed_org_id",
+        "| parse @message '/api/pypi/*/*/simple/' as parsed_domain, parsed_distribution",
+        "| parse @message '/simple/*/ ' as parsed_package",
+        "| filter ispresent(parsed_package)",
+        "| parse message ' HTTP/1.1\" * ' as parsed_status_code",
+        "| parse message '\"-\" \"*\" ' as parsed_user_agent",
         "| parse message ' x_forwarded_for:\"*\"' as xff",
         "| parse xff '*,*' as client_ip, xff_rest",
-        "| fields @timestamp, @message, user, org_id, domain, distribution, package, status_code, user_agent, coalesce(client_ip, xff) as x_forwarded_for",
+        "| fields @timestamp, @message, parsed_user as user, parsed_org_id as org_id, parsed_domain as domain, parsed_distribution as distribution, parsed_package as package, parsed_status_code as status_code, parsed_user_agent as user_agent, coalesce(client_ip, xff) as x_forwarded_for",
     ])
 
     return "\n    ".join(query_parts)
