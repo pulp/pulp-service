@@ -106,15 +106,17 @@ pytest tests/
 
 ```bash
 python -m build
-# Creates dist/pulp_access_logs_exporter-2026.2.0.tar.gz
+# Creates dist/pulp_access_logs_exporter-2026.02.06.0.tar.gz
 ```
 
 ### Uploading to Pulp PyPI
 
 ```bash
 twine upload --repository-url https://pulp.example.com/api/pypi/internal/simple/ \
-  dist/pulp_access_logs_exporter-2026.2.0.tar.gz
+  dist/pulp_access_logs_exporter-2026.02.06.0.tar.gz
 ```
+
+**Versioning**: Uses CalVer format `YYYY.0M.0D.MICRO` (e.g., 2026.02.06.0 for first release on Feb 6, 2026)
 
 ## Architecture
 
