@@ -129,15 +129,14 @@ def test_authentication_with_only_username(
         assert repo is not None
 
 
-def test_get_requests_without_auth_to_simple_api(
+def test_get_requests_to_public_domains_without_auth(
     anonymous_user,
     cleanup_auth_headers,
     pulpcore_bindings,
     python_bindings,
     gen_object_with_cleanup,
 ):
-    """Test that all domains allow GET requests without authentication but block other methods."""
-    # Create a user with credentials to set up the domain
+    """Test that public- domains allow unauthenticated GET/HEAD/OPTIONS but block other methods."""
     setup_user = {
         "identity": {"internal": {"org_id": 33333}, "user": {"username": "publicdomainuser"}}
     }
@@ -148,24 +147,25 @@ def test_get_requests_without_auth_to_simple_api(
 
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
 
-        # Create a domain (any domain, not necessarily public-)
-        domain_name = str(uuid4())
+        # Create a PUBLIC domain (with public- prefix)
+        public_domain_name = f"public-{str(uuid4())}"
         gen_object_with_cleanup(
             pulpcore_bindings.DomainsApi,
             {
-                "name": domain_name,
+                "name": public_domain_name,
                 "storage_class": "pulpcore.app.models.storage.FileSystem",
                 "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
             },
         )
 
-        # Create a Python repository
+        # Create a Python repository in the public domain
         python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
             auth_header
         )
-
         repo = gen_object_with_cleanup(
-            python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
+            python_bindings.RepositoriesPythonApi,
+            {"name": str(uuid4())},
+            pulp_domain=public_domain_name
         )
 
         # Create a Python distribution
@@ -180,49 +180,200 @@ def test_get_requests_without_auth_to_simple_api(
                 "base_path": base_path,
                 "repository": repo.pulp_href,
             },
-            pulp_domain=domain_name,
+            pulp_domain=public_domain_name,
         )
 
         api_host = python_bindings.DistributionsPypiApi.api_client.configuration.host
-        simple_url = f"{api_host}/api/pypi/{domain_name}/{base_path}/simple/"
+        public_simple_url = f"{api_host}/api/pypi/{public_domain_name}/{base_path}/simple/"
 
-        # GET request should succeed for any domain without auth
-        response = requests.get(simple_url)
-        assert (
-            response.status_code == 200
-        ), f"Expected 200 for GET on domain, got {response.status_code}"
-
-        # POST request should be blocked (401/403) without auth
-        response = requests.post(simple_url, data={})
-        assert response.status_code in [
-            401,
-            403,
-        ], f"Expected 401/403 for POST without auth, got {response.status_code}"
-
-        # PUT request should be blocked (401/403) without auth
-        response = requests.put(simple_url, data={})
-        assert response.status_code in [
-            401,
-            403,
-        ], f"Expected 401/403 for PUT without auth, got {response.status_code}"
-
-        # DELETE request should be blocked (401/403) without auth
-        response = requests.delete(simple_url)
-        assert response.status_code in [
-            401,
-            403,
-        ], f"Expected 401/403 for DELETE without auth, got {response.status_code}"
-
-        # PATCH request should be blocked (401/403) without auth
-        response = requests.patch(simple_url, data={})
-        assert response.status_code in [
-            401,
-            403,
-        ], f"Expected 401/403 for PATCH without auth, got {response.status_code}"
-
-        # some bindings has scope=session, so we need to remove the headers to avoid
-        # affecting the other tests
+        # Remove auth headers for testing unauthenticated access
         pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
         python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
         python_bindings.DistributionsPypiApi.api_client.default_headers.pop("x-rh-identity", None)
+
+        # Test 1: GET should succeed for public- domain without auth
+        response = requests.get(public_simple_url)
+        assert response.status_code == 200, \
+            f"Expected 200 for GET on public- domain, got {response.status_code}"
+
+        # Test 2: HEAD should succeed for public- domain without auth
+        response = requests.head(public_simple_url)
+        assert response.status_code == 200, \
+            f"Expected 200 for HEAD on public- domain, got {response.status_code}"
+
+        # Test 3: OPTIONS should succeed for public- domain without auth
+        response = requests.options(public_simple_url)
+        assert response.status_code == 200, \
+            f"Expected 200 for OPTIONS on public- domain, got {response.status_code}"
+
+        # Test 4: POST should be blocked without auth (even on public- domain)
+        response = requests.post(public_simple_url, data={})
+        assert response.status_code in [401, 403], \
+            f"Expected 401/403 for POST on public- domain without auth, got {response.status_code}"
+
+        # Test 5: PUT should be blocked without auth
+        response = requests.put(public_simple_url, data={})
+        assert response.status_code in [401, 403], \
+            f"Expected 401/403 for PUT on public- domain without auth, got {response.status_code}"
+
+        # Test 6: DELETE should be blocked without auth
+        response = requests.delete(public_simple_url)
+        assert response.status_code in [401, 403], \
+            f"Expected 401/403 for DELETE on public- domain without auth, got {response.status_code}"
+
+        # Test 7: PATCH should be blocked without auth
+        response = requests.patch(public_simple_url, data={})
+        assert response.status_code in [401, 403], \
+            f"Expected 401/403 for PATCH on public- domain without auth, got {response.status_code}"
+
+
+def test_get_requests_to_private_domains_require_auth(
+    anonymous_user,
+    cleanup_auth_headers,
+    pulpcore_bindings,
+    python_bindings,
+    gen_object_with_cleanup,
+):
+    """Test that non-public domains require authentication for all requests including GET."""
+    setup_user = {
+        "identity": {"internal": {"org_id": 44444}, "user": {"username": "privatedomainuser"}}
+    }
+
+    with anonymous_user:
+        header_content = json.dumps(setup_user)
+        auth_header = b64encode(bytes(header_content, "ascii"))
+
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+
+        # Create a PRIVATE domain (without public- prefix)
+        private_domain_name = str(uuid4())  # No "public-" prefix
+        gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": private_domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Create a Python repository in the private domain
+        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
+            auth_header
+        )
+        repo = gen_object_with_cleanup(
+            python_bindings.RepositoriesPythonApi,
+            {"name": str(uuid4())},
+            pulp_domain=private_domain_name
+        )
+
+        # Create a Python distribution
+        python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = (
+            auth_header
+        )
+        base_path = str(uuid4())
+        gen_object_with_cleanup(
+            python_bindings.DistributionsPypiApi,
+            {
+                "name": str(uuid4()),
+                "base_path": base_path,
+                "repository": repo.pulp_href,
+            },
+            pulp_domain=private_domain_name,
+        )
+
+        api_host = python_bindings.DistributionsPypiApi.api_client.configuration.host
+        private_simple_url = f"{api_host}/api/pypi/{private_domain_name}/{base_path}/simple/"
+
+        # Remove auth headers
+        pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+        python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
+        python_bindings.DistributionsPypiApi.api_client.default_headers.pop("x-rh-identity", None)
+
+        # Test 1: GET should be BLOCKED for private domain without auth
+        response = requests.get(private_simple_url)
+        assert response.status_code in [401, 403], \
+            f"Expected 401/403 for GET on private domain without auth, got {response.status_code}"
+
+        # Test 2: With auth, GET should succeed
+        response = requests.get(
+            private_simple_url,
+            headers={"x-rh-identity": auth_header.decode()}
+        )
+        assert response.status_code == 200, \
+            f"Expected 200 for GET on private domain WITH auth, got {response.status_code}"
+
+
+def test_case_insensitive_public_domain_matching(
+    anonymous_user,
+    cleanup_auth_headers,
+    pulpcore_bindings,
+    python_bindings,
+    gen_object_with_cleanup,
+):
+    """Test that Public-, PUBLIC-, and public- all match as public domains."""
+    setup_user = {
+        "identity": {"internal": {"org_id": 55555}, "user": {"username": "casetest"}}
+    }
+
+    test_cases = [
+        f"public-{str(uuid4())}",
+        f"Public-{str(uuid4())}",
+        f"PUBLIC-{str(uuid4())}",
+    ]
+
+    with anonymous_user:
+        header_content = json.dumps(setup_user)
+        auth_header = b64encode(bytes(header_content, "ascii"))
+
+        for domain_name in test_cases:
+            pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+
+            gen_object_with_cleanup(
+                pulpcore_bindings.DomainsApi,
+                {
+                    "name": domain_name,
+                    "storage_class": "pulpcore.app.models.storage.FileSystem",
+                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+                },
+            )
+
+            python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
+                auth_header
+            )
+            repo = gen_object_with_cleanup(
+                python_bindings.RepositoriesPythonApi,
+                {"name": str(uuid4())},
+                pulp_domain=domain_name
+            )
+
+            python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = (
+                auth_header
+            )
+            base_path = str(uuid4())
+            gen_object_with_cleanup(
+                python_bindings.DistributionsPypiApi,
+                {
+                    "name": str(uuid4()),
+                    "base_path": base_path,
+                    "repository": repo.pulp_href,
+                },
+                pulp_domain=domain_name,
+            )
+
+            api_host = python_bindings.DistributionsPypiApi.api_client.configuration.host
+            test_url = f"{api_host}/api/pypi/{domain_name}/{base_path}/simple/"
+
+            # Remove auth
+            pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+            python_bindings.RepositoriesPythonApi.api_client.default_headers.pop(
+                "x-rh-identity", None
+            )
+            python_bindings.DistributionsPypiApi.api_client.default_headers.pop(
+                "x-rh-identity", None
+            )
+
+            # All case variants should allow unauthenticated GET
+            response = requests.get(test_url)
+            assert response.status_code == 200, \
+                f"Expected 200 for GET on {domain_name}, got {response.status_code}"
  

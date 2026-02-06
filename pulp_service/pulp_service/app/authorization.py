@@ -130,3 +130,53 @@ class AllowUnauthPull(BasePermission):
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
             return True
+
+
+class PublicDomainReadOnlyPermission(BasePermission):
+    """
+    A Permission Class that grants permission to make GET/HEAD/OPTIONS requests
+    without authentication ONLY to domains with 'public-' prefix.
+    """
+
+    def has_permission(self, request, view):
+        # Only allow safe methods
+        if request.method not in SAFE_METHODS:
+            return False
+
+        # Check if this is a public domain
+        try:
+            domain_pk = get_domain_pk()
+            if domain_pk:
+                domain = Domain.objects.get(pk=domain_pk)
+                # Case-insensitive check for "public-" prefix
+                if domain.name.lower().startswith("public-"):
+                    _logger.info(
+                        f"Allowing unauthenticated {request.method} to public domain: {domain.name}"
+                    )
+                    return True
+        except Domain.DoesNotExist:
+            _logger.debug(f"Domain with pk={domain_pk} not found")
+        except Exception as e:
+            _logger.warning(f"Error checking domain for public access: {e}")
+
+        return False
+
+
+class PublicDomainOrAuthenticatedPermission(BasePermission):
+    """
+    Combined Permission Class that allows:
+    - Unauthenticated GET/HEAD/OPTIONS requests to public- domains
+    - OR authenticated requests with domain-based permission checks
+
+    This is the default permission class for all API endpoints.
+    """
+
+    def has_permission(self, request, view):
+        # First check if this is a public domain read request
+        public_check = PublicDomainReadOnlyPermission()
+        if public_check.has_permission(request, view):
+            return True
+
+        # Otherwise, require authentication and domain-based permissions
+        domain_check = DomainBasedPermission()
+        return domain_check.has_permission(request, view)

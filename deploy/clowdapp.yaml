@@ -1131,8 +1131,8 @@ parameters:
     description: The default authentication classes for Pulp.
     value: "['pulp_service.app.authentication.RHServiceAccountCertAuthentication','pulp_service.app.authentication.DeprecateCRHCSA','pulpcore.app.authentication.JSONHeaderRemoteAuthentication','rest_framework.authentication.BasicAuthentication','rest_framework.authentication.SessionAuthentication','pulp_service.app.authentication.RHTermsBasedRegistryAuthentication']"
   - name: PULP_REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES
-    description: The default permission classes for the REST API
-    value: "['pulp_service.app.authorization.DomainBasedPermission']"
+    description: The default permission classes for the REST API. Allows unauthenticated GET/HEAD/OPTIONS to public- domains.
+    value: "['pulp_service.app.authorization.PublicDomainOrAuthenticatedPermission']"
   - name: PULP_AUTHENTICATION_JSON_HEADER
     description: The name of the header where Authentication information is found.
     value: "HTTP_X_RH_IDENTITY"
