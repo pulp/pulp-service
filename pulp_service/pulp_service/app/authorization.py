@@ -130,3 +130,45 @@ class AllowUnauthPull(BasePermission):
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
             return True
+
+
+class PublicDomainPermission(BasePermission):
+    """
+    Grant permission for GET/HEAD/OPTIONS requests without authentication
+    when domain name starts with "public-". Excludes /pulp-mgmt/ admin interface.
+    """
+
+    def has_permission(self, request, view):
+        # Exclude /pulp-mgmt/ admin interface - always require authentication
+        if '/pulp-mgmt/' in request.path:
+            return False
+
+        # Only allow safe methods (GET, HEAD, OPTIONS) for public access
+        if request.method not in SAFE_METHODS:
+            return False
+
+        # Try to extract domain from the URL
+        try:
+            domain_pk = get_domain_pk()
+
+            # Get the domain object to check its name
+            try:
+                domain = Domain.objects.get(pk=domain_pk)
+
+                # Grant permission if domain name starts with "public-"
+                if domain.name.startswith("public-"):
+                    _logger.debug(
+                        f"Allowing unauthenticated {request.method} request to public domain: {domain.name}"
+                    )
+                    return True
+            except Domain.DoesNotExist:
+                _logger.debug(f"Domain with pk={domain_pk} not found")
+                return False
+
+        except Exception as e:
+            # get_domain_pk() may fail for non-domain endpoints
+            _logger.debug(f"Could not extract domain from request: {e}")
+            return False
+
+        # Not a public domain - let DomainBasedPermission handle it
+        return False
