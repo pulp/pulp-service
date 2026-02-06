@@ -5,7 +5,7 @@ Check `Plugin Writer's Guide`_ for more details.
     https://docs.pulpproject.org/pulpcore/plugins/plugin-writer/index.html
 """
 
-FEATURE_SERVICE_API_URL = "https://feature.stage.api.redhat.com/features/v1/featureStatus"
+FEATURE_SERVICE_API_URL = "https://feature.stage.api.redhat.com/features/v2/featureStatus"
 FEATURE_SERVICE_API_CERT_PATH = ""
 AUTHENTICATION_HEADER_DEBUG = False
 INSTALLED_APPS = "@merge django.contrib.admin.apps.SimpleAdminConfig,hijack,hijack.contrib.admin"

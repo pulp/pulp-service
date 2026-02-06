@@ -100,11 +100,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             )
             raise PermissionError(_("Access denied."))
 
-        features_available = {
-            feature["name"]
-            for feature in response["features"]
-            if feature["isEntitled"] is True
-        }
+        features_available = { feature["name"] for feature in response["features"] }
         return features_available == set(self.features)
 
     def permit(self, request):
