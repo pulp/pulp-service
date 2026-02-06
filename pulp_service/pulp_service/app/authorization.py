@@ -130,3 +130,50 @@ class AllowUnauthPull(BasePermission):
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
             return True
+
+
+class PublicDomainReadPermission(BasePermission):
+    """
+    Permission class that grants unauthenticated access to GET/HEAD/OPTIONS requests
+    ONLY for domains whose names start with 'public-' (case-sensitive).
+
+    This is more restrictive than AllowUnauthPull, which allows all domains.
+    Use this class when you want to limit public read access to specifically
+    designated public domains.
+    """
+
+    def has_permission(self, request, view):
+        # Only allow safe methods (GET, HEAD, OPTIONS)
+        if request.method not in SAFE_METHODS:
+            return False
+
+        # Try to get the domain PK from the request context
+        try:
+            domain_pk = get_domain_pk()
+        except LookupError:
+            # Domain context not set - deny access
+            _logger.debug("PublicDomainReadPermission: domain context not set")
+            return False
+        except Exception as e:
+            # Unexpected error - deny access and log
+            _logger.warning(f"PublicDomainReadPermission: unexpected error getting domain_pk: {e}")
+            return False
+
+        # Fetch the domain object to check its name
+        try:
+            domain = Domain.objects.get(pk=domain_pk)
+        except Domain.DoesNotExist:
+            # Domain not found - deny access
+            _logger.warning(f"PublicDomainReadPermission: domain with pk={domain_pk} does not exist")
+            return False
+        except Exception as e:
+            # Database error or other unexpected error - deny access
+            _logger.error(f"PublicDomainReadPermission: error fetching domain: {e}")
+            return False
+
+        # Check if domain name starts with 'public-' (case-sensitive)
+        if domain.name.startswith('public-'):
+            return True
+
+        # Domain does not start with 'public-' - deny access
+        return False
