@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pulp-access-logs-exporter"
-version = "2026.02.06.0"  # CalVer: YYYY.0M.0D.MICRO
+version = "20260206.0"  # CalVer: YYYYMMDD.MICRO
 description = "Export Pulp access logs from CloudWatch to Parquet format"
 readme = "README.md"
 requires-python = ">=3.12"
