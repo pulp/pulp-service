@@ -1235,7 +1235,7 @@ parameters:
     value: "pulp-services-non-prod.pem"
   - name: PULP_FEATURE_SERVICE_API_URL
     description: FeatureServices API URL to list the features from an owner
-    value: "https://feature.stage.api.redhat.com/features/v1/featureStatus"
+    value: "https://feature.stage.api.redhat.com/features/v2/featureStatus"
   - name: PULP_TASK_PROTECTION_TIME
     description: Set the time in minutes to purge tasks
     value: "20160"
