@@ -175,9 +175,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0040-close-stale-db-connections-before-heartbeat.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0040-close-stale-db-connections-before-heartbeat.patch
 
-COPY images/assets/patches/0041-prefetch-python-ca.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0041-prefetch-python-ca.patch
-
 COPY images/assets/patches/0042-Add-contains-filter-python-content-endpoint.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0042-Add-contains-filter-python-content-endpoint.patch
 
