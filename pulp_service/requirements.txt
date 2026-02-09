@@ -15,8 +15,6 @@ uvloop==0.21.0
 jsonschema
 memray
 pyinstrument
-guppy3
-psutil
 clamav-client>=0.7.1,<1.0
 django-hijack==3.7.4
 pycares>=4.0.0,<5.0
