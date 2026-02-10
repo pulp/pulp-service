@@ -55,6 +55,21 @@ def parse_args(args=None):
         help="Exclude these paths (default: /livez,/status)",
     )
 
+    parser.add_argument(
+        "--s3-access-key-id",
+        help="AWS access key ID for S3 (if different from CloudWatch credentials)",
+    )
+
+    parser.add_argument(
+        "--s3-secret-access-key",
+        help="AWS secret access key for S3 (if different from CloudWatch credentials)",
+    )
+
+    parser.add_argument(
+        "--s3-session-token",
+        help="AWS session token for S3 (if using temporary credentials)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -155,7 +170,18 @@ def main():
     # 5. Write Parquet file
     print("\nWriting Parquet file...")
     print(f"  Output: {args.output_path}")
-    write_parquet(table, args.output_path)
+
+    # Pass S3 credentials if provided
+    s3_credentials = None
+    if args.s3_access_key_id and args.s3_secret_access_key:
+        s3_credentials = {
+            'access_key': args.s3_access_key_id,
+            'secret_key': args.s3_secret_access_key,
+        }
+        if args.s3_session_token:
+            s3_credentials['session_token'] = args.s3_session_token
+
+    write_parquet(table, args.output_path, s3_credentials=s3_credentials)
 
     # 6. Print statistics
     elapsed = time_module.time() - start_time
