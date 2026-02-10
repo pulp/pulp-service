@@ -972,14 +972,11 @@ objects:
           command: ['/bin/bash', '-c']
           args:
             - |
-              # Generate timestamped output path to avoid overwriting
-              # Use the hour being exported (1 hour ago) for the path
-              EXPORT_TIMESTAMP=$(date -u -d '1 hour ago' '+%Y-%m-%d-%H')
-              YEAR=$(date -u -d '1 hour ago' '+%Y')
-              MONTH=$(date -u -d '1 hour ago' '+%m')
-              DAY=$(date -u -d '1 hour ago' '+%d')
-              HOUR=$(date -u -d '1 hour ago' '+%H')
-              OUTPUT_PATH="${S3_BUCKET_NAME}/pypi-logs/year=${YEAR}/month=${MONTH}/day=${DAY}/hour=${HOUR}/logs.parquet"
+              # Generate CalVer filename with ISO 8601 timestamp
+              # Use the hour being exported (1 hour ago) for the filename
+              # Format: pulp-access-logs-YYYYMMDDTHHMMSSZ.parquet
+              TIMESTAMP=$(date -u -d '1 hour ago' '+%Y%m%dT%H0000Z')
+              OUTPUT_PATH="${S3_BUCKET_NAME}/pypi-logs/pulp-access-logs-${TIMESTAMP}.parquet"
 
               pip install --index-url ${PULP_PYPI_URL}/simple/ \
                 pulp-access-logs-exporter && \
