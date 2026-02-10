@@ -18,7 +18,7 @@ SCHEMA = pa.schema([
 ])
 
 
-def write_parquet(table: pa.Table, output_path: str):
+def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None):
     """
     Write PyArrow Table to Parquet file.
 
@@ -37,6 +37,10 @@ def write_parquet(table: pa.Table, output_path: str):
     Args:
         table: PyArrow Table with log data
         output_path: Local file path or S3 URI (s3://bucket/key)
+        s3_credentials: Optional dict with S3 credentials:
+            - access_key: AWS access key ID
+            - secret_key: AWS secret access key
+            - session_token: AWS session token (optional)
     """
     import pyarrow.parquet as pq
     import pyarrow.fs as fs
@@ -44,7 +48,18 @@ def write_parquet(table: pa.Table, output_path: str):
     if output_path.startswith('s3://'):
         # S3 upload using PyArrow filesystem
         print(f"Writing to S3: {output_path}")
-        s3_fs = fs.S3FileSystem()
+
+        # Create S3FileSystem with explicit credentials if provided
+        if s3_credentials:
+            s3_fs = fs.S3FileSystem(
+                access_key=s3_credentials['access_key'],
+                secret_key=s3_credentials['secret_key'],
+                session_token=s3_credentials.get('session_token'),
+            )
+        else:
+            # Use default credentials (from env vars or IAM role)
+            s3_fs = fs.S3FileSystem()
+
         # Remove s3:// prefix for PyArrow
         s3_path = output_path[5:]
 
