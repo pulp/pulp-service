@@ -660,7 +660,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulpcore
 
-- **Version**: 3.95.0 (see requirements.txt)
+- **Version**: 3.103.1 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulpcore
 - **Documentation**: https://docs.pulpproject.org/pulpcore/
 
@@ -684,7 +684,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulp Python Plugin
 
-- **Version**: 3.22.1 (see requirements.txt)
+- **Version**: 3.24.1 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulp_python
 - **Documentation**: https://docs.pulpproject.org/pulp_python/
 
@@ -702,7 +702,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulp Container Plugin
 
-- **Version**: 2.26.2 (see requirements.txt)
+- **Version**: 2.27.0 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulp_container
 - **Documentation**: https://docs.pulpproject.org/pulp_container/
 
@@ -721,7 +721,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulp RPM Plugin
 
-- **Version**: 3.32.5 (see requirements.txt)
+- **Version**: 3.34.0 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulp_rpm
 - **Documentation**: https://docs.pulpproject.org/pulp_rpm/
 
@@ -739,19 +739,19 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Additional Pulp Plugins
 
-**Pulp Gem** (0.7.3, see requirements.txt):
+**Pulp Gem** (0.7.5, see requirements.txt):
 - RubyGems repository support
 - Documentation: https://docs.pulpproject.org/pulp_gem/
 
-**Pulp NPM** (0.4.0, see requirements.txt):
+**Pulp NPM** (0.5.0, see requirements.txt):
 - NPM registry support
 - Documentation: https://docs.pulpproject.org/pulp_npm/
 
-**Pulp Maven** (0.11.0, see requirements.txt):
+**Pulp Maven** (0.12.0, see requirements.txt):
 - Maven repository support
 - Documentation: https://docs.pulpproject.org/pulp_maven/
 
-**Pulp Hugging Face** (0.1.0, see requirements.txt):
+**Pulp Hugging Face** (0.3.0, see requirements.txt):
 - Hugging Face model repository support
 
 ### Key Architectural Boundaries
