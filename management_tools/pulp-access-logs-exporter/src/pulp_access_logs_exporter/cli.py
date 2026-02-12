@@ -105,10 +105,16 @@ def parse_time(time_str: str) -> datetime:
     # Try to parse as ISO format
     try:
         # Handle both with and without 'Z' suffix
+        # Always return timezone-naive UTC for consistency
         if time_str.endswith('Z'):
-            return datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+            return dt.replace(tzinfo=None)  # Strip timezone, treat as UTC
         else:
-            return datetime.fromisoformat(time_str)
+            dt = datetime.fromisoformat(time_str)
+            # If timezone-aware, convert to naive UTC
+            if dt.tzinfo is not None:
+                return dt.replace(tzinfo=None)
+            return dt
     except ValueError:
         raise ValueError(f"Invalid time format: {time_str}")
 
