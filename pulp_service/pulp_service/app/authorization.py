@@ -48,8 +48,12 @@ class DomainBasedPermission(BasePermission):
 
         user = request.user
 
-        # Anonymous users have no permissions
+        # Anonymous users can make safe requests on public domains
         if not user.is_authenticated:
+            if request.method in SAFE_METHODS:
+                domain = getattr(request, "pulp_domain", None)
+                if domain and "public-" in domain.name:
+                    return True
             return False
 
         # Check if user is creating a domain or creating a resource within a domain
