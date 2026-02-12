@@ -70,6 +70,11 @@ def parse_args(args=None):
         help="AWS session token for S3 (if using temporary credentials)",
     )
 
+    parser.add_argument(
+        "--s3-region",
+        help="AWS region for S3 bucket (defaults to --aws-region if not specified)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -187,7 +192,10 @@ def main():
         if args.s3_session_token:
             s3_credentials['session_token'] = args.s3_session_token
 
-    write_parquet(table, args.output_path, s3_credentials=s3_credentials)
+    # Determine S3 region (use s3_region if specified, otherwise fall back to aws_region)
+    s3_region = args.s3_region or args.aws_region
+
+    write_parquet(table, args.output_path, s3_credentials=s3_credentials, region=s3_region)
 
     # 6. Print statistics
     elapsed = time_module.time() - start_time
