@@ -1,0 +1,100 @@
+From aa15b73667de977bf6f0caaab91d6909c431bb1e Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Wed, 11 Feb 2026 21:19:28 -0500
+Subject: [PATCH] Move content app's heartbeat to a thread.
+
+---
+ pulpcore/content/__init__.py | 33 +++++++++++++++++----------------
+ 1 file changed, 17 insertions(+), 16 deletions(-)
+
+diff --git a/pulpcore/content/__init__.py b/pulpcore/content/__init__.py
+index 96e4f6a6d..9420c2abb 100644
+--- a/pulpcore/content/__init__.py
++++ b/pulpcore/content/__init__.py
+@@ -1,11 +1,10 @@
+-import asyncio
+ from contextlib import suppress
+ from importlib import import_module
+ from importlib.util import find_spec
+ import logging
+ import os
++import threading
+ 
+-from asgiref.sync import sync_to_async
+ from aiohttp import web
+ from gunicorn.arbiter import Arbiter
+ import django
+@@ -15,6 +14,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
+ django.setup()
+ 
+ from django.conf import settings  # noqa: E402: module level not at top of file
++from django.db import connection  # noqa: E402: module level not at top of file
+ from django.db.utils import (  # noqa: E402: module level not at top of file
+     IntegrityError,
+     InterfaceError,
+@@ -48,7 +48,7 @@ if settings.UVLOOP_ENABLED:
+ CONTENT_MODULE_NAME = "content"
+ 
+ 
+-async def _heartbeat():
++def _heartbeat(shutdown_event):
+     name = get_worker_name()
+     heartbeat_interval = settings.CONTENT_APP_TTL // 4
+     msg = "Content App '{name}' heartbeat written, sleeping for '{interarrival}' seconds".format(
+@@ -60,39 +60,40 @@ async def _heartbeat():
+     versions = {app.label: app.version for app in pulp_plugin_configs()}
+ 
+     try:
+-        app_status = await AppStatus.objects.acreate(
++        app_status = AppStatus.objects.create(
+             name=name, app_type="content", versions=versions
+         )
+     except IntegrityError:
+         log.error(f"A content app with name {name} already exists in the database.")
+         exit(Arbiter.WORKER_BOOT_ERROR)
+     try:
+-        while True:
+-            await asyncio.sleep(heartbeat_interval)
++        while not shutdown_event.wait(timeout=heartbeat_interval):
+             try:
+-                await app_status.asave_heartbeat()
++                app_status.save_heartbeat()
+                 log.debug(msg)
+             except (InterfaceError, DatabaseError):
+-                await sync_to_async(Handler._reset_db_connection)()
++                Handler._reset_db_connection()
+                 try:
+-                    await app_status.asave_heartbeat()
++                    app_status.save_heartbeat()
+                     log.debug(msg)
+                 except (InterfaceError, DatabaseError) as e:
+                     log.error(f"{fail_msg} Exception: {str(e)}")
+                     exit(Arbiter.WORKER_BOOT_ERROR)
+     finally:
+         if app_status:
+-            await app_status.adelete()
++            app_status.delete()
++        connection.close()
+ 
+ 
+ async def _heartbeat_ctx(app):
+-    heartbeat_task = asyncio.create_task(_heartbeat())
++    shutdown_event = threading.Event()
++    heartbeat_thread = threading.Thread(
++        target=_heartbeat, args=(shutdown_event,), daemon=True
++    )
++    heartbeat_thread.start()
+     yield
+-    heartbeat_task.cancel()
+-    try:
+-        await heartbeat_task
+-    except asyncio.CancelledError:
+-        pass
++    shutdown_event.set()
++    heartbeat_thread.join()
+ 
+ 
+ async def server(*args, **kwargs):
+-- 
+2.52.0
+

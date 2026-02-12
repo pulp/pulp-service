@@ -141,9 +141,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0028-OCIStorage-create-manifest.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-OCIStorage-create-manifest.patch
 
-COPY images/assets/patches/0028-Add-a-SIGTERM-handler-to-pulpcore-content.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-Add-a-SIGTERM-handler-to-pulpcore-content.patch
-
 COPY images/assets/patches/0030-Handle-API-worker-heartbeat-in-a-different-thread.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0030-Handle-API-worker-heartbeat-in-a-different-thread.patch
 
@@ -171,16 +168,11 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0038-readonly-pypi-endpoints.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0038-readonly-pypi-endpoints.patch
 
-COPY images/assets/patches/0040-close-stale-db-connections-before-heartbeat.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0040-close-stale-db-connections-before-heartbeat.patch
-
 COPY images/assets/patches/0042-Add-contains-filter-python-content-endpoint.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0042-Add-contains-filter-python-content-endpoint.patch
 
-COPY images/assets/patches/0043-Log-heartbeat-success-at-info-level.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0043-Log-heartbeat-success-at-info-level.patch
-
-COPY images/assets/gunicorn_config.py /tmp/
+COPY images/assets/patches/0044-Move-content-app-heartbeat-to-a-thread.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
