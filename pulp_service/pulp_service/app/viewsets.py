@@ -29,7 +29,10 @@ from pulpcore.app.models import Domain, Group, Task
 from pulpcore.app.serializers import DomainSerializer
 
 
-from pulp_service.app.authentication import RHServiceAccountCertAuthentication
+from pulp_service.app.authentication import (
+    RHServiceAccountCertAuthentication,
+    RHTermsBasedRegistryAuthentication,
+)
 
 from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.app.models import FeatureContentGuard
@@ -109,15 +112,19 @@ class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
 
 class DebugAuthenticationHeadersView(APIView):
     """
-    Returns the content of the authentication headers.
+    Returns the content of the authentication headers and client IP information.
     """
 
-    authentication_classes = [RHServiceAccountCertAuthentication]
+    authentication_classes = [RHTermsBasedRegistryAuthentication]
     permission_classes = []
 
     def get(self, request=None, path=None, pk=None):
         if not settings.AUTHENTICATION_HEADER_DEBUG:
             raise PermissionError("Access denied.")
+
+        response_data = {}
+
+        # Get x-rh-identity header
         try:
             header_content = request.headers["x-rh-identity"]
         except KeyError:
@@ -134,8 +141,24 @@ class DebugAuthenticationHeadersView(APIView):
             _logger.error("Access not allowed - Header content is not Base64 encoded.")
             raise PermissionError("Access denied.")
 
-        json_header_value = json.loads(header_decoded_content)
-        return Response(data=json_header_value)
+        response_data["x_rh_identity"] = json.loads(header_decoded_content)
+
+        # Get client IP headers
+        response_data["client_ip_headers"] = {
+            "true_client_ip": request.headers.get("True-Client-IP"),
+            "x_forwarded_for": request.headers.get("X-Forwarded-For"),
+            "x_real_ip": request.headers.get("X-Real-IP"),
+            "remote_addr": request.META.get("REMOTE_ADDR"),
+        }
+
+        # Get other useful headers
+        response_data["other_headers"] = {
+            "x_rh_edge_host": request.headers.get("X-RH-EDGE-HOST"),
+            "user_agent": request.headers.get("User-Agent"),
+            "host": request.headers.get("Host"),
+        }
+
+        return Response(data=response_data)
 
 
 @extend_schema_view(
@@ -212,11 +235,8 @@ class TaskIngestionDispatcherView(APIView):
         timeout = timedelta(seconds=timeout)
 
         while datetime.now() < start_time + timeout:
-            dispatch(
-                'pulp_service.app.tasks.util.no_op_task',
-                exclusive_resources=[str(uuid4())]
-            )
-                
+            dispatch("pulp_service.app.tasks.util.no_op_task", exclusive_resources=[str(uuid4())])
+
             task_count = task_count + 1
 
         return Response({"tasks_executed": task_count})
@@ -230,7 +250,6 @@ class TaskIngestionRandomResourceLockDispatcherView(APIView):
         if not settings.TEST_TASK_INGESTION:
             raise PermissionError("Access denied.")
 
-
         exclusive_resources_list = [str(uuid4()) for _ in range(3)]
 
         task_count = 0
@@ -239,10 +258,10 @@ class TaskIngestionRandomResourceLockDispatcherView(APIView):
 
         while datetime.now() < start_time + timeout:
             dispatch(
-                'pulp_service.app.tasks.util.no_op_task',
-                exclusive_resources=[random.choice(exclusive_resources_list)]
+                "pulp_service.app.tasks.util.no_op_task",
+                exclusive_resources=[random.choice(exclusive_resources_list)],
             )
-                
+
             task_count = task_count + 1
 
         return Response({"tasks_executed": task_count})
@@ -298,29 +317,29 @@ class RDSConnectionTestDispatcherView(APIView):
             return Response(
                 {
                     "error": "RDS connection tests are not enabled.",
-                    "hint": "Set RDS_CONNECTION_TESTS_ENABLED=True in settings or enable DEBUG mode."
+                    "hint": "Set RDS_CONNECTION_TESTS_ENABLED=True in settings or enable DEBUG mode.",
                 },
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        tests = request.data.get('tests', [])
-        run_sequentially = request.data.get('run_sequentially', False)
-        duration_minutes = request.data.get('duration_minutes', 50)
+        tests = request.data.get("tests", [])
+        run_sequentially = request.data.get("run_sequentially", False)
+        duration_minutes = request.data.get("duration_minutes", 50)
 
         # Validate duration
         if not isinstance(duration_minutes, int) or duration_minutes < 1 or duration_minutes > 300:
             return Response(
                 {
                     "error": "Invalid duration_minutes. Must be an integer between 1 and 300 (5 hours).",
-                    "provided": duration_minutes
+                    "provided": duration_minutes,
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not tests:
             return Response(
                 {"error": "No tests specified. Provide a list of test names."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Validate test names
@@ -328,21 +347,22 @@ class RDSConnectionTestDispatcherView(APIView):
             return Response(
                 {
                     "error": f"Invalid test names: {invalid_tests}",
-                    "available_tests": list(self.AVAILABLE_TESTS.keys())
+                    "available_tests": list(self.AVAILABLE_TESTS.keys()),
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         dispatched_tasks = []
 
         # Check if domain support is enabled
-        domain_enabled = getattr(settings, 'DOMAIN_ENABLED', False)
+        domain_enabled = getattr(settings, "DOMAIN_ENABLED", False)
 
         # For sequential execution, use a shared lock resource
         # This forces tasks to run one at a time
         sequential_lock = []
         if run_sequentially:
             from uuid import uuid4
+
             sequential_lock = [f"rds-test-sequential-{uuid4()}"]
 
         for test_name in tests:
@@ -352,7 +372,7 @@ class RDSConnectionTestDispatcherView(APIView):
             task = dispatch(
                 task_func,
                 exclusive_resources=sequential_lock,  # Empty list for parallel, shared lock for sequential
-                kwargs={'duration_minutes': duration_minutes}
+                kwargs={"duration_minutes": duration_minutes},
             )
 
             # Get task ID - use current_id() if available, fallback to pk
@@ -361,25 +381,30 @@ class RDSConnectionTestDispatcherView(APIView):
             # Build task href based on domain support
             if domain_enabled:
                 # Domain-aware path: /pulp/{domain}/api/v3/tasks/{task_id}/
-                domain_name = getattr(task.pulp_domain, 'name', 'default')
+                domain_name = getattr(task.pulp_domain, "name", "default")
                 task_href = f"/pulp/{domain_name}/api/v3/tasks/{task_id}/"
             else:
                 # Standard path: /pulp/api/v3/tasks/{task_id}/
                 task_href = f"/pulp/api/v3/tasks/{task_id}/"
 
-            dispatched_tasks.append({
-                "test_name": test_name,
-                "task_id": str(task_id),
-                "task_href": task_href,
-            })
+            dispatched_tasks.append(
+                {
+                    "test_name": test_name,
+                    "task_id": str(task_id),
+                    "task_href": task_href,
+                }
+            )
 
-        return Response({
-            "message": f"Dispatched {len(dispatched_tasks)} test(s)",
-            "tasks": dispatched_tasks,
-            "run_sequentially": run_sequentially,
-            "duration_minutes": duration_minutes,
-            "note": f"Each test runs for approximately {duration_minutes} minutes. Monitor task status via task_href."
-        }, status=status.HTTP_202_ACCEPTED)
+        return Response(
+            {
+                "message": f"Dispatched {len(dispatched_tasks)} test(s)",
+                "tasks": dispatched_tasks,
+                "run_sequentially": run_sequentially,
+                "duration_minutes": duration_minutes,
+                "note": f"Each test runs for approximately {duration_minutes} minutes. Monitor task status via task_href.",
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     def get(self, request):
         """
@@ -387,28 +412,30 @@ class RDSConnectionTestDispatcherView(APIView):
 
         This endpoint is always accessible for documentation purposes.
         """
-        return Response({
-            "available_tests": list(self.AVAILABLE_TESTS.keys()),
-            "descriptions": {
-                "test_1_idle_connection": "Idle connection test - baseline timeout test",
-                "test_2_active_heartbeat": "Active heartbeat test - periodic queries",
-                "test_3_long_transaction": "Long transaction test - idle transaction",
-                "test_4_transaction_with_work": "Transaction with work test - active transaction",
-                "test_5_session_variable": "Session variable test - connection pinning via SET",
-                "test_6_listen_notify": "LISTEN/NOTIFY test - CRITICAL: real worker behavior",
-                "test_7_listen_with_activity": "LISTEN with activity test - periodic notifications",
-            },
-            "usage": {
-                "endpoint": "/api/pulp/rds-connection-tests/",
-                "method": "POST",
-                "body": {
-                    "tests": ["test_1_idle_connection", "test_2_active_heartbeat"],
-                    "run_sequentially": False,
-                    "duration_minutes": 50
+        return Response(
+            {
+                "available_tests": list(self.AVAILABLE_TESTS.keys()),
+                "descriptions": {
+                    "test_1_idle_connection": "Idle connection test - baseline timeout test",
+                    "test_2_active_heartbeat": "Active heartbeat test - periodic queries",
+                    "test_3_long_transaction": "Long transaction test - idle transaction",
+                    "test_4_transaction_with_work": "Transaction with work test - active transaction",
+                    "test_5_session_variable": "Session variable test - connection pinning via SET",
+                    "test_6_listen_notify": "LISTEN/NOTIFY test - CRITICAL: real worker behavior",
+                    "test_7_listen_with_activity": "LISTEN with activity test - periodic notifications",
                 },
-                "note": "duration_minutes is optional (default: 50, min: 1, max: 300)"
+                "usage": {
+                    "endpoint": "/api/pulp/rds-connection-tests/",
+                    "method": "POST",
+                    "body": {
+                        "tests": ["test_1_idle_connection", "test_2_active_heartbeat"],
+                        "run_sequentially": False,
+                        "duration_minutes": 50,
+                    },
+                    "note": "duration_minutes is optional (default: 50, min: 1, max: 300)",
+                },
             }
-        })
+        )
 
 
 class DatabaseTriggersView(APIView):
@@ -427,7 +454,8 @@ class DatabaseTriggersView(APIView):
         from django.db import connection
 
         with connection.cursor() as cursor:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT
                     t.tgname AS trigger_name,
                     c.relname AS table_name,
@@ -455,7 +483,8 @@ class DatabaseTriggersView(APIView):
                 WHERE c.relname = 'core_task'
                 AND t.tgisinternal = false
                 ORDER BY t.tgname;
-            """)
+            """
+            )
 
             columns = [col[0] for col in cursor.description]
             triggers = []
@@ -463,11 +492,9 @@ class DatabaseTriggersView(APIView):
                 trigger_info = dict(zip(columns, row))
                 triggers.append(trigger_info)
 
-        return Response({
-            "table": "core_task",
-            "trigger_count": len(triggers),
-            "triggers": triggers
-        })
+        return Response(
+            {"table": "core_task", "trigger_count": len(triggers), "triggers": triggers}
+        )
 
 
 class ReleaseTaskLocksView(APIView):
@@ -499,18 +526,18 @@ class ReleaseTaskLocksView(APIView):
             return Response(
                 {
                     "error": "This endpoint only works with Redis workers.",
-                    "worker_type": settings.WORKER_TYPE
+                    "worker_type": settings.WORKER_TYPE,
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Get task_id from query parameters
-        task_id = request.GET.get('task_id')
+        task_id = request.GET.get("task_id")
 
         if not task_id:
             return Response(
                 {"error": "Missing required query parameter: task_id"},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -523,16 +550,15 @@ class ReleaseTaskLocksView(APIView):
             if not redis_conn:
                 return Response(
                     {"error": "Redis connection not available"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
             # Look up the task
             try:
-                task = Task.objects.select_related('pulp_domain').get(pk=task_id)
+                task = Task.objects.select_related("pulp_domain").get(pk=task_id)
             except Task.DoesNotExist:
                 return Response(
-                    {"error": f"Task {task_id} not found"},
-                    status=status.HTTP_404_NOT_FOUND
+                    {"error": f"Task {task_id} not found"}, status=status.HTTP_404_NOT_FOUND
                 )
 
             # Extract exclusive and shared resources from the task
@@ -552,7 +578,7 @@ class ReleaseTaskLocksView(APIView):
             task_lock_key = f"task:{task_id}"
             task_lock_holder = redis_conn.get(task_lock_key)
             if task_lock_holder:
-                task_lock_holder = task_lock_holder.decode('utf-8')
+                task_lock_holder = task_lock_holder.decode("utf-8")
 
             # Delete exclusive resource locks directly (no ownership check)
             exclusive_locks_deleted = 0
@@ -573,28 +599,27 @@ class ReleaseTaskLocksView(APIView):
             # Delete the task lock
             task_lock_deleted = redis_conn.delete(task_lock_key)
 
-            return Response({
-                "message": "Successfully released locks for task",
-                "task_id": str(task_id),
-                "task_state": task.state,
-                "task_lock_holder": task_lock_holder,
-                "task_lock_deleted": bool(task_lock_deleted),
-                "exclusive_resources": exclusive_resources,
-                "exclusive_resources_count": len(exclusive_resources),
-                "exclusive_locks_deleted": exclusive_locks_deleted,
-                "shared_resources": shared_resources,
-                "shared_resources_count": len(shared_resources),
-                "shared_locks_deleted": shared_locks_deleted
-            })
+            return Response(
+                {
+                    "message": "Successfully released locks for task",
+                    "task_id": str(task_id),
+                    "task_state": task.state,
+                    "task_lock_holder": task_lock_holder,
+                    "task_lock_deleted": bool(task_lock_deleted),
+                    "exclusive_resources": exclusive_resources,
+                    "exclusive_resources_count": len(exclusive_resources),
+                    "exclusive_locks_deleted": exclusive_locks_deleted,
+                    "shared_resources": shared_resources,
+                    "shared_resources_count": len(shared_resources),
+                    "shared_locks_deleted": shared_locks_deleted,
+                }
+            )
 
         except Exception as e:
             _logger.exception(f"Error releasing locks for task {task_id}")
             return Response(
-                {
-                    "error": "Failed to release locks",
-                    "detail": str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"error": "Failed to release locks", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -616,21 +641,22 @@ class CreateDomainView(APIView):
         Self-service endpoint to create a new domain.
         This endpoint uses the model domain's storage settings and class,
         """
-        
+
         # Check if user has a group, create one if not
         user = request.user
-        domain_name = request.data.get('name')
-        
+        domain_name = request.data.get("name")
+
         if not domain_name:
             return Response(
-                {"error": "Domain name is required."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Domain name is required."}, status=status.HTTP_400_BAD_REQUEST
             )
-                
+
         if not user.groups.exists():
             # User has no groups, create one with a unique name or reuse existing
             group_name = f"domain-{domain_name}"
-            _logger.info(f"User {user.username} has no groups. Creating or finding group '{group_name}' for domain creation.")
+            _logger.info(
+                f"User {user.username} has no groups. Creating or finding group '{group_name}' for domain creation."
+            )
             try:
                 # Use get_or_create to avoid duplicate group name issues
                 group, created = Group.objects.get_or_create(name=group_name)
@@ -638,7 +664,7 @@ class CreateDomainView(APIView):
                     _logger.info(f"Created new group '{group_name}'.")
                 else:
                     _logger.info(f"Reusing existing group '{group_name}'.")
-                
+
                 # Add user to the group
                 user.groups.add(group)
                 _logger.info(f"Added user {user.username} to group '{group_name}'.")
@@ -646,34 +672,36 @@ class CreateDomainView(APIView):
                 _logger.error(f"Failed to create or assign group '{group_name}': {e}")
                 return Response(
                     {"error": f"Failed to create group for domain: {str(e)}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
         else:
             _logger.info(f"User {user.username} already belongs to a group.")
-        
+
         # Prepare data with defaults from default domain if needed
         data = request.data.copy()
-        
+
         # Always get storage settings from model domain (ignore user input)
         try:
-            model_domain = Domain.objects.get(name='template-domain-s3')
-            data['storage_settings'] = model_domain.storage_settings
-            data['storage_class'] = model_domain.storage_class
-            data['pulp_labels'] = model_domain.pulp_labels
+            model_domain = Domain.objects.get(name="template-domain-s3")
+            data["storage_settings"] = model_domain.storage_settings
+            data["storage_class"] = model_domain.storage_class
+            data["pulp_labels"] = model_domain.pulp_labels
         except Domain.DoesNotExist:
             _logger.error("Model domain 'template-domain-s3' not found")
             return Response(
-                {"error": "Model domain 'template-domain-s3' not found. Please create it first with correct storage settings."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {
+                    "error": "Model domain 'template-domain-s3' not found. Please create it first with correct storage settings."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
         serializer = DomainSerializer(data=data)
         serializer.is_valid(raise_exception=True)
-                
+
         # Perform the creation with validated data
         with transaction.atomic():
             domain = serializer.save()
-            
-        response_data = DomainSerializer(domain, context={'request': request}).data
-        
+
+        response_data = DomainSerializer(domain, context={"request": request}).data
+
         return Response(response_data, status=status.HTTP_201_CREATED)
