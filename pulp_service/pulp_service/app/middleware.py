@@ -1,4 +1,5 @@
 import cProfile
+import ipaddress
 import logging
 import marshal
 import tempfile
@@ -25,6 +26,19 @@ repository_name_var = ContextVar('repository_name')
 x_quay_auth_var = ContextVar('x_quay_auth')
 x_task_diagnostics_var = ContextVar('x_profile_task')
 request_path_var = ContextVar('request_path', default=None)
+
+
+def _is_valid_ip(ip_str):
+    """
+    Validate that a string is a valid IPv4 or IPv6 address.
+
+    Returns True if valid, False otherwise.
+    """
+    try:
+        ipaddress.ip_address(ip_str.strip())
+        return True
+    except ValueError:
+        return False
 
 
 class ProfilerMiddleware(MiddlewareMixin):
@@ -80,17 +94,19 @@ class TrueClientIPMiddleware(MiddlewareMixin):
     Akamai CDN sends the original client IP in True-Client-IP header.
     This middleware adds it to the beginning of X-Forwarded-For chain
     so it appears in access logs without changing the log format.
+
+    Validates True-Client-IP is a valid IP address before using it.
     """
     def process_view(self, request, *args, **kwargs):
         true_client_ip = request.META.get("HTTP_TRUE_CLIENT_IP")
-        if true_client_ip:
+        if true_client_ip and _is_valid_ip(true_client_ip):
             x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
             if x_forwarded_for:
                 # Prepend True-Client-IP to existing X-Forwarded-For chain
-                request.META["HTTP_X_FORWARDED_FOR"] = f"{true_client_ip}, {x_forwarded_for}"
+                request.META["HTTP_X_FORWARDED_FOR"] = f"{true_client_ip.strip()}, {x_forwarded_for}"
             else:
                 # Set X-Forwarded-For to True-Client-IP if it doesn't exist
-                request.META["HTTP_X_FORWARDED_FOR"] = true_client_ip
+                request.META["HTTP_X_FORWARDED_FOR"] = true_client_ip.strip()
 
 
 class RhEdgeHostMiddleware(MiddlewareMixin):
