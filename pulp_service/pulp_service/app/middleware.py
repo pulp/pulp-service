@@ -73,6 +73,26 @@ class ProfilerMiddleware(MiddlewareMixin):
         return response
 
 
+class TrueClientIPMiddleware(MiddlewareMixin):
+    """
+    Prepends True-Client-IP header value to X-Forwarded-For for logging.
+
+    Akamai CDN sends the original client IP in True-Client-IP header.
+    This middleware adds it to the beginning of X-Forwarded-For chain
+    so it appears in access logs without changing the log format.
+    """
+    def process_view(self, request, *args, **kwargs):
+        true_client_ip = request.META.get("HTTP_TRUE_CLIENT_IP")
+        if true_client_ip:
+            x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+            if x_forwarded_for:
+                # Prepend True-Client-IP to existing X-Forwarded-For chain
+                request.META["HTTP_X_FORWARDED_FOR"] = f"{true_client_ip}, {x_forwarded_for}"
+            else:
+                # Set X-Forwarded-For to True-Client-IP if it doesn't exist
+                request.META["HTTP_X_FORWARDED_FOR"] = true_client_ip
+
+
 class RhEdgeHostMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
         if "HTTP_X_RH_EDGE_HOST" in request.META and request.META["HTTP_X_RH_EDGE_HOST"] is not None:
