@@ -95,7 +95,7 @@ def test_authentication_with_only_username(
     gen_object_with_cleanup,
     cleanup_auth_headers,
 ):
-    """Test that requests with only username in x-rh-identity header work."""
+    """Test that requests with only username (no org_id) in x-rh-identity header return 401."""
     only_username = {"identity": {"user": {"username": "anotheruser"}}}
 
     with anonymous_user:
@@ -104,29 +104,16 @@ def test_authentication_with_only_username(
 
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
 
-        domain_name = str(uuid4())
-        domain = gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
-
-        assert domain is not None
-        assert domain.name == domain_name
-
-        # Create a repository in the domain to verify permissions work
-        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
-            auth_header
-        )
-
-        repo = gen_object_with_cleanup(
-            python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
-        )
-
-        assert repo is not None
+        with pytest.raises(pulpcore_bindings.ApiException) as exp:
+            gen_object_with_cleanup(
+                pulpcore_bindings.DomainsApi,
+                {
+                    "name": str(uuid4()),
+                    "storage_class": "pulpcore.app.models.storage.FileSystem",
+                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+                },
+            )
+        assert exp.value.status == 401
 
 
 def test_get_requests_without_auth_to_simple_api(
@@ -139,7 +126,7 @@ def test_get_requests_without_auth_to_simple_api(
     """Test that all domains allow GET requests without authentication but block other methods."""
     # Create a user with credentials to set up the domain
     setup_user = {
-        "identity": {"internal": {"org_id": 33333}, "user": {"username": "publicdomainuser"}}
+        "identity": {"org_id": 33333, "internal": {"org_id": 33333}, "user": {"username": "publicdomainuser"}}
     }
 
     with anonymous_user:
@@ -237,7 +224,7 @@ def test_public_domain_allows_unauthenticated_get(
     """Test that domains with 'public-' in the name allow GET requests without authentication
     on the standard API, while non-public domains block unauthenticated GET requests."""
     setup_user = {
-        "identity": {"internal": {"org_id": 44444}, "user": {"username": "publicdomaintestuser"}}
+        "identity": {"org_id": 44444, "internal": {"org_id": 44444}, "user": {"username": "publicdomaintestuser"}}
     }
 
     with anonymous_user:

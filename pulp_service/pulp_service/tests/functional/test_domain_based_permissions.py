@@ -9,6 +9,7 @@ def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_u
 
     user1_orgid1 = {
         "identity": {
+            "org_id": 1,
             "internal": {
                 "org_id": 1
             },
@@ -20,6 +21,7 @@ def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_u
 
     user2_orgid1 = {
         "identity": {
+            "org_id": 1,
             "internal": {
                 "org_id": 1
             },
@@ -82,6 +84,7 @@ def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user):
 
     user1_orgid1 = {
         "identity": {
+            "org_id": 1,
             "internal": {
                 "org_id": 1
             },
@@ -115,6 +118,7 @@ def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user):
 def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_object_with_cleanup, monitor_task):
     user1_orgid1 = {
         "identity": {
+            "org_id": 1,
             "internal": {
                 "org_id": 1
             },
@@ -126,6 +130,7 @@ def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_ob
 
     user2_orgid2 = {
         "identity": {
+            "org_id": 2,
             "internal": {
                 "org_id": 2
             },
@@ -211,6 +216,7 @@ def test_operations_using_basic_auth(pulpcore_bindings, file_bindings, gen_user,
 def test_user_permissions_without_orgId(pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup, monitor_task):
     user1 = {
         "identity": {
+            "org_id": 1,
             "user": {
                 "username": "user1"
             },
@@ -260,6 +266,7 @@ def test_admin_user_with_header_auth(pulpcore_bindings, file_bindings, bindings_
 
     admin = {
         "identity": {
+            "org_id": 1,
             "user": {
                 "username": username
             },
