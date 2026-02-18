@@ -976,7 +976,7 @@ objects:
               # Use the hour being exported (1 hour ago) for the filename
               # Format: pulp-access-logs-YYYYMMDDTHHMMSSZ.parquet
               TIMESTAMP=$(date -u -d '1 hour ago' '+%Y%m%dT%H0000Z')
-              OUTPUT_PATH="${S3_BUCKET_NAME}/pypi-logs/pulp-access-logs-${TIMESTAMP}.parquet"
+              OUTPUT_PATH="${S3_BUCKET_PATH}/pulp-access-logs-${TIMESTAMP}.parquet"
 
               pip install --index-url ${PULP_PYPI_URL}/simple/ \
                 pulp-access-logs-exporter && \
@@ -986,6 +986,7 @@ objects:
                 --end-time "15 minutes ago" \
                 --output-path "${OUTPUT_PATH}" \
                 --aws-region ${AWS_REGION} \
+                ${S3_REGION:+--s3-region "${S3_REGION}"} \
                 ${S3_ACCESS_KEY_ID:+--s3-access-key-id "${S3_ACCESS_KEY_ID}"} \
                 ${S3_SECRET_ACCESS_KEY:+--s3-secret-access-key "${S3_SECRET_ACCESS_KEY}"} \
                 ${S3_SESSION_TOKEN:+--s3-session-token "${S3_SESSION_TOKEN}"}
@@ -994,8 +995,13 @@ objects:
               value: "us-east-1"
             - name: CLOUDWATCH_LOG_GROUP
               value: "${CLOUDWATCH_LOG_GROUP}"
-            - name: S3_BUCKET_NAME
-              value: "${S3_BUCKET_NAME}"
+            - name: S3_BUCKET_PATH
+              # Full S3 path including bucket and prefix
+              # Example: s3://dataverse-sandbox-snowpipe/source-sandbox-pulp/data
+              value: "${S3_BUCKET_PATH}"
+            - name: S3_REGION
+              # S3 bucket region (may differ from AWS_REGION for cross-region buckets)
+              value: "${S3_REGION}"
             - name: PULP_PYPI_URL
               value: "${PULP_PYPI_URL}"
             # CloudWatch credentials (for logs:StartQuery)
