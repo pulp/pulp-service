@@ -1000,19 +1000,19 @@ objects:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: cloudwatch-pulp-service-stage-read-only
+                  name: cloudwatch-pulp-log-access-read-only
                   key: aws_access_key_id
                   optional: false
             - name: AWS_REGION
               valueFrom:
                 secretKeyRef:
-                  name: cloudwatch-pulp-service-stage-read-only
+                  name: cloudwatch-pulp-log-access-read-only
                   key: aws_region
                   optional: false
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: cloudwatch-pulp-service-stage-read-only
+                  name: cloudwatch-pulp-log-access-read-only
                   key: aws_secret_access_key
                   optional: false
             - name: AWS_REGION
@@ -1020,7 +1020,7 @@ objects:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: cloudwatch-pulp-service-stage-read-only
+                  name: cloudwatch-pulp-log-access-read-only
                   key: aws_access_key_id
                   optional: false
 
