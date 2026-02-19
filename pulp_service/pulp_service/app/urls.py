@@ -14,6 +14,7 @@ from .viewsets import (
     TaskIngestionDispatcherView,
     TaskIngestionRandomResourceLockDispatcherView,
 )
+from pulp_container.app.registry_api import VersionView
 
 
 urlpatterns = [
@@ -30,4 +31,5 @@ urlpatterns = [
     path("api/pulp/test/random_lock_tasks/", TaskIngestionRandomResourceLockDispatcherView.as_view()),
     path("api/pulp/rds-connection-tests/", RDSConnectionTestDispatcherView.as_view()),
     path("api/pulp/create-domain/", CreateDomainView.as_view()),
+    path("api/pulp/container/v2/", VersionView.as_view()),
 ]
