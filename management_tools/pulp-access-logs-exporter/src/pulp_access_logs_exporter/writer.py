@@ -1,5 +1,9 @@
 """Parquet file writing to local filesystem or S3."""
 
+import os
+import tempfile
+from typing import Optional
+
 import pyarrow as pa
 import structlog
 
@@ -21,9 +25,38 @@ SCHEMA = pa.schema([
 ])
 
 
-def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None, region: str = None):
+def _make_s3_client(credentials: Optional[dict], region: Optional[str]):
+    """Create a boto3 S3 client with explicit or ambient credentials."""
+    import boto3
+    if credentials:
+        return boto3.client(
+            's3',
+            aws_access_key_id=credentials['access_key'],
+            aws_secret_access_key=credentials['secret_key'],
+            aws_session_token=credentials.get('session_token'),
+            region_name=region,
+        )
+    return boto3.client('s3', region_name=region)
+
+
+def _upload_to_s3(tmp_path: str, s3_uri: str, credentials: Optional[dict], region: Optional[str]) -> None:
+    """Upload a local file to an S3 URI."""
+    bucket, key = s3_uri[5:].split('/', 1)
+    s3_client = _make_s3_client(credentials, region)
+    log.info("uploading to s3", bucket=bucket, key=key)
+    s3_client.upload_file(tmp_path, bucket, key)
+    log.info("upload complete", bucket=bucket, key=key)
+
+
+def write_parquet(
+    table: pa.Table,
+    destinations: list,
+) -> None:
     """
-    Write PyArrow Table to Parquet file.
+    Write PyArrow Table to Parquet and upload to one or more destinations.
+
+    The Parquet file is generated once to a temporary file, then uploaded
+    to each destination. Temporary file is always cleaned up on exit.
 
     Schema includes:
       - timestamp: timestamp[ns]
@@ -39,71 +72,39 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
 
     Args:
         table: PyArrow Table with log data
-        output_path: Local file path or S3 URI (s3://bucket/key)
-        s3_credentials: Optional dict with S3 credentials:
-            - access_key: AWS access key ID
-            - secret_key: AWS secret access key
-            - session_token: AWS session token (optional)
-        region: AWS region for S3 bucket (optional)
+        destinations: List of dicts, each with:
+            - path: Local file path or S3 URI (s3://bucket/key)
+            - credentials: Optional dict with access_key, secret_key, session_token
+            - region: Optional AWS region string
     """
     import pyarrow.parquet as pq
-    import os
-    import tempfile
 
-    if output_path.startswith('s3://'):
-        # Write to temporary file, then upload to S3
-        log.info("writing to s3", output=output_path)
+    s3_destinations = [d for d in destinations if d['path'].startswith('s3://')]
+    local_destinations = [d for d in destinations if not d['path'].startswith('s3://')]
 
-        # Create temporary file
+    # Handle S3 destinations: generate temp file once, upload to each
+    if s3_destinations:
         with tempfile.NamedTemporaryFile(mode='wb', suffix='.parquet', delete=False) as tmp_file:
             tmp_path = tmp_file.name
 
         try:
-            # Write Parquet to temporary file
             pq.write_table(table, tmp_path, compression='snappy')
-
             file_size_kb = os.path.getsize(tmp_path) / 1024
-            log.info("parquet file generated", size_kb=round(file_size_kb, 2))
+            log.info("parquet file generated", size_kb=round(file_size_kb, 2), records=len(table))
 
-            # Upload to S3 using boto3
-            import boto3
-
-            # Parse S3 URI
-            s3_path = output_path[5:]  # Remove 's3://'
-            bucket, key = s3_path.split('/', 1)
-
-            # Create S3 client with explicit credentials if provided
-            if s3_credentials:
-                s3_client = boto3.client(
-                    's3',
-                    aws_access_key_id=s3_credentials['access_key'],
-                    aws_secret_access_key=s3_credentials['secret_key'],
-                    aws_session_token=s3_credentials.get('session_token'),
-                    region_name=region,
-                )
-            else:
-                # Use default credentials
-                s3_client = boto3.client('s3', region_name=region)
-
-            log.info("uploading to s3", bucket=bucket, key=key)
-            s3_client.upload_file(tmp_path, bucket, key)
-
-            log.info("upload complete", records=len(table))
+            for dest in s3_destinations:
+                _upload_to_s3(tmp_path, dest['path'], dest.get('credentials'), dest.get('region'))
         finally:
-            # Clean up temporary file
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
-    else:
-        # Local file
-        log.info("writing to local file", output=output_path)
 
-        # Ensure parent directory exists for local file paths
-        parent_dir = os.path.dirname(output_path)
+    # Handle local destinations
+    for dest in local_destinations:
+        path = dest['path']
+        log.info("writing to local file", output=path)
+        parent_dir = os.path.dirname(path)
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
-
-        pq.write_table(table, output_path, compression='snappy')
-
-        file_size_kb = os.path.getsize(output_path) / 1024
-        log.info("write complete", records=len(table), size_kb=round(file_size_kb, 2))
-
+        pq.write_table(table, path, compression='snappy')
+        file_size_kb = os.path.getsize(path) / 1024
+        log.info("write complete", output=path, records=len(table), size_kb=round(file_size_kb, 2))

@@ -32,15 +32,9 @@ def parse_args(args=None):
     )
 
     parser.add_argument(
-        "--output-path",
-        required=True,
-        help="Local file path or S3 URI (s3://bucket/key)",
-    )
-
-    parser.add_argument(
         "--aws-region",
         default="us-east-1",
-        help="AWS region (default: us-east-1)",
+        help="AWS region for CloudWatch (default: us-east-1)",
     )
 
     parser.add_argument(
@@ -55,24 +49,49 @@ def parse_args(args=None):
         help="Exclude these paths (default: /livez,/status)",
     )
 
+    # Primary output destination
     parser.add_argument(
-        "--s3-access-key-id",
-        help="AWS access key ID for S3 (if different from CloudWatch credentials)",
+        "--primary-output-path",
+        required=True,
+        help="Primary output path - local file or S3 URI (s3://bucket/key)",
+    )
+    parser.add_argument(
+        "--primary-s3-access-key-id",
+        help="AWS access key ID for primary S3 bucket",
+    )
+    parser.add_argument(
+        "--primary-s3-secret-access-key",
+        help="AWS secret access key for primary S3 bucket",
+    )
+    parser.add_argument(
+        "--primary-s3-session-token",
+        help="AWS session token for primary S3 bucket (optional)",
+    )
+    parser.add_argument(
+        "--primary-s3-region",
+        help="AWS region for primary S3 bucket",
     )
 
+    # Secondary output destination (optional)
     parser.add_argument(
-        "--s3-secret-access-key",
-        help="AWS secret access key for S3 (if different from CloudWatch credentials)",
+        "--secondary-output-path",
+        help="Secondary output path - local file or S3 URI (s3://bucket/key)",
     )
-
     parser.add_argument(
-        "--s3-session-token",
-        help="AWS session token for S3 (if using temporary credentials)",
+        "--secondary-s3-access-key-id",
+        help="AWS access key ID for secondary S3 bucket",
     )
-
     parser.add_argument(
-        "--s3-region",
-        help="AWS region for S3 bucket (defaults to --aws-region if not specified)",
+        "--secondary-s3-secret-access-key",
+        help="AWS secret access key for secondary S3 bucket",
+    )
+    parser.add_argument(
+        "--secondary-s3-session-token",
+        help="AWS session token for secondary S3 bucket (optional)",
+    )
+    parser.add_argument(
+        "--secondary-s3-region",
+        help="AWS region for secondary S3 bucket",
     )
 
     return parser.parse_args(args)
@@ -185,23 +204,41 @@ def main():
     table = convert_to_arrow_table(results)
     log.info("converted to arrow table", schema=str(table.schema))
 
-    # 5. Write Parquet file
-    log.info("writing parquet file", output=args.output_path)
+    # 5. Write Parquet file(s)
+    # Build list of destinations, each with its own credentials
+    def _credentials(key_id, secret_key, session_token):
+        if key_id and secret_key:
+            creds = {'access_key': key_id, 'secret_key': secret_key}
+            if session_token:
+                creds['session_token'] = session_token
+            return creds
+        return None
 
-    # Pass S3 credentials if provided
-    s3_credentials = None
-    if args.s3_access_key_id and args.s3_secret_access_key:
-        s3_credentials = {
-            'access_key': args.s3_access_key_id,
-            'secret_key': args.s3_secret_access_key,
+    destinations = [
+        {
+            'path': args.primary_output_path,
+            'credentials': _credentials(
+                args.primary_s3_access_key_id,
+                args.primary_s3_secret_access_key,
+                args.primary_s3_session_token,
+            ),
+            'region': args.primary_s3_region,
         }
-        if args.s3_session_token:
-            s3_credentials['session_token'] = args.s3_session_token
+    ]
 
-    # Determine S3 region (use s3_region if specified, otherwise fall back to aws_region)
-    s3_region = args.s3_region or args.aws_region
+    if args.secondary_output_path:
+        destinations.append({
+            'path': args.secondary_output_path,
+            'credentials': _credentials(
+                args.secondary_s3_access_key_id,
+                args.secondary_s3_secret_access_key,
+                args.secondary_s3_session_token,
+            ),
+            'region': args.secondary_s3_region,
+        })
 
-    write_parquet(table, args.output_path, s3_credentials=s3_credentials, region=s3_region)
+    log.info("writing parquet file", destinations=[d['path'] for d in destinations])
+    write_parquet(table, destinations)
 
     # 6. Log final statistics
     elapsed = time_module.time() - start_time
@@ -209,7 +246,7 @@ def main():
         "export complete",
         records=len(table),
         elapsed_seconds=round(elapsed, 2),
-        output=args.output_path,
+        destinations=[d['path'] for d in destinations],
     )
 
     return 0
