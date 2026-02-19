@@ -1,6 +1,9 @@
 """Parquet file writing to local filesystem or S3."""
 
 import pyarrow as pa
+import structlog
+
+log = structlog.get_logger(__name__)
 
 
 # Parquet schema for access logs
@@ -49,7 +52,7 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
 
     if output_path.startswith('s3://'):
         # Write to temporary file, then upload to S3
-        print(f"Writing to S3: {output_path}")
+        log.info("writing to s3", output=output_path)
 
         # Create temporary file
         with tempfile.NamedTemporaryFile(mode='wb', suffix='.parquet', delete=False) as tmp_file:
@@ -59,10 +62,8 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
             # Write Parquet to temporary file
             pq.write_table(table, tmp_path, compression='snappy')
 
-            # Get file size
-            file_size = os.path.getsize(tmp_path)
-            file_size_kb = file_size / 1024
-            print(f"  Generated Parquet file ({file_size_kb:.2f} KB)")
+            file_size_kb = os.path.getsize(tmp_path) / 1024
+            log.info("parquet file generated", size_kb=round(file_size_kb, 2))
 
             # Upload to S3 using boto3
             import boto3
@@ -84,18 +85,17 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
                 # Use default credentials
                 s3_client = boto3.client('s3', region_name=region)
 
-            # Upload file
-            print(f"  Uploading to s3://{bucket}/{key}...")
+            log.info("uploading to s3", bucket=bucket, key=key)
             s3_client.upload_file(tmp_path, bucket, key)
 
-            print(f"Successfully wrote {len(table)} records to S3")
+            log.info("upload complete", records=len(table))
         finally:
             # Clean up temporary file
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     else:
         # Local file
-        print(f"Writing to local file: {output_path}")
+        log.info("writing to local file", output=output_path)
 
         # Ensure parent directory exists for local file paths
         parent_dir = os.path.dirname(output_path)
@@ -104,8 +104,6 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
 
         pq.write_table(table, output_path, compression='snappy')
 
-        # Print file size
-        file_size = os.path.getsize(output_path)
-        file_size_kb = file_size / 1024
-        print(f"Successfully wrote {len(table)} records ({file_size_kb:.2f} KB)")
+        file_size_kb = os.path.getsize(output_path) / 1024
+        log.info("write complete", records=len(table), size_kb=round(file_size_kb, 2))
 

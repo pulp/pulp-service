@@ -127,6 +127,8 @@ def parse_time(time_str: str) -> datetime:
 def main():
     """Main entry point for CLI."""
     import time as time_module
+    import structlog
+    from pulp_access_logs_exporter.logging_config import setup_logging
     from pulp_access_logs_exporter.cloudwatch import (
         build_query,
         fetch_cloudwatch_logs,
@@ -134,32 +136,38 @@ def main():
     )
     from pulp_access_logs_exporter.writer import write_parquet
 
+    setup_logging()
+    log = structlog.get_logger()
+
     start_time = time_module.time()
     args = parse_args()
 
-    print("=" * 60)
-    print("Pulp Access Logs Exporter")
-    print("=" * 60)
+    log.info("starting export")
 
     # 1. Parse start/end times
-    print("\nParsing time range...")
     start_dt = parse_time(args.start_time)
     end_dt = parse_time(args.end_time)
-
-    print(f"  Start: {start_dt.isoformat()}")
-    print(f"  End:   {end_dt.isoformat()}")
-    print(f"  Duration: {end_dt - start_dt}")
+    log.info(
+        "time range parsed",
+        start=start_dt.isoformat(),
+        end=end_dt.isoformat(),
+        duration=str(end_dt - start_dt),
+    )
 
     # 2. Build CloudWatch Logs Insights query
-    print("\nBuilding CloudWatch Logs Insights query...")
     query = build_query(args.filter_paths, args.exclude_paths)
-    print(f"  Filter paths: {args.filter_paths}")
-    print(f"  Exclude paths: {args.exclude_paths}")
+    log.info(
+        "query built",
+        filter_paths=args.filter_paths,
+        exclude_paths=args.exclude_paths,
+    )
 
     # 3. Fetch logs from CloudWatch
-    print(f"\nQuerying CloudWatch Logs...")
-    print(f"  Log group: {args.cloudwatch_group}")
-    print(f"  Region: {args.aws_region}")
+    log.info(
+        "querying cloudwatch",
+        log_group=args.cloudwatch_group,
+        region=args.aws_region,
+    )
 
     results = fetch_cloudwatch_logs(
         log_group=args.cloudwatch_group,
@@ -170,17 +178,15 @@ def main():
     )
 
     if not results:
-        print("\nNo logs found in the specified time range.")
+        log.info("no logs found in the specified time range")
         return 0
 
     # 4. Convert to PyArrow Table
-    print("\nConverting to PyArrow Table...")
     table = convert_to_arrow_table(results)
-    print(f"  Schema: {table.schema}")
+    log.info("converted to arrow table", schema=str(table.schema))
 
     # 5. Write Parquet file
-    print("\nWriting Parquet file...")
-    print(f"  Output: {args.output_path}")
+    log.info("writing parquet file", output=args.output_path)
 
     # Pass S3 credentials if provided
     s3_credentials = None
@@ -197,14 +203,14 @@ def main():
 
     write_parquet(table, args.output_path, s3_credentials=s3_credentials, region=s3_region)
 
-    # 6. Print statistics
+    # 6. Log final statistics
     elapsed = time_module.time() - start_time
-    print("\n" + "=" * 60)
-    print("Export completed successfully!")
-    print("=" * 60)
-    print(f"  Records exported: {len(table)}")
-    print(f"  Time elapsed: {elapsed:.2f} seconds")
-    print("=" * 60)
+    log.info(
+        "export complete",
+        records=len(table),
+        elapsed_seconds=round(elapsed, 2),
+        output=args.output_path,
+    )
 
     return 0
 

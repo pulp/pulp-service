@@ -5,7 +5,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import boto3
 import pyarrow as pa
+import structlog
 from pulp_access_logs_exporter.writer import SCHEMA
+
+log = structlog.get_logger(__name__)
 
 
 def build_query(filter_paths: str = "/api/pypi/", exclude_paths: str = "/livez,/status") -> str:
@@ -98,7 +101,7 @@ def fetch_cloudwatch_logs(
     while current < end_dt:
         chunk_end = min(current + chunk_duration, end_dt)
 
-        print(f"Querying logs from {current.isoformat()} to {chunk_end.isoformat()}...")
+        log.info("querying chunk", start=current.isoformat(), end=chunk_end.isoformat())
 
         # Start async query
         response = logs_client.start_query(
@@ -136,7 +139,7 @@ def fetch_cloudwatch_logs(
 
         # Process results
         chunk_results = result['results']
-        print(f"  Retrieved {len(chunk_results)} records")
+        log.info("chunk retrieved", records=len(chunk_results))
 
         # Check if results were truncated
         stats = result.get('statistics', {})
@@ -144,7 +147,11 @@ def fetch_cloudwatch_logs(
         records_scanned = stats.get('recordsScanned', 0)
 
         if len(chunk_results) >= 10000:
-            print(f"  WARNING: Result set may be truncated (matched: {records_matched}, scanned: {records_scanned})")
+            log.warning(
+                "result set may be truncated",
+                matched=records_matched,
+                scanned=records_scanned,
+            )
 
         # Convert from CloudWatch format to dict
         for record in chunk_results:
@@ -153,7 +160,7 @@ def fetch_cloudwatch_logs(
 
         current = chunk_end
 
-    print(f"Total records retrieved: {len(all_results)}")
+    log.info("total records retrieved", total=len(all_results))
     return all_results
 
 
