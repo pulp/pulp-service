@@ -50,6 +50,31 @@ class RHTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
         return super().authenticate(request)
 
 
+class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
+    """
+    Authenticate users from Turnpike registry-auth X-RH-IDENTITY headers.
+
+    Turnpike passes credentials in a different identity format than the standard
+    RH identity header used by RHTermsBasedRegistryAuthentication:
+
+        {"identity": {"type": "Registry", "auth_type": "registry-auth",
+                      "registry": {"org_id": "...", "username": "..."}}}
+
+    Returns null for other identity formats, letting DRF fall through to
+    the next authentication class.
+    """
+
+    header = "HTTP_X_RH_IDENTITY"
+    jq_filter = (
+        'if (.identity.auth_type // empty) == "registry-auth" '
+        'then "\(.identity.registry.org_id)|\(.identity.registry.username)" '
+        'else null end'
+    )
+
+    def authenticate_header(self, request):
+        return "Bearer"
+
+
 class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
     """
     Authenticate users via SAML email from RH Identity header.
