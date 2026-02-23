@@ -50,6 +50,19 @@ class RHTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
         return super().authenticate(request)
 
 
+class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
+
+    header = "HTTP_X_RH_IDENTITY"
+    jq_filter = (
+        'if .identity.auth_type == "registry-auth" '
+        'then "\(.identity.registry.org_id)|\(.identity.registry.username)" '
+        'else null end'
+    )
+
+    def authenticate_header(self, request):
+        return "Bearer"
+
+
 class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
     """
     Authenticate users via SAML email from RH Identity header.
