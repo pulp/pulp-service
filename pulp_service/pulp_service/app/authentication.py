@@ -74,6 +74,28 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
     def authenticate_header(self, request):
         return "Bearer"
 
+    def authenticate(self, request):
+        if self.header not in request.META:
+            _logger.info(f"Header {self.header} not present in request")
+            return None
+
+        header_content = request.META.get(self.header)
+
+        try:
+            header_decoded_content = b64decode(header_content)
+            _logger.info(
+                f"[TurnpikeTermsBasedRegistryAuthentication] Decoded header content: "
+                f"{header_decoded_content.decode('utf-8')}"
+            )
+        except Base64DecodeError:
+            _logger.info(
+                "[TurnpikeTermsBasedRegistryAuthentication] "
+                "Access not allowed - Header content is not Base64 encoded."
+            )
+            raise AuthenticationFailed(_("Access denied."))
+
+        return super().authenticate(request)
+
 
 class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
     """
