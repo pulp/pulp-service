@@ -42,10 +42,15 @@ class UserExtractionMiddleware:
                     # SAML user
                     elif "associate" in identity and "email" in identity["associate"]:
                         username = identity["associate"]["email"]
+                    # Turnpike registry-auth
+                    elif "registry" in identity and "username" in identity["registry"]:
+                        username = identity["registry"]["username"]
 
                     # Org ID
                     if "org_id" in identity:
                         org_id = f"{identity['org_id']}"
+                    elif "registry" in identity and "org_id" in identity["registry"]:
+                        org_id = f"{identity['registry']['org_id']}"
 
                     if not username and not org_id:
                         log.warning(
