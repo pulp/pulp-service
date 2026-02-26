@@ -55,6 +55,7 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
                 access_key=s3_credentials['access_key'],
                 secret_key=s3_credentials['secret_key'],
                 session_token=s3_credentials.get('session_token'),
+                endpoint_override=s3_credentials.get('endpoint_url'),
             )
         else:
             # Use default credentials (from env vars or IAM role)
