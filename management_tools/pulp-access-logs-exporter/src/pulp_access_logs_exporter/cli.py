@@ -70,6 +70,11 @@ def parse_args(args=None):
         help="AWS session token for S3 (if using temporary credentials)",
     )
 
+    parser.add_argument(
+        "--s3-endpoint-url",
+        help="Custom S3 endpoint URL (e.g. for MinIO: http://minio-host:9000)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -180,6 +185,8 @@ def main():
         }
         if args.s3_session_token:
             s3_credentials['session_token'] = args.s3_session_token
+        if args.s3_endpoint_url:
+            s3_credentials['endpoint_url'] = args.s3_endpoint_url
 
     write_parquet(table, args.output_path, s3_credentials=s3_credentials)
 
