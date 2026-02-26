@@ -172,8 +172,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0044-Move-content-app-heartbeat-to-a-thread.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
 
-COPY images/assets/patches/0045-Log-all-request-headers-in-HeaderContentGuard.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0045-Log-all-request-headers-in-HeaderContentGuard.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
