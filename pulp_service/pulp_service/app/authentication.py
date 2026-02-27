@@ -94,6 +94,7 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
             )
             raise AuthenticationFailed(_("Access denied."))
 
+        _logger.info("[TurnpikeTermsBasedRegistryAuthentication] - x-rh-identity: %s", header_decoded_content)
         return super().authenticate(request)
 
 
