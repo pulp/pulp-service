@@ -51,12 +51,17 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
 
         # Create S3FileSystem with explicit credentials if provided
         if s3_credentials:
-            s3_fs = fs.S3FileSystem(
-                access_key=s3_credentials['access_key'],
-                secret_key=s3_credentials['secret_key'],
-                session_token=s3_credentials.get('session_token'),
-                endpoint_override=s3_credentials.get('endpoint_url'),
-            )
+            kwargs = {
+                'access_key': s3_credentials['access_key'],
+                'secret_key': s3_credentials['secret_key'],
+            }
+            if s3_credentials.get('session_token'):
+                kwargs['session_token'] = s3_credentials['session_token']
+            if s3_credentials.get('endpoint_url'):
+                kwargs['endpoint_override'] = s3_credentials['endpoint_url']
+            if s3_credentials.get('region'):
+                kwargs['region'] = s3_credentials['region']
+            s3_fs = fs.S3FileSystem(**kwargs)
         else:
             # Use default credentials (from env vars or IAM role)
             s3_fs = fs.S3FileSystem()
@@ -84,4 +89,45 @@ def write_parquet(table: pa.Table, output_path: str, s3_credentials: dict = None
         file_size = os.path.getsize(output_path)
         file_size_kb = file_size / 1024
         print(f"Successfully wrote {len(table)} records ({file_size_kb:.2f} KB)")
+
+
+def upload_file(source: str, destination: str, s3_credentials: dict = None):
+    """
+    Upload a local file to S3 using boto3.
+
+    Args:
+        source: Local file path
+        destination: S3 URI (s3://bucket/key)
+        s3_credentials: Optional dict with S3 credentials:
+            - access_key: AWS access key ID
+            - secret_key: AWS secret access key
+            - session_token: AWS session token (optional)
+            - endpoint_url: Custom S3 endpoint (optional, e.g. MinIO)
+            - region: AWS region (optional)
+    """
+    import boto3
+
+    if not destination.startswith('s3://'):
+        raise ValueError(f"Destination must be an S3 URI (s3://...): {destination}")
+
+    # Parse s3://bucket/key
+    s3_path = destination[5:]
+    bucket, _, key = s3_path.partition('/')
+
+    kwargs = {}
+    if s3_credentials:
+        kwargs['aws_access_key_id'] = s3_credentials['access_key']
+        kwargs['aws_secret_access_key'] = s3_credentials['secret_key']
+        if s3_credentials.get('session_token'):
+            kwargs['aws_session_token'] = s3_credentials['session_token']
+        if s3_credentials.get('region'):
+            kwargs['region_name'] = s3_credentials['region']
+        if s3_credentials.get('endpoint_url'):
+            kwargs['endpoint_url'] = s3_credentials['endpoint_url']
+
+    s3_client = boto3.client('s3', **kwargs)
+
+    print(f"Uploading {source} -> {destination}")
+    s3_client.upload_file(source, bucket, key)
+    print(f"Upload complete")
 
