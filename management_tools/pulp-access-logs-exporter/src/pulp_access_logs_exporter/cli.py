@@ -75,6 +75,11 @@ def parse_args(args=None):
         help="Custom S3 endpoint URL (e.g. for MinIO: http://minio-host:9000)",
     )
 
+    parser.add_argument(
+        "--s3-region",
+        help="AWS region for S3 (if different from --aws-region)",
+    )
+
     return parser.parse_args(args)
 
 
@@ -187,6 +192,8 @@ def main():
             s3_credentials['session_token'] = args.s3_session_token
         if args.s3_endpoint_url:
             s3_credentials['endpoint_url'] = args.s3_endpoint_url
+        if args.s3_region:
+            s3_credentials['region'] = args.s3_region
 
     write_parquet(table, args.output_path, s3_credentials=s3_credentials)
 
@@ -199,6 +206,75 @@ def main():
     print(f"  Time elapsed: {elapsed:.2f} seconds")
     print("=" * 60)
 
+    return 0
+
+
+def parse_upload_args(args=None):
+    """Parse command-line arguments for upload command."""
+    parser = argparse.ArgumentParser(
+        description="Upload a local Parquet file to S3"
+    )
+
+    parser.add_argument(
+        "--source",
+        required=True,
+        help="Local file path to upload",
+    )
+
+    parser.add_argument(
+        "--destination",
+        required=True,
+        help="S3 URI (s3://bucket/key)",
+    )
+
+    parser.add_argument(
+        "--s3-access-key-id",
+        help="AWS access key ID for S3",
+    )
+
+    parser.add_argument(
+        "--s3-secret-access-key",
+        help="AWS secret access key for S3",
+    )
+
+    parser.add_argument(
+        "--s3-session-token",
+        help="AWS session token for S3 (if using temporary credentials)",
+    )
+
+    parser.add_argument(
+        "--s3-endpoint-url",
+        help="Custom S3 endpoint URL (e.g. for MinIO: http://minio-host:9000)",
+    )
+
+    parser.add_argument(
+        "--s3-region",
+        help="AWS region for the S3 bucket",
+    )
+
+    return parser.parse_args(args)
+
+
+def upload_main():
+    """Main entry point for upload CLI."""
+    from pulp_access_logs_exporter.writer import upload_file
+
+    args = parse_upload_args()
+
+    s3_credentials = None
+    if args.s3_access_key_id and args.s3_secret_access_key:
+        s3_credentials = {
+            'access_key': args.s3_access_key_id,
+            'secret_key': args.s3_secret_access_key,
+        }
+        if args.s3_session_token:
+            s3_credentials['session_token'] = args.s3_session_token
+        if args.s3_endpoint_url:
+            s3_credentials['endpoint_url'] = args.s3_endpoint_url
+        if args.s3_region:
+            s3_credentials['region'] = args.s3_region
+
+    upload_file(args.source, args.destination, s3_credentials=s3_credentials)
     return 0
 
 
