@@ -963,6 +963,134 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
+      - name: export-access-logs-hourly
+        schedule: "15 * * * *"
+        restartPolicy: Never
+        concurrencyPolicy: Forbid
+        podSpec:
+          image: registry.access.redhat.com/ubi9/python-312:latest
+          command: ['/bin/bash', '-c']
+          args:
+            - |
+              # Generate CalVer filename with ISO 8601 timestamp
+              # Use the hour being exported (1 hour ago) for the filename
+              # Format: pulp-access-logs-YYYYMMDDTHHMMSSZ.parquet
+              TIMESTAMP=$(date -u -d '1 hour ago' '+%Y%m%dT%H0000Z')
+              PRIMARY_PATH="${PRIMARY_S3_BUCKET_PATH}/pulp-access-logs-${TIMESTAMP}.parquet"
+              SECONDARY_PATH="${SECONDARY_S3_BUCKET_PATH}/pulp-access-logs-${TIMESTAMP}.parquet"
+
+              pip install --index-url ${PULP_PYPI_URL}/simple/ \
+                pulp-access-logs-exporter && \
+              export-access-logs \
+                --cloudwatch-group ${CLOUDWATCH_LOG_GROUP} \
+                --start-time "1 hour ago" \
+                --end-time "15 minutes ago" \
+                --aws-region ${AWS_REGION} \
+                --primary-output-path "${PRIMARY_PATH}" \
+                ${PRIMARY_S3_REGION:+--primary-s3-region "${PRIMARY_S3_REGION}"} \
+                ${PRIMARY_S3_ACCESS_KEY_ID:+--primary-s3-access-key-id "${PRIMARY_S3_ACCESS_KEY_ID}"} \
+                ${PRIMARY_S3_SECRET_ACCESS_KEY:+--primary-s3-secret-access-key "${PRIMARY_S3_SECRET_ACCESS_KEY}"} \
+                ${PRIMARY_S3_SESSION_TOKEN:+--primary-s3-session-token "${PRIMARY_S3_SESSION_TOKEN}"} \
+                ${SECONDARY_S3_BUCKET_PATH:+--secondary-output-path "${SECONDARY_PATH}"} \
+                ${SECONDARY_S3_REGION:+--secondary-s3-region "${SECONDARY_S3_REGION}"} \
+                ${SECONDARY_S3_ACCESS_KEY_ID:+--secondary-s3-access-key-id "${SECONDARY_S3_ACCESS_KEY_ID}"} \
+                ${SECONDARY_S3_SECRET_ACCESS_KEY:+--secondary-s3-secret-access-key "${SECONDARY_S3_SECRET_ACCESS_KEY}"} \
+                ${SECONDARY_S3_SESSION_TOKEN:+--secondary-s3-session-token "${SECONDARY_S3_SESSION_TOKEN}"}
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_access_key_id
+                  optional: false
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_region
+                  optional: false
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_secret_access_key
+                  optional: false
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_access_key_id
+                  optional: false
+
+            - name: CLOUDWATCH_LOG_GROUP
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: cloudwatch_log_group
+                  optional: false
+
+            # Primary S3 bucket (pulp-prod-dataverse-s3, Clowder-managed)
+            - name: PRIMARY_S3_BUCKET_PATH
+              valueFrom:
+                secretKeyRef:
+                  name: primary-s3-credentials
+                  key: bucket_path
+                  optional: false
+            - name: PRIMARY_S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: primary-s3-credentials
+                  key: region
+                  optional: false
+            - name: PRIMARY_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: primary-s3-credentials
+                  key: aws_access_key_id
+                  optional: false
+            - name: PRIMARY_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: primary-s3-credentials
+                  key: aws_secret_access_key
+                  optional: false
+            # Secondary S3 bucket (Dataverse Snowpipe, cross-account)
+            - name: SECONDARY_S3_BUCKET_PATH
+              valueFrom:
+                secretKeyRef:
+                  name: secondary-s3-credentials
+                  key: bucket_path
+                  optional: false
+            - name: SECONDARY_S3_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: secondary-s3-credentials
+                  key: region
+                  optional: false
+            - name: SECONDARY_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: secondary-s3-credentials
+                  key: aws_access_key_id
+                  optional: false
+            - name: SECONDARY_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: secondary-s3-credentials
+                  key: aws_secret_access_key
+                  optional: false
+            - name: PULP_PYPI_URL
+              value: "${PULP_PYPI_URL}"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -1301,3 +1429,9 @@ parameters:
   - name: PULP_WORKER_TYPE
     description: Worker implementation type (pulpcore or redis).
     value: "redis"
+  - name: PULP_PYPI_URL
+    description: Internal Pulp PyPI instance URL for package installation
+    required: false
+  - name: S3_BUCKET_NAME
+    description: S3 bucket for log archives
+    required: false

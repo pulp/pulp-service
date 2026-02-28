@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pulp-access-logs-exporter"
+version = "20260216.0"  # CalVer: YYYYMMDD.MICRO
+description = "Export Pulp access logs from CloudWatch to Parquet format"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.26.0",
+    "pyarrow>=14.0.0",
+    "structlog>=24.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+    "pandas>=2.0.0",  # Only for test validation (converting Table to DataFrame)
+]
+
+[project.scripts]
+export-access-logs = "pulp_access_logs_exporter.cli:main"
