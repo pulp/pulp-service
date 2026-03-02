@@ -75,13 +75,8 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
         return "Bearer"
 
     def authenticate(self, request):
-        header_present = self.header in request.META
-        _logger.info(
-            "[TurnpikeTermsBasedRegistryAuthentication] authenticate() called, "
-            f"path: {request.path}, header present: {header_present}, "
-            f"header content: {request.META.get(self.header, 'N/A')}"
-        )
-        if not header_present:
+        if self.header not in request.META:
+            _logger.info(f"Header {self.header} not present in request")
             return None
 
         header_content = request.META.get(self.header)
