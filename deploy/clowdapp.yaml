@@ -1301,3 +1301,6 @@ parameters:
   - name: PULP_WORKER_TYPE
     description: Worker implementation type (pulpcore or redis).
     value: "redis"
+  - name: CLUSTER_NAME
+    description: Cluster identifier for the deployment (e.g. crcs02ue1, crcp01ue1)
+    required: false
