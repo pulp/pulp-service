@@ -963,6 +963,119 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
+      - name: export-access-logs-hourly
+        schedule: "15 * * * *"
+        restartPolicy: Never
+        concurrencyPolicy: Forbid
+        podSpec:
+          image: registry.access.redhat.com/ubi9/python-312:latest
+          command: ['/bin/bash', '-c']
+          args:
+            - |
+              # Only run on pulp* clusters (stage only for now)
+              if [[ "${CLUSTER_NAME}" != pulp* ]]; then
+                echo "Skipping: CLUSTER_NAME='${CLUSTER_NAME}' is not a pulp* cluster"
+                exit 0
+              fi
+
+              TIMESTAMP=$(date -u -d '1 hour ago' '+%Y%m%dT%H0000Z')
+              LOCAL_FILE="/tmp/pulp_access_logs_${TIMESTAMP}.parquet"
+
+              # Install tools
+              pip install uv
+              export UV_INDEX="https://${PYPI_USERNAME}:${PYPI_PASSWORD}@${PULP_PYPI_HOST}/simple/"
+              uv pip install pulp-access-logs-exporter
+
+              export PATH=${PATH}:/tmp/bin
+              mkdir -p /tmp/bin
+              curl -L https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-amd64 -o /tmp/bin/jq
+              chmod +x /tmp/bin/jq
+
+              # 1. Query CloudWatch and write to local file
+              START_TIME=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:00:00Z')
+              END_TIME=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:59:59Z')
+              export-access-logs \
+                --cloudwatch-group "${CLOUDWATCH_LOG_GROUP}" \
+                --start-time "${START_TIME}" \
+                --end-time "${END_TIME}" \
+                --output-path "${LOCAL_FILE}" \
+                --aws-region "${AWS_REGION}"
+
+              # 2. Upload to dataverse S3 bucket
+              upload-parquet \
+                --source "${LOCAL_FILE}" \
+                --destination "s3://${S3_BUCKET_NAME}/${S3_BUCKET_PREFIX}/pulp_access_logs_${TIMESTAMP}.parquet" \
+                --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+                --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}"
+
+              # 3. Upload to Clowder objectStore bucket (redundancy)
+              OBJSTORE_ACCESS_KEY=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .accessKey' /cdapp/cdappconfig.json)
+              if [ -n "${OBJSTORE_ACCESS_KEY}" ] && [ "${OBJSTORE_ACCESS_KEY}" != "null" ]; then
+                OBJSTORE_SECRET_KEY=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .secretKey' /cdapp/cdappconfig.json)
+                OBJSTORE_BUCKET=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .name' /cdapp/cdappconfig.json)
+                OBJSTORE_ENDPOINT=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .endpoint' /cdapp/cdappconfig.json)
+                upload-parquet \
+                  --source "${LOCAL_FILE}" \
+                  --destination "s3://${OBJSTORE_BUCKET}/pulp_access_logs_${TIMESTAMP}.parquet" \
+                  --s3-access-key-id "${OBJSTORE_ACCESS_KEY}" \
+                  --s3-secret-access-key "${OBJSTORE_SECRET_KEY}" \
+                  ${OBJSTORE_ENDPOINT:+--s3-endpoint-url "http://${OBJSTORE_ENDPOINT}:9000"}
+              fi
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_access_key_id
+                  optional: false
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_secret_access_key
+                  optional: false
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_region
+                  optional: false
+            - name: CLUSTER_NAME
+              value: ${{CLUSTER_NAME}}
+            - name: OBJECT_STORE_NAME
+              value: ${{OBJECT_STORE_NAME}}
+            - name: CLOUDWATCH_LOG_GROUP
+              value: ${{CLOUDWATCH_LOG_GROUP}}
+            - name: S3_BUCKET_NAME
+              value: ${{S3_BUCKET_NAME}}
+            - name: S3_BUCKET_PREFIX
+              value: ${{S3_BUCKET_PREFIX}}
+            - name: S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: aws_access_key_id
+                  optional: false
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: aws_secret_access_key
+                  optional: false
+            - name: PULP_PYPI_HOST
+              value: ${{PULP_PYPI_HOST}}
+            - name: PYPI_USERNAME
+              value: ${{PYPI_USERNAME}}
+            - name: PYPI_PASSWORD
+              value: ${{PYPI_PASSWORD}}
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
@@ -1301,3 +1414,24 @@ parameters:
   - name: PULP_WORKER_TYPE
     description: Worker implementation type (pulpcore or redis).
     value: "redis"
+  - name: PULP_PYPI_HOST
+    description: Hostname and path of the internal Pulp PyPI index
+    required: false
+  - name: PYPI_USERNAME
+    description: Username for the internal Pulp PyPI index
+    required: false
+  - name: PYPI_PASSWORD
+    description: Password/token for the internal Pulp PyPI index
+    required: false
+  - name: CLOUDWATCH_LOG_GROUP
+    description: CloudWatch log group name for access logs export
+    required: false
+  - name: S3_BUCKET_NAME
+    description: S3 bucket for log archives
+    required: false
+  - name: S3_BUCKET_PREFIX
+    description: S3 key prefix within the bucket
+    required: false
+  - name: CLUSTER_NAME
+    description: Cluster identifier for the deployment (e.g. crcs02ue1, crcp01ue1)
+    required: false
