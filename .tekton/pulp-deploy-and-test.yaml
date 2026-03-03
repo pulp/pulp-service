@@ -510,6 +510,52 @@ spec:
                     storage: 2Gi
               EOF
 
+          - name: generate-attestation-test-keys
+            image: "$(params.BONFIRE_IMAGE)"
+            env:
+              - name: OC_LOGIN_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: token
+              - name: OC_LOGIN_SERVER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.EPHEMERAL_ENV_PROVIDER_SECRET)
+                    key: url
+              - name: NS
+                value: $(params.NS)
+            script: |
+              set -ex
+
+              login.sh
+
+              if [ -n "$NS" ]; then
+                oc_wrapper project $NS
+              else
+                export NS=$(oc_wrapper project | grep -oE 'ephemeral-......')
+              fi
+              echo "Namespace is $NS"
+
+              # Generate an RSA-4096 test keypair for attestation verification tests.
+              # Run inside the pulp-api container which has the cryptography library.
+              oc_wrapper exec -c pulp-api deployment/pulp-api -- python3 -c "
+              from cryptography.hazmat.primitives.asymmetric import rsa
+              from cryptography.hazmat.primitives import serialization
+              key = rsa.generate_private_key(65537, 4096)
+              open('/tmp/test-key-private.pem','wb').write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+              open('/tmp/test-key.pem','wb').write(key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+              "
+
+              # Copy the generated keys out of the container
+              oc_wrapper exec -c pulp-api deployment/pulp-api -- cat /tmp/test-key.pem > /tmp/test-key.pem
+              oc_wrapper exec -c pulp-api deployment/pulp-api -- cat /tmp/test-key-private.pem > /tmp/test-key-private.pem
+
+              oc_wrapper create configmap attestation-test-keys \
+                --from-file=test-key.pem=/tmp/test-key.pem \
+                --from-file=test-key-private.pem=/tmp/test-key-private.pem \
+                --dry-run=client -o yaml | oc_wrapper apply -f -
+
           - name: update-deployment-with-the-pvc
             image: "$(params.BONFIRE_IMAGE)"
             env:
@@ -543,6 +589,7 @@ spec:
               oc_wrapper patch clowdapp pulp --type=merge -p '{"spec": {"disabled": true}}'
 
               # Update the deployment to mount the volume with the bindings and install them
+              # Also mount the attestation test keys and override the verification key setting
               oc_wrapper patch deployment pulp-api --type=strategic -p "$(cat<<EOF
               {
                 "spec": {
@@ -551,14 +598,19 @@ spec:
                     "spec": {
                       "volumes": [  
                         { "name": "bindings", "persistentVolumeClaim": { "claimName": "$BINDINGS_PVC"}},
-                        { "name": "python-path", "persistentVolumeClaim": { "claimName": "python-path"}}
+                        { "name": "python-path", "persistentVolumeClaim": { "claimName": "python-path"}},
+                        { "name": "attestation-test-keys", "configMap": { "name": "attestation-test-keys"}}
                       ],
                       "containers": [
                         {
                           "name": "pulp-api",
+                          "env": [
+                            {"name": "PULP_ATTESTATION_VERIFICATION_KEY", "value": "/etc/pki/attestation/test-key.pem"}
+                          ],
                           "volumeMounts": [
                             {"mountPath": "/data","name": "bindings"},
-                            {"mountPath": "/tmp/home/","name": "python-path"}
+                            {"mountPath": "/tmp/home/","name": "python-path"},
+                            {"mountPath": "/etc/pki/attestation","name": "attestation-test-keys","readOnly": true}
                           ]
                         }
                       ]
@@ -569,6 +621,34 @@ spec:
               EOF
               )"
               oc_wrapper rollout status deployment/pulp-api --timeout=4m
+
+              # Also patch the worker deployment with the attestation test keys
+              oc_wrapper patch deployment pulp-worker --type=strategic -p "$(cat<<EOF
+              {
+                "spec": {
+                  "template": {
+                    "spec": {
+                      "volumes": [
+                        { "name": "attestation-test-keys", "configMap": { "name": "attestation-test-keys"}}
+                      ],
+                      "containers": [
+                        {
+                          "name": "pulp-worker",
+                          "env": [
+                            {"name": "PULP_ATTESTATION_VERIFICATION_KEY", "value": "/etc/pki/attestation/test-key.pem"}
+                          ],
+                          "volumeMounts": [
+                            {"mountPath": "/etc/pki/attestation","name": "attestation-test-keys","readOnly": true}
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              EOF
+              )"
+              oc_wrapper rollout status deployment/pulp-worker --timeout=4m
 
           - name: install-pulp-clients
             image: "$(params.BONFIRE_IMAGE)"
@@ -696,6 +776,9 @@ spec:
               debug_and_fail() {
                 oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-content\S*")
                 oc_wrapper logs $(oc_wrapper get pod | grep -oE "pulp-api\S*")
+                for pod in $(oc_wrapper get pod | grep -oE "pulp-worker\S*"); do
+                  oc_wrapper logs "$pod"
+                done
                 echo "CURL OUTPUT"
                 curl https://env-${NS}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
                 echo "ROUTES"
@@ -704,49 +787,6 @@ spec:
               }
 
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install pulp-smash@git+https://github.com/pulp/pulp-smash.git@2ded6671e0f32c51e70681467199e8a195f7f5fe"
-
-              cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
-              cat << EOF >> pulp-smash.json
-              {
-                "pulp": {
-                  "auth": [
-                    "admin",
-                    "password"
-                  ],
-                  "selinux enabled": false,
-                  "version": "3"
-                },
-                "hosts": [
-                  {
-                    "hostname": "pulp-api",
-                    "roles": {
-                      "api": {
-                        "port": 8000,
-                        "scheme": "http",
-                        "service": "nginx"
-                      },
-                      "content": {
-                        "port": 8000,
-                        "scheme": "https",
-                        "service": "pulp-content"
-                      },
-                      "pulp resource manager": {},
-                      "pulp workers": {},
-                      "redis": {},
-                      "shell": {
-                        "transport": "local"
-                      }
-                    }
-                  }
-                ]
-              }
-              EOF
-              sed "s#password#${PASSWORD}#g" pulp-smash.json > pulp-smash.customized.json
-              sed -i "s/pulp-content/env-${NS}.apps.crc-eph.r9lp.p1.openshiftapps.com/g" pulp-smash.customized.json
-
-              echo "PULP-SMASH CONFIG:"
-              cat pulp-smash.customized.json
 
               curl -o functest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/functest_requirements.txt
               curl -o unittest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/unittest_requirements.txt
@@ -754,7 +794,6 @@ spec:
               ### Adapted from ./.github/workflows/scripts/script.sh
               cat unittest_requirements.txt | cmd_stdin_prefix bash -c "cat > /tmp/unittest_requirements.txt"
               cat functest_requirements.txt | cmd_stdin_prefix bash -c "cat > /tmp/functest_requirements.txt"
-              cat pulp-smash.customized.json | cmd_stdin_prefix bash -c "cat > /tmp/home/.config/pulp_smash/settings.json"
               cmd_prefix bash -c "HOME=/tmp/home pip3 install -r /tmp/unittest_requirements.txt -r /tmp/functest_requirements.txt"
               # Because we pass the path to pytest -o cache_dir=/tmp/home/.cache/pytest_cache, pulpcore-manager must be in the same dir
               cmd_prefix bash -c "ln -s /usr/local/lib/pulp/bin/pulpcore-manager /tmp/home/.local/bin/pulpcore-manager || /bin/true"
