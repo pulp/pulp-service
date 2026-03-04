@@ -425,7 +425,7 @@ objects:
             value: ${PULP_SECURE_PROXY_SSL_HEADER}
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
-          - name: PULP_TEST_TASK_INGESTION 
+          - name: PULP_TEST_TASK_INGESTION
             value: ${PULP_TEST_TASK_INGESTION}
           - name: PULP_PYTHON_GROUP_UPLOADS
             value: ${PULP_PYTHON_GROUP_UPLOADS}
