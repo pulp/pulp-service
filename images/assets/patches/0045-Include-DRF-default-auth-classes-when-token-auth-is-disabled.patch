@@ -1,0 +1,42 @@
+From 0107bbe45858812529e95b77b5cb933ec2ee8aba Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andr=C3=A9=20=22decko=22=20de=20Brito?= <decko@redhat.com>
+Date: Wed, 4 Mar 2026 11:35:39 -0300
+Subject: [PATCH] Include DRF default auth classes when token auth is disabled
+
+When TOKEN_AUTH_DISABLED=true, ContainerRegistryApiMixin only used
+RegistryAuthentication (Basic auth). This prevented custom backends
+configured in DEFAULT_AUTHENTICATION_CLASSES (e.g. remote header-based
+auth) from being used for container registry operations.
+
+Now includes both RegistryAuthentication and all configured default
+authentication classes, allowing deployments to use custom auth
+backends alongside standard Basic auth.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+---
+ pulp_container/app/registry_api.py | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
+index 8fa771a..a0593ac 100644
+--- a/pulp_container/app/registry_api.py
++++ b/pulp_container/app/registry_api.py
+@@ -232,9 +232,14 @@ class ContainerRegistryApiMixin:
+     def authentication_classes(self):
+         """
+         List of authentication classes to check for this view.
++
++        When token auth is disabled, includes both RegistryAuthentication (Basic auth)
++        and any authentication classes configured in DEFAULT_AUTHENTICATION_CLASSES.
++        This allows deployments to use custom authentication backends (e.g. remote
++        header-based auth) alongside standard Basic auth for container registry operations.
+         """
+         if settings.get("TOKEN_AUTH_DISABLED", False):
+-            return [RegistryAuthentication]
++            return [RegistryAuthentication, *api_settings.DEFAULT_AUTHENTICATION_CLASSES]
+         return [TokenAuthentication]
+ 
+     @property
+-- 
+2.53.0
+
