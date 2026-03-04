@@ -4,7 +4,7 @@ Date: Wed, 4 Mar 2026 11:35:39 -0300
 Subject: [PATCH] Include DRF default auth classes when token auth is disabled
 
 When TOKEN_AUTH_DISABLED=true, ContainerRegistryApiMixin only used
-RegistryAuthentication (Basic auth). This prevented custom backends
+a single authentication class. This prevented custom backends
 configured in DEFAULT_AUTHENTICATION_CLASSES (e.g. remote header-based
 auth) from being used for container registry operations.
 
@@ -18,10 +18,9 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
  1 file changed, 6 insertions(+), 1 deletion(-)
 
 diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
-index 8fa771a..a0593ac 100644
 --- a/pulp_container/app/registry_api.py
 +++ b/pulp_container/app/registry_api.py
-@@ -232,9 +232,14 @@ class ContainerRegistryApiMixin:
+@@ -234,9 +234,14 @@ class ContainerRegistryApiMixin:
      def authentication_classes(self):
          """
          List of authentication classes to check for this view.
@@ -32,11 +31,8 @@ index 8fa771a..a0593ac 100644
 +        header-based auth) alongside standard Basic auth for container registry operations.
          """
          if settings.get("TOKEN_AUTH_DISABLED", False):
--            return [RegistryAuthentication]
+-            return [RHServiceAccountCertAuthentication]
 +            return [RegistryAuthentication, *api_settings.DEFAULT_AUTHENTICATION_CLASSES]
          return [TokenAuthentication]
- 
-     @property
--- 
-2.53.0
 
+     @property
