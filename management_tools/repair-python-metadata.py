@@ -35,11 +35,16 @@ ENVIRONMENTS = {
 CONTENT_SOURCES_LABEL = "contentsources"
 
 
-def get_all_pages(url, session):
+def get_all_pages(url, session, retries=3):
     """Paginate through all results from a Pulp API endpoint."""
     while url:
-        response = session.get(url)
-        response.raise_for_status()
+        for attempt in range(retries):
+            response = session.get(url)
+            if response.status_code == 500 and attempt < retries - 1:
+                log.warning(f"500 error on {url}, retrying ({attempt + 1}/{retries})...")
+                continue
+            response.raise_for_status()
+            break
         data = response.json()
         yield from data.get("results", [])
         url = data.get("next")
