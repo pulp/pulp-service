@@ -52,7 +52,10 @@ def get_all_pages(url, session, retries=3):
 
 def get_domains(session, base_url):
     """Get all domains, excluding content-sources domains."""
-    url = f"{base_url}/api/pulp/default/api/v3/domains/?limit=100"
+    url = (
+        f"{base_url}/api/pulp/default/api/v3/domains/"
+        f"?limit=50&fields=name,pulp_href,pulp_labels"
+    )
     all_domains = list(get_all_pages(url, session))
     domains = [
         d for d in all_domains
