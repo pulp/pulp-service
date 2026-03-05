@@ -47,16 +47,13 @@ def get_all_pages(url, session):
 
 def get_domains(session, base_url):
     """Get all domains, excluding content-sources domains."""
-    url = f"{base_url}/api/pulp/default/api/v3/domains/?limit=100"
-    domains = list(get_all_pages(url, session))
-    filtered = [
-        d for d in domains
-        if d.get("pulp_labels", {}).get(CONTENT_SOURCES_LABEL) != "true"
-    ]
-    log.info(
-        f"Found {len(domains)} total domains, {len(filtered)} after excluding content-sources"
+    url = (
+        f"{base_url}/api/pulp/default/api/v3/domains/"
+        f"?limit=100&pulp_label_select={CONTENT_SOURCES_LABEL}!=true"
     )
-    return filtered
+    domains = list(get_all_pages(url, session))
+    log.info(f"Found {len(domains)} domains (excluding content-sources)")
+    return domains
 
 
 def get_python_repos(session, base_url, domain_name):
