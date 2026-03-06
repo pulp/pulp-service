@@ -42,20 +42,6 @@ class DomainBasedPermission(BasePermission):
         return DomainOrg.objects.filter(query).exists()
 
     def has_permission(self, request, view):
-        authenticator = getattr(request, "successful_authenticator", None)
-        authenticator_class = type(authenticator).__name__ if authenticator else "None"
-        _logger.info(
-            "DomainBasedPermission: user=%s pk=%s is_superuser=%s is_authenticated=%s "
-            "authenticator=%s method=%s path=%s",
-            request.user.username,
-            request.user.pk,
-            request.user.is_superuser,
-            request.user.is_authenticated,
-            authenticator_class,
-            request.method,
-            request.META.get("PATH_INFO", ""),
-        )
-
         # Admins have all permissions
         if request.user.is_superuser:
             return True

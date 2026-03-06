@@ -21,21 +21,6 @@ class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
     def authenticate_header(self, request):
         return "Bearer"
 
-    def authenticate(self, request):
-        _logger.info(
-            "RHServiceAccountCertAuthentication: attempting auth method=%s path=%s",
-            request.method,
-            request.META.get("PATH_INFO", ""),
-        )
-        result = super().authenticate(request)
-        if result:
-            _logger.info(
-                "RHServiceAccountCertAuthentication: authenticated user=%s", result[0].username
-            )
-        else:
-            _logger.info("RHServiceAccountCertAuthentication: skipped (no match)")
-        return result
-
 
 class RHTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
 
@@ -45,25 +30,6 @@ class RHTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
 
     def authenticate_header(self, request):
         return "Bearer"
-
-    def authenticate(self, request):
-        _logger.info(
-            "RHTermsBasedRegistryAuthentication: attempting auth method=%s path=%s",
-            request.method,
-            request.META.get("PATH_INFO", ""),
-        )
-        if self.header not in request.META:
-            _logger.info("RHTermsBasedRegistryAuthentication: skipped (no %s header)", self.header)
-            return None
-
-        result = super().authenticate(request)
-        if result:
-            _logger.info(
-                "RHTermsBasedRegistryAuthentication: authenticated user=%s", result[0].username
-            )
-        else:
-            _logger.info("RHTermsBasedRegistryAuthentication: skipped (no match)")
-        return result
 
 
 class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
@@ -91,26 +57,10 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
         return "Bearer"
 
     def authenticate(self, request):
-        _logger.info(
-            "TurnpikeTermsBasedRegistryAuthentication: attempting auth method=%s path=%s",
-            request.method,
-            request.META.get("PATH_INFO", ""),
-        )
         if self.header not in request.META:
-            _logger.info(
-                "TurnpikeTermsBasedRegistryAuthentication: skipped (no %s header)", self.header
-            )
             return None
 
-        result = super().authenticate(request)
-        if result:
-            _logger.info(
-                "TurnpikeTermsBasedRegistryAuthentication: authenticated user=%s",
-                result[0].username,
-            )
-        else:
-            _logger.info("TurnpikeTermsBasedRegistryAuthentication: skipped (no match)")
-        return result
+        return super().authenticate(request)
 
 
 class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
@@ -121,19 +71,6 @@ class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
 
     header = "HTTP_X_RH_IDENTITY"
     jq_filter = ".identity.associate.email"
-
-    def authenticate(self, request):
-        _logger.info(
-            "RHSamlAuthentication: attempting auth method=%s path=%s",
-            request.method,
-            request.META.get("PATH_INFO", ""),
-        )
-        result = super().authenticate(request)
-        if result:
-            _logger.info("RHSamlAuthentication: authenticated user=%s", result[0].username)
-        else:
-            _logger.info("RHSamlAuthentication: skipped (no match)")
-        return result
 
     def get_user(self, user_id):
         """
