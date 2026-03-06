@@ -56,12 +56,6 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
     def authenticate_header(self, request):
         return "Bearer"
 
-    def authenticate(self, request):
-        if self.header not in request.META:
-            return None
-
-        return super().authenticate(request)
-
 
 class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
     """
