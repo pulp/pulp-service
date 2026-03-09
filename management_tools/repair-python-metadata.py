@@ -58,8 +58,7 @@ def get_domains(session, base_url):
     )
     all_domains = list(get_all_pages(url, session))
     domains = [
-        d for d in all_domains
-        if d.get("pulp_labels", {}).get(CONTENT_SOURCES_LABEL) != "true"
+        d for d in all_domains if d.get("pulp_labels", {}).get(CONTENT_SOURCES_LABEL) != "true"
     ]
     log.info(
         f"Found {len(all_domains)} total domains, "
@@ -97,6 +96,10 @@ def main():
         help="Base URL for the Pulp API (overrides --env)",
     )
     parser.add_argument(
+        "--domain",
+        help="Only process this specific domain (by name)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="List repositories that would be repaired without triggering repair",
@@ -115,7 +118,11 @@ def main():
 
     session = requests.Session()
 
-    domains = get_domains(session, base_url)
+    if args.domain:
+        domains = [{"name": args.domain}]
+        log.info(f"Targeting single domain: {args.domain}")
+    else:
+        domains = get_domains(session, base_url)
 
     total_repos = 0
     total_dispatched = 0
