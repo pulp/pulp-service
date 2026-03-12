@@ -159,6 +159,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0035-Revert-Mitigate-a-disk-consumption-issue-during-sync.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0035-Revert-Mitigate-a-disk-consumption-issue-during-sync.patch
 
+COPY images/assets/patches/0046-Ignore-attestation-verification.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0046-Ignore-attestation-verification.patch
+
 COPY images/assets/patches/0037-allow_none_verification_material.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0037-allow_none_verification_material.patch
 
@@ -175,11 +178,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch
 
-
-COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-redhat-release3
-COPY images/assets/patches/0048-Re-enable-attestation-verification-with-vendored-key.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0048-Re-enable-attestation-verification-with-vendored-key.patch
-ENV PULP_ATTESTATION_VERIFICATION_KEY=/etc/pki/sigstore/SIGSTORE-redhat-release3
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
