@@ -978,9 +978,14 @@ objects:
           command: ['/bin/bash', '-c']
           args:
             - |
-              # Only run on pulp* clusters (stage only for now)
+              # Only run on pulp* clusters with required parameters configured
               if [[ "${CLUSTER_NAME}" != pulp* ]]; then
                 echo "Skipping: CLUSTER_NAME='${CLUSTER_NAME}' is not a pulp* cluster"
+                exit 0
+              fi
+
+              if [[ -z "${CLOUDWATCH_LOG_GROUP}" || -z "${S3_BUCKET_NAME}" || -z "${PULP_PYPI_HOST}" ]]; then
+                echo "Skipping: required parameters not configured (CLOUDWATCH_LOG_GROUP, S3_BUCKET_NAME, PULP_PYPI_HOST)"
                 exit 0
               fi
 
