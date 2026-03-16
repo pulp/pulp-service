@@ -34,7 +34,7 @@ Upstream: https://pulpproject.org/ | Source: https://github.com/pulp/pulp-servic
 | **Authentication** | `pulp_service/app/authentication.py` | X.509 cert, SAML, registry auth backends |
 | **Authorization** | `pulp_service/app/authorization.py` | Domain-based RBAC permissions |
 | **Middleware** | `pulp_service/app/middleware.py` | Profiler, edge host, SAML, OTEL metrics |
-| **Storage** | `pulp_service/app/storage.py` | AIPCCStorageBackend, OCIStorageBackend |
+| **Storage** | `pulp_service/app/storage.py` | OCIStorage (OCI/ORAS backend) |
 | **Signals** | `pulp_service/app/signals.py` | User creation, domain creation hooks |
 | **Tasks** | `pulp_service/app/tasks/` | Package scanning, domain metrics |
 | **Content** | `pulp_service/app/content.py` | aiohttp middleware for pulp-content |
@@ -56,7 +56,7 @@ Upstream: https://pulpproject.org/ | Source: https://github.com/pulp/pulp-servic
 **Three-service model:**
 1. **pulp-api** — Gunicorn WSGI serving Django REST API (port 24817 local, 8000 prod)
 2. **pulp-content** — Gunicorn + aiohttp async content delivery (port 24816 local, 8000 prod)
-3. **pulp-worker** — Celery workers for background tasks (Redis broker)
+3. **pulp-worker** — Redis-based workers for background tasks (`WORKER_TYPE=redis`, added via patch 0033; uses Redis for resource locking instead of PostgreSQL)
 
 **Request flow:**
 ```
@@ -72,7 +72,7 @@ Client -> Load Balancer (sets X-Forwarded-For, X-RH-IDENTITY)
 - **Authentication**: `X-RH-IDENTITY` header (base64-encoded JSON) → custom auth classes in `app/authentication.py`
 - **Multi-tenancy**: `DomainOrg` model maps org_id → Pulp domain; domain-based routing for content APIs
 - **Context variables**: `ContextVar` instances in `app/middleware.py` carry request-scoped data (org_id, user_id, request_path) across layers
-- **Storage backends**: `AIPCCStorageBackend` (S3) and `OCIStorageBackend` (OCI/ORAS) in `app/storage.py`
+- **Storage backends**: Based on `django-storages`; S3 via `storages.backends.s3boto3.S3Boto3Storage` (upstream), `OCIStorage` (OCI/ORAS) in `app/storage.py`
 - **Tasks**: Background work in `app/tasks/` (package scanning, domain metrics, RDS testing)
 
 **Upstream plugins this extends**: pulpcore, pulp-python, pulp-container, pulp-rpm, pulp-gem, pulp-npm, pulp-maven, pulp-hugging-face.
