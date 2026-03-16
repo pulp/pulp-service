@@ -978,9 +978,14 @@ objects:
           command: ['/bin/bash', '-c']
           args:
             - |
-              # Only run on pulp* clusters with required parameters configured
+              # Only run on pulp* clusters in stage environment
               if [[ "${CLUSTER_NAME}" != pulp* ]]; then
                 echo "Skipping: CLUSTER_NAME='${CLUSTER_NAME}' is not a pulp* cluster"
+                exit 0
+              fi
+
+              if [[ "${ENV_NAME}" != "stage" ]]; then
+                echo "Skipping: ENV_NAME='${ENV_NAME}' is not stage"
                 exit 0
               fi
 
@@ -1053,6 +1058,8 @@ objects:
                   optional: false
             - name: CLUSTER_NAME
               value: ${{CLUSTER_NAME}}
+            - name: ENV_NAME
+              value: ${{ENV_NAME}}
             - name: OBJECT_STORE_NAME
               value: ${{OBJECT_STORE_NAME}}
             - name: CLOUDWATCH_LOG_GROUP
