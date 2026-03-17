@@ -1063,29 +1063,49 @@ objects:
             - name: OBJECT_STORE_NAME
               value: ${{OBJECT_STORE_NAME}}
             - name: CLOUDWATCH_LOG_GROUP
-              value: ${{CLOUDWATCH_LOG_GROUP}}
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: cloudwatch_log_group
+                  optional: false
             - name: S3_BUCKET_NAME
-              value: ${{S3_BUCKET_NAME}}
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: bucket
+                  optional: false
             - name: S3_BUCKET_PREFIX
               value: ${{S3_BUCKET_PREFIX}}
             - name: S3_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: pulp-dataverse-s3
-                  key: aws_access_key_id
+                  name: dataverse
+                  key: s3_access_key_id
                   optional: false
             - name: S3_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: pulp-dataverse-s3
-                  key: aws_secret_access_key
+                  name: dataverse
+                  key: s3_secret_access_key
                   optional: false
             - name: PULP_PYPI_HOST
-              value: ${{PULP_PYPI_HOST}}
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: pulp_pypi_url
+                  optional: false
             - name: PYPI_USERNAME
-              value: ${{PYPI_USERNAME}}
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: pypi_username
+                  optional: false
             - name: PYPI_PASSWORD
-              value: ${{PYPI_PASSWORD}}
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: pypi_password
+                  optional: false
           resources:
             requests:
               cpu: 250m
@@ -1437,21 +1457,6 @@ parameters:
     value: "redis"
   - name: CLUSTER_NAME
     description: Cluster identifier for the deployment (e.g. crcs02ue1, crcp01ue1)
-    required: false
-  - name: PULP_PYPI_HOST
-    description: Hostname and path of the internal Pulp PyPI index
-    required: false
-  - name: PYPI_USERNAME
-    description: Username for the internal Pulp PyPI index
-    required: false
-  - name: PYPI_PASSWORD
-    description: Password/token for the internal Pulp PyPI index
-    required: false
-  - name: CLOUDWATCH_LOG_GROUP
-    description: CloudWatch log group name for access logs export
-    required: false
-  - name: S3_BUCKET_NAME
-    description: S3 bucket for log archives
     required: false
   - name: S3_BUCKET_PREFIX
     description: S3 key prefix within the bucket
