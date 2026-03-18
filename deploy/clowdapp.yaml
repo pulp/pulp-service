@@ -1075,7 +1075,7 @@ objects:
                   key: bucket
                   optional: false
             - name: S3_BUCKET_PREFIX
-              value: ${{S3_BUCKET_PREFIX}}
+              value: data
             - name: S3_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -1458,9 +1458,4 @@ parameters:
   - name: CLUSTER_NAME
     description: Cluster identifier for the deployment (e.g. crcs02ue1, crcp01ue1)
     required: false
-  - name: S3_BUCKET_PREFIX
-    description: S3 key prefix within the bucket
-    required: false
-  - name: CLUSTER_NAME
-    description: Cluster identifier for the deployment (e.g. crcs02ue1, crcp01ue1)
-    required: false
+
