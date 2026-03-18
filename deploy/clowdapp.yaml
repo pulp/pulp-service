@@ -1024,18 +1024,13 @@ objects:
                 --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
                 --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}"
 
-              # 3. Upload to Clowder objectStore bucket (redundancy)
-              OBJSTORE_ACCESS_KEY=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .accessKey' /cdapp/cdappconfig.json)
-              if [ -n "${OBJSTORE_ACCESS_KEY}" ] && [ "${OBJSTORE_ACCESS_KEY}" != "null" ]; then
-                OBJSTORE_SECRET_KEY=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .secretKey' /cdapp/cdappconfig.json)
-                OBJSTORE_BUCKET=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .name' /cdapp/cdappconfig.json)
-                OBJSTORE_ENDPOINT=$(jq -r --arg name "${OBJECT_STORE_NAME}" '.objectStore.buckets[] | select(.requestedName == $name) | .endpoint' /cdapp/cdappconfig.json)
+              # 3. Upload to pulp-dataverse-s3 bucket (redundancy)
+              if [ -n "${BACKUP_S3_ACCESS_KEY_ID:-}" ]; then
                 upload-parquet \
                   --source "${LOCAL_FILE}" \
-                  --destination "s3://${OBJSTORE_BUCKET}/pulp_access_logs_${TIMESTAMP}.parquet" \
-                  --s3-access-key-id "${OBJSTORE_ACCESS_KEY}" \
-                  --s3-secret-access-key "${OBJSTORE_SECRET_KEY}" \
-                  ${OBJSTORE_ENDPOINT:+--s3-endpoint-url "http://${OBJSTORE_ENDPOINT}:9000"}
+                  --destination "s3://${BACKUP_S3_BUCKET_NAME}/pulp_access_logs_${TIMESTAMP}.parquet" \
+                  --s3-access-key-id "${BACKUP_S3_ACCESS_KEY_ID}" \
+                  --s3-secret-access-key "${BACKUP_S3_SECRET_ACCESS_KEY}"
               fi
           env:
             - name: AWS_ACCESS_KEY_ID
@@ -1060,8 +1055,24 @@ objects:
               value: ${{CLUSTER_NAME}}
             - name: ENV_NAME
               value: ${{ENV_NAME}}
-            - name: OBJECT_STORE_NAME
-              value: ${{OBJECT_STORE_NAME}}
+            - name: BACKUP_S3_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: bucket
+                  optional: false
+            - name: BACKUP_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: aws_access_key_id
+                  optional: false
+            - name: BACKUP_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: aws_secret_access_key
+                  optional: false
             - name: CLOUDWATCH_LOG_GROUP
               valueFrom:
                 secretKeyRef:
