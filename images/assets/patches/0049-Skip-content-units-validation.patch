@@ -1,0 +1,22 @@
+diff --git a/pulpcore/app/serializers/repository.py b/pulpcore/app/serializers/repository.py
+index 3e50eb73c..212dfeb81 100644
+--- a/pulpcore/app/serializers/repository.py
++++ b/pulpcore/app/serializers/repository.py
+@@ -331,10 +331,13 @@ class RepositoryAddRemoveContentSerializer(ModelSerializer, NestedHyperlinkedMod
+             add_content_units[extract_pk(url)] = url
+ 
+         content_units_pks = set(add_content_units.keys())
+-        existing_content_units = models.Content.objects.filter(pk__in=content_units_pks)
+-        existing_content_units.touch()
+-
+-        raise_for_unknown_content_units(existing_content_units, add_content_units)
++        
++        # only verify the existing content units if the set has less than 100k elements to
++        # avoid a timeout in client requests
++        if len(content_units_pks) <= 100_000:
++            existing_content_units = models.Content.objects.filter(pk__in=content_units_pks)
++            existing_content_units.touch()
++            raise_for_unknown_content_units(existing_content_units, add_content_units)
+ 
+         return list(add_content_units.keys())
+ 
