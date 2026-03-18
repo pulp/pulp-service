@@ -999,7 +999,7 @@ objects:
 
               # Install tools
               pip install uv
-              export UV_INDEX="https://${PYPI_USERNAME}:${PYPI_PASSWORD}@${PULP_PYPI_HOST}/simple/"
+              export UV_INDEX="https://${PYPI_USERNAME}:${PYPI_PASSWORD}@${PULP_PYPI_HOST}"
               uv pip install pulp-access-logs-exporter
 
               export PATH=${PATH}:/tmp/bin
