@@ -969,7 +969,7 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
-      - name: export-access-logs
+      - name: export-access-logs-v2
         schedule: "15 * * * *"
         restartPolicy: Never
         concurrencyPolicy: Forbid
