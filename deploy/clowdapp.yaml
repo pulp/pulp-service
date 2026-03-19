@@ -969,7 +969,7 @@ objects:
             - name: XDG_CACHE_HOME
               value: "/tmp"
 
-      - name: export-access-logs-v2
+      - name: export-access-logs-v3
         schedule: "15 * * * *"
         restartPolicy: Never
         concurrencyPolicy: Forbid
@@ -1016,6 +1016,12 @@ objects:
                 --end-time "${END_TIME}" \
                 --output-path "${LOCAL_FILE}" \
                 --aws-region "${AWS_REGION}"
+
+              # Skip uploads if no data was exported
+              if [ ! -f "${LOCAL_FILE}" ]; then
+                echo "No data exported — skipping uploads."
+                exit 0
+              fi
 
               # 2. Upload to dataverse S3 bucket
               upload-parquet \
