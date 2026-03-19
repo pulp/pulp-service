@@ -1,0 +1,25 @@
+diff --git a/pulpcore/app/serializers/repository.py b/pulpcore/app/serializers/repository.py
+index 3e50eb73c..0f1bd2c81 100644
+--- a/pulpcore/app/serializers/repository.py
++++ b/pulpcore/app/serializers/repository.py
+@@ -328,7 +328,7 @@ class RepositoryAddRemoveContentSerializer(ModelSerializer, NestedHyperlinkedMod
+         add_content_units = {}
+ 
+         for url in value:
+-            add_content_units[extract_pk(url)] = url
++            add_content_units[self._extract_pk(url)] = url
+ 
+         content_units_pks = set(add_content_units.keys())
+         existing_content_units = models.Content.objects.filter(pk__in=content_units_pks)
+@@ -354,6 +354,11 @@ class RepositoryAddRemoveContentSerializer(ModelSerializer, NestedHyperlinkedMod
+             raise_for_unknown_content_units(existing_content_units, remove_content_units)
+             return list(remove_content_units.keys())
+ 
++    def _extract_pk(self, uri, only_prn=False):
++        if uri.startswith("prn:") or only_prn:
++            return extract_pk(uri, only_prn)
++        return urlparse(uri).path.strip("/").split("/")[-1]
++
+     class Meta:
+         model = models.RepositoryVersion
+         fields = ["add_content_units", "remove_content_units", "base_version"]
