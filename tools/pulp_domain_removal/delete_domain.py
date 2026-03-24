@@ -57,8 +57,8 @@ def config_from_pulp_cli_config(
         config = tomllib.load(fp)[profile]
         configuration = pulpcore.client.pulpcore.Configuration()
         configuration.host = config["base_url"]
-        configuration.cert_file = config["cert"]
-        configuration.key_file = config["key"]
+        configuration.username = config["username"]
+        configuration.password = config["password"]
         configuration.domain = config.get("domain", "default")
     return configuration
 
@@ -87,7 +87,6 @@ class PulpDomainCleanup:
         """
         self.configuration = configuration
         self.domain = domain or configuration.domain
-
         # Create API client
         self.api_client = pulpcore.client.pulpcore.ApiClient(configuration)
 
@@ -100,6 +99,12 @@ class PulpDomainCleanup:
         self.tasks_api = pulpcore.client.pulpcore.TasksApi(self.api_client)
         self.contentguards_api = pulpcore.client.pulpcore.ContentguardsApi(self.api_client)
         self.orphans_cleanup_api = pulpcore.client.pulpcore.OrphansCleanupApi(self.api_client)
+
+    def _get_auth_headers(self) -> dict:
+        import base64
+        credentials = f"{self.configuration.username}:{self.configuration.password}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        return {"Authorization": f"Basic {encoded}"}
 
     def _delete_resource(self, href: str) -> Optional[str]:
         """
@@ -118,9 +123,16 @@ class PulpDomainCleanup:
         response = self.api_client.rest_client.request(
             method='DELETE',
             url=url,
+            headers=self._get_auth_headers(),
         )
         response.read()
-        
+
+        if response.status not in (200, 202, 204):
+            error_body = response.data.decode('utf-8') if response.data else "(no body)"
+            print(f"\n❌ API error: DELETE {url} returned HTTP {response.status}")
+            print(f"   Response: {error_body}")
+            sys.exit(1)
+
         # Parse response to get task href
         if response.data:
             task_data = json.loads(response.data.decode('utf-8'))
@@ -517,9 +529,16 @@ class PulpDomainCleanup:
                 response = self.api_client.rest_client.request(
                     method='GET',
                     url=url + params,
+                    headers=self._get_auth_headers(),
                 )
                 response.read()
-                
+
+                if response.status != 200:
+                    error_body = response.data.decode('utf-8') if response.data else "(no body)"
+                    print(f"\n❌ API error: GET {url + params} returned HTTP {response.status}")
+                    print(f"   Response: {error_body}")
+                    sys.exit(1)
+
                 if not response.data:
                     break
                     
