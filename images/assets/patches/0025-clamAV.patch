@@ -1,6 +1,6 @@
-From 81ad2ad53e2fd6aff47048d064edae6397557af6 Mon Sep 17 00:00:00 2001
-From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
-Date: Fri, 29 Aug 2025 16:41:58 -0300
+From eeab8cc111d03218b3f3b58200206b18aaa1f0b5 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Tue, 24 Mar 2026 12:12:45 -0400
 Subject: [PATCH] Extend dwloader to push data stream through clamAV
 
 ---
@@ -13,10 +13,10 @@ Subject: [PATCH] Extend dwloader to push data stream through clamAV
  6 files changed, 89 insertions(+), 1 deletion(-)
 
 diff --git a/pulpcore/app/settings.py b/pulpcore/app/settings.py
-index e5dfb1b1a..e3fc93dc0 100644
+index 7d30421f2..ffbc2ab30 100644
 --- a/pulpcore/app/settings.py
 +++ b/pulpcore/app/settings.py
-@@ -413,6 +413,10 @@ VULN_REPORT_TASK_LIMITER = 10
+@@ -425,6 +425,10 @@ VULN_REPORT_TASK_LIMITER = 10
  # Replaces asyncio event loop with uvloop
  UVLOOP_ENABLED = False
  
@@ -28,10 +28,10 @@ index e5dfb1b1a..e3fc93dc0 100644
  # Read more at https://www.dynaconf.com/django/
  
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 7e30e32cc..5699c3b6e 100644
+index d00a53cba..51fffdc4d 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -16,6 +16,7 @@ from aiohttp.web_exceptions import (
+@@ -17,6 +17,7 @@ from aiohttp.web_exceptions import (
      HTTPFound,
      HTTPMovedPermanently,
      HTTPNotFound,
@@ -39,7 +39,7 @@ index 7e30e32cc..5699c3b6e 100644
      HTTPRequestRangeNotSatisfiable,
  )
  from yarl import URL
-@@ -59,8 +60,9 @@ from pulpcore.app.util import (  # noqa: E402: module level not at top of file
+@@ -60,8 +61,9 @@ from pulpcore.app.util import (  # noqa: E402: module level not at top of file
  )
  
  from pulpcore.exceptions import (  # noqa: E402
@@ -50,7 +50,7 @@ index 7e30e32cc..5699c3b6e 100644
  )
  from pulpcore.metrics import artifacts_size_counter  # noqa: E402
  
-@@ -934,6 +936,11 @@ class Handler:
+@@ -916,6 +918,11 @@ class Handler:
                              url=url, r=ce.message
                          )
                          raise Error(reason=reason)
@@ -62,7 +62,7 @@ index 7e30e32cc..5699c3b6e 100644
  
          if not any([repository, repo_version, publication, distro.remote]):
              reason = _(
-@@ -1311,6 +1318,10 @@ class Handler:
+@@ -1298,6 +1305,10 @@ class Handler:
          downloader.handle_data = handle_data
          original_finalize = downloader.finalize
          downloader.finalize = finalize
@@ -70,10 +70,10 @@ index 7e30e32cc..5699c3b6e 100644
 +            scan_repo = repository.pulp_labels.get("malware_scanning", "false")
 +            if scan_repo.lower() == "true":
 +                downloader.scan_repository = True
+         failed_download = True
          try:
              download_result = await downloader.run(
-                 extra_data={"disable_retry_list": (DigestValidationError,)}
-@@ -1333,6 +1344,16 @@ class Handler:
+@@ -1321,6 +1332,16 @@ class Handler:
                  "Learn more on <https://pulpproject.org/pulpcore/docs/user/learn/"
                  "on-demand-downloading/#on-demand-and-streamed-limitations>"
              )
@@ -87,11 +87,11 @@ index 7e30e32cc..5699c3b6e 100644
 +                "We can't remove the data already sent so we are "
 +                "forcing the connection to close.\n"
 +            )
- 
-         if save_artifact and remote.policy != Remote.STREAMED:
-             content_artifacts = await asyncio.shield(
+         finally:
+             if failed_download:
+                 # remove the temporary file
 diff --git a/pulpcore/download/base.py b/pulpcore/download/base.py
-index 114e65fa6..da6eb8961 100644
+index b093ad9e4..ab8acff4b 100644
 --- a/pulpcore/download/base.py
 +++ b/pulpcore/download/base.py
 @@ -1,6 +1,7 @@
@@ -117,8 +117,8 @@ index 114e65fa6..da6eb8961 100644
 +    MalwareError,
  )
  
- 
-@@ -115,6 +118,9 @@ class BaseDownloader:
+ log = logging.getLogger(__name__)
+@@ -114,6 +117,9 @@ class BaseDownloader:
                      ).format(self.url, Artifact.DIGEST_FIELDS, set(self.expected_digests))
                  )
  
@@ -128,7 +128,7 @@ index 114e65fa6..da6eb8961 100644
      def _ensure_writer_has_open_file(self):
          """
          Create a temporary file on demand.
-@@ -159,6 +165,7 @@ class BaseDownloader:
+@@ -158,6 +164,7 @@ class BaseDownloader:
          self._ensure_writer_has_open_file()
          self._writer.write(data)
          self._record_size_and_digests_for_data(data)
@@ -136,7 +136,7 @@ index 114e65fa6..da6eb8961 100644
  
      async def finalize(self):
          """
-@@ -182,6 +189,7 @@ class BaseDownloader:
+@@ -181,6 +188,7 @@ class BaseDownloader:
          self._writer = None
          self.validate_digests()
          self.validate_size()
@@ -144,7 +144,7 @@ index 114e65fa6..da6eb8961 100644
          log.debug(f"Downloaded file from {self.url}")
  
      def fetch(self, extra_data=None):
-@@ -211,6 +219,12 @@ class BaseDownloader:
+@@ -210,6 +218,12 @@ class BaseDownloader:
          concurrent.futures.wait(futures, timeout=None, return_when=ALL_COMPLETED)
          self._size += len(data)
  
@@ -157,7 +157,7 @@ index 114e65fa6..da6eb8961 100644
      @property
      def artifact_attributes(self):
          """
-@@ -252,6 +266,25 @@ class BaseDownloader:
+@@ -251,6 +265,25 @@ class BaseDownloader:
              if actual_size != expected_size:
                  raise SizeValidationError(actual_size, expected_size, url=self.url)
  
@@ -183,7 +183,7 @@ index 114e65fa6..da6eb8961 100644
      async def run(self, extra_data=None):
          """
          Run the downloader with concurrency restriction.
-@@ -307,3 +340,11 @@ class BaseDownloader:
+@@ -306,3 +339,11 @@ class BaseDownloader:
              :meth:`~pulpcore.plugin.download.BaseDownloader.finalize`.
          """
          raise NotImplementedError("Subclasses must define a _run() method that returns a coroutine")
@@ -196,7 +196,7 @@ index 114e65fa6..da6eb8961 100644
 +            self.clamd_client._init_socket()
 +            self.clamd_client._send_command("INSTREAM")
 diff --git a/pulpcore/exceptions/__init__.py b/pulpcore/exceptions/__init__.py
-index 55d875dcb..f18625761 100644
+index 4c458e439..17e30978b 100644
 --- a/pulpcore/exceptions/__init__.py
 +++ b/pulpcore/exceptions/__init__.py
 @@ -21,6 +21,7 @@ from .validation import (
@@ -207,16 +207,14 @@ index 55d875dcb..f18625761 100644
      ValidationError,
      MissingDigestValidationError,
      UnsupportedDigestValidationError,
- )
 diff --git a/pulpcore/exceptions/validation.py b/pulpcore/exceptions/validation.py
-index d5fcb23ad..43b923d7b 100644
+index 2131e5fce..94cd27ab1 100644
 --- a/pulpcore/exceptions/validation.py
 +++ b/pulpcore/exceptions/validation.py
-@@ -73,6 +73,25 @@ class SizeValidationError(ValidationError):
-             )
+@@ -74,6 +74,25 @@ class SizeValidationError(ValidationError):
              return f"[{self.error_code}] " + msg.format(expected=self.expected, actual=self.actual)
  
-+
+ 
 +class MalwareError(ValidationError):
 +    """
 +    Raised when a virus is found in file.
@@ -235,11 +233,12 @@ index d5fcb23ad..43b923d7b 100644
 +            msg = _("ClamAV detected a virus ({signature})")
 +            return msg.format(signature=self.virus)
 +
- 
++
  class MissingDigestValidationError(ValidationError):
      """
+     Raised when attempting to save() an Artifact with an incomplete set of checksums.
 diff --git a/pulpcore/plugin/exceptions.py b/pulpcore/plugin/exceptions.py
-index 59870dc62..b8362afe7 100644
+index 0406964ec..d1ffedd6a 100644
 --- a/pulpcore/plugin/exceptions.py
 +++ b/pulpcore/plugin/exceptions.py
 @@ -1,6 +1,7 @@
@@ -250,7 +249,7 @@ index 59870dc62..b8362afe7 100644
      InvalidSignatureError,
      PulpException,
      SizeValidationError,
-@@ -16,6 +17,7 @@ from pulpcore.exceptions import (
+@@ -17,6 +18,7 @@ from pulpcore.exceptions import (
  __all__ = [
      "ValidationError",
      "DigestValidationError",
@@ -259,5 +258,5 @@ index 59870dc62..b8362afe7 100644
      "PulpException",
      "SizeValidationError",
 -- 
-2.46.2
+2.53.0
 
