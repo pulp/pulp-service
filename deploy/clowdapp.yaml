@@ -978,14 +978,9 @@ objects:
           command: ['/bin/bash', '-c']
           args:
             - |
-              # Only run on pulp* clusters in stage environment
+              # Only run on pulp* worker clusters (stage + prod)
               if [[ "${CLUSTER_NAME}" != pulp* ]]; then
                 echo "Skipping: CLUSTER_NAME='${CLUSTER_NAME}' is not a pulp* cluster"
-                exit 0
-              fi
-
-              if [[ "${ENV_NAME}" != "stage" ]]; then
-                echo "Skipping: ENV_NAME='${ENV_NAME}' is not stage"
                 exit 0
               fi
 
