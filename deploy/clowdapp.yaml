@@ -417,6 +417,8 @@ objects:
             value: ${PULP_MIDDLEWARE}
           - name: PULP_PYPI_API_HOSTNAME
             value: ${{PULP_PYPI_API_HOSTNAME}}
+          - name: PULP_PYPI_PATH_PREFIX
+            value: ${{PULP_PYPI_PATH_PREFIX}}
           - name: PULP_FEATURE_SERVICE_API_CERT_PATH
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_FEATURE_SERVICE_API_URL
@@ -1379,7 +1381,10 @@ parameters:
     value: "@merge ['pulp_service.app.middleware.TrueClientIPMiddleware', 'pulp_service.app.middleware.RequestPathMiddleware', 'pulp_service.app.middleware.ActiveConnectionsMetricMiddleware', 'pulp_service.app.middleware.ProfilerMiddleware', 'pulp_service.app.middleware.RhEdgeHostMiddleware', 'pulp_service.app.middleware.RHSamlAuthHeaderMiddleware']"
   - name: PULP_PYPI_API_HOSTNAME
     description: The hostname used to form the distribution's `base_url`.
-    value: "http://pulp-content:8000"
+    value: "https://packages.redhat.com"
+  - name: PULP_PYPI_PATH_PREFIX
+    description: The path prefix for PyPI API endpoints.
+    value: "/api/pypi/"
   - name: PULP_SECURE_PROXY_SSL_HEADER
     description: Check for the correct url scheme to use when building URLs
     value: "['HTTP_X_FORWARDED_PROTO', 'https']"
