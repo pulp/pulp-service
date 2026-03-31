@@ -26,6 +26,14 @@ def vuln_report_service_api(service_bindings):
 
 
 @pytest.fixture(scope="session")
+def pypi_yank_report_api(service_bindings):
+    """PyPI Yank Report API fixture."""
+    return service_bindings.PypiYankReportApi
+
+
+
+
+@pytest.fixture(scope="session")
 def service_content_guards_api_client(service_bindings):
     """Api for service content guards."""
     return service_bindings.ContentguardsFeatureApi

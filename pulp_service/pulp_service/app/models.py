@@ -177,6 +177,17 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         )
 
 
+class YankedPackageReport(BaseModel):
+    """
+    Stores the result of a PyPI yank check for Python packages stored in Pulp.
+    """
+
+    report = models.JSONField()
+
+    class Meta:
+        default_related_name = "%(app_label)s_%(model_name)s"
+
+
 class VulnerabilityReport(BaseModel):
     """
     Model used in vulnerability report.

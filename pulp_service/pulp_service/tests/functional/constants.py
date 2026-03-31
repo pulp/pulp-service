@@ -1,3 +1,36 @@
+# PYPI YANK CHECK CONSTANTS
+# Packages verified as yanked via https://pypi.org/pypi/{package}/{version}/json
+YANKED_PACKAGES = [
+    {
+        "name": "attrs",
+        "version": "21.1.0",
+        "filename": "attrs-21.1.0-py2.py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+    },
+    {
+        "name": "safety",
+        "version": "2.3.0",
+        "filename": "safety-2.3.0-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+    },
+]
+
+# Packages verified as NOT yanked from PyPI, used in test_pypi_yank_check.py
+NOT_YANKED_PACKAGES = [
+    {
+        "name": "attrs",
+        "version": "23.1.0",
+        "filename": "attrs-23.1.0-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+    },
+    {
+        "name": "safety",
+        "version": "3.2.3",
+        "filename": "safety-3.2.3-py3-none-any.whl",
+        "packagetype": "bdist_wheel",
+    },
+]
+
 # CONTENT GUARD CONSTANTS
 CONTENT_GUARD_HEADER_NAME="x-rh-identity"
 CONTENT_GUARD_HEADER_VALUE='eyJpZGVudGl0eSI6IHsib3JnX2lkIjogIjE5MDEyMzQ3In19' 

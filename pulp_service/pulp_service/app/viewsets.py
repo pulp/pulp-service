@@ -16,7 +16,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from rest_framework import status
 from rest_framework.exceptions import APIException
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
@@ -37,10 +37,12 @@ from pulp_service.app.authentication import (
 from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.app.models import FeatureContentGuard
 from pulp_service.app.models import VulnerabilityReport as VulnReport
+from pulp_service.app.models import YankedPackageReport as YankedReport
 from pulp_service.app.serializers import (
     ContentScanSerializer,
     FeatureContentGuardSerializer,
     VulnerabilityReportSerializer,
+    YankedPackageReportSerializer,
 )
 from pulp_service.app.tasks.package_scan import check_npm_package, check_content_from_repo_version
 from pulp_rpm.app.models import Package
@@ -218,6 +220,32 @@ class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin,
             dispatch_task, kwargs = check_npm_package, {"npm_package": temp_file_pk}
 
         task = dispatch(dispatch_task, shared_resources=shared_resources, kwargs=kwargs)
+        return OperationPostponedResponse(task, request)
+
+
+class IsSuperuser(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_superuser
+
+
+class YankedPackageReportViewSet(
+    NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin
+):
+    endpoint_name = "pypi_yank_report"
+    queryset = YankedReport.objects.all()
+    serializer_class = YankedPackageReportSerializer
+    permission_classes = [IsSuperuser]
+
+    @extend_schema(
+        request=None,
+        description="Trigger a task to check Python packages stored in Pulp against PyPI for yanked versions",
+        summary="Check for yanked PyPI packages",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def create(self, request):
+        from pulp_service.app.tasks.pypi_yank_check import check_python_packages_for_yanked
+
+        task = dispatch(check_python_packages_for_yanked, exclusive_resources=[])
         return OperationPostponedResponse(task, request)
 
 

@@ -14,7 +14,7 @@ from pulpcore.plugin.serializers import (
 from pulpcore.plugin.models import PulpTemporaryFile
 from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
 
-from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport
+from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport, YankedPackageReport
 from pulp_service.app.constants import (
     NPM_PACKAGE_LOCK_SCHEMA,
     OSV_RH_ECOSYSTEM_CPES_LABEL,
@@ -51,6 +51,18 @@ class VulnerabilityReportSerializer(ModelSerializer):
     class Meta:
         model = VulnerabilityReport
         fields = ModelSerializer.Meta.fields + ("vulns",)
+
+
+class YankedPackageReportSerializer(ModelSerializer):
+    """
+    A serializer for the YankedPackageReport Model.
+    """
+
+    pulp_href = IdentityField(view_name="pypi_yank_report-detail")
+
+    class Meta:
+        model = YankedPackageReport
+        fields = ModelSerializer.Meta.fields + ("report",)
 
 
 class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
