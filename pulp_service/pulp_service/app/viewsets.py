@@ -35,10 +35,11 @@ from pulp_service.app.authentication import (
 )
 
 from pulp_service.app.authorization import DomainBasedPermission
-from pulp_service.app.models import FeatureContentGuard
+from pulp_service.app.models import AgentScanReport, FeatureContentGuard
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.models import YankedPackageReport as YankedReport
 from pulp_service.app.serializers import (
+    AgentScanReportSerializer,
     ContentScanSerializer,
     FeatureContentGuardSerializer,
     VulnerabilityReportSerializer,
@@ -733,3 +734,18 @@ class CreateDomainView(APIView):
         response_data = DomainSerializer(domain, context={"request": request}).data
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class AgentScanReportView(
+    NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin
+):
+
+    endpoint_name = "agent_scan_report"
+    queryset = AgentScanReport.objects.prefetch_related("repo_versions").select_related(
+        "content"
+    )
+    serializer_class = AgentScanReportSerializer
+
+    @classmethod
+    def routable(cls):
+        return True

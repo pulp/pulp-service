@@ -236,6 +236,16 @@ objects:
         wildcardPolicy: None
       EOF
 
+      # Create agent credentials secret
+      cat <<EOF > /tmp/application_default_credentials.json
+      {
+        "account": "",
+        ...
+      }
+      EOF
+      kubectl create secret generic agent-credentials --from-file=service-account-json=/tmp/application_default_credentials.json
+
+
 - apiVersion: v1
   kind: ConfigMap
   metadata:
@@ -598,6 +608,9 @@ objects:
           - name: pulp-settings
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
+          - name: agent-credentials
+            mountPath: "/.config/gcloud/application_default_credentials.json"
+            subPath: "application_default_credentials.json"
         volumes:
           - name: secret-volume
             secret:
@@ -605,6 +618,12 @@ objects:
           - name: pulp-settings
             secret:
               secretName: pulp-settings
+          - name: agent-credentials
+            secret:
+              secretName: agent-credentials
+              items:
+              - key: "service-account-json"
+                path: "application_default_credentials.json"
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -687,6 +706,8 @@ objects:
             value: ${PULP_MAX_CONCURRENT_CONTENT}
           - name: PULP_WORKER_TYPE
             value: ${PULP_WORKER_TYPE}
+          - name: ANTHROPIC_VERTEX_PROJECT_ID
+            value: ${ANTHROPIC_VERTEX_PROJECT_ID}
       autoScaler:
         minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
         maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
@@ -1480,4 +1501,6 @@ parameters:
   - name: CLUSTER_NAME
     description: Cluster identifier for the deployment (e.g. crcs02ue1, crcp01ue1)
     required: false
-
+  - name: ANTHROPIC_VERTEX_PROJECT_ID
+    description: PROJECT ID used by agents to authenticate to Vertex AI
+    value: "test-project"

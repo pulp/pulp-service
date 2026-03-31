@@ -1,6 +1,13 @@
+# build agent
+FROM registry.access.redhat.com/ubi9/go-toolset:9.7 AS builder
+
+COPY images/assets/agent-scan .
+RUN go mod download
+RUN CGO_ENABLED=0 go build -o agent-scan .
+
+# build pulp image
 FROM registry.access.redhat.com/ubi9/ubi
 ARG PYTHON_VERSION=3.11
-
 ENV PYTHONUNBUFFERED=0
 ENV DJANGO_SETTINGS_MODULE=pulpcore.app.settings
 ENV PULP_SETTINGS=/etc/pulp/settings.py
@@ -108,6 +115,8 @@ RUN PULP_STATIC_ROOT=/var/lib/operator/static/ PULP_CONTENT_ORIGIN=localhost \
        pulpcore-manager collectstatic --clear --noinput --link
 USER root:root
 
+COPY --from=builder /opt/app-root/src/agent-scan /usr/bin/agent-scan
+
 # This path seems to be hardcoded in tests
 RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manager
 
@@ -181,6 +190,12 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 
 COPY images/assets/patches/0051-Get-pk-from-uri-with-split-in-rpm.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0051-Get-pk-from-uri-with-split-in-rpm.patch
+
+COPY images/assets/patches/0052-pulpcore-agent-scan-report.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0052-pulpcore-agent-scan-report.patch
+
+COPY images/assets/patches/0053-python-agent-scan-task.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0053-python-agent-scan-task.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE

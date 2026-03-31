@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from pulpcore.plugin.serializers import (
     ContentGuardSerializer,
+    DetailRelatedField,
     GetOrCreateSerializerMixin,
     ModelSerializer,
     ValidateFieldsMixin,
@@ -14,7 +15,12 @@ from pulpcore.plugin.serializers import (
 from pulpcore.plugin.models import PulpTemporaryFile
 from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
 
-from pulp_service.app.models import FeatureContentGuard, VulnerabilityReport, YankedPackageReport
+from pulp_service.app.models import (
+    AgentScanReport,
+    FeatureContentGuard,
+    VulnerabilityReport,
+    YankedPackageReport,
+)
 from pulp_service.app.constants import (
     NPM_PACKAGE_LOCK_SCHEMA,
     OSV_RH_ECOSYSTEM_CPES_LABEL,
@@ -126,3 +132,17 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             raise serializers.ValidationError(_("Invalid JSON format."))
 
         return temp_file.pk
+
+
+class AgentScanReportSerializer(ModelSerializer):
+    reports = serializers.CharField()
+    pulp_href = IdentityField(view_name="agent_scan_report-detail")
+    content = DetailRelatedField(
+        read_only=True,
+        view_name_pattern=r"content(-.*/.*)-detail",
+    )
+    repo_versions = RepositoryVersionRelatedField(many=True, required=False)
+
+    class Meta:
+        model = AgentScanReport
+        fields = ModelSerializer.Meta.fields + ("reports", "repo_versions", "content")
