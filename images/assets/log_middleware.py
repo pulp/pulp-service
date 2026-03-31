@@ -85,7 +85,9 @@ class UserExtractionMiddleware:
         # Expose the (possibly modified) X-Forwarded-For as a plain environ key.
         # Gunicorn's %({name}i)s reads raw request headers, not environ, so
         # the log format uses %({X_FORWARDED_FOR}e)s to pick up this value.
-        environ["X_FORWARDED_FOR"] = environ.get("HTTP_X_FORWARDED_FOR", "")
+        xff_value = environ.get("HTTP_X_FORWARDED_FOR")
+        if xff_value:
+            environ["X_FORWARDED_FOR"] = xff_value
 
         return self.app(environ, start_response)
 
