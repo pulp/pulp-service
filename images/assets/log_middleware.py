@@ -1,4 +1,5 @@
 import base64
+import ipaddress
 import json
 import logging
 import sys
@@ -67,6 +68,21 @@ class UserExtractionMiddleware:
             environ["REMOTE_USER"] = username
         if org_id:
             environ["ORG_ID"] = org_id
+
+        # Prepend True-Client-IP to X-Forwarded-For so gunicorn access logs
+        # capture the real client IP. This must happen at the WSGI level
+        # because gunicorn logs the original header before Django middleware runs.
+        true_client_ip = environ.get("HTTP_TRUE_CLIENT_IP", "").strip()
+        if true_client_ip:
+            try:
+                ipaddress.ip_address(true_client_ip)
+                xff = environ.get("HTTP_X_FORWARDED_FOR", "")
+                if xff:
+                    environ["HTTP_X_FORWARDED_FOR"] = f"{true_client_ip}, {xff}"
+                else:
+                    environ["HTTP_X_FORWARDED_FOR"] = true_client_ip
+            except ValueError:
+                pass
 
         return self.app(environ, start_response)
 
