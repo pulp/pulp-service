@@ -1,0 +1,53 @@
+diff --git a/pulpcore/app/serializers/content.py b/pulpcore/app/serializers/content.py
+index c011965ef..d321fff7d 100644
+--- a/pulpcore/app/serializers/content.py
++++ b/pulpcore/app/serializers/content.py
+@@ -38,6 +38,11 @@ class NoArtifactContentSerializer(base.ModelSerializer):
+         view_name="vuln_report-detail",
+         source="core_vulnerabilityreport",
+     )
++    agent_scan_report = RelatedField(
++        read_only=True,
++        view_name="agent_scan_report-detail",
++        source="service_agentscanreport",
++    )
+ 
+     def get_artifacts(self, validated_data):
+         """
+@@ -128,6 +133,7 @@ class NoArtifactContentSerializer(base.ModelSerializer):
+             "repository",
+             "pulp_labels",
+             "vuln_report",
++            "agent_scan_report"
+         )
+ 
+ 
+diff --git a/pulpcore/app/serializers/repository.py b/pulpcore/app/serializers/repository.py
+index fbcf19b92..3c00c8f37 100644
+--- a/pulpcore/app/serializers/repository.py
++++ b/pulpcore/app/serializers/repository.py
+@@ -292,10 +292,16 @@ class RepositoryVersionSerializer(ModelSerializer, NestedHyperlinkedModelSeriali
+     vuln_report = serializers.SerializerMethodField(
+         read_only=True,
+     )
++    agent_scan_report = serializers.SerializerMethodField(
++        read_only=True,
++    )
+ 
+     def get_vuln_report(self, object):
+         return f"{reverse('vuln_report-list')}?repo_versions={get_prn(object)}"
+ 
++    def get_agent_scan_report(self, object):
++        return f"{reverse('agent_scan_report-list')}?repo_versions={get_prn(object)}"
++
+     class Meta:
+         model = models.RepositoryVersion
+         fields = ModelSerializer.Meta.fields + (
+@@ -305,6 +311,7 @@ class RepositoryVersionSerializer(ModelSerializer, NestedHyperlinkedModelSeriali
+             "base_version",
+             "content_summary",
+             "vuln_report",
++            "agent_scan_report"
+         )
+ 
+ 

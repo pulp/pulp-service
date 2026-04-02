@@ -17,7 +17,7 @@ from django.db import models
 
 from django.contrib.postgres.fields import ArrayField
 
-from pulpcore.plugin.models import BaseModel, Domain, Group
+from pulpcore.plugin.models import BaseModel, Content, Domain, Group, RepositoryVersion
 from pulpcore.plugin.models import AutoAddObjPermsMixin
 from pulpcore.plugin.util import get_domain_pk
 
@@ -195,6 +195,19 @@ class VulnerabilityReport(BaseModel):
 
     vulns = models.JSONField()
     pulp_domain = models.ForeignKey("core.Domain", default=get_domain_pk, on_delete=models.CASCADE)
+
+    class Meta:
+        default_related_name = "%(app_label)s_%(model_name)s"
+
+class AgentScanReport(BaseModel):
+    content = models.OneToOneField(
+        Content,
+        on_delete=models.CASCADE,
+        unique=True,
+    )
+    reports = models.TextField()
+    pulp_domain = models.ForeignKey(Domain, default=get_domain_pk, on_delete=models.CASCADE)
+    repo_versions = models.ManyToManyField(RepositoryVersion, blank=True)
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
