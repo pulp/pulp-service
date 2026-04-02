@@ -609,8 +609,7 @@ objects:
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
           - name: agent-credentials
-            mountPath: "/.config/gcloud/application_default_credentials.json"
-            subPath: "application_default_credentials.json"
+            mountPath: "/.config/gcloud/"
         volumes:
           - name: secret-volume
             secret:
@@ -621,9 +620,6 @@ objects:
           - name: agent-credentials
             secret:
               secretName: agent-credentials
-              items:
-              - key: "service-account-json"
-                path: "application_default_credentials.json"
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
