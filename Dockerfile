@@ -1,5 +1,5 @@
 # build agent
-FROM registry.access.redhat.com/ubi9/go-toolset:9.7 AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:9.7-1775437082 AS builder
 
 COPY images/assets/agent-scan .
 RUN go mod download
