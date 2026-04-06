@@ -244,6 +244,12 @@ objects:
       }
       EOF
       kubectl create secret generic agent-credentials --from-file=service-account-json=/tmp/application_default_credentials.json
+      kubectl create secret generic agent-splunk --from-literal=jira_url="https://<my-jira-url>" \
+        --from-literal=jira_username="<my-jira-user@example.com>" \
+        --from-literal=jira_api_token="<my-jira-token>" \
+        --from-literal=project_id="<vertex-ai-project-id>" \
+        --from-literal=splunk_url="https://<splunk-url>/" \
+        --from-literal=splunk_token="<splunk-token>"
 
 
 - apiVersion: v1
@@ -857,6 +863,51 @@ objects:
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
 
+    - name: mcp-atlassian
+      replicas: ${{MCP_ATLASSIAN_REPLICAS}}
+      podSpec:
+        image: ${{MCP_ATLASSIAN_IMAGE}}
+        env:
+          - name: JIRA_URL
+            valueFrom:
+              secretKeyRef:
+                name: agent-splunk
+                key: jira_url
+                optional: false
+          - name: JIRA_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: agent-splunk
+                key: jira_username
+                optional: false
+          - name: JIRA_API_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: agent-splunk
+                key: jira_api_token
+                optional: false
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 30
+          timeoutSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 10
+        resources:
+          requests:
+            cpu: ${{MCP_ATLASSIAN_CPU_REQUEST}}
+            memory: ${{MCP_ATLASSIAN_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{MCP_ATLASSIAN_CPU_LIMIT}}
+            memory: ${{MCP_ATLASSIAN_MEMORY_LIMIT}}   
+
     database:
       name: pulp
       version: 15
@@ -1146,6 +1197,71 @@ objects:
             limits:
               cpu: 500m
               memory: 1Gi
+
+      - name: agent-splunk
+        schedule: "0 * * * *"
+        restartPolicy: Never
+        concurrencyPolicy: Forbid
+        podSpec:
+          image: ${{AGENT_SPLUNK_IMAGE}}
+          env:
+            - name: JIRA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agent-splunk
+                  key: jira_url
+                  optional: false
+            - name: JIRA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: agent-splunk
+                  key: jira_username
+                  optional: false
+            - name: JIRA_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-splunk
+                  key: jira_api_token
+                  optional: false
+            - name: ANTHROPIC_VERTEX_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: agent-splunk
+                  key: project_id
+                  optional: false
+            - name: SPLUNK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agent-splunk
+                  key: splunk_url
+                  optional: false
+            - name: SPLUNK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-splunk
+                  key: splunk_token
+                  optional: false
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: JIRA_MCP_URL
+              value: http://${MCP_ATLASSIAN_SVC_NAME}.$(NAMESPACE).svc:${MCP_ATLASSIAN_PORT}/mcp
+          volumeMounts:
+            - name: agent-credentials
+              mountPath: "/.config/gcloud/"
+          volumes:
+            - name: agent-credentials
+              secret:
+                secretName: agent-credentials
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
 
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
@@ -1500,3 +1616,32 @@ parameters:
   - name: ANTHROPIC_VERTEX_PROJECT_ID
     description: PROJECT ID used by agents to authenticate to Vertex AI
     value: "test-project"
+
+# TODO: change these images!!!!!
+  - name: AGENT_SPLUNK_IMAGE
+    description: Specify which container image will be deployed by agent-splunk cronjob
+    value: "quay.io/rhn_support_hyagi/agent-splunk:latest"
+  - name: MCP_ATLASSIAN_IMAGE
+    description: Specify which container image will be deployed for the mcp-atlassian service
+    value: "quay.io/rhn_support_hyagi/mcp-atlassian:latest"
+  - name: MCP_ATLASSIAN_REPLICAS
+    description: Number of mcp-atlassian replicas
+    value: "1"
+  - name: MCP_ATLASSIAN_CPU_REQUEST
+    description: Amount of CPU to request for mcp-atlassian pods
+    value: "250m"
+  - name: MCP_ATLASSIAN_CPU_LIMIT
+    description: Limit of CPU use by mcp-atlassian pods
+    value: "500m"
+  - name: MCP_ATLASSIAN_MEMORY_REQUEST
+    description: Amount of memory to request for mcp-atlassian pods
+    value: "256Mi"
+  - name: MCP_ATLASSIAN_MEMORY_LIMIT
+    description: Limit of memory use by mcp-atlassian pods
+    value: "512Mi"
+  - name: MCP_ATLASSIAN_SVC_NAME
+    description: MCP Atlassian service name. This variable will be used by agent-splunk to connect to the atlassian mcp server.
+    value: pulp-mcp-atlassian
+  - name: MCP_ATLASSIAN_PORT
+    description: MCP Atlassian service port. This variable will be used by agent-splunk to connect to the atlassian mcp server.
+    value: "9000"
