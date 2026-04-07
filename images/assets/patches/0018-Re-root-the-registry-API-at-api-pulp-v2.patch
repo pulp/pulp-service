@@ -16,11 +16,11 @@ index dbe6418d..006e8afb 100644
 --- a/pulp_container/app/content.py
 +++ b/pulp_container/app/content.py
 @@ -6,7 +6,7 @@ from pulp_container.app.registry import Registry
- 
+
  registry = Registry()
- 
+
 -PREFIX = "/pulp/container/{pulp_domain}/" if settings.DOMAIN_ENABLED else "/pulp/container/"
-+PREFIX = "/api/pulp-container/{pulp_domain}/" if settings.DOMAIN_ENABLED else "/pulp/container/"
++PREFIX = f"{settings.CONTENT_PATH_PREFIX}container/{{pulp_domain}}/" if settings.DOMAIN_ENABLED else "/pulp/container/"
  
  app.add_routes(
      [
@@ -33,7 +33,7 @@ index 0c7a5898..fa4808cb 100644
          self.request = request
          self.path_prefix = (
 -            f"pulp/container/{request.pulp_domain.name}"
-+            f"api/pulp-container/{request.pulp_domain.name}"
++            f"{settings.CONTENT_PATH_PREFIX.lstrip('/')}container/{request.pulp_domain.name}"
              if settings.DOMAIN_ENABLED
              else "pulp/container"
          )
