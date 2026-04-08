@@ -56,10 +56,10 @@ class HeadersWithModifiedXForwardedFor:
             return [self._modified_xff]
         return self._original.getall(key, default)
 
-    def getone(self, key, default=None):
+    def getone(self, key):
         if key.lower() == "x-forwarded-for":
             return self._modified_xff
-        return self._original.getone(key, default)
+        return self._original.getone(key)
 
     def keys(self):
         return self._original.keys()
