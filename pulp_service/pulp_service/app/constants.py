@@ -42,6 +42,7 @@ VULNERABILITY_TASK_THREAD_TIMEOUT = 60
 
 PYPI_JSON_URL = "https://pypi.org/pypi/{package}/json"
 PYPI_CHECK_CONCURRENCY = 50
+PYTHON_REPOSITORY_PULP_TYPE = "python.python"
 
 CONTENT_SOURCES_LABEL_NAME = "contentsources"
 RHEL_AI_DOMAIN_NAME = "rhel-ai"

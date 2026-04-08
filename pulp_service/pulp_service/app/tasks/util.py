@@ -44,6 +44,15 @@ def except_catch_and_raise(queue):
     return decorator
 
 
+def register_pypi_yank_monitor_schedule():
+    name = "Monitor PyPI packages for yanking"
+    task_name = "pulp_service.app.tasks.pypi_yank_check.dispatch_pypi_yank_checks"
+    TaskSchedule.objects.update_or_create(
+        name=name,
+        defaults={"task_name": task_name, "dispatch_interval": timedelta(days=1)},
+    )
+
+
 def no_op_task():
     with connections["default"].cursor() as cursor:
         cursor.execute("SELECT 1")

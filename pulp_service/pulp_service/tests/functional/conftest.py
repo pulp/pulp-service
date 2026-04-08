@@ -25,10 +25,11 @@ def vuln_report_service_api(service_bindings):
     return service_bindings.VulnReportServiceApi
 
 
+
 @pytest.fixture(scope="session")
-def pypi_yank_report_api(service_bindings):
-    """PyPI Yank Report API fixture."""
-    return service_bindings.PypiYankReportApi
+def pypi_yank_monitor_api(service_bindings):
+    """PyPI Yank Monitor API fixture."""
+    return service_bindings.PypiYankMonitorApi
 
 
 

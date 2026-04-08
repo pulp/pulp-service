@@ -10,6 +10,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.db import transaction
 from django.db.models.query import QuerySet
+from django.http import Http404
 from django.shortcuts import redirect
 
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -19,7 +20,8 @@ from rest_framework.exceptions import APIException
 from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
+from rest_framework.decorators import action
+from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 
 from pulpcore.plugin.viewsets import OperationPostponedResponse
 from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
@@ -27,6 +29,9 @@ from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
 from pulpcore.plugin.tasking import dispatch
 from pulpcore.app.models import Domain, Group, Task
 from pulpcore.app.serializers import DomainSerializer
+from pulpcore.filters import BaseFilterSet, HyperlinkRelatedFilter
+from pulpcore.app.viewsets.base import NAME_FILTER_OPTIONS
+from pulpcore.app.viewsets.custom_filters import LabelFilter
 
 
 from pulp_service.app.authentication import (
@@ -36,12 +41,14 @@ from pulp_service.app.authentication import (
 
 from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.app.models import AgentScanReport, FeatureContentGuard
+from pulp_service.app.models import PyPIYankMonitor
 from pulp_service.app.models import VulnerabilityReport as VulnReport
-from pulp_service.app.models import YankedPackageReport as YankedReport
+from pulp_service.app.models import YankedPackageReport
 from pulp_service.app.serializers import (
     AgentScanReportSerializer,
     ContentScanSerializer,
     FeatureContentGuardSerializer,
+    PyPIYankMonitorSerializer,
     VulnerabilityReportSerializer,
     YankedPackageReportSerializer,
 )
@@ -229,25 +236,47 @@ class IsSuperuser(BasePermission):
         return request.user and request.user.is_superuser
 
 
-class YankedPackageReportViewSet(
-    NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin
+
+class PyPIYankMonitorFilter(BaseFilterSet):
+    pulp_label_select = LabelFilter()
+    repository = HyperlinkRelatedFilter(allow_null=True)
+
+    class Meta:
+        model = PyPIYankMonitor
+        fields = {"name": NAME_FILTER_OPTIONS}
+
+
+class PyPIYankMonitorViewSet(
+    NamedModelViewSet, CreateModelMixin, ListModelMixin, RetrieveModelMixin, DestroyModelMixin
 ):
-    endpoint_name = "pypi_yank_report"
-    queryset = YankedReport.objects.all()
-    serializer_class = YankedPackageReportSerializer
+    endpoint_name = "pypi_yank_monitor"
+    queryset = PyPIYankMonitor.objects.all()
+    serializer_class = PyPIYankMonitorSerializer
+    filterset_class = PyPIYankMonitorFilter
     permission_classes = [IsSuperuser]
 
-    @extend_schema(
-        request=None,
-        description="Trigger a task to check Python packages stored in Pulp against PyPI for yanked versions",
-        summary="Check for yanked PyPI packages",
-        responses={202: AsyncOperationResponseSerializer},
-    )
-    def create(self, request):
-        from pulp_service.app.tasks.pypi_yank_check import check_python_packages_for_yanked
-
-        task = dispatch(check_python_packages_for_yanked, exclusive_resources=[])
+    @extend_schema(request=None, responses={202: AsyncOperationResponseSerializer})
+    @action(detail=True, methods=["post"], url_path="check")
+    def check(self, request, pk=None):
+        monitor = self.get_object()
+        repo = monitor.repository or monitor.repository_version.repository
+        task = dispatch(
+            "pulp_service.app.tasks.pypi_yank_check.check_packages_for_monitor",
+            shared_resources=[repo],
+            kwargs={"monitor_pk": str(monitor.pk)},
+        )
         return OperationPostponedResponse(task, request)
+
+    @extend_schema(responses=YankedPackageReportSerializer)
+    @action(detail=True, methods=["get"], url_path="report")
+    def report(self, request, pk=None):
+        monitor = self.get_object()
+        try:
+            latest_report = monitor.reports.latest("pulp_created")
+        except YankedPackageReport.DoesNotExist:
+            raise Http404
+        serializer = YankedPackageReportSerializer(latest_report, context={"request": request})
+        return Response(serializer.data)
 
 
 class TaskIngestionDispatcherView(APIView):

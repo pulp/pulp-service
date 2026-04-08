@@ -15,7 +15,7 @@ from gettext import gettext as _
 from django.conf import settings
 from django.db import models
 
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields import ArrayField, HStoreField
 
 from pulpcore.plugin.models import BaseModel, Content, Domain, Group, RepositoryVersion
 from pulpcore.plugin.models import AutoAddObjPermsMixin
@@ -183,6 +183,46 @@ class YankedPackageReport(BaseModel):
     """
 
     report = models.JSONField()
+    monitor = models.ForeignKey(
+        "PyPIYankMonitor",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reports",
+    )
+    repository_name = models.TextField(null=True, blank=True)
+
+    class Meta:
+        default_related_name = "%(app_label)s_%(model_name)s"
+
+
+class PyPIYankMonitor(BaseModel):
+    """
+    Registers a Python repository or repository version for daily PyPI yank monitoring.
+    Exactly one of repository or repository_version must be set.
+    """
+
+    name = models.TextField(db_index=True, unique=True)
+    description = models.TextField(null=True, blank=True)
+    pulp_labels = HStoreField(default=dict)
+    repository = models.ForeignKey(
+        "core.Repository", on_delete=models.CASCADE, null=True, blank=True
+    )
+    repository_version = models.ForeignKey(
+        "core.RepositoryVersion", on_delete=models.CASCADE, null=True, blank=True
+    )
+    last_checked = models.DateTimeField(null=True, blank=True)
+
+    def get_repo_version_and_name(self):
+        """Return (repository_version, repository_name) for this monitor.
+
+        If pinned to a version, return it directly. Otherwise return the latest
+        complete version of the repository.
+        """
+        if self.repository_version:
+            return self.repository_version, self.repository_version.repository.name
+        latest = self.repository.versions.complete().latest("number")
+        return latest, self.repository.name
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
