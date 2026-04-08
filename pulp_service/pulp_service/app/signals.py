@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from django.db.models.signals import post_save
+from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 
@@ -11,6 +11,14 @@ from pulp_service.app.models import DomainOrg
 
 
 _logger = logging.getLogger(__name__)
+
+
+@receiver(post_migrate)
+def register_scheduled_tasks(sender, **kwargs):
+    if sender.name == "pulp_service.app":
+        from pulp_service.app.tasks.util import register_pypi_yank_monitor_schedule
+
+        register_pypi_yank_monitor_schedule()
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)

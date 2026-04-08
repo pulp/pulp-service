@@ -14,10 +14,12 @@ from pulpcore.plugin.serializers import (
 )
 from pulpcore.plugin.models import PulpTemporaryFile
 from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
+from pulpcore.app.models import Repository
 
 from pulp_service.app.models import (
     AgentScanReport,
     FeatureContentGuard,
+    PyPIYankMonitor,
     VulnerabilityReport,
     YankedPackageReport,
 )
@@ -25,6 +27,7 @@ from pulp_service.app.constants import (
     NPM_PACKAGE_LOCK_SCHEMA,
     OSV_RH_ECOSYSTEM_CPES_LABEL,
     OSV_RH_ECOSYSTEM_LABEL,
+    PYTHON_REPOSITORY_PULP_TYPE,
 )
 
 
@@ -64,11 +67,51 @@ class YankedPackageReportSerializer(ModelSerializer):
     A serializer for the YankedPackageReport Model.
     """
 
-    pulp_href = IdentityField(view_name="pypi_yank_report-detail")
-
     class Meta:
         model = YankedPackageReport
-        fields = ModelSerializer.Meta.fields + ("report",)
+        fields = ("pulp_created", "pulp_last_updated", "report", "repository_name")
+
+
+class PyPIYankMonitorSerializer(ModelSerializer):
+    """
+    A serializer for the PyPIYankMonitor Model.
+    """
+
+    pulp_href = IdentityField(view_name="pypi_yank_monitor-detail")
+    repository = DetailRelatedField(
+        view_name_pattern=r"repositories(-.*/.*)-detail",
+        queryset=Repository.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    repository_version = RepositoryVersionRelatedField(
+        required=False,
+        allow_null=True,
+    )
+
+    def validate(self, data):
+        repo = data.get("repository")
+        repo_version = data.get("repository_version")
+        if bool(repo) == bool(repo_version):
+            raise serializers.ValidationError(
+                _("Exactly one of 'repository' or 'repository_version' must be specified.")
+            )
+        if repo and repo.pulp_type != PYTHON_REPOSITORY_PULP_TYPE:
+            raise serializers.ValidationError(
+                _("Only Python repositories can be monitored for PyPI yanking.")
+            )
+        if repo_version and repo_version.repository.pulp_type != PYTHON_REPOSITORY_PULP_TYPE:
+            raise serializers.ValidationError(
+                _("Only Python repository versions can be monitored for PyPI yanking.")
+            )
+        return data
+
+    class Meta:
+        model = PyPIYankMonitor
+        fields = ModelSerializer.Meta.fields + (
+            "name", "description", "pulp_labels",
+            "repository", "repository_version", "last_checked",
+        )
 
 
 class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
