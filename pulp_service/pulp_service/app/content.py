@@ -51,6 +51,16 @@ class HeadersWithModifiedXForwardedFor:
     def __len__(self):
         return len(self._original)
 
+    def getall(self, key, default=None):
+        if key.lower() == "x-forwarded-for":
+            return [self._modified_xff]
+        return self._original.getall(key, default)
+
+    def getone(self, key, default=None):
+        if key.lower() == "x-forwarded-for":
+            return self._modified_xff
+        return self._original.getone(key, default)
+
     def keys(self):
         return self._original.keys()
 
