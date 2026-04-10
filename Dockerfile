@@ -185,12 +185,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0049-Skip-content-units-validation.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
 
-COPY images/assets/patches/0050-Get-pk-from-uri-with-split.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0050-Get-pk-from-uri-with-split.patch
-
-COPY images/assets/patches/0051-Get-pk-from-uri-with-split-in-rpm.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0051-Get-pk-from-uri-with-split-in-rpm.patch
-
 COPY images/assets/patches/0052-pulpcore-agent-scan-report.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0052-pulpcore-agent-scan-report.patch
 
