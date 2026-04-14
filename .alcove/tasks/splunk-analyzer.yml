@@ -1,0 +1,20 @@
+name: Splunk Log Analyzer
+description: |
+  Analyzes Splunk logs for 5xx errors and drafts Jira issues.
+  Runs as a pre-compiled agent binary from GitHub Releases.
+
+executable:
+  url: https://github.com/pulp/pulp-service/releases/download/agent-splunk-20260414-e4c209e/agent-splunk
+  args: ["--model", "claude-opus-4-6"]
+  env:
+    SPLUNK_INSECURE_SKIP_VERIFY: "true"
+
+timeout: 1800
+
+profiles:
+  - splunk-analyzer
+
+credentials:
+  SPLUNK_TOKEN: splunk
+  JIRA_TOKEN: jira
+  VERTEX_SA_JSON: google-vertex
