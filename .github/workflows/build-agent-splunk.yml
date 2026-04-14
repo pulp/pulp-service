@@ -53,6 +53,5 @@ jobs:
           else
             gh release create "$TAG" \
               --title "agent-splunk $TAG" \
-              --generate-notes \
               agent-splunk
           fi
