@@ -4,6 +4,14 @@ The PyPI Yank Monitor checks Python packages in your Pulp repositories against p
 
 Monitors run automatically on a daily schedule. You can also trigger a check on demand.
 
+## How monitoring works
+
+A daily scheduled task dispatches a yank check for every registered monitor. The task queries the PyPI JSON API for each package in the monitored repository and compares the yank status of each version. Results are stored as a report linked to the monitor.
+
+Yank monitors are **not scoped to a Pulp domain**. Although you access the API through a domain-specific path (for example, `/api/pulp/public-rhai/api/v3/`), monitors are stored globally. The daily scheduled task runs from the `default` domain and processes all monitors regardless of which domain path was used to create them.
+
+> **Note**: The `pulp_href` returned for a monitor always uses the `default` domain path (for example, `/api/pulp/default/api/v3/pypi_yank_monitor/...`), even when you create the monitor through a different domain path. Use the returned `pulp_href` for subsequent operations on that monitor.
+
 ## Prerequisites
 
 Before proceeding, ensure that you have:
@@ -58,7 +66,7 @@ The response includes the monitor `pulp_href`:
 
 ```json
 {
-  "pulp_href": "/api/pulp/public-rhai/api/v3/pypi_yank_monitor/abcdef01-2345-6789-abcd-ef0123456789/",
+  "pulp_href": "/api/pulp/default/api/v3/pypi_yank_monitor/abcdef01-2345-6789-abcd-ef0123456789/",
   "name": "yank-monitor-my-repo",
   "repository": "/api/pulp/public-rhai/api/v3/repositories/python/python/01234567-89ab-cdef-0123-456789abcdef/",
   "repository_version": null,
@@ -148,13 +156,15 @@ curl ${AUTH} -X DELETE \
 
 ## API reference
 
+All endpoints use the base path `/api/pulp/{domain}/api/v3/`.
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v3/pypi_yank_monitor/` | `GET` | List all monitors (supports filtering by `name`, `repository`, `pulp_label_select`) |
-| `/api/v3/pypi_yank_monitor/` | `POST` | Create a new monitor |
-| `/api/v3/pypi_yank_monitor/{id}/` | `GET` | Retrieve a specific monitor |
-| `/api/v3/pypi_yank_monitor/{id}/` | `DELETE` | Delete a monitor |
-| `/api/v3/pypi_yank_monitor/{id}/check/` | `POST` | Trigger an on-demand yank check (returns 202 with task) |
-| `/api/v3/pypi_yank_monitor/{id}/report/` | `GET` | Retrieve the latest yank report (returns 404 if no report exists) |
+| `pypi_yank_monitor/` | `GET` | List all monitors (supports filtering by `name`, `repository`, `pulp_label_select`) |
+| `pypi_yank_monitor/` | `POST` | Create a new monitor |
+| `pypi_yank_monitor/{id}/` | `GET` | Retrieve a specific monitor |
+| `pypi_yank_monitor/{id}/` | `DELETE` | Delete a monitor |
+| `pypi_yank_monitor/{id}/check/` | `POST` | Trigger an on-demand yank check (returns 202 with task) |
+| `pypi_yank_monitor/{id}/report/` | `GET` | Retrieve the latest yank report (returns 404 if no report exists) |
 
 All endpoints require **superuser** permissions.
