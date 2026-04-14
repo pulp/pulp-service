@@ -22,13 +22,6 @@ jobs:
         with:
           name: agent-splunk
           path: tools/agents/agent-splunk/agent-splunk
-      - name: Build and push image
-        uses: docker/build-push-action@v6
-        with:
-          context: tools/agents/agent-splunk
-          file: tools/agents/agent-splunk/Containerfile
-          push: true
-          tags: ghcr.io/pulp/agent-splunk:latest
 
   release:
     needs: build
