@@ -936,14 +936,67 @@ spec:
               POSTN=$(cat /workspace/postN)
               SHORT_COMMIT_SHA=$(cat /workspace/commit_sha)
               PULP_FILE_REPO=$(cat /workspace/file_repo)
+              PULP_BASE_URL="https://mtls.internal.console.redhat.com"
+              CERT="/workspace/pulp-sa-cert.pem"
 
               # copy pulp certificate into API container
               oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "echo \"$PULP_CREDENTIALS\" > /tmp/pulp-sa-cert.pem"
-              
-              # UPLOAD FILES TO PULP
-              for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
-                oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "curl -s -XPOST --cert /tmp/pulp-sa-cert.pem -F \"file=@/data/api-${PACKAGE//_/-}.json\" https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/  -F \"relative_path=${PACKAGE}-${CUR_DATE}.${POSTN}+${SHORT_COMMIT_SHA}\" -F \"repository=${PULP_FILE_REPO}\""
+
+              # Phase 1: Upload each schema synchronously and collect content hrefs
+              # /upload/ is synchronous — returns content href directly, no task polling needed
+              CONTENT_HREFS=()
+
+              for PACKAGE in $PULP_BINDINGS_COMPONENTS; do
+                RELATIVE_PATH="${PACKAGE}-${CUR_DATE}.${POSTN}+${SHORT_COMMIT_SHA}"
+                FILENAME="api-${PACKAGE//_/-}.json"
+                echo "Uploading $FILENAME as $RELATIVE_PATH ..."
+
+                CONTENT_HREF=$(oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c \
+                  "curl -sf -XPOST --cert /tmp/pulp-sa-cert.pem \
+                    -F 'file=@/data/${FILENAME}' \
+                    -F 'relative_path=${RELATIVE_PATH}' \
+                    https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/upload/" \
+                  | python3 -c "import json,sys; print(json.load(sys.stdin)['pulp_href'])")
+
+                echo "Content href: $CONTENT_HREF"
+                CONTENT_HREFS+=("$CONTENT_HREF")
               done
+
+              # Build modify JSON body with all collected hrefs
+              CONTENT_HREFS_JSON=$(python3 -c \
+                "import json,sys
+              hrefs = sys.argv[1:]
+              print(json.dumps({'add_content_units': hrefs}))
+              " "${CONTENT_HREFS[@]}")
+              echo "Modify payload: $CONTENT_HREFS_JSON"
+
+              # Single modify call — one new repository version for all content
+              echo "Adding all content units to repository in one version..."
+              MODIFY_RESPONSE=$(curl -sf -XPOST --cert "$CERT" \
+                -H "Content-Type: application/json" \
+                -d "$CONTENT_HREFS_JSON" \
+                "${PULP_BASE_URL}${PULP_FILE_REPO}modify/")
+
+              MODIFY_TASK_HREF=$(echo "$MODIFY_RESPONSE" | python3 -c \
+                "import json,sys; print(json.load(sys.stdin)['task'])")
+              echo "Modify task: $MODIFY_TASK_HREF"
+
+              # Poll the modify task until completion
+              while true; do
+                MODIFY_RESULT=$(curl -sf --cert "$CERT" "${PULP_BASE_URL}${MODIFY_TASK_HREF}")
+                MODIFY_STATE=$(echo "$MODIFY_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['state'])")
+                case "$MODIFY_STATE" in
+                  completed) break ;;
+                  failed|canceled)
+                    echo "ERROR: Modify task ended with state: $MODIFY_STATE" >&2
+                    echo "$MODIFY_RESULT" >&2
+                    exit 1 ;;
+                  *) sleep 5 ;;
+                esac
+              done
+              echo "Repository modify completed successfully."
+              echo "New repository version: $(echo "$MODIFY_RESULT" | python3 -c \
+                "import json,sys; print(json.load(sys.stdin).get('created_resources', ['(none)'])[0])")"
 
     - name: publish-bindings-to-pypi
       when:
