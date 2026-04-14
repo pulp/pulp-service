@@ -1,0 +1,58 @@
+name: Build agent-splunk
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/agents/agent-splunk/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Build
+        working-directory: tools/agents/agent-splunk
+        run: CGO_ENABLED=0 go build -o agent-splunk .
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-splunk
+          path: tools/agents/agent-splunk/agent-splunk
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: tools/agents/agent-splunk
+          push: true
+          tags: ghcr.io/pulp/agent-splunk:latest
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="agent-splunk-$(date +'%Y%m%d')-${GITHUB_SHA::7}"
+          fi
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-splunk
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: agent-splunk ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: agent-splunk
