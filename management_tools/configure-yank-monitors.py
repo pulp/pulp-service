@@ -46,11 +46,14 @@ def _raise_for_status(response: requests.Response) -> None:
 
 
 def _safe_next_url(next_url: str | None, expected_host: str) -> str | None:
-    """Return next_url only if it points to the expected host."""
+    """Return next_url only if it points to the expected host.
+
+    Relative URLs (no hostname) are treated as same-host and returned as-is.
+    """
     if next_url is None:
         return None
     parsed = urlparse(next_url)
-    if parsed.hostname != expected_host:
+    if parsed.hostname is not None and parsed.hostname != expected_host:
         raise ValueError(
             f"Pagination URL host mismatch: expected {expected_host}, "
             f"got {parsed.hostname}"
@@ -181,6 +184,7 @@ def configure_monitors(
     created_count = 0
     skipped_count = 0
     failed_count = 0
+    would_create_count = 0
 
     for repo in repositories:
         repo_name = repo["name"]
@@ -195,6 +199,7 @@ def configure_monitors(
 
         if dry_run:
             print(f"  DRY RUN: would create monitor '{monitor_name}' for {repo_name}")
+            would_create_count += 1
             continue
 
         print(f"  CREATING: monitor '{monitor_name}' for {repo_name}...", end=" ")
@@ -206,7 +211,10 @@ def configure_monitors(
             print(f"FAILED\n    {err}", file=sys.stderr)
             failed_count += 1
 
-    print(f"\nDone. Created: {created_count}, Skipped: {skipped_count}, Failed: {failed_count}")
+    if dry_run:
+        print(f"\nDry run complete. Would create: {would_create_count}, Skipped: {skipped_count}")
+    else:
+        print(f"\nDone. Created: {created_count}, Skipped: {skipped_count}, Failed: {failed_count}")
 
 
 def main():
