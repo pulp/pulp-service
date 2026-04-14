@@ -41,4 +41,3 @@ go build -o agent-splunk .
 podman build -f Containerfile -t agent-splunk .
 podman run --env-file .env agent-splunk
 ```
-
