@@ -90,11 +90,8 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "[splunk] registered splunk_search tool (%s)\n", splunkURL)
 	}
 
-	// Load skill file
-	skillMsg, err := skills.LoadSkill()
-	if err != nil {
-		return fmt.Errorf("LoadSkill: %w", err)
-	}
+	// Load embedded skill
+	skillMsg := skills.LoadSkill()
 	fmt.Fprintf(os.Stderr, "[skills] loaded jira-workflow.md\n")
 
 	var model models.Model
