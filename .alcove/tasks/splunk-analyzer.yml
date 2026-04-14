@@ -18,3 +18,7 @@ credentials:
   SPLUNK_TOKEN: splunk
   JIRA_TOKEN: jira
   VERTEX_SA_JSON: google-vertex
+
+schedule:
+  cron: "0 * * * *"
+  enabled: true

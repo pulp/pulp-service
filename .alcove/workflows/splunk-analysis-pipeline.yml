@@ -3,8 +3,4 @@ name: Splunk Analysis Pipeline
 workflow:
   - id: analyze-logs
     agent: Splunk Log Analyzer
-    trigger:
-      schedule:
-        cron: "0 * * * *"
-        enabled: true
     outputs: [issues_found, issues_created, error_summary]
