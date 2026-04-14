@@ -15,7 +15,6 @@ FROM registry.access.redhat.com/ubi9-minimal:latest
 WORKDIR /app
 
 COPY --from=builder /opt/app-root/src/agent-splunk .
-COPY --from=builder /opt/app-root/src/skills/jira-workflows.md ./skills/
 
 USER 1001
 
