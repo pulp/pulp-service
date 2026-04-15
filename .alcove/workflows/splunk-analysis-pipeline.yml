@@ -2,5 +2,6 @@ name: Splunk Analysis Pipeline
 
 workflow:
   - id: analyze-logs
+    type: agent
     agent: Splunk Log Analyzer
     outputs: [issues_found, issues_created, error_summary]
