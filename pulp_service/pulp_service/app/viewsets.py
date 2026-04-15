@@ -253,7 +253,7 @@ class PyPIYankMonitorViewSet(
     queryset = PyPIYankMonitor.objects.all()
     serializer_class = PyPIYankMonitorSerializer
     filterset_class = PyPIYankMonitorFilter
-    permission_classes = [IsSuperuser]
+    permission_classes = [DomainBasedPermission]
 
     @extend_schema(request=None, responses={202: AsyncOperationResponseSerializer})
     @action(detail=True, methods=["post"], url_path="check")
