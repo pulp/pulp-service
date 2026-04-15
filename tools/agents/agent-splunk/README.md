@@ -7,7 +7,7 @@ An AI agent that queries Splunk for 5xx errors, analyzes them using an LLM (Clau
 - Go 1.25+
 - Authentication configured for your chosen provider (see below)
 - Access to a Splunk instance
-- A running [MCP Atlassian](Containerfile.mcp-atlassian) server
+- MCP servers: either a running [MCP Atlassian](Containerfile.mcp-atlassian) server (`JIRA_MCP_URL`) or an `ALCOVE_MCP_CONFIG` with stdio-based MCP servers
 
 ## Environment Variables
 
@@ -27,7 +27,8 @@ If both `ANTHROPIC_API_KEY` and `ANTHROPIC_VERTEX_PROJECT_ID` are set, the direc
 | `CLOUD_ML_REGION` | Vertex AI region (default: `us-east5`) |
 | `SPLUNK_URL` | Splunk instance URL |
 | `SPLUNK_TOKEN` | Splunk auth token |
-| `JIRA_MCP_URL` | URL of the Jira MCP server |
+| `ALCOVE_MCP_CONFIG` | JSON config for stdio MCP servers (used by Alcove, takes precedence over `JIRA_MCP_URL`) |
+| `JIRA_MCP_URL` | URL of the Jira MCP server (standalone mode) |
 
 ## Usage
 

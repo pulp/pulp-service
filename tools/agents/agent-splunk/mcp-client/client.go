@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,33 +49,101 @@ func (m *MCPManager) Close() {
 	}
 }
 
-// ConnectMCP connects to all configured MCP servers over HTTP.
+// mcpServerSpec describes an MCP server to be launched as a stdio child process.
+// This matches the format used in the ALCOVE_MCP_CONFIG environment variable.
+type mcpServerSpec struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+}
+
+// ConnectMCP connects to all configured MCP servers.
 //
-// Jira:    JIRA_MCP_URL → Streamable HTTP transport
+// It supports two modes:
 //
-// Environment variables for Jira (must be configured on the MCP server side):
+//  1. Alcove mode (ALCOVE_MCP_CONFIG): spawns MCP servers as stdio child
+//     processes using the command/args/env defined in the JSON config.
 //
-//	JIRA_URL, JIRA_USERNAME, JIRA_TOKEN
+//  2. Standalone mode (JIRA_MCP_URL): connects to a running MCP server
+//     over Streamable HTTP.
+//
+// Alcove mode takes precedence when ALCOVE_MCP_CONFIG is set.
 func ConnectMCP(ctx context.Context) (*MCPManager, error) {
 	mgr := &MCPManager{
 		toolMap:     make(map[string]*mcp.ClientSession),
 		nativeTools: make(map[string]NativeToolHandler),
 	}
 
-	// --- Jira MCP (HTTP) ---
-	if url := os.Getenv("JIRA_MCP_URL"); url != "" {
-		session, err := connectHTTP(ctx, url)
-		if err != nil {
-			return nil, fmt.Errorf("jira MCP: %w", err)
+	// --- Alcove mode: stdio child processes ---
+	if mcpConfig := os.Getenv("ALCOVE_MCP_CONFIG"); mcpConfig != "" {
+		var servers map[string]mcpServerSpec
+		if err := json.Unmarshal([]byte(mcpConfig), &servers); err != nil {
+			return nil, fmt.Errorf("parse ALCOVE_MCP_CONFIG: %w", err)
 		}
-		mgr.sessions = append(mgr.sessions, session)
-		fmt.Fprintf(os.Stderr, "[mcp] connected to Jira (http: %s)\n", url)
+		var errs []string
+		for name, spec := range servers {
+			if spec.Command == "" {
+				continue
+			}
+			session, err := connectStdio(ctx, spec)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v", name, err))
+				fmt.Fprintf(os.Stderr, "[mcp] failed to connect to %s: %v\n", name, err)
+				continue
+			}
+			mgr.sessions = append(mgr.sessions, session)
+			fmt.Fprintf(os.Stderr, "[mcp] connected to %s (stdio: %s)\n", name, spec.Command)
+		}
+		if len(mgr.sessions) == 0 && len(errs) > 0 {
+			return nil, fmt.Errorf("all MCP servers failed: %s", strings.Join(errs, "; "))
+		}
+	} else {
+		// --- Standalone mode: HTTP ---
+		if url := os.Getenv("JIRA_MCP_URL"); url != "" {
+			session, err := connectHTTP(ctx, url)
+			if err != nil {
+				return nil, fmt.Errorf("jira MCP: %w", err)
+			}
+			mgr.sessions = append(mgr.sessions, session)
+			fmt.Fprintf(os.Stderr, "[mcp] connected to Jira (http: %s)\n", url)
+		}
 	}
 
 	if len(mgr.sessions) == 0 {
 		return nil, nil // no MCP servers configured
 	}
 	return mgr, nil
+}
+
+func connectStdio(ctx context.Context, spec mcpServerSpec) (*mcp.ClientSession, error) {
+	// Validate the command before executing. ALCOVE_MCP_CONFIG is set by the
+	// platform, but we still guard against path traversal and injection.
+	if strings.Contains(spec.Command, "..") {
+		return nil, fmt.Errorf("command path must not contain '..': %s", spec.Command)
+	}
+	resolvedCmd, err := exec.LookPath(spec.Command)
+	if err != nil {
+		return nil, fmt.Errorf("command not found: %s", spec.Command)
+	}
+
+	cmd := exec.CommandContext(ctx, resolvedCmd, spec.Args...)
+	cmd.Env = os.Environ()
+	for k, v := range spec.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	cmd.Stderr = os.Stderr
+
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "agent-splunk",
+		Version: "v1.0.0",
+	}, nil)
+
+	transport := &mcp.CommandTransport{Command: cmd}
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		return nil, err
+	}
+	return session, nil
 }
 
 func connectHTTP(ctx context.Context, endpoint string) (*mcp.ClientSession, error) {
