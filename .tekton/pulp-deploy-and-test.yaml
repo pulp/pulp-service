@@ -786,7 +786,7 @@ spec:
                 exit 1
               }
 
-              cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8"
+              cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8 gnupg"
 
               curl -o functest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/functest_requirements.txt
               curl -o unittest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/unittest_requirements.txt
