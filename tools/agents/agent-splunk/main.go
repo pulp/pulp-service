@@ -29,10 +29,9 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	baseURL := os.Getenv("ANTHROPIC_BASE_URL")
 	projectID := os.Getenv("ANTHROPIC_VERTEX_PROJECT_ID")
-	if projectID == "" {
-		return fmt.Errorf("ANTHROPIC_VERTEX_PROJECT_ID environment variable is required")
-	}
 
 	region := os.Getenv("CLOUD_ML_REGION")
 	if region == "" {
@@ -49,6 +48,18 @@ func run() error {
 	}
 	if _, exists := supportedModels[*inputModel]; !exists {
 		return fmt.Errorf("unsupported model: %s. Supported models: claude-opus-4-6, gemini-2.5-pro", *inputModel)
+	}
+
+	// Validate required auth env vars early, before any MCP/tool setup.
+	switch *inputModel {
+	case "claude-opus-4-6":
+		if apiKey == "" && projectID == "" {
+			return fmt.Errorf("either ANTHROPIC_API_KEY or ANTHROPIC_VERTEX_PROJECT_ID environment variable is required")
+		}
+	case "gemini-2.5-pro":
+		if projectID == "" {
+			return fmt.Errorf("ANTHROPIC_VERTEX_PROJECT_ID environment variable is required for Gemini models")
+		}
 	}
 
 	question := *inputQuestion
@@ -97,10 +108,18 @@ func run() error {
 	var model models.Model
 	switch *inputModel {
 	case "claude-opus-4-6":
-		model = models.Claude{
-			Model:     *inputModel,
-			ProjectID: projectID,
-			Region:    region,
+		if apiKey != "" {
+			model = models.Claude{
+				Model:   *inputModel,
+				APIKey:  apiKey,
+				BaseURL: baseURL,
+			}
+		} else {
+			model = models.Claude{
+				Model:     *inputModel,
+				ProjectID: projectID,
+				Region:    region,
+			}
 		}
 	case "gemini-2.5-pro":
 		model = models.Gemini{

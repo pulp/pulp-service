@@ -5,14 +5,24 @@ An AI agent that queries Splunk for 5xx errors, analyzes them using an LLM (Clau
 ## Prerequisites
 
 - Go 1.25+
-- Google Cloud credentials configured (for Vertex AI access)
+- Authentication configured for your chosen provider (see below)
 - Access to a Splunk instance
 - A running [MCP Atlassian](Containerfile.mcp-atlassian) server
 
 ## Environment Variables
 
+The agent supports two authentication methods for Claude models:
+
+**Option 1: Direct Anthropic API** — set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_BASE_URL`).
+
+**Option 2: Vertex AI** — set `ANTHROPIC_VERTEX_PROJECT_ID` and configure Google Cloud credentials.
+
+If both `ANTHROPIC_API_KEY` and `ANTHROPIC_VERTEX_PROJECT_ID` are set, the direct API is used. Gemini models always require Vertex AI.
+
 | Variable | Description |
 |---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key for direct API access |
+| `ANTHROPIC_BASE_URL` | Custom base URL for the Anthropic API (optional) |
 | `ANTHROPIC_VERTEX_PROJECT_ID` | Google Cloud project ID for Vertex AI |
 | `CLOUD_ML_REGION` | Vertex AI region (default: `us-east5`) |
 | `SPLUNK_URL` | Splunk instance URL |
