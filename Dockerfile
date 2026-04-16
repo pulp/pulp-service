@@ -70,7 +70,6 @@ RUN pip install --upgrade pip setuptools wheel && \
     pip install  \
          rhsm \
          setproctitle \
-         gunicorn \
          python-nginx \
          django-storages\[boto3,azure]\>=1.12.2 \
          requests\[use_chardet_on_py3] \
