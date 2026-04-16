@@ -1,7 +1,0 @@
-FROM python:3.13-slim
-
-RUN pip install --no-cache-dir mcp-atlassian
-
-EXPOSE 9000
-
-ENTRYPOINT ["mcp-atlassian", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "9000"]
