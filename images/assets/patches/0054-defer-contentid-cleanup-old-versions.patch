@@ -1,12 +1,20 @@
 diff --git a/pulpcore/app/models/repository.py b/pulpcore/app/models/repository.py
-index a2350072e..2e9e4fcf0 100644
+index a2350072e..5435d19f1 100644
 --- a/pulpcore/app/models/repository.py
 +++ b/pulpcore/app/models/repository.py
-@@ -416,7 +416,9 @@ class Repository(MasterModel):
+@@ -414,9 +414,15 @@ class Repository(MasterModel):
+                 _("Attempt to cleanup old versions, while a new version is in flight.")
+             )
          if self.retain_repo_versions:
-             # Consider only completed versions that aren't protected for cleanup
-             versions = self.versions.complete().exclude(pk__in=self.protected_versions())
+-            # Consider only completed versions that aren't protected for cleanup
+-            versions = self.versions.complete().exclude(pk__in=self.protected_versions())
 -            for version in versions.order_by("-number")[self.retain_repo_versions :]:
++            # Consider only completed versions that aren't protected for cleanup.
++            # Evaluate protected PKs eagerly to avoid embedding the complex
++            # protected_versions() queryset as a NOT IN subquery, which causes
++            # PostgreSQL to pick expensive join plans.
++            protected_pks = set(self.protected_versions().values_list("pk", flat=True))
++            versions = self.versions.complete().exclude(pk__in=protected_pks)
 +            for version in versions.defer("content_ids").order_by("-number")[
 +                self.retain_repo_versions :
 +            ]:
