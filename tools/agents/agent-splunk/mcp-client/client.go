@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,8 +13,9 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// MCP client — connects to multiple MCP servers (e.g. Grafana, Jira) over
-// HTTP and bridges their tools into the langchaingo tool-calling loop.
+// MCP client — connects to multiple MCP servers over HTTP and bridges their
+// tools into the langchaingo tool-calling loop. Also manages native Go tool
+// handlers that bypass MCP entirely.
 // ---------------------------------------------------------------------------
 
 // NativeToolHandler is a function that handles a tool call directly in Go,
@@ -49,26 +49,11 @@ func (m *MCPManager) Close() {
 }
 
 // ConnectMCP connects to all configured MCP servers over HTTP.
-//
-// Jira:    JIRA_MCP_URL → Streamable HTTP transport
-//
-// Environment variables for Jira (must be configured on the MCP server side):
-//
-//	JIRA_URL, JIRA_USERNAME, JIRA_TOKEN
+// Returns nil if no MCP servers are configured.
 func ConnectMCP(ctx context.Context) (*MCPManager, error) {
 	mgr := &MCPManager{
 		toolMap:     make(map[string]*mcp.ClientSession),
 		nativeTools: make(map[string]NativeToolHandler),
-	}
-
-	// --- Jira MCP (HTTP) ---
-	if url := os.Getenv("JIRA_MCP_URL"); url != "" {
-		session, err := connectHTTP(ctx, url)
-		if err != nil {
-			return nil, fmt.Errorf("jira MCP: %w", err)
-		}
-		mgr.sessions = append(mgr.sessions, session)
-		fmt.Fprintf(os.Stderr, "[mcp] connected to Jira (http: %s)\n", url)
 	}
 
 	if len(mgr.sessions) == 0 {

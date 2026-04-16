@@ -7,7 +7,7 @@ An AI agent that queries Splunk for 5xx errors, analyzes them using an LLM (Clau
 - Go 1.25+
 - Google Cloud credentials configured (for Vertex AI access)
 - Access to a Splunk instance
-- A running [MCP Atlassian](Containerfile.mcp-atlassian) server
+- A Jira Cloud instance with API token access
 
 ## Environment Variables
 
@@ -17,7 +17,9 @@ An AI agent that queries Splunk for 5xx errors, analyzes them using an LLM (Clau
 | `CLOUD_ML_REGION` | Vertex AI region (default: `us-east5`) |
 | `SPLUNK_URL` | Splunk instance URL |
 | `SPLUNK_TOKEN` | Splunk auth token |
-| `JIRA_MCP_URL` | URL of the Jira MCP server |
+| `JIRA_URL` | Jira instance URL (e.g. `https://redhat.atlassian.net`) |
+| `JIRA_USERNAME` | Jira username (email) for API authentication |
+| `JIRA_API_TOKEN` | Jira API token for authentication |
 
 ## Usage
 

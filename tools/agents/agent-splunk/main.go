@@ -12,6 +12,7 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
+	"agent-splunk/jira"
 	mcpClient "agent-splunk/mcp-client"
 	"agent-splunk/models"
 	"agent-splunk/skills"
@@ -60,24 +61,9 @@ func run() error {
 	promptParts = append(promptParts, question)
 	prompt := strings.Join(promptParts, "\n")
 
-	// Connect to MCP servers (Grafana, Jira, etc.) if configured.
-	mcpMgr, err := mcpClient.ConnectMCP(ctx)
-	if err != nil {
-		return fmt.Errorf("MCP connect: %w", err)
-	}
+	// MCPManager routes tool calls to the correct handler (native or MCP).
+	mcpMgr := mcpClient.NewMCPManager()
 	var tools []llms.Tool
-	if mcpMgr != nil {
-		defer mcpMgr.Close()
-		tools, err = mcpMgr.DiscoverTools(ctx)
-		if err != nil {
-			return fmt.Errorf("MCP discover tools: %w", err)
-		}
-		fmt.Fprintf(os.Stderr, "[mcp] discovered %d tools\n", len(tools))
-	} else {
-		// Ensure we have an MCPManager even without MCP servers,
-		// so native tools can still be registered.
-		mcpMgr = mcpClient.NewMCPManager()
-	}
 
 	// --- Splunk (native tool) ---
 	if splunkURL := os.Getenv("SPLUNK_URL"); splunkURL != "" {
@@ -88,6 +74,19 @@ func run() error {
 		splunkClient := splunk.NewClient(splunkURL, splunkToken)
 		tools = append(tools, splunkClient.RegisterTool(mcpMgr))
 		fmt.Fprintf(os.Stderr, "[splunk] registered splunk_search tool (%s)\n", splunkURL)
+	}
+
+	// --- Jira (native tool) ---
+	if jiraURL := os.Getenv("JIRA_URL"); jiraURL != "" {
+		jiraUsername := os.Getenv("JIRA_USERNAME")
+		jiraToken := os.Getenv("JIRA_API_TOKEN")
+		if jiraUsername == "" || jiraToken == "" {
+			return fmt.Errorf("JIRA_USERNAME and JIRA_API_TOKEN are required when JIRA_URL is set")
+		}
+		jiraClient := jira.NewClient(jiraURL, jiraUsername, jiraToken)
+		jiraTools := jiraClient.RegisterTools(mcpMgr)
+		tools = append(tools, jiraTools...)
+		fmt.Fprintf(os.Stderr, "[jira] registered %d jira tools (%s)\n", len(jiraTools), jiraURL)
 	}
 
 	// Load embedded skill
