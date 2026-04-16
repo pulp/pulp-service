@@ -1,0 +1,15 @@
+diff --git a/pulpcore/app/models/repository.py b/pulpcore/app/models/repository.py
+index a2350072e..2e9e4fcf0 100644
+--- a/pulpcore/app/models/repository.py
++++ b/pulpcore/app/models/repository.py
+@@ -416,7 +416,9 @@ class Repository(MasterModel):
+         if self.retain_repo_versions:
+             # Consider only completed versions that aren't protected for cleanup
+             versions = self.versions.complete().exclude(pk__in=self.protected_versions())
+-            for version in versions.order_by("-number")[self.retain_repo_versions :]:
++            for version in versions.defer("content_ids").order_by("-number")[
++                self.retain_repo_versions :
++            ]:
+                 _logger.info(
+                     "Deleting repository version {} due to version retention limit.".format(version)
+                 )
