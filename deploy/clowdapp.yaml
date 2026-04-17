@@ -658,6 +658,8 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
+          - name: PULP_OTEL_METRICS_DISPATCH_INTERVAL_MINUTES
+            value: ${PULP_OTEL_METRICS_DISPATCH_INTERVAL_MINUTES}
           - name: PULP_REDIS_PORT
             value: "6379"
           - name: SENTRY_DSN
@@ -1500,3 +1502,6 @@ parameters:
   - name: ANTHROPIC_VERTEX_PROJECT_ID
     description: PROJECT ID used by agents to authenticate to Vertex AI
     value: "test-project"
+  - name: PULP_OTEL_METRICS_DISPATCH_INTERVAL_MINUTES
+    description: Configure the interval to get disk usage metrics.
+    value: "60"
