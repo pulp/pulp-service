@@ -1,0 +1,21 @@
+#!/bin/bash
+
+PULP_SERVICE_DIR="${PULP_SERVICE_DIR:-/workspace/pulp-service}"
+TEST_DIR="${PULP_SERVICE_DIR}/pulp_service/pulp_service/tests"
+
+if [ ! -d "$TEST_DIR" ]; then
+    TEST_DIR="/tmp/pulp_service/pulp_service/tests"
+fi
+
+if [ ! -d "$TEST_DIR" ]; then
+    echo "Error: Cannot find test directory."
+    echo "Mount pulp-service at /workspace/pulp-service or set PULP_SERVICE_DIR."
+    exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    echo "Running all functional tests from: $TEST_DIR/functional/"
+    exec pytest "$TEST_DIR/functional/" "${@}"
+else
+    exec pytest "$@"
+fi

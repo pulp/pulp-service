@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+if [ -z "$1" ]; then
+    echo "Usage: pulp-add-patch <patch-file>"
+    echo "Applies a patch to pulpcore site-packages."
+    exit 1
+fi
+
+PATCH_FILE="$1"
+SITE_PACKAGES="/usr/local/lib/pulp/lib/python${PYTHON_VERSION:-3.11}/site-packages"
+
+if [ ! -f "$PATCH_FILE" ]; then
+    echo "Error: Patch file not found: $PATCH_FILE"
+    exit 1
+fi
+
+echo "Applying patch: $(basename "$PATCH_FILE")"
+patch -p1 -d "$SITE_PACKAGES" < "$PATCH_FILE"
+echo "Patch applied. Restart services with: pulp-restart"

@@ -1,0 +1,30 @@
+#!/bin/bash
+
+SERVICE="${1:-all}"
+
+case "$SERVICE" in
+    all)
+        echo "Restarting all Pulp services..."
+        supervisorctl restart pulp-api pulp-content pulp-worker
+        ;;
+    api)
+        echo "Restarting pulp-api..."
+        supervisorctl restart pulp-api
+        ;;
+    content)
+        echo "Restarting pulp-content..."
+        supervisorctl restart pulp-content
+        ;;
+    worker)
+        echo "Restarting pulp-worker..."
+        supervisorctl restart pulp-worker
+        ;;
+    *)
+        echo "Usage: pulp-restart [all|api|content|worker]"
+        echo "Restarts Pulp services managed by supervisord."
+        exit 1
+        ;;
+esac
+
+echo "Done. Service status:"
+supervisorctl status
