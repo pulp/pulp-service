@@ -697,15 +697,25 @@ def _get_redis_lock_info(redis_conn, task):
     exclusive_info = []
     for resource in exclusive_resources:
         lock_key = resource_to_lock_key(resource)
-        holder = redis_conn.get(lock_key)
-        if holder:
-            holder = holder.decode("utf-8")
+        lock_type = redis_conn.type(lock_key)
+        if isinstance(lock_type, bytes):
+            lock_type = lock_type.decode("utf-8")
+        holder = None
+        holders = None
+        if lock_type == "string":
+            val = redis_conn.get(lock_key)
+            if val:
+                holder = val.decode("utf-8")
+        elif lock_type == "set":
+            holders = sorted(m.decode("utf-8") for m in redis_conn.smembers(lock_key))
         exclusive_info.append(
             {
                 "resource": resource,
                 "lock_key": lock_key,
-                "held": holder is not None,
+                "held": lock_type != "none",
                 "holder": holder,
+                "holders": holders,
+                "lock_type": lock_type,
             }
         )
 
