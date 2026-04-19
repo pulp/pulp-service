@@ -362,6 +362,16 @@ class TestStaleLockScanView:
         assert "online_workers" in data["worker_summary"]
         assert "online_api_processes" in data["worker_summary"]
 
+        # --- pagination fields ---
+        assert "next_cursor" in data
+        assert isinstance(data["next_cursor"], int)
+        assert "has_more" in data
+        assert isinstance(data["has_more"], bool)
+        assert "page_size" in data
+        assert isinstance(data["page_size"], int)
+        assert "scan_type" in data
+        assert data["scan_type"] == "all"
+
     def test_healthy_locks_excluded_by_default(self, debug_api_url, admin_auth):
         """Healthy locks are not included unless include_healthy=true."""
         resp = requests.get(f"{debug_api_url}stale-locks/", auth=admin_auth)
@@ -488,3 +498,162 @@ class TestStaleLockScanView:
                 assert "name" in task_summary
                 assert "pulp_created" in task_summary
                 assert "app_lock" in task_summary
+
+    def test_pagination_default_page_size(self, debug_api_url, admin_auth):
+        """Default page_size is 100."""
+        resp = requests.get(f"{debug_api_url}stale-locks/", auth=admin_auth)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page_size"] == 100
+
+    def test_pagination_custom_page_size(self, debug_api_url, admin_auth):
+        """Respects the page_size query parameter."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"page_size": 5},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page_size"] == 5
+
+    def test_pagination_page_size_clamped_to_max(self, debug_api_url, admin_auth):
+        """page_size is clamped to 500 maximum."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"page_size": 9999},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["page_size"] == 500
+
+    def test_pagination_page_size_clamped_to_min(self, debug_api_url, admin_auth):
+        """page_size is clamped to 1 minimum."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"page_size": 0},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["page_size"] == 1
+
+    def test_pagination_invalid_page_size(self, debug_api_url, admin_auth):
+        """Invalid page_size falls back to default 100."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"page_size": "abc"},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["page_size"] == 100
+
+    def test_pagination_cursor_default(self, debug_api_url, admin_auth):
+        """Default cursor starts at 0 and next_cursor is returned."""
+        resp = requests.get(f"{debug_api_url}stale-locks/", auth=admin_auth)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "next_cursor" in data
+        assert isinstance(data["next_cursor"], int)
+        assert "has_more" in data
+        assert isinstance(data["has_more"], bool)
+
+    def test_pagination_cursor_resume(self, debug_api_url, admin_auth):
+        """Passing a cursor value resumes scanning from that position."""
+        # First request with a small page_size
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"page_size": 1, "cursor": 0},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        next_cursor = data["next_cursor"]
+
+        # Second request using the returned cursor (valid regardless of has_more)
+        resp2 = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"page_size": 1, "cursor": next_cursor},
+            auth=admin_auth,
+        )
+        assert resp2.status_code == 200
+
+    def test_scan_type_resource(self, debug_api_url, admin_auth):
+        """scan_type=resource only scans resource locks."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"scan_type": "resource"},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scan_type"] == "resource"
+
+    def test_scan_type_task(self, debug_api_url, admin_auth):
+        """scan_type=task only scans task locks."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"scan_type": "task"},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scan_type"] == "task"
+
+    def test_scan_type_all(self, debug_api_url, admin_auth):
+        """scan_type=all scans both resource and task locks (default)."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"scan_type": "all"},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scan_type"] == "all"
+
+    def test_scan_type_invalid_defaults_to_all(self, debug_api_url, admin_auth):
+        """Invalid scan_type falls back to 'all'."""
+        resp = requests.get(
+            f"{debug_api_url}stale-locks/",
+            params={"scan_type": "invalid"},
+            auth=admin_auth,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["scan_type"] == "all"
+
+
+class TestStaleLockCleanupDispatcherView:
+    """Tests for /api/pulp/debug/cleanup-stale-locks/"""
+
+    def test_get_returns_documentation(self, debug_api_url, admin_auth):
+        """GET returns endpoint documentation with expected fields."""
+        resp = requests.get(f"{debug_api_url}cleanup-stale-locks/", auth=admin_auth)
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "description" in data
+        assert "task_name" in data
+        assert data["task_name"] == "pulp_service.app.tasks.stale_lock_cleanup.cleanup_stale_locks"
+        assert "schedule" in data
+        assert "usage" in data
+        assert data["usage"]["method"] == "POST"
+
+    def test_post_dispatches_task(self, debug_api_url, admin_auth):
+        """POST dispatches a cleanup task and returns 202 with task href."""
+        resp = requests.post(f"{debug_api_url}cleanup-stale-locks/", auth=admin_auth)
+        assert resp.status_code == 202
+        data = resp.json()
+
+        assert "task" in data
+        task_href = data["task"]
+        assert "/api/v3/tasks/" in task_href
+
+    def test_post_task_completes(self, debug_api_url, admin_auth, pulpcore_bindings, monitor_task):
+        """Dispatched cleanup task runs to completion and returns a summary result."""
+        resp = requests.post(f"{debug_api_url}cleanup-stale-locks/", auth=admin_auth)
+        assert resp.status_code == 202
+        data = resp.json()
+
+        task_href = data["task"]
+        # Wait for the task to complete
+        task = monitor_task(task_href)
+        assert task.state == "completed"

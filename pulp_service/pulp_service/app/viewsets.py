@@ -53,6 +53,11 @@ from pulp_service.app.serializers import (
     YankedPackageReportSerializer,
 )
 from pulp_service.app.tasks.package_scan import check_npm_package, check_content_from_repo_version
+from pulp_service.app.tasks.redis_lock_utils import (
+    check_lock_holder_liveness,
+    scan_resource_locks,
+    scan_task_locks,
+)
 from pulp_rpm.app.models import Package
 
 
@@ -851,46 +856,8 @@ def _collect_all_lock_holders(redis_locks):
 
 
 def _check_lock_holder_liveness(lock_holders):
-    """
-    Check whether each lock holder (worker/API process) is still alive.
-
-    Detects Bug 2: orphaned locks from dead processes that were never cleaned up.
-
-    Returns a dict mapping holder name to liveness info.
-    """
-    from pulpcore.app.models import AppStatus
-
-    if not lock_holders:
-        return {}
-
-    # Look up all AppStatus records for these holders
-    app_statuses = {
-        app.name: app
-        for app in AppStatus.objects.filter(name__in=lock_holders)
-    }
-
-    result = {}
-    for holder_name in lock_holders:
-        app = app_statuses.get(holder_name)
-        if app is None:
-            result[holder_name] = {
-                "exists_in_db": False,
-                "online": False,
-                "app_type": None,
-                "last_heartbeat": None,
-                "verdict": "DEAD: no AppStatus record exists, lock is orphaned",
-            }
-        else:
-            result[holder_name] = {
-                "exists_in_db": True,
-                "online": app.online,
-                "app_type": app.app_type,
-                "last_heartbeat": app.last_heartbeat.isoformat()
-                if app.last_heartbeat
-                else None,
-                "verdict": "alive" if app.online else "DEAD: AppStatus exists but is not online, lock is orphaned",
-            }
-    return result
+    """Thin wrapper preserved for internal use; delegates to shared module."""
+    return check_lock_holder_liveness(lock_holders)
 
 
 def _diagnose_stuck_task(task, app_lock_info, redis_locks, queue_position,
@@ -1577,95 +1544,14 @@ class TaskQueueView(APIView):
 
 
 def _scan_resource_locks(redis_conn):
-    """
-    Scan Redis for all resource lock keys (pulp:resource_lock:*).
-
-    Uses SCAN to iterate without blocking Redis. For each key, determines
-    the lock type (string = exclusive, set = shared) and extracts the
-    holder(s).
-
-    Returns a list of dicts describing each lock.
-    """
-    from pulpcore.tasking.redis_locks import REDIS_LOCK_PREFIX
-
-    locks = []
-    cursor = 0
-    pattern = f"{REDIS_LOCK_PREFIX}*"
-
-    while True:
-        cursor, keys = redis_conn.scan(cursor=cursor, match=pattern, count=200)
-        for key in keys:
-            key_str = key.decode("utf-8") if isinstance(key, bytes) else key
-            resource_name = key_str[len(REDIS_LOCK_PREFIX):]
-
-            lock_type = redis_conn.type(key)
-            if isinstance(lock_type, bytes):
-                lock_type = lock_type.decode("utf-8")
-
-            ttl = redis_conn.ttl(key)
-            holders = []
-
-            if lock_type == "string":
-                val = redis_conn.get(key)
-                if val:
-                    holders = [val.decode("utf-8")]
-            elif lock_type == "set":
-                members = redis_conn.smembers(key)
-                holders = sorted(m.decode("utf-8") for m in members)
-
-            locks.append({
-                "lock_key": key_str,
-                "resource": resource_name,
-                "lock_type": lock_type,
-                "holders": holders,
-                "ttl": ttl,
-            })
-
-        if cursor == 0:
-            break
-
+    """Thin wrapper preserved for internal use; delegates to shared module."""
+    locks, _ = scan_resource_locks(redis_conn)
     return locks
 
 
 def _scan_task_locks(redis_conn):
-    """
-    Scan Redis for all task lock keys (task:*).
-
-    Returns a list of dicts describing each task lock.
-    """
-    locks = []
-    cursor = 0
-    pattern = "task:*"
-
-    while True:
-        cursor, keys = redis_conn.scan(cursor=cursor, match=pattern, count=200)
-        for key in keys:
-            key_str = key.decode("utf-8") if isinstance(key, bytes) else key
-            task_id = key_str[5:]  # Strip "task:" prefix
-
-            lock_type = redis_conn.type(key)
-            if isinstance(lock_type, bytes):
-                lock_type = lock_type.decode("utf-8")
-
-            ttl = redis_conn.ttl(key)
-            holder = None
-
-            if lock_type == "string":
-                val = redis_conn.get(key)
-                if val:
-                    holder = val.decode("utf-8")
-
-            locks.append({
-                "lock_key": key_str,
-                "task_id": task_id,
-                "lock_type": lock_type,
-                "holder": holder,
-                "ttl": ttl,
-            })
-
-        if cursor == 0:
-            break
-
+    """Thin wrapper preserved for internal use; delegates to shared module."""
+    locks, _ = scan_task_locks(redis_conn)
     return locks
 
 
@@ -1733,6 +1619,11 @@ class StaleLockScanView(APIView):
     Query parameters:
         include_healthy (bool): If "true", include locks held by online
             processes in the response. Default: false (only show stale/orphaned).
+        page_size (int): Maximum number of lock keys to return per page.
+            Default: 100.  Max: 500.
+        cursor (int): Redis SCAN cursor to resume from.  Default: 0 (start).
+        scan_type (str): Which lock types to scan -- "resource", "task", or
+            "all" (default).
 
     Response structure:
         summary: Counts of total, orphaned, and healthy locks
@@ -1743,6 +1634,10 @@ class StaleLockScanView(APIView):
         lock_holder_liveness: Liveness status of all unique lock holders
         task_correlations: Mapping of orphaned resources to related tasks
         worker_summary: Current online worker/API process counts
+        next_cursor: Redis SCAN cursor to pass on the next request (0 = done)
+        has_more: Whether more results are available
+        page_size: The page_size that was used
+        scan_type: The scan_type that was used
     """
 
     permission_classes = [IsAdminUser]
@@ -1760,6 +1655,22 @@ class StaleLockScanView(APIView):
             "true", "1", "yes",
         )
 
+        # Pagination parameters
+        try:
+            page_size = int(request.GET.get("page_size", 100))
+        except (ValueError, TypeError):
+            page_size = 100
+        page_size = max(1, min(page_size, 500))
+
+        try:
+            req_cursor = int(request.GET.get("cursor", 0))
+        except (ValueError, TypeError):
+            req_cursor = 0
+
+        scan_type = request.GET.get("scan_type", "all").lower()
+        if scan_type not in ("resource", "task", "all"):
+            scan_type = "all"
+
         try:
             redis_conn = get_redis_connection()
             if not redis_conn:
@@ -1768,15 +1679,39 @@ class StaleLockScanView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
-            # Phase 1: Scan all resource locks and task locks from Redis
-            resource_locks = _scan_resource_locks(redis_conn)
-            task_locks = _scan_task_locks(redis_conn)
+            # Phase 1: Scan lock keys with pagination support
+            resource_locks = []
+            task_locks_list = []
+            next_resource_cursor = 0
+            next_task_cursor = 0
+
+            if scan_type in ("resource", "all"):
+                resource_locks, next_resource_cursor = scan_resource_locks(
+                    redis_conn, cursor=req_cursor, max_keys=page_size,
+                )
+
+            if scan_type in ("task", "all"):
+                task_locks_list, next_task_cursor = scan_task_locks(
+                    redis_conn, cursor=req_cursor, max_keys=page_size,
+                )
+
+            # Determine the combined next_cursor.  When scanning "all" we
+            # report has_more if *either* scan is incomplete.
+            if scan_type == "resource":
+                combined_next_cursor = next_resource_cursor
+            elif scan_type == "task":
+                combined_next_cursor = next_task_cursor
+            else:
+                # For "all", use the first non-zero cursor (or 0 if both done)
+                combined_next_cursor = next_resource_cursor or next_task_cursor
+
+            has_more = combined_next_cursor != 0
 
             # Phase 2: Collect all unique lock holders and check liveness
             all_holders = set()
             for lock_info in resource_locks:
                 all_holders.update(lock_info["holders"])
-            for lock_info in task_locks:
+            for lock_info in task_locks_list:
                 if lock_info["holder"]:
                     all_holders.add(lock_info["holder"])
 
@@ -1801,7 +1736,7 @@ class StaleLockScanView(APIView):
 
             orphaned_task_locks = []
             healthy_task_locks = []
-            for lock_info in task_locks:
+            for lock_info in task_locks_list:
                 holder = lock_info["holder"]
                 if holder and not lock_holder_liveness.get(
                     holder, {}
@@ -1837,7 +1772,7 @@ class StaleLockScanView(APIView):
                 "total_resource_locks": len(resource_locks),
                 "orphaned_resource_locks": len(orphaned_resource_locks),
                 "healthy_resource_locks": len(healthy_resource_locks),
-                "total_task_locks": len(task_locks),
+                "total_task_locks": len(task_locks_list),
                 "orphaned_task_locks": len(orphaned_task_locks),
                 "healthy_task_locks": len(healthy_task_locks),
                 "unique_lock_holders": len(all_holders),
@@ -1854,6 +1789,10 @@ class StaleLockScanView(APIView):
                 "lock_holder_liveness": lock_holder_liveness,
                 "task_correlations": task_correlations,
                 "worker_summary": worker_summary,
+                "next_cursor": combined_next_cursor,
+                "has_more": has_more,
+                "page_size": page_size,
+                "scan_type": scan_type,
             }
 
             if include_healthy:
@@ -1868,6 +1807,57 @@ class StaleLockScanView(APIView):
                 {"error": "Failed to scan for stale locks", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class StaleLockCleanupDispatcherView(APIView):
+    """
+    Admin-only endpoint to dispatch the ``cleanup_stale_locks`` background
+    task.
+
+    POST dispatches the task and returns an ``OperationPostponedResponse``
+    with the task href so the caller can poll for completion.
+
+    GET returns usage documentation and the dotted task path.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        request=None,
+        description="Dispatch a background task that scans Redis for orphaned locks and removes them.",
+        summary="Dispatch stale lock cleanup",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        if settings.WORKER_TYPE != "redis":
+            return Response(
+                {"error": "This endpoint only works with Redis workers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        task = dispatch(
+            "pulp_service.app.tasks.stale_lock_cleanup.cleanup_stale_locks",
+        )
+        return OperationPostponedResponse(task, request)
+
+    def get(self, request):
+        """Return endpoint documentation."""
+        return Response({
+            "description": (
+                "POST to dispatch a background task that scans all Redis "
+                "resource locks and task locks, identifies orphaned locks "
+                "held by dead workers, and removes them.  The task result "
+                "contains a summary with counts of scanned, orphaned, and "
+                "cleaned locks."
+            ),
+            "task_name": "pulp_service.app.tasks.stale_lock_cleanup.cleanup_stale_locks",
+            "schedule": "Runs automatically every 6 hours",
+            "usage": {
+                "endpoint": "/api/pulp/debug/cleanup-stale-locks/",
+                "method": "POST",
+                "authentication": "Admin user required",
+            },
+        })
 
 
 class CreateDomainView(APIView):
