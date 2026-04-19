@@ -681,6 +681,319 @@ class ReleaseTaskLocksView(APIView):
             )
 
 
+def _get_redis_lock_info(redis_conn, task):
+    """Get Redis lock state for a task's resources."""
+    from pulpcore.tasking.redis_locks import resource_to_lock_key
+
+    reserved = task.reserved_resources_record or []
+    exclusive_resources = [r for r in reserved if not r.startswith("shared:")]
+    shared_resources = [r[7:] for r in reserved if r.startswith("shared:")]
+
+    task_lock_key = f"task:{task.pk}"
+    task_lock_holder = redis_conn.get(task_lock_key)
+    if task_lock_holder:
+        task_lock_holder = task_lock_holder.decode("utf-8")
+
+    exclusive_info = []
+    for resource in exclusive_resources:
+        lock_key = resource_to_lock_key(resource)
+        holder = redis_conn.get(lock_key)
+        if holder:
+            holder = holder.decode("utf-8")
+        exclusive_info.append(
+            {
+                "resource": resource,
+                "lock_key": lock_key,
+                "held": holder is not None,
+                "holder": holder,
+            }
+        )
+
+    shared_info = []
+    for resource in shared_resources:
+        lock_key = resource_to_lock_key(resource)
+        lock_type = redis_conn.type(lock_key)
+        if isinstance(lock_type, bytes):
+            lock_type = lock_type.decode("utf-8")
+        holders = None
+        if lock_type == "set":
+            holders = sorted(m.decode("utf-8") for m in redis_conn.smembers(lock_key))
+        elif lock_type == "string":
+            val = redis_conn.get(lock_key)
+            if val:
+                holders = [val.decode("utf-8")]
+        shared_info.append(
+            {
+                "resource": resource,
+                "lock_key": lock_key,
+                "held": lock_type != "none",
+                "holders": holders,
+                "lock_type": lock_type,
+            }
+        )
+
+    return {
+        "task_lock": {
+            "key": task_lock_key,
+            "held": task_lock_holder is not None,
+            "holder": task_lock_holder,
+        },
+        "exclusive_resources": exclusive_info,
+        "shared_resources": shared_info,
+    }
+
+
+def _get_app_lock_info(task):
+    """Get app_lock info for a task."""
+    if not task.app_lock:
+        return {"locked": False, "app_status_name": None}
+    app = task.app_lock
+    return {
+        "locked": True,
+        "app_status_name": app.name,
+        "app_type": app.app_type,
+        "last_heartbeat": app.last_heartbeat.isoformat() if app.last_heartbeat else None,
+        "online": app.online,
+    }
+
+
+class TaskDebugView(APIView):
+    """
+    Admin-only endpoint providing comprehensive debug information for a task.
+
+    Returns task state, app_lock info, Redis lock state for all resources,
+    queue position, and blocking tasks.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from pulpcore.app.redis_connection import get_redis_connection
+        from pulpcore.constants import TASK_INCOMPLETE_STATES, TASK_STATES
+
+        if settings.WORKER_TYPE != "redis":
+            return Response(
+                {"error": "This endpoint only works with Redis workers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        task_id = request.GET.get("task_id")
+        if not task_id:
+            return Response(
+                {"error": "Missing required query parameter: task_id"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return Response(
+                    {"error": "Redis connection not available"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            try:
+                task = Task.objects.select_related("pulp_domain", "app_lock").get(pk=task_id)
+            except Task.DoesNotExist:
+                return Response(
+                    {"error": f"Task {task_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            exclusive_resources = [
+                r
+                for r in task.reserved_resources_record or []
+                if not r.startswith("shared:")
+            ]
+
+            # Queue position
+            older_waiting = Task.objects.filter(
+                state=TASK_STATES.WAITING,
+                app_lock__isnull=True,
+                pulp_created__lt=task.pulp_created,
+            ).count()
+            fetch_task_limit = 20
+            within_window = older_waiting < fetch_task_limit
+
+            # Blocking tasks — incomplete tasks with overlapping exclusive resources
+            blocking = []
+            if exclusive_resources and task.state == TASK_STATES.WAITING:
+                blocking_qs = (
+                    Task.objects.filter(
+                        state__in=TASK_INCOMPLETE_STATES,
+                        reserved_resources_record__overlap=exclusive_resources,
+                        pulp_created__lt=task.pulp_created,
+                    )
+                    .exclude(pk=task.pk)
+                    .select_related("pulp_domain")[:20]
+                )
+                for bt in blocking_qs:
+                    overlap = [
+                        r
+                        for r in bt.reserved_resources_record or []
+                        if r in exclusive_resources
+                        or r.removeprefix("shared:") in exclusive_resources
+                    ]
+                    blocking.append(
+                        {
+                            "task_id": str(bt.pk),
+                            "state": bt.state,
+                            "name": bt.name,
+                            "pulp_created": bt.pulp_created.isoformat(),
+                            "overlapping_resources": overlap,
+                        }
+                    )
+
+            return Response(
+                {
+                    "task_id": str(task.pk),
+                    "task": {
+                        "state": task.state,
+                        "name": task.name,
+                        "logging_cid": task.logging_cid,
+                        "pulp_created": task.pulp_created.isoformat(),
+                        "unblocked_at": task.unblocked_at.isoformat()
+                        if task.unblocked_at
+                        else None,
+                        "started_at": task.started_at.isoformat()
+                        if task.started_at
+                        else None,
+                        "finished_at": task.finished_at.isoformat()
+                        if task.finished_at
+                        else None,
+                        "immediate": task.immediate,
+                        "deferred": task.deferred,
+                        "error": task.error,
+                        "reserved_resources_record": task.reserved_resources_record,
+                        "versions": task.versions,
+                        "parent_task": str(task.parent_task_id)
+                        if task.parent_task_id
+                        else None,
+                        "domain": task.pulp_domain.name if task.pulp_domain else None,
+                    },
+                    "app_lock": _get_app_lock_info(task),
+                    "redis_locks": _get_redis_lock_info(redis_conn, task),
+                    "queue_position": {
+                        "older_waiting_tasks": older_waiting,
+                        "fetch_task_limit": fetch_task_limit,
+                        "within_fetch_window": within_window,
+                    },
+                    "blocking_tasks": blocking,
+                }
+            )
+
+        except Exception as e:
+            _logger.exception(f"Error getting debug info for task {task_id}")
+            return Response(
+                {"error": "Failed to get task debug info", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class TaskQueueView(APIView):
+    """
+    Admin-only endpoint listing the oldest waiting and running tasks.
+
+    Returns task info with Redis lock state for each, giving operators
+    the same view workers have when calling fetch_task().
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from pulpcore.app.redis_connection import get_redis_connection
+        from pulpcore.constants import TASK_STATES
+
+        if settings.WORKER_TYPE != "redis":
+            return Response(
+                {"error": "This endpoint only works with Redis workers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            limit = int(request.GET.get("limit", 10))
+        except (ValueError, TypeError):
+            limit = 10
+        limit = max(1, min(limit, 100))
+
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return Response(
+                    {"error": "Redis connection not available"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            total_waiting = Task.objects.filter(state=TASK_STATES.WAITING).count()
+            total_running = Task.objects.filter(state=TASK_STATES.RUNNING).count()
+
+            tasks = (
+                Task.objects.filter(
+                    state__in=[TASK_STATES.WAITING, TASK_STATES.RUNNING]
+                )
+                .select_related("pulp_domain", "app_lock")
+                .order_by("pulp_created")[:limit]
+            )
+
+            task_list = []
+            for task in tasks:
+                redis_locks = _get_redis_lock_info(redis_conn, task)
+
+                blocked_by = set()
+                for res in redis_locks["exclusive_resources"]:
+                    if res["held"] and res["holder"]:
+                        blocked_by.add(res["holder"])
+                for res in redis_locks["shared_resources"]:
+                    if res["lock_type"] == "string" and res["holders"]:
+                        blocked_by.update(res["holders"])
+
+                task_list.append(
+                    {
+                        "task_id": str(task.pk),
+                        "state": task.state,
+                        "name": task.name,
+                        "logging_cid": task.logging_cid,
+                        "pulp_created": task.pulp_created.isoformat(),
+                        "started_at": task.started_at.isoformat()
+                        if task.started_at
+                        else None,
+                        "immediate": task.immediate,
+                        "deferred": task.deferred,
+                        "domain": task.pulp_domain.name if task.pulp_domain else None,
+                        "versions": task.versions,
+                        "reserved_resources_record": task.reserved_resources_record,
+                        "app_lock": _get_app_lock_info(task),
+                        "redis_locks": {
+                            "task_lock_held": redis_locks["task_lock"]["held"],
+                            "task_lock_holder": redis_locks["task_lock"]["holder"],
+                            "exclusive_resources_locked": sum(
+                                1 for r in redis_locks["exclusive_resources"] if r["held"]
+                            ),
+                            "shared_resources_locked": sum(
+                                1 for r in redis_locks["shared_resources"] if r["held"]
+                            ),
+                            "blocked_by": sorted(blocked_by),
+                        },
+                    }
+                )
+
+            return Response(
+                {
+                    "total_waiting": total_waiting,
+                    "total_running": total_running,
+                    "limit": limit,
+                    "tasks": task_list,
+                }
+            )
+
+        except Exception as e:
+            _logger.exception("Error getting task queue info")
+            return Response(
+                {"error": "Failed to get task queue info", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class CreateDomainView(APIView):
 
     permission_classes = [DomainBasedPermission]
