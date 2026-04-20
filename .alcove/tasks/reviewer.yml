@@ -27,4 +27,4 @@ outputs:
   - comments
 
 profiles:
-  - pulp-service-contributor
+  - pulp-service-reviewer

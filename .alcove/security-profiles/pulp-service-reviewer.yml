@@ -1,0 +1,16 @@
+name: pulp-service-reviewer
+display_name: Pulp Service Reviewer
+description: Read-only access to pulp/pulp-service with permission to post review comments
+tools:
+  github:
+    rules:
+      - repos: ["pulp/pulp-service"]
+        operations:
+          - clone
+          - read_prs
+          - read_issues
+          - read_contents
+          - read_commits
+          - read_branches
+          - read_git
+          - create_comment
