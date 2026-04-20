@@ -61,7 +61,7 @@ objects:
         
           metrics/aggregation:
             receivers: [otlp]
-            processors: 
+            processors:
             - memory_limiter
             - filter/filter_pulp_api_request_duration
             - attributes/remove_worker_name
@@ -373,6 +373,8 @@ objects:
             value: ${{OTEL_PYTHON_EXCLUDED_URLS}}
           - name: PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS
             value: ${PULP_OTEL_PULP_API_HISTOGRAM_BUCKETS}
+          - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+            value: "delta"
           - name: PULP_REDIS_PORT
             value: "6379"
           - name: SENTRY_DSN
@@ -543,6 +545,8 @@ objects:
             value: ${OTEL_METRIC_EXPORT_TIMEOUT}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
+          - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+            value: "delta"
           - name: PULP_REDIS_PORT
             value: "6379"
           - name: SENTRY_DSN
@@ -658,6 +662,8 @@ objects:
             value: ${{OTEL_EXPORTER_OTLP_ENDPOINT}}
           - name: OTEL_TRACES_EXPORTER
             value: "none"
+          - name: OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE
+            value: "delta"
           - name: PULP_OTEL_METRICS_DISPATCH_INTERVAL_MINUTES
             value: ${PULP_OTEL_METRICS_DISPATCH_INTERVAL_MINUTES}
           - name: PULP_REDIS_PORT
