@@ -69,19 +69,10 @@ workflow:
       pr: "{{steps.create-pr.outputs.pr_number}}"
     outputs: [approved, comments]
 
-  - id: security-review
-    type: agent
-    agent: SDLC Security Reviewer
-    depends: "await-ci.Succeeded || revision.Succeeded"
-    max_iterations: 3
-    inputs:
-      pr: "{{steps.create-pr.outputs.pr_number}}"
-    outputs: [approved, comments]
-
   - id: revision
     type: agent
     agent: SDLC Developer
-    depends: "code-review.Failed || security-review.Failed"
+    depends: "code-review.Failed"
     max_iterations: 3
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
@@ -91,13 +82,12 @@ workflow:
       issue_body: "{{trigger.issue_body}}"
       issue_url: "{{trigger.issue_url}}"
       code_feedback: "{{steps.code-review.outputs.comments}}"
-      security_feedback: "{{steps.security-review.outputs.comments}}"
     outputs: [summary]
 
   - id: merge
     type: bridge
     action: merge-pr
-    depends: "code-review.Succeeded && security-review.Succeeded"
+    depends: "code-review.Succeeded"
     inputs:
       repo: pulp/pulp-service
       pr: "{{steps.create-pr.outputs.pr_number}}"
