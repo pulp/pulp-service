@@ -1,0 +1,7 @@
+name: Pulp Dependency Upgrade Pipeline
+
+workflow:
+  - id: upgrade-dependencies
+    type: agent
+    agent: Upgrade Pulp Dependencies
+    outputs: [packages_upgraded, patches_modified, patches_removed, tests_passed, pr_url]

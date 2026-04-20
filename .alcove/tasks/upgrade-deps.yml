@@ -1,0 +1,29 @@
+name: Upgrade Pulp Dependencies
+description: |
+  Upgrades pulpcore and/or plugin versions in pulp-service.
+  Bumps versions in requirements.txt, resolves patch conflicts,
+  runs migrations and tests, fixes failures, and opens a PR.
+
+  Pass PACKAGES as JSON to target specific versions, e.g.:
+    {"pulpcore": "3.109.0", "pulp-python": "3.29.0"}
+  If omitted, discovers and upgrades to latest from PyPI.
+
+prompt: |
+  You are an autonomous agent that upgrades pulpcore and plugin dependencies
+  in pulp-service. Read /workspace/pulp-service/.alcove/agents/upgrade-deps/AGENT.md
+  for your full instructions. Follow all 8 phases in order. If PACKAGES env var
+  is set, use those target versions; otherwise auto-detect latest from PyPI.
+
+timeout: 7200
+
+schedule:
+  cron: "0 8 * * 1"
+  enabled: true
+
+dev_container:
+  image: ghcr.io/pulp/hosted-pulp-dev-env:main
+
+repos:
+  - url: https://github.com/pulp/pulp-service
+    ref: main
+    name: pulp-service
