@@ -14,6 +14,9 @@ prompt: |
   for your full instructions. Follow all 8 phases in order. If PACKAGES env var
   is set, use those target versions; otherwise auto-detect latest from PyPI.
 
+  Push your work to the branch specified in the Workflow Context.
+  Do NOT create a PR — the pipeline handles that automatically.
+
 timeout: 7200
 
 schedule:

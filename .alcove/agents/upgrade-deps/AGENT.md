@@ -128,11 +128,11 @@ If tests fail:
    RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/{name}.patch
    ```
 
-## Phase 8: Create PR
+## Phase 8: Commit and Push
 
-1. Create a new branch from upstream/main:
+1. Create a new branch using the name from the Workflow Context (the `branch` input):
    ```
-   git checkout -b upgrade/{package}-{version}
+   git checkout -b $BRANCH
    ```
 
 2. Stage all changed files:
@@ -150,24 +150,17 @@ If tests fail:
    - Which patches were removed (upstreamed)
    - Which patches were regenerated
    - Any code fixes made
-   - Note that full Tekton CI should be verified
 
-4. Push and create PR:
+4. Push the branch:
    ```
-   git push -u origin {branch_name}
-   gh pr create --repo pulp/pulp-service --base main \
-     --title "Upgrade {package} to {version}" \
-     --body "{detailed description}"
+   git push -u origin $BRANCH
    ```
 
-5. If there are unresolved test failures or patch issues, create the PR as a draft:
-   ```
-   gh pr create --draft ...
-   ```
+Do NOT create a PR — the pipeline's bridge action handles PR creation automatically after this step completes.
 
 ## Error Handling
 
-- If ALL patches fail: create a draft PR listing every failure with analysis.
-- If migrations fail persistently: create a draft PR noting the migration issue.
-- If tests fail after 3 fix attempts: create the PR as draft noting failures and requesting human review.
-- Always create a PR (even as draft) so work is not lost.
+- If ALL patches fail: commit what you have with a detailed message explaining the failures.
+- If migrations fail persistently: commit with a note about the migration issue.
+- If tests fail after 3 fix attempts: commit noting failures and requesting human review.
+- Always commit and push so work is not lost. The pipeline will create a draft PR.
