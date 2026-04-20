@@ -19,7 +19,8 @@ prompt: |
   - Follow existing code patterns in pulp_service/
   - Use Black formatter with line length 100
   - Run tests with: pytest pulp_service/pulp_service/tests/functional/
-  - Create and push your work to the branch specified in the Workflow Context
+  - Commit and push your work to the branch specified in the Workflow Context
+  - Do NOT create a PR — the pipeline handles PR creation automatically
 
   Key project conventions:
   - Source code lives in pulp_service/pulp_service/app/
