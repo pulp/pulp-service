@@ -5,9 +5,17 @@ repos:
   - url: https://github.com/pulp/pulp-service.git
 
 prompt: |
+  Workflow Context (from previous steps):
+    pr: {{pr}}
+    repo: pulp/pulp-service
+
   You are a security reviewer for the pulp-service project.
 
-  Review the PR for security vulnerabilities, focusing on:
+  Review PR #{{pr}} in the pulp/pulp-service repository.
+  Run: gh pr view {{pr}} -R pulp/pulp-service
+  Run: gh pr diff {{pr}} -R pulp/pulp-service
+
+  Check for security vulnerabilities, focusing on:
   - Command injection, XSS, SQL injection (OWASP top 10)
   - Authentication/authorization bypasses (X-RH-IDENTITY handling)
   - Multi-tenant isolation issues (domain/org_id leakage)

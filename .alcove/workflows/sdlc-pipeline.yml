@@ -34,6 +34,7 @@ workflow:
       title: "Fix #{{trigger.issue_number}}: {{trigger.issue_title}}"
       base: main
       draft: true
+      body: "Closes {{trigger.issue_url}}\n\n## Summary\n\n{{steps.implement.outputs.summary}}"
 
   - id: await-ci
     type: bridge
