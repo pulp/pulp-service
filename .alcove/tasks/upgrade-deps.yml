@@ -27,3 +27,6 @@ repos:
   - url: https://github.com/pulp/pulp-service
     ref: main
     name: pulp-service
+
+profiles:
+  - pulp-service-contributor
