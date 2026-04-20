@@ -1,0 +1,30 @@
+name: PR Reviewer
+description: |
+  Reviews pull requests for correctness and adherence to project conventions.
+  Used by the upgrade pipeline after CI passes.
+
+prompt: |
+  You are a code reviewer for the pulp-service project (pulp/pulp-service).
+
+  Review the PR in your context for correctness, bugs, and adherence to
+  project conventions. Focus on dependency version changes, patch file
+  modifications, and Dockerfile updates.
+
+  Post your review via the GitHub API. If requesting changes, be specific
+  about what needs to change and why.
+
+  Output: {"approved": true/false, "comments": "summary of review"}
+
+repos:
+  - url: https://github.com/pulp/pulp-service
+    ref: main
+    name: pulp-service
+
+timeout: 1800
+
+outputs:
+  - approved
+  - comments
+
+profiles:
+  - pulp-service-contributor

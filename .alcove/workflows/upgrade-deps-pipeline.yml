@@ -5,7 +5,7 @@ workflow:
     type: agent
     agent: Upgrade Pulp Dependencies
     inputs:
-      branch: "upgrade/deps-{{trigger.issue_number}}"
+      branch: "upgrade/deps-auto"
     outputs: [packages_upgraded, patches_modified, patches_removed, tests_passed]
 
   - id: create-pr
@@ -22,8 +22,26 @@ workflow:
   - id: await-ci
     type: bridge
     action: await-ci
-    depends: "create-pr.Succeeded"
+    depends: "create-pr.Succeeded || ci-fix.Succeeded"
     max_iterations: 4
     inputs:
       repo: pulp/pulp-service
       pr: "{{steps.create-pr.outputs.pr_number}}"
+
+  - id: ci-fix
+    type: agent
+    agent: Upgrade Pulp Dependencies
+    depends: "await-ci.Failed"
+    max_iterations: 3
+    inputs:
+      branch: "{{steps.upgrade-dependencies.inputs.branch}}"
+      ci_logs: "{{steps.await-ci.outputs.failure_logs}}"
+    outputs: [summary]
+
+  - id: code-review
+    type: agent
+    agent: PR Reviewer
+    depends: "await-ci.Succeeded"
+    inputs:
+      pr: "{{steps.create-pr.outputs.pr_number}}"
+    outputs: [approved, comments]
