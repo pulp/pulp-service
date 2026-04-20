@@ -1,6 +1,6 @@
 name: pulp-service-contributor
 display_name: Pulp Service Contributor
-description: Clone pulp/pulp-service, push branches, and create PRs
+description: Clone pulp/pulp-service and push branches
 tools:
   github:
     rules:
@@ -14,6 +14,3 @@ tools:
           - read_branches
           - read_git
           - push_branch
-          - create_pr
-          - create_pr_draft
-          - create_comment
