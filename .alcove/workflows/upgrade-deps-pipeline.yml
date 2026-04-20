@@ -4,4 +4,26 @@ workflow:
   - id: upgrade-dependencies
     type: agent
     agent: Upgrade Pulp Dependencies
-    outputs: [packages_upgraded, patches_modified, patches_removed, tests_passed, pr_url]
+    inputs:
+      branch: "upgrade/deps-{{trigger.issue_number}}"
+    outputs: [packages_upgraded, patches_modified, patches_removed, tests_passed]
+
+  - id: create-pr
+    type: bridge
+    action: create-pr
+    depends: "upgrade-dependencies.Succeeded"
+    inputs:
+      repo: pulp/pulp-service
+      branch: "{{steps.upgrade-dependencies.inputs.branch}}"
+      title: "Upgrade pulp dependencies"
+      base: main
+      draft: true
+
+  - id: await-ci
+    type: bridge
+    action: await-ci
+    depends: "create-pr.Succeeded"
+    max_iterations: 4
+    inputs:
+      repo: pulp/pulp-service
+      pr: "{{steps.create-pr.outputs.pr_number}}"
