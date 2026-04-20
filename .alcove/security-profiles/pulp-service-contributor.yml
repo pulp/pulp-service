@@ -14,5 +14,3 @@ tools:
           - read_branches
           - read_git
           - push_branch
-          - create_pr_draft
-          - create_comment
