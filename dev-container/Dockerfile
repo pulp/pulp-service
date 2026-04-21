@@ -109,21 +109,23 @@ RUN openssl rand -base64 32 > /etc/pulp/certs/database_fields.symmetric.key && \
 
 # PostgreSQL: initialize as pulp user (not postgres) for rootless operation.
 # PostgreSQL only requires that the process user owns PGDATA.
+# The RPM creates /var/lib/pgsql owned by postgres — reassign everything to pulp.
 RUN mkdir -p /var/run/postgresql /var/lib/pgsql/16/data && \
-    chown -R pulp:pulp /var/run/postgresql /var/lib/pgsql/16
+    chown -R 700:700 /var/run/postgresql /var/lib/pgsql && \
+    chmod -R 700 /var/lib/pgsql/16/data
 
-USER pulp:pulp
+USER 700
 RUN /usr/pgsql-16/bin/initdb -D /var/lib/pgsql/16/data && \
     echo "local all all trust" > /var/lib/pgsql/16/data/pg_hba.conf && \
     echo "host all all 127.0.0.1/32 trust" >> /var/lib/pgsql/16/data/pg_hba.conf && \
     echo "host all all ::1/128 trust" >> /var/lib/pgsql/16/data/pg_hba.conf
-USER root:root
+USER root
 
 # Ensure all runtime directories are writable by pulp for rootless operation
-RUN chown -R pulp:pulp /var/run/postgresql /var/lib/pgsql /var/log/pulp \
-                       /var/lib/pulp /usr/local/lib/pulp /etc/pulp && \
+RUN chown -R 700:700 /var/run/postgresql /var/lib/pgsql /var/log/pulp \
+                     /var/lib/pulp /usr/local/lib/pulp /etc/pulp && \
     mkdir -p /var/run/supervisord && \
-    chown pulp:pulp /var/run/supervisord && \
+    chown 700:700 /var/run/supervisord && \
     chmod 777 /workspace
 
 COPY dev-container/settings.py /etc/pulp/settings.py
