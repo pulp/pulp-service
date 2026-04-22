@@ -8,6 +8,11 @@ executable:
   args: ["--model", "claude-opus-4-6"]
   env:
     SPLUNK_INSECURE_SKIP_VERIFY: "true"
+    SPLUNK_URL: "https://splunk-api.corp.redhat.com:8089/"
+    JIRA_URL: "https://redhat.atlassian.net/"
+    JIRA_USERNAME: "dkliban+pulp-sre-agent@redhat.com"
+    ANTHROPIC_VERTEX_PROJECT_ID: "itpc-gcp-core-pe-eng-claude"
+    CLOUD_ML_REGION: "us-east5"
 
 timeout: 1800
 
@@ -15,7 +20,7 @@ direct_outbound: true
 
 credentials:
   SPLUNK_TOKEN: splunk
-  JIRA_TOKEN: jira
+  JIRA_API_TOKEN: jira
   VERTEX_SA_JSON: google-vertex
 
 schedule:
