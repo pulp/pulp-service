@@ -107,19 +107,12 @@ RUN openssl rand -base64 32 > /etc/pulp/certs/database_fields.symmetric.key && \
     chown pulp:pulp /etc/pulp/certs/database_fields.symmetric.key && \
     chmod 600 /etc/pulp/certs/database_fields.symmetric.key
 
-# PostgreSQL: initialize as pulp user for rootless operation.
-# On OpenShift, containers run with arbitrary UIDs but always GID 0.
-# Make all directories group-writable (GID 0) for OpenShift compatibility.
+# PostgreSQL directories — initdb runs at startup (not build time) because
+# OpenShift assigns arbitrary UIDs and PostgreSQL requires PGDATA owned by
+# the process UID. GID 0 group-writable for OpenShift compatibility.
 RUN mkdir -p /var/run/postgresql /var/lib/pgsql/16/data && \
     chown -R 700:0 /var/run/postgresql /var/lib/pgsql && \
     chmod -R g+rwX /var/run/postgresql /var/lib/pgsql
-
-USER 700
-RUN /usr/pgsql-16/bin/initdb -D /var/lib/pgsql/16/data && \
-    echo "local all all trust" > /var/lib/pgsql/16/data/pg_hba.conf && \
-    echo "host all all 127.0.0.1/32 trust" >> /var/lib/pgsql/16/data/pg_hba.conf && \
-    echo "host all all ::1/128 trust" >> /var/lib/pgsql/16/data/pg_hba.conf
-USER root
 
 # Ensure all runtime directories are writable by any UID in GID 0 (OpenShift convention)
 RUN chown -R 700:0 /var/run/postgresql /var/lib/pgsql /var/log/pulp \

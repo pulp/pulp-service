@@ -5,8 +5,21 @@ PG_BIN=/usr/pgsql-16/bin
 PG_DATA=/var/lib/pgsql/16/data
 
 echo "=== Pulp Dev Container Starting (rootless) ==="
+echo "Running as UID $(id -u), GID $(id -g)"
 
-# Start PostgreSQL (runs as current user — no runuser needed)
+# Initialize PostgreSQL if PGDATA is empty (first run).
+# This must happen at runtime, not build time, because OpenShift assigns
+# arbitrary UIDs and PostgreSQL requires PGDATA owned by the process UID.
+if [ ! -f "$PG_DATA/PG_VERSION" ]; then
+    echo "Initializing PostgreSQL (first run)..."
+    $PG_BIN/initdb -D $PG_DATA
+    echo "local all all trust" > $PG_DATA/pg_hba.conf
+    echo "host all all 127.0.0.1/32 trust" >> $PG_DATA/pg_hba.conf
+    echo "host all all ::1/128 trust" >> $PG_DATA/pg_hba.conf
+    echo "PostgreSQL initialized."
+fi
+
+# Start PostgreSQL
 echo "Starting PostgreSQL..."
 $PG_BIN/pg_ctl -D $PG_DATA start -l /var/lib/pgsql/pg.log -w
 
@@ -15,11 +28,11 @@ until $PG_BIN/pg_isready -h localhost -q; do
     sleep 1
 done
 
-# Create pulp database (idempotent — current user is the DB superuser)
+# Create pulp database (idempotent)
 $PG_BIN/psql -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'pulp'" | grep -q 1 || \
     $PG_BIN/psql -d postgres -c "CREATE DATABASE pulp"
 
-# Start Redis (runs as current user)
+# Start Redis
 echo "Starting Redis..."
 redis-server --bind 127.0.0.1 --daemonize yes --protected-mode yes
 
@@ -29,7 +42,7 @@ if [ -d "/workspace/pulp-service/pulp_service" ]; then
     pip install -e /workspace/pulp-service/pulp_service --quiet 2>&1 || true
 fi
 
-# Run database migrations (already running as pulp)
+# Run database migrations
 echo "Running database migrations..."
 pulpcore-manager migrate --noinput
 
