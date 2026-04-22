@@ -107,11 +107,12 @@ RUN openssl rand -base64 32 > /etc/pulp/certs/database_fields.symmetric.key && \
     chown pulp:pulp /etc/pulp/certs/database_fields.symmetric.key && \
     chmod 600 /etc/pulp/certs/database_fields.symmetric.key
 
-ARG CACHE_BUST=2026-04-22
-# PostgreSQL directories — initdb runs at startup (not build time) because
-# OpenShift assigns arbitrary UIDs and PostgreSQL requires PGDATA owned by
-# the process UID. GID 0 group-writable for OpenShift compatibility.
-RUN mkdir -p /var/run/postgresql /var/lib/pgsql/16 && \
+# PostgreSQL: remove the data directory created by the RPM, so initdb can
+# create it at runtime with the correct UID ownership. On OpenShift, the
+# runtime UID is arbitrary (e.g., 1000830000) and initdb requires creating
+# PGDATA itself with 0700 permissions.
+RUN mkdir -p /var/run/postgresql && \
+    rm -rf /var/lib/pgsql/16/data && \
     chown -R 700:0 /var/run/postgresql /var/lib/pgsql && \
     chmod -R g+rwX /var/run/postgresql /var/lib/pgsql
 
