@@ -50,8 +50,8 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
 
     header = "HTTP_X_RH_IDENTITY"
     jq_filter = (
-        'if .identity.auth_type == "registry-auth" and .identity.registry.org_id and .identity.registry.username '
-        'then "\(.identity.registry.org_id)|\(.identity.registry.username)" '
+        'if .identity.auth_type == "registry-auth" and .identity.registry.username '
+        'then "\(.identity.registry.org_id // "")|\(.identity.registry.username)" '
         'else null end'
     )
 
