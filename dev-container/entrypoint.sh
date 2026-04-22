@@ -28,9 +28,11 @@ until $PG_BIN/pg_isready -h localhost -q; do
     sleep 1
 done
 
-# Create pulp database (idempotent)
+# Create pulp role and database (idempotent)
+$PG_BIN/psql -d postgres -tc "SELECT 1 FROM pg_roles WHERE rolname = 'pulp'" | grep -q 1 || \
+    $PG_BIN/psql -d postgres -c "CREATE ROLE pulp WITH LOGIN SUPERUSER"
 $PG_BIN/psql -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'pulp'" | grep -q 1 || \
-    $PG_BIN/psql -d postgres -c "CREATE DATABASE pulp"
+    $PG_BIN/psql -d postgres -c "CREATE DATABASE pulp OWNER pulp"
 
 # Start Redis
 echo "Starting Redis..."
