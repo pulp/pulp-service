@@ -107,12 +107,12 @@ RUN openssl rand -base64 32 > /etc/pulp/certs/database_fields.symmetric.key && \
     chown pulp:pulp /etc/pulp/certs/database_fields.symmetric.key && \
     chmod 600 /etc/pulp/certs/database_fields.symmetric.key
 
-# PostgreSQL: initialize as pulp user (not postgres) for rootless operation.
-# PostgreSQL only requires that the process user owns PGDATA.
-# The RPM creates /var/lib/pgsql owned by postgres — reassign everything to pulp.
+# PostgreSQL: initialize as pulp user for rootless operation.
+# On OpenShift, containers run with arbitrary UIDs but always GID 0.
+# Make all directories group-writable (GID 0) for OpenShift compatibility.
 RUN mkdir -p /var/run/postgresql /var/lib/pgsql/16/data && \
-    chown -R 700:700 /var/run/postgresql /var/lib/pgsql && \
-    chmod -R 700 /var/lib/pgsql/16/data
+    chown -R 700:0 /var/run/postgresql /var/lib/pgsql && \
+    chmod -R g+rwX /var/run/postgresql /var/lib/pgsql
 
 USER 700
 RUN /usr/pgsql-16/bin/initdb -D /var/lib/pgsql/16/data && \
@@ -121,11 +121,14 @@ RUN /usr/pgsql-16/bin/initdb -D /var/lib/pgsql/16/data && \
     echo "host all all ::1/128 trust" >> /var/lib/pgsql/16/data/pg_hba.conf
 USER root
 
-# Ensure all runtime directories are writable by pulp for rootless operation
-RUN chown -R 700:700 /var/run/postgresql /var/lib/pgsql /var/log/pulp \
-                     /var/lib/pulp /usr/local/lib/pulp /etc/pulp && \
+# Ensure all runtime directories are writable by any UID in GID 0 (OpenShift convention)
+RUN chown -R 700:0 /var/run/postgresql /var/lib/pgsql /var/log/pulp \
+                   /var/lib/pulp /usr/local/lib/pulp /etc/pulp && \
+    chmod -R g+rwX /var/run/postgresql /var/lib/pgsql /var/log/pulp \
+                   /var/lib/pulp /usr/local/lib/pulp /etc/pulp && \
     mkdir -p /var/run/supervisord && \
-    chown 700:700 /var/run/supervisord && \
+    chown 700:0 /var/run/supervisord && \
+    chmod g+rwX /var/run/supervisord && \
     chmod 777 /workspace
 
 COPY dev-container/settings.py /etc/pulp/settings.py
