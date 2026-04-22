@@ -16,6 +16,12 @@ from pulp_service.app.constants import (
     PKG_ECOSYSTEM,
     VULNERABILITY_TASK_THREAD_TIMEOUT,
 )
+from pulp_service.app.exceptions import (
+    UnsupportedPackageTypeError,
+    VulnReportTaskError,
+    VulnReportThreadDiedError,
+    VulnReportThreadTimeoutError,
+)
 from pulp_service.app.models import VulnerabilityReport
 from pulp_service.app.tasks.util import except_catch_and_raise
 
@@ -69,7 +75,7 @@ async def _scan_packages(background_thread):
                 lambda: content_queue.get(timeout=VULNERABILITY_TASK_THREAD_TIMEOUT), None
             ):
                 if isinstance(osv_data, Exception):
-                    raise RuntimeError(f"Background vuln report task failed to execute: {osv_data}")
+                    raise VulnReportTaskError(osv_data=osv_data)
                 data = json.dumps(osv_data)
                 async with session.post(url=OSV_QUERY_URL, data=data) as response:
                     response_body = await response.text()
@@ -92,9 +98,9 @@ async def _scan_packages(background_thread):
                         content_queue.put(next_page_request)
         except Empty:
             if not background_thread.is_alive():
-                raise RuntimeError("Vuln report task thread died unexpectedly.")
+                raise VulnReportThreadDiedError()
             else:
-                raise RuntimeError("Background vuln report thread took too long.")
+                raise VulnReportThreadTimeoutError()
 
     vuln_report, created = await sync_to_async(VulnerabilityReport.objects.get_or_create)(
         vulns=scanned_packages, pulp_domain=get_domain()
@@ -172,7 +178,7 @@ def _identify_package_ecosystem(content: any, repository=None) -> str:
             # ignore non rpm packages (advisory, packagecategory, packagelangpacks)
             return []
     else:
-        raise RuntimeError("Package type not supported!")
+        raise UnsupportedPackageTypeError()
 
 
 def _convert_rhel_repo_cpe(repo):
