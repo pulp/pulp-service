@@ -11,6 +11,8 @@ executable:
 
 timeout: 1800
 
+direct_outbound: true
+
 credentials:
   SPLUNK_TOKEN: splunk
   JIRA_TOKEN: jira
