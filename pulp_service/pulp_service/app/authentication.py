@@ -25,8 +25,10 @@ class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
 class RHTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
 
     header = "HTTP_X_RH_IDENTITY"
-    # Combines org_id with username - returns null if either is missing
-    jq_filter = '.identity | if .org_id and .user.username then "\(.org_id)|\(.user.username)" else null end'
+    # Combines org_id with username - falls back to "|username" if org_id is missing
+    jq_filter = (
+        '.identity | if .user.username then "\(.org_id // "")|\(.user.username)" else null end'
+    )
 
     def authenticate_header(self, request):
         return "Bearer"
