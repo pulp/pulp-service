@@ -10,7 +10,7 @@ workflow:
 
   - id: create-pr
     type: bridge
-    action: create-pr
+    action: create-merge-request
     depends: "upgrade-dependencies.Succeeded"
     inputs:
       repo: pulp/pulp-service
@@ -21,7 +21,7 @@ workflow:
 
   - id: await-ci
     type: bridge
-    action: await-ci
+    action: await-checks
     depends: "create-pr.Succeeded || ci-fix.Succeeded"
     max_iterations: 4
     inputs:
