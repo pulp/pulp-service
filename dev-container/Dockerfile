@@ -1,3 +1,9 @@
+# Stage 0: Build the alcove-shim binary
+FROM docker.io/library/golang:1.25 AS shim-builder
+WORKDIR /src
+RUN git clone --depth=1 https://github.com/bmbouter/alcove.git . && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/alcove-shim ./cmd/shim
+
 FROM registry.access.redhat.com/ubi9/ubi
 
 ARG PYTHON_VERSION=3.11
@@ -130,7 +136,11 @@ COPY dev-container/settings.py /etc/pulp/settings.py
 COPY dev-container/supervisord.conf /etc/supervisord.conf
 COPY dev-container/entrypoint.sh /entrypoint.sh
 COPY dev-container/scripts/ /usr/local/bin/
-RUN chmod +x /entrypoint.sh /usr/local/bin/pulp-*
+
+# Install the alcove-shim binary for dev container communication
+COPY --from=shim-builder /out/alcove-shim /usr/local/bin/alcove-shim
+
+RUN chmod +x /entrypoint.sh /usr/local/bin/pulp-* /usr/local/bin/alcove-shim
 
 # Run as pulp user — no root required at runtime
 USER 700
