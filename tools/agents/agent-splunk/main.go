@@ -31,12 +31,19 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Auth mode 1: Proxy (ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL).
+	// Gate handles real credentials; the agent sends requests to the proxy.
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	baseURL := os.Getenv("ANTHROPIC_BASE_URL")
+
+	// Auth mode 2: Service account JSON for direct Vertex AI access.
 	var saCredential []byte
 	if saJSON := os.Getenv("VERTEX_SA_JSON"); saJSON != "" {
 		saCredential = []byte(saJSON)
 		fmt.Fprintf(os.Stderr, "[auth] using VERTEX_SA_JSON for Vertex AI authentication\n")
 	}
 
+	// Resolve project ID (required for Vertex AI modes, not for proxy mode).
 	projectID := os.Getenv("ANTHROPIC_VERTEX_PROJECT_ID")
 	if projectID == "" && len(saCredential) > 0 {
 		var sa struct {
@@ -50,8 +57,13 @@ func run() error {
 		}
 		projectID = sa.ProjectID
 	}
-	if projectID == "" {
-		return fmt.Errorf("ANTHROPIC_VERTEX_PROJECT_ID environment variable is required (or set VERTEX_SA_JSON with a service account that contains project_id)")
+
+	if apiKey == "" && projectID == "" {
+		return fmt.Errorf("set ANTHROPIC_API_KEY (proxy mode) or ANTHROPIC_VERTEX_PROJECT_ID / VERTEX_SA_JSON (Vertex AI mode)")
+	}
+
+	if apiKey != "" {
+		fmt.Fprintf(os.Stderr, "[auth] using proxy mode (ANTHROPIC_BASE_URL=%s)\n", baseURL)
 	}
 
 	region := os.Getenv("CLOUD_ML_REGION")
@@ -59,7 +71,12 @@ func run() error {
 		region = "us-east5"
 	}
 
-	inputModel := flag.String("model", "claude-opus-4-6", "Define the model (claude-opus-4-6,gemini-2.5-pro). Default: claude-opus-4-6")
+	defaultModel := "claude-opus-4-6"
+	if envModel := os.Getenv("CLAUDE_MODEL"); envModel != "" {
+		defaultModel = envModel
+	}
+
+	inputModel := flag.String("model", defaultModel, fmt.Sprintf("Define the model (claude-opus-4-6,gemini-2.5-pro). Default: %s", defaultModel))
 	inputQuestion := flag.String("question", "", "Question to ask the model")
 	flag.Parse()
 
@@ -120,6 +137,8 @@ func run() error {
 			ProjectID:    projectID,
 			Region:       region,
 			SACredential: saCredential,
+			APIKey:       apiKey,
+			BaseURL:      baseURL,
 		}
 	case "gemini-2.5-pro":
 		model = models.Gemini{
