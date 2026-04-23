@@ -21,6 +21,7 @@ repos:
     name: pulp-service
 
 timeout: 1800
+enforcement_mode: monitor
 
 outputs:
   - approved
