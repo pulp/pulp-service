@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -34,7 +35,7 @@ func run() error {
 	// Auth mode 1: Proxy (ANTHROPIC_API_KEY + ANTHROPIC_BASE_URL).
 	// Gate handles real credentials; the agent sends requests to the proxy.
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	baseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	baseURL := normalizeBaseURL(os.Getenv("ANTHROPIC_BASE_URL"))
 
 	// Auth mode 2: Service account JSON for direct Vertex AI access.
 	var saCredential []byte
@@ -172,4 +173,23 @@ func run() error {
 	}
 
 	return nil
+}
+
+// normalizeBaseURL ensures the base URL ends with /v1, which langchaingo
+// expects (it appends "/messages" to form the final endpoint).
+func normalizeBaseURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	u.Path = strings.TrimSuffix(u.Path, "/messages")
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	if !strings.HasSuffix(u.Path, "/v1") {
+		u.Path += "/v1"
+	}
+	return u.String()
 }
