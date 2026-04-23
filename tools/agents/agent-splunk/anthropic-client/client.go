@@ -2,6 +2,7 @@ package anthropicClient
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,9 +17,10 @@ import (
 // It intercepts HTTP requests meant for the Anthropic API and rewrites
 // them to target the Vertex AI endpoint, using gcloud credentials for auth.
 type VertexClient struct {
-	ProjectID string
-	Region    string
-	Model     string
+	ProjectID    string
+	Region       string
+	Model        string
+	SACredential []byte // Raw service account JSON; if set, used instead of ADC.
 
 	once    sync.Once
 	creds   *google.Credentials
@@ -33,12 +35,17 @@ const (
 func (v *VertexClient) Do(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 
-	// run the function to get gcloud credentials only once and store/cache the credentials in
-	// VertexClient struct (creds)
 	v.once.Do(func() {
-		creds, err := google.FindDefaultCredentials(ctx, GOOGLE_API_AUTH_URL)
+		initCtx := context.Background()
+		var creds *google.Credentials
+		var err error
+		if len(v.SACredential) > 0 {
+			creds, err = google.CredentialsFromJSON(initCtx, v.SACredential, GOOGLE_API_AUTH_URL)
+		} else {
+			creds, err = google.FindDefaultCredentials(initCtx, GOOGLE_API_AUTH_URL)
+		}
 		if err != nil {
-			v.initErr = fmt.Errorf("find default credentials: %w", err)
+			v.initErr = fmt.Errorf("obtain credentials: %w", err)
 			return
 		}
 		v.creds = creds
