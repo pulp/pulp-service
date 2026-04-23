@@ -10,9 +10,10 @@ import (
 )
 
 type Claude struct {
-	Model     string
-	ProjectID string
-	Region    string
+	Model        string
+	ProjectID    string
+	Region       string
+	SACredential []byte
 }
 
 func (claude Claude) ModelRun(ctx context.Context, cfg RunConfig) (string, error) {
@@ -22,9 +23,10 @@ func (claude Claude) ModelRun(ctx context.Context, cfg RunConfig) (string, error
 		anthropic.WithModel(claude.Model),
 		anthropic.WithToken("vertex-ai"),
 		anthropic.WithHTTPClient(&anthropicClient.VertexClient{
-			ProjectID: claude.ProjectID,
-			Region:    claude.Region,
-			Model:     claude.Model,
+			ProjectID:    claude.ProjectID,
+			Region:       claude.Region,
+			Model:        claude.Model,
+			SACredential: claude.SACredential,
 		}),
 	)
 	if err != nil {

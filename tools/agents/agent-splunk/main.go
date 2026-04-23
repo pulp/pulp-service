@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -30,9 +31,27 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var saCredential []byte
+	if saJSON := os.Getenv("VERTEX_SA_JSON"); saJSON != "" {
+		saCredential = []byte(saJSON)
+		fmt.Fprintf(os.Stderr, "[auth] using VERTEX_SA_JSON for Vertex AI authentication\n")
+	}
+
 	projectID := os.Getenv("ANTHROPIC_VERTEX_PROJECT_ID")
+	if projectID == "" && len(saCredential) > 0 {
+		var sa struct {
+			ProjectID string `json:"project_id"`
+		}
+		if err := json.Unmarshal(saCredential, &sa); err != nil {
+			return fmt.Errorf("VERTEX_SA_JSON is not valid JSON: %w", err)
+		}
+		if sa.ProjectID == "" {
+			return fmt.Errorf("VERTEX_SA_JSON does not contain a project_id field")
+		}
+		projectID = sa.ProjectID
+	}
 	if projectID == "" {
-		return fmt.Errorf("ANTHROPIC_VERTEX_PROJECT_ID environment variable is required")
+		return fmt.Errorf("ANTHROPIC_VERTEX_PROJECT_ID environment variable is required (or set VERTEX_SA_JSON with a service account that contains project_id)")
 	}
 
 	region := os.Getenv("CLOUD_ML_REGION")
@@ -97,9 +116,10 @@ func run() error {
 	switch *inputModel {
 	case "claude-opus-4-6":
 		model = models.Claude{
-			Model:     *inputModel,
-			ProjectID: projectID,
-			Region:    region,
+			Model:        *inputModel,
+			ProjectID:    projectID,
+			Region:       region,
+			SACredential: saCredential,
 		}
 	case "gemini-2.5-pro":
 		model = models.Gemini{
