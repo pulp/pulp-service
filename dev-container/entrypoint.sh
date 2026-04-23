@@ -34,9 +34,9 @@ $PG_BIN/psql -d postgres -tc "SELECT 1 FROM pg_roles WHERE rolname = 'pulp'" | g
 $PG_BIN/psql -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'pulp'" | grep -q 1 || \
     $PG_BIN/psql -d postgres -c "CREATE DATABASE pulp OWNER pulp"
 
-# Start Redis
+# Start Redis (--save "" disables persistence, --dir /tmp for writable working dir)
 echo "Starting Redis..."
-redis-server --bind 127.0.0.1 --daemonize yes --protected-mode yes
+redis-server --bind 127.0.0.1 --daemonize yes --protected-mode yes --save "" --dir /tmp
 
 # If /workspace/pulp-service has source, install in dev mode
 if [ -d "/workspace/pulp-service/pulp_service" ]; then
