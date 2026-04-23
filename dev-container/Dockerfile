@@ -1,5 +1,5 @@
 # Stage 0: Build the alcove-shim binary
-FROM docker.io/library/golang:1.25 AS shim-builder
+FROM docker.io/library/golang:1.26 AS shim-builder
 WORKDIR /src
 RUN git clone --depth=1 https://github.com/bmbouter/alcove.git . && \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/alcove-shim ./cmd/shim
