@@ -4,7 +4,7 @@ description: |
   Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
-  url: https://github.com/pulp/pulp-service/releases/download/agent-splunk-20260416-697d4e1/agent-splunk
+  url: https://github.com/pulp/pulp-service/releases/download/agent-splunk-20260423-1cfe8d9/agent-splunk
   args: ["--model", "claude-opus-4-6"]
   env:
     SPLUNK_INSECURE_SKIP_VERIFY: "true"
