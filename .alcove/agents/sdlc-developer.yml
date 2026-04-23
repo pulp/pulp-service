@@ -35,6 +35,3 @@ timeout: 3600
 
 dev_container:
   image: ghcr.io/pulp/hosted-pulp-dev-env:main
-
-profiles:
-  - pulp-service-contributor

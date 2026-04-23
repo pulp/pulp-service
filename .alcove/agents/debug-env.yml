@@ -3,6 +3,7 @@ description: Prints all Skiff environment variables with dummy token detection a
 executable:
   url: file:///usr/local/bin/debug-env
 timeout: 60
+enforcement_mode: monitor
 credentials:
   SPLUNK_TOKEN: splunk
   JIRA_TOKEN: jira

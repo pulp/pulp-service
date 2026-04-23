@@ -91,6 +91,3 @@ credentials:
   GITHUB_TOKEN: github
 
 timeout: 900
-
-profiles:
-  - pulp-service-planner

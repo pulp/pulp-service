@@ -25,6 +25,3 @@ timeout: 1800
 outputs:
   - approved
   - comments
-
-profiles:
-  - pulp-service-reviewer
