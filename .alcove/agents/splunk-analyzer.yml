@@ -13,6 +13,7 @@ executable:
     JIRA_USERNAME: "dkliban+pulp-sre-agent@redhat.com"
 
 timeout: 1800
+enforcement_mode: monitor
 
 direct_outbound: true
 
