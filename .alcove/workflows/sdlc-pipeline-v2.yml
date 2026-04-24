@@ -25,10 +25,12 @@ workflow:
     outputs: [complexity, target_area, candidate_files, approach, risks, automatable, reviewers_needed]
 
   # Phase 2: Plan — create implementation plan from triage output.
+  # Condition ensures triage explicitly flagged the issue as automatable.
   - id: plan
     type: agent
     agent: Implementation Planner v2
     depends: "triage.Succeeded"
+    condition: "steps.triage.outputs.automatable == true"
     inputs:
       issue_number: "{{trigger.issue_number}}"
       issue_title: "{{trigger.issue_title}}"

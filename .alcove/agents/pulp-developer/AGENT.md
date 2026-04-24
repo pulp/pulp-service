@@ -72,7 +72,7 @@ Four auth classes, all extend `JSONHeaderRemoteAuthentication` with different `j
 
 ### Multi-tenancy (app/models.py, app/authorization.py)
 - `DomainOrg` model links `org_id`, `user` (FK), or `group` (FK) to Pulp domains (M2M).
-  Access granted by matching org_id, direct user FK, or group membership.
+  Access is granted by matching org_id, direct user FK, or group membership.
 - `DomainBasedPermission` extracts org_id from `.identity.internal.org_id`
 - `AllowUnauthPull` permission class allows safe methods (GET/HEAD/OPTIONS) without authentication
 - ContextVars bridge permission checks to signal handlers:

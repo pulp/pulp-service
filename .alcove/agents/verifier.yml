@@ -57,11 +57,13 @@ prompt: |
   - Are there unintended side effects?
 
   ### 5. Verdict
-  Produce a clear PASS or FAIL verdict. If FAIL, list exactly what needs fixing.
+  Produce a clear PASS or FAIL verdict. If FAIL, list exactly what needs fixing
+  and EXIT WITH A NON-ZERO STATUS (exit 1). This signals the pipeline to
+  trigger the patch phase for corrections.
   Do not be lenient. A FAIL now is cheaper than a FAIL in CI.
 
   Output: {
-    "verdict": "pass|fail",
+    "verdict": "pass",
     "fixes_required": ["list of things to fix"],
     "code_issues": [{"severity": "critical|major|minor", "file": "path", "line": 42, "issue": "description", "suggested_fix": "what to change"}]
   }
