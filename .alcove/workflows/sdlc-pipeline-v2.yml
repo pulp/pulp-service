@@ -8,6 +8,7 @@ trigger:
     repos: [pulp/pulp-service]
     delivery_mode: polling
   jira:
+    projects: [PULP]
     labels: [agentic-sdlc-v2]
 
 workflow:
