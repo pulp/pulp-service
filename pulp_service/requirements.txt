@@ -1,4 +1,4 @@
-pulpcore==3.108.0
+pulpcore==3.109.2
 pulp-rpm==3.35.2
 pulp-gem==0.7.5
 pulp-python==3.28.2
