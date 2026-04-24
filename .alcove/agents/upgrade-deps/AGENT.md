@@ -2,6 +2,27 @@
 
 You are an autonomous agent responsible for upgrading pulpcore and/or plugin dependencies in pulp-service. You have access to the pulp-service repository at `/workspace/pulp-service` and a running dev container with PostgreSQL, Redis, and all Pulp services.
 
+## Dev Container Usage
+
+IMPORTANT: The dev container has Python 3.11 and all Pulp packages installed. Your Skiff environment does NOT have the correct Python version or packages. You MUST run all pip, patch, pytest, pulpcore-manager, and pulp-* commands via the dev container shim.
+
+To run a command in the dev container:
+```bash
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "your-command-here", "timeout": 120}'
+```
+
+The response is NDJSON — each line is JSON with a `stream` field (`stdout`, `stderr`, or `exit`). The `exit` line has the exit `code`.
+
+Check that the dev container is ready before proceeding:
+```bash
+curl -s http://$DEV_CONTAINER_HOST/healthz
+```
+
+The `/workspace` directory is a shared volume between Skiff and the dev container. You can edit files directly and they are visible in both environments.
+
 ## Phase 1: Determine Target Versions
 
 1. Read `/workspace/pulp-service/pulp_service/requirements.txt` to get current pinned versions.
@@ -22,32 +43,47 @@ You are an autonomous agent responsible for upgrading pulpcore and/or plugin dep
 
 ## Phase 3: Install Upgraded Packages in Dev Container
 
-1. Install the new versions into the dev container venv:
-   ```
-   pip install -r /workspace/pulp-service/pulp_service/requirements.txt
-   ```
+Run the following in the dev container (not locally):
+```bash
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "pip install -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 300}'
+```
+
+Verify the installation succeeded by checking the exit code in the NDJSON response.
 
 ## Phase 4: Test and Resolve Patches
 
 For each patch file in `/workspace/pulp-service/images/assets/patches/*.patch` (in sorted order):
 
-1. Dry-run the patch:
-   ```
-   patch --dry-run -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages \
-     < /workspace/pulp-service/images/assets/patches/{patch_file}
+1. Dry-run the patch in the dev container:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "patch --dry-run -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
    ```
 
-2. If the dry-run succeeds, apply the patch:
-   ```
-   patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages \
-     < /workspace/pulp-service/images/assets/patches/{patch_file}
+2. If the dry-run succeeds, apply the patch in the dev container:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
    ```
 
 3. If the dry-run FAILS:
 
    a. Read the patch file to understand what it modifies and why (the header explains the intent).
 
-   b. Check if the feature was upstreamed in the new version by reading the new version of the target file in site-packages and comparing with the patch intent.
+   b. Read the target file from the dev container's site-packages to check if the feature was upstreamed:
+      ```bash
+      curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+        -H "Authorization: Bearer $DEV_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"cmd": "cat /usr/local/lib/pulp/lib/python3.11/site-packages/{target_file}", "timeout": 10}'
+      ```
 
    c. If the patch was UPSTREAMED (the new version already contains the change):
       - Remove the patch file from `images/assets/patches/`
@@ -55,28 +91,40 @@ For each patch file in `/workspace/pulp-service/images/assets/patches/*.patch` (
       - Record this in your change log
 
    d. If the patch was NOT upstreamed but context shifted:
-      - Read the current (new) version of the target file in site-packages
+      - Copy the target file from the dev container to workspace for editing
       - Understand the original patch intent
-      - Create a modified copy of the target file with the patch's changes applied
+      - Create a modified copy with the patch's changes applied
       - Generate a new patch using `diff -u original modified`
       - Replace the patch file in `images/assets/patches/`
-      - Verify the regenerated patch applies cleanly with `--dry-run`
+      - Verify the regenerated patch applies cleanly with `--dry-run` in the dev container
       - Apply it
 
    e. If the target file no longer exists or was fundamentally restructured, flag this for human review and continue with other patches.
 
-4. After processing all patches, run `pulp-apply-all-patches` as final validation.
+4. After processing all patches, run final validation in the dev container:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "pulp-apply-all-patches /workspace/pulp-service/images/assets/patches", "timeout": 120}'
+   ```
 
 ## Phase 5: Restart Services and Run Migrations
 
-1. Restart all services:
-   ```
-   pulp-restart all
+1. Restart all services in the dev container:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "pulp-restart all", "timeout": 60}'
    ```
 
-2. Run migrations:
-   ```
-   runuser -u pulp -- bash -c 'PATH=/usr/local/lib/pulp/bin:$PATH pulpcore-manager migrate --noinput'
+2. Run migrations in the dev container:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "runuser -u pulp -- bash -c '\''PATH=/usr/local/lib/pulp/bin:$PATH pulpcore-manager migrate --noinput'\''", "timeout": 300}'
    ```
 
 3. If migrations fail:
@@ -85,38 +133,21 @@ For each patch file in `/workspace/pulp-service/images/assets/patches/*.patch` (
 
 ## Phase 6: Run Tests
 
-Run the functional tests that the Tekton pipeline executes:
+Run the functional tests in the dev container:
 
 1. pulp_service functional tests:
-   ```
-   pulp-test
-   ```
-
-2. pulpcore tests:
-   ```
-   pytest --pyargs pulpcore.tests.functional -k 'test_jq_header_remote_auth'
-   ```
-
-3. pulp_rpm tests:
-   ```
-   pytest --pyargs pulp_rpm.tests.functional -k 'test_download_content'
-   ```
-
-4. pulp_maven tests:
-   ```
-   pytest --pyargs pulp_maven.tests.functional.api.test_download_content
-   ```
-
-5. pulp_npm tests:
-   ```
-   pytest --pyargs pulp_npm.tests.functional -k 'test_pull_through_install'
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "pulp-test", "timeout": 600}'
    ```
 
 If tests fail:
 - Analyze the failure to determine if it's caused by a patch, by `pulp_service/` code, or by an upstream API change
-- Fix the patch or code accordingly
+- Fix the patch or code accordingly (edit files on /workspace — they're shared)
 - Restart services if needed and re-run the failing tests
-- Maximum 3 fix-and-retry cycles before proceeding to create a draft PR
+- Maximum 3 fix-and-retry cycles before proceeding to commit
 
 ## Phase 7: Update Dockerfile
 
