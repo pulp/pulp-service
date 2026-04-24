@@ -87,8 +87,6 @@ repos:
   - name: pulp-service
     url: https://github.com/pulp/pulp-service.git
 
-credentials:
-  GITHUB_TOKEN: github
 
 timeout: 900
 enforcement_mode: monitor
