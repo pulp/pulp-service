@@ -18,6 +18,8 @@ prompt: |
   Do NOT create a PR — the pipeline handles that automatically.
 
 timeout: 7200
+credentials:
+  GITHUB_TOKEN: github
 enforcement_mode: monitor
 
 schedule:
