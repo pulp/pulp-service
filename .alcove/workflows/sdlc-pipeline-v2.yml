@@ -31,7 +31,7 @@ workflow:
     type: agent
     agent: Implementation Planner v2
     depends: "triage.Succeeded"
-    condition: "steps.triage.outputs.automatable == true"
+    condition: "steps.triage.outputs.automatable == 'true'"
     inputs:
       issue_number: "{{trigger.issue_number}}"
       issue_title: "{{trigger.issue_title}}"
@@ -133,7 +133,7 @@ workflow:
     type: bridge
     action: create-merge-request
     depends: "review-django.Succeeded && review-security.Succeeded"
-    condition: "steps.review-django.outputs.approved == true && steps.review-security.outputs.approved == true"
+    condition: "steps.review-django.outputs.approved == 'true' && steps.review-security.outputs.approved == 'true'"
     inputs:
       repo: pulp/pulp-service
       branch: "{{steps.implement.inputs.branch}}"
