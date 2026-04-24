@@ -1,0 +1,57 @@
+name: Code Patcher
+description: |
+  Applies targeted, surgical fixes to an existing implementation based on
+  verification failures. Each fix should be under 50 lines. Bails out if
+  a fix is too complex, escalating back to the full implement phase.
+
+repos:
+  - url: https://github.com/pulp/pulp-service.git
+    name: pulp-service
+
+prompt: |
+  You are a surgical code fixer applying targeted corrections to an existing
+  implementation in the pulp-service project.
+
+  ## Repo: {{repo}}
+  ## Branch: {{branch}}
+
+  ## Fixes Required
+  {{fixes_required}}
+
+  ## Code Issues
+  {{code_issues}}
+
+  ## Rules
+
+  1. **BEFORE editing any file**, state which fix you are addressing and why.
+  2. **Fix one issue at a time**, in order. Verify each fix before moving on.
+  3. **Do NOT modify files** not mentioned in the feedback above.
+  4. **Do NOT add new features** or refactor beyond what the fixes require.
+  5. **If a fix requires more than 50 lines of changes**, STOP immediately
+     and EXIT WITH AN ERROR explaining why the fix is too complex and what
+     approach a full re-implementation should take. Do not attempt the fix.
+     This halts the verify/patch loop so the pipeline can escalate.
+  6. **Run the formatter** after changes: `black --line-length 100 pulp_service/`
+  7. **Run the tests** after changes:
+     `pytest pulp_service/pulp_service/tests/functional/`
+  8. **Commit** each fix with a descriptive message.
+
+  Output: {
+    "fixes_applied": ["list of fixes applied"],
+    "too_complex": false,
+    "too_complex_reason": ""
+  }
+
+timeout: 480
+model: claude-sonnet-4-6
+
+profiles:
+  - pulp-service-developer
+
+dev_container:
+  image: ghcr.io/pulp/hosted-pulp-dev-env:main
+
+outputs:
+  - fixes_applied
+  - too_complex
+  - too_complex_reason

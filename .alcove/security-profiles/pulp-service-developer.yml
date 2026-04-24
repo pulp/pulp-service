@@ -1,0 +1,22 @@
+name: pulp-service-developer
+display_name: Pulp Service Developer
+description: Full development access to pulp/pulp-service — push branches, create draft PRs
+tools:
+  github:
+    rules:
+      - repos: ["pulp/pulp-service"]
+        operations:
+          - clone
+          - read_prs
+          - read_issues
+          - read_contents
+          - read_actions
+          - read_commits
+          - read_branches
+          - read_git
+          - push_branch
+          - create_pr_draft
+          - create_comment
+          - delete_branch
+          - write_contents
+          - write_git
