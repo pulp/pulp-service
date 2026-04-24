@@ -53,9 +53,11 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
 
 Verify the installation succeeded by checking the exit code in the NDJSON response.
 
-## Phase 4: Test and Resolve Patches
+## Phase 4: Apply and Resolve Patches
 
-For each patch file in `/workspace/pulp-service/images/assets/patches/*.patch` (in sorted order):
+Patches MUST be applied in the exact order they appear in the `Dockerfile`, NOT in alphabetical order from the patches directory. Read the `Dockerfile` and extract the ordered list of patch filenames from the COPY/RUN lines.
+
+For each patch, in Dockerfile order:
 
 1. Dry-run the patch in the dev container:
    ```bash
@@ -65,7 +67,7 @@ For each patch file in `/workspace/pulp-service/images/assets/patches/*.patch` (
      -d '{"cmd": "patch --dry-run -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
    ```
 
-2. If the dry-run succeeds, apply the patch in the dev container:
+2. If the dry-run succeeds, apply it:
    ```bash
    curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
      -H "Authorization: Bearer $DEV_TOKEN" \
@@ -73,41 +75,35 @@ For each patch file in `/workspace/pulp-service/images/assets/patches/*.patch` (
      -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
    ```
 
-3. If the dry-run FAILS:
+3. If the dry-run FAILS, determine the cause. There are only two possibilities:
 
-   a. Read the patch file to understand what it modifies and why (the header explains the intent).
+   **A. The patch changes are already present in the upstream package (upstreamed).**
 
-   b. Read the target file from the dev container's site-packages to check if the feature was upstreamed:
-      ```bash
-      curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-        -H "Authorization: Bearer $DEV_TOKEN" \
-        -H "Content-Type: application/json" \
-        -d '{"cmd": "cat /usr/local/lib/pulp/lib/python3.11/site-packages/{target_file}", "timeout": 10}'
-      ```
+   To check: read the patch file to understand what lines it adds/removes, then read the target file from the dev container's site-packages and look for the exact changes the patch would make. If the upstream code already contains those changes, the patch is upstreamed.
 
-   c. If the patch was UPSTREAMED (the new version already contains the change):
-      - Remove the patch file from `images/assets/patches/`
-      - Remove the corresponding COPY and RUN lines from `Dockerfile`
-      - Record this in your change log
-
-   d. If the patch was NOT upstreamed but context shifted:
-      - Copy the target file from the dev container to workspace for editing
-      - Understand the original patch intent
-      - Create a modified copy with the patch's changes applied
-      - Generate a new patch using `diff -u original modified`
-      - Replace the patch file in `images/assets/patches/`
-      - Verify the regenerated patch applies cleanly with `--dry-run` in the dev container
-      - Apply it
-
-   e. If the target file no longer exists or was fundamentally restructured, flag this for human review and continue with other patches.
-
-4. After processing all patches, run final validation in the dev container:
+   Read the target file:
    ```bash
    curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
      -H "Authorization: Bearer $DEV_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"cmd": "pulp-apply-all-patches /workspace/pulp-service/images/assets/patches", "timeout": 120}'
+     -d '{"cmd": "cat /usr/local/lib/pulp/lib/python3.11/site-packages/{target_file}", "timeout": 10}'
    ```
+
+   If upstreamed:
+   - Delete the patch file from `images/assets/patches/`
+   - Remove the corresponding COPY and RUN lines from the `Dockerfile`
+   - Record this in your change log
+
+   **B. The upstream code changed and the patch needs to be updated.**
+
+   The patch's intent is still needed but the surrounding code (context lines) shifted. To fix:
+   1. Read the target file from the dev container (the new upstream version)
+   2. Copy it to `/workspace` as the "original" file
+   3. Read the patch to understand what logical change it makes
+   4. Apply that same logical change to the new version of the file, creating a "modified" file
+   5. Generate a new patch: `diff -u original modified > /workspace/pulp-service/images/assets/patches/{patch_file}`
+   6. Verify the new patch applies cleanly with `--dry-run` in the dev container
+   7. Apply it
 
 ## Phase 5: Restart Services and Run Migrations
 
