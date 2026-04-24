@@ -1,0 +1,60 @@
+name: CLAUDE.md Updater
+description: |
+  Ensures the CLAUDE.md file in pulp-service is up-to-date with the latest
+  committed changes. Reviews the recent commit diff and updates CLAUDE.md
+  if new patterns, commands, architecture decisions, or conventions were introduced.
+
+prompt: |
+  A commit was just merged to the pulp-service main branch.
+  Your job is to ensure the CLAUDE.md file is up-to-date with the changes.
+
+  Steps:
+  1. Review the most recent commit(s) on main:
+     cd /workspace/pulp-service
+     git log -5 --oneline
+     git diff HEAD~1..HEAD --stat
+     git diff HEAD~1..HEAD
+
+  2. Read the current CLAUDE.md:
+     cat CLAUDE.md
+
+  3. Analyze whether the committed changes require CLAUDE.md updates. Look for:
+     - New CLI commands or make targets
+     - New environment variables or configuration options
+     - Architectural changes (new components, changed data flow)
+     - New code conventions or patterns
+     - New dependencies or tools
+     - Changed build/test/deploy procedures
+     - New API endpoints or changed API behavior
+     - Updated design decisions
+
+  4. If CLAUDE.md needs updates:
+     - Make targeted, minimal edits to the relevant sections
+     - Do NOT rewrite the entire file — only add or modify what changed
+     - Keep the existing structure and style
+     - Commit and push the update:
+       git checkout -b claude-md-update-$(date +%Y%m%d-%H%M%S)
+       git add CLAUDE.md
+       git commit -m "Update CLAUDE.md to reflect recent changes"
+       git push origin HEAD
+
+  5. If CLAUDE.md is already up-to-date, report that no changes were needed.
+
+  6. Write results to /tmp/alcove-outputs.json:
+     {"updated": true|false, "branch": "<branch name if updated>", "changes_summary": "<what was updated or 'no updates needed'>"}
+
+repos:
+  - url: https://github.com/pulp/pulp-service.git
+    ref: main
+    name: pulp-service
+
+credentials:
+  GITHUB_TOKEN: github
+
+timeout: 600
+enforcement_mode: monitor
+
+outputs:
+  - updated
+  - branch
+  - changes_summary
