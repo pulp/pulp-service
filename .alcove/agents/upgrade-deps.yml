@@ -32,5 +32,3 @@ repos:
     ref: main
     name: pulp-service
 
-profiles:
-  - pulp-service-contributor

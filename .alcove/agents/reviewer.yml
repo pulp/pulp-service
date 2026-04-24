@@ -26,6 +26,3 @@ enforcement_mode: monitor
 outputs:
   - approved
   - comments
-
-profiles:
-  - pulp-service-reviewer
