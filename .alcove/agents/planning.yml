@@ -92,6 +92,3 @@ credentials:
 
 timeout: 900
 enforcement_mode: monitor
-
-profiles:
-  - pulp-service-planner
