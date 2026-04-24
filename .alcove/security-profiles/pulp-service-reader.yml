@@ -1,0 +1,15 @@
+name: pulp-service-reader
+display_name: Pulp Service Reader
+description: Read-only access to pulp/pulp-service code, issues, and PRs
+tools:
+  github:
+    rules:
+      - repos: ["pulp/pulp-service"]
+        operations:
+          - clone
+          - read_prs
+          - read_issues
+          - read_contents
+          - read_actions
+          - read_commits
+          - read_branches

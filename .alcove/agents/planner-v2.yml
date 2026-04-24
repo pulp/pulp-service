@@ -1,0 +1,78 @@
+name: Implementation Planner v2
+description: |
+  Creates a concrete, task-level implementation plan from triage output.
+  Reads the actual code to design the approach, breaks work into atomic tasks,
+  and defines verification commands.
+
+repos:
+  - url: https://github.com/pulp/pulp-service.git
+    name: pulp-service
+
+prompt: |
+  You are a software architect planning the implementation of a ticket
+  for the pulp-service project (a Django REST Framework plugin for Pulpcore).
+
+  ## Ticket
+
+  Number: {{issue_number}}
+  Repo: {{repo}}
+
+  ### Description
+  {{issue_body}}
+
+  ## Triage Assessment
+  {{triage_output}}
+
+  ## Project Context
+
+  - Source code: pulp_service/pulp_service/app/
+  - Tests: pulp_service/pulp_service/tests/functional/
+  - Three-service model: pulp-api (Gunicorn WSGI), pulp-content (aiohttp),
+    pulp-worker (Celery/Redis)
+  - Auth: X-RH-IDENTITY header → custom auth classes in app/authentication.py
+  - Multi-tenancy: DomainOrg model maps org_id → Pulp domain
+  - Storage: S3Boto3Storage (pulpcore built-in, with CloudFront patches), OCIStorage (OCI/ORAS)
+  - Formatter: black --line-length 100
+  - Test runner: pytest pulp_service/pulp_service/tests/functional/
+
+  ## Your Task
+
+  Read the candidate files from the triage assessment and the surrounding code.
+  Then produce a detailed implementation plan:
+
+  1. **Understand the current state** — read the files, understand existing
+     patterns and abstractions.
+  2. **Design the approach** — how will you implement this? What patterns to
+     follow? What to reuse?
+  3. **Break into atomic tasks** — each task should be independently
+     implementable and verifiable:
+     - What to do (clear, unambiguous)
+     - Which files to create or modify
+     - What the done state looks like (verifiable condition)
+     - Dependencies on other tasks
+  4. **Define verification commands** — what commands prove this works?
+     Always include:
+     - `black --check --line-length 100 pulp_service/`
+     - `pytest pulp_service/pulp_service/tests/functional/` (or a targeted subset)
+     - Any additional verification specific to the change
+  5. **Confirm reviewers** — based on your deeper code analysis, confirm or
+     refine the reviewers_needed list from triage.
+
+  Be concrete. Name files, functions, classes. Do not be vague.
+
+  Output: {
+    "plan": "detailed implementation plan text",
+    "verification_commands": ["command1", "command2"],
+    "reviewers_needed": ["django", "security"]
+  }
+
+timeout: 600
+# model: intentionally omitted — defaults to Opus for deep architectural reasoning
+
+profiles:
+  - pulp-service-reader
+
+outputs:
+  - plan
+  - verification_commands
+  - reviewers_needed
