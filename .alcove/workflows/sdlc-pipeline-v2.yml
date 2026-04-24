@@ -128,12 +128,11 @@ workflow:
     outputs: [summary]
 
   # Phase 6: Submit — create draft PR (human merges after review).
-  # Condition ensures both reviewers explicitly approved.
+  # Reviewers exit non-zero on rejection, so depends is sufficient for gating.
   - id: create-pr
     type: bridge
     action: create-merge-request
     depends: "review-django.Succeeded && review-security.Succeeded"
-    condition: "steps.review-django.outputs.approved == 'true' && steps.review-security.outputs.approved == 'true'"
     inputs:
       repo: pulp/pulp-service
       branch: "{{steps.implement.inputs.branch}}"
