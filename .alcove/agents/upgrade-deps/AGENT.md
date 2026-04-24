@@ -75,13 +75,11 @@ For each patch, in Dockerfile order:
      -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
    ```
 
-3. If the dry-run FAILS, determine the cause. There are only two possibilities:
+3. If the dry-run FAILS, determine the cause. Default assumption: the patch needs to be updated (option B). Only classify as upstreamed (option A) if you have verified EVERY change in the patch.
 
-   **A. The patch changes are already present in the upstream package (upstreamed).**
+   First, read the patch file to understand ALL changes it makes. A patch may modify multiple files and make multiple changes per file. You must verify every single one.
 
-   To check: read the patch file to understand what lines it adds/removes, then read the target file from the dev container's site-packages and look for the exact changes the patch would make. If the upstream code already contains those changes, the patch is upstreamed.
-
-   Read the target file:
+   Then read EACH target file from the dev container:
    ```bash
    curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
      -H "Authorization: Bearer $DEV_TOKEN" \
@@ -89,21 +87,33 @@ For each patch, in Dockerfile order:
      -d '{"cmd": "cat /usr/local/lib/pulp/lib/python3.11/site-packages/{target_file}", "timeout": 10}'
    ```
 
-   If upstreamed:
+   **A. The patch is upstreamed (ALL changes are already present).**
+
+   A patch is upstreamed ONLY if EVERY change across ALL files in the patch is already present in the upstream code. Check each change individually:
+   - For lines the patch ADDS: verify those exact lines exist in the upstream file
+   - For lines the patch REMOVES: verify those lines are already absent
+   - For lines the patch MODIFIES: verify the "after" version is already present
+
+   IMPORTANT: A patch that modifies multiple files is only upstreamed if ALL files reflect ALL changes. If even one change from the patch is missing from upstream, the patch is NOT upstreamed — it needs to be updated (option B).
+
+   Example of a false positive: a patch removes `authentication_classes = []` AND changes a URL path. If the authentication lines happen to be absent in the new version for unrelated reasons but the URL path is still the old value, the patch is NOT upstreamed — it still needs to apply the URL change.
+
+   If truly upstreamed (all changes verified):
    - Delete the patch file from `images/assets/patches/`
    - Remove the corresponding COPY and RUN lines from the `Dockerfile`
    - Record this in your change log
 
-   **B. The upstream code changed and the patch needs to be updated.**
+   **B. The upstream code changed and the patch needs to be updated (DEFAULT).**
 
    The patch's intent is still needed but the surrounding code (context lines) shifted. To fix:
-   1. Read the target file from the dev container (the new upstream version)
-   2. Copy it to `/workspace` as the "original" file
-   3. Read the patch to understand what logical change it makes
-   4. Apply that same logical change to the new version of the file, creating a "modified" file
-   5. Generate a new patch: `diff -u original modified > /workspace/pulp-service/images/assets/patches/{patch_file}`
-   6. Verify the new patch applies cleanly with `--dry-run` in the dev container
-   7. Apply it
+   1. Read each target file from the dev container (the new upstream version)
+   2. Copy each to `/workspace` as "original" files
+   3. Read the patch to understand what logical changes it makes to each file
+   4. Apply those same logical changes to the new versions, creating "modified" files
+   5. Generate a new patch: `diff -u original modified > new.patch` (for multi-file patches, concatenate the diffs)
+   6. Replace the patch file in `images/assets/patches/`
+   7. Verify the new patch applies cleanly with `--dry-run` in the dev container
+   8. Apply it
 
 ## Phase 5: Restart Services and Run Migrations
 
