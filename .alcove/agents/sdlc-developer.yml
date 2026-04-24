@@ -32,8 +32,6 @@ prompt: |
   Output: {"summary": "what you implemented"}
 
 timeout: 3600
-credentials:
-  GITHUB_TOKEN: github
 enforcement_mode: monitor
 
 dev_container:

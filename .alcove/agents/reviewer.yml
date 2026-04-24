@@ -21,8 +21,6 @@ repos:
     name: pulp-service
 
 timeout: 1800
-credentials:
-  GITHUB_TOKEN: github
 enforcement_mode: monitor
 
 outputs:
