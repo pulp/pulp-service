@@ -142,6 +142,12 @@ Escalations
 
 [Escalation policy](data/teams/pulp/escalation-policies/pulp.yml).
 
+## PulpOOMKilled
+
+This alert shares the same investigation procedure as PulpCrashing. See PulpCrashing above for investigation steps.
+The key difference is that OOMKilled specifically indicates the container was terminated due to exceeding its memory limit.
+Check container memory limits and recent memory usage trends in Grafana.
+
 ## PulpProdServiceRDSLowStorageSpace
 
 Impact

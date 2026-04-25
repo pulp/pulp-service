@@ -89,11 +89,15 @@ func run() error {
 	// --- Acquire exclusive file lock ---
 	unlock, lockErr := dedup.AcquireLock(defaultLockPath)
 	if lockErr != nil {
-		// Another instance is running; exit silently.
-		fmt.Fprintf(os.Stderr, "[main] lock already held, exiting: %v\n", lockErr)
+		// Another instance is running; output structured JSON and exit cleanly.
+		fmt.Fprintf(os.Stderr, "[lock] another instance is running, skipping this run\n")
+		skipOutput, _ := json.Marshal(map[string]any{"skipped": true, "reason": "lock_held"})
+		fmt.Println(string(skipOutput))
 		return nil
 	}
 	defer unlock()
+
+	runStart := time.Now()
 
 	// --- Signal handling + timeout ---
 	signalCtx, signalCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -162,6 +166,33 @@ func run() error {
 	// --- Register AlertManager native tool ---
 	alertTool := amClient.RegisterTool(mcpManager)
 	allTools = append(allTools, alertTool)
+
+	// --- Pre-flight dedup: skip if all alerts already processed ---
+	alertsFound := 0
+	alertsProcessed := 0
+	prefetchedAlerts, prefetchErr := amClient.FetchAlerts(timeoutCtx)
+	if prefetchErr != nil {
+		fmt.Fprintf(os.Stderr, "[main] warning: pre-flight alert fetch failed, proceeding anyway: %v\n", prefetchErr)
+	} else {
+		alertsFound = len(prefetchedAlerts)
+		allSeen := alertsFound > 0
+		for _, alert := range prefetchedAlerts {
+			if !dedupCache.Seen(alert.Fingerprint, alert.StartsAt) {
+				allSeen = false
+				alertsProcessed++
+				dedupCache.Record(alert.Fingerprint, alert.StartsAt)
+			}
+		}
+		if alertsFound > 0 && allSeen {
+			fmt.Fprintf(os.Stderr, "[main] all %d alerts already processed within cooldown, skipping run\n", alertsFound)
+			return nil
+		}
+		if alertsFound == 0 {
+			fmt.Fprintf(os.Stderr, "[main] no active alerts found, skipping run\n")
+			return nil
+		}
+		fmt.Fprintf(os.Stderr, "[main] %d alerts to process after dedup check\n", alertsProcessed)
+	}
 
 	// --- Load skills ---
 	jiraSkill := skills.LoadSkill()
@@ -242,6 +273,22 @@ func run() error {
 	}
 
 	fmt.Fprintf(os.Stderr, "\n[main] triage complete (%d bytes)\n", len(triageResult))
+
+	// Record a conservative issue creation estimate. The LLM controls
+	// actual creation via MCP tool calls, so we count once per run.
+	dedupCache.RecordIssueCreation()
+	issuesChecked := 1
+
+	// --- Structured run summary for observability ---
+	runSummary := map[string]any{
+		"alerts_found":     alertsFound,
+		"alerts_processed": alertsProcessed,
+		"issues_checked":   issuesChecked,
+		"run_duration_sec":  time.Since(runStart).Seconds(),
+	}
+	summaryJSON, _ := json.Marshal(runSummary)
+	fmt.Fprintf(os.Stderr, "[summary] %s\n", string(summaryJSON))
+
 	return nil
 }
 
@@ -253,8 +300,7 @@ func runCheckOnly(amClient *alertmanager.Client) error {
 
 	found, count, checkErr := amClient.CheckAlerts(checkCtx)
 	if checkErr != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", checkErr)
-		os.Exit(1)
+		return fmt.Errorf("check-only: %w", checkErr)
 	}
 
 	output := map[string]any{"alerts_found": found, "count": count}

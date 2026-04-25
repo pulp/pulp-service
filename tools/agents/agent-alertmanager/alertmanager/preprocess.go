@@ -20,15 +20,47 @@ var budgetBurnPrefixes = []string{
 	"PulpContentError",
 }
 
-// FilterLatencyAlerts removes alerts whose alertname starts with
-// "PulpApiLatency" or "PulpContentLatency". These latency alerts are
-// informational and should not trigger triage workflows.
+// latencyPrefixes defines the alertname prefixes for latency alerts.
+var latencyPrefixes = []string{
+	"PulpApiLatency",
+	"PulpContentLatency",
+}
+
+// isLatencyAlert checks whether an alert name matches a known latency prefix
+// with a "BudgetBurn" suffix, or is a generic latency alert.
+func isLatencyAlert(alertName string) bool {
+	for _, prefix := range latencyPrefixes {
+		if strings.HasPrefix(alertName, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isBudgetBurnAlert checks whether an alert name matches a known burn-rate
+// prefix AND contains "BudgetBurn" (e.g. PulpApiErrorBudgetBurn1h or
+// PulpApiError1hrBudgetBurn). Returns the matching prefix and true if
+// matched, otherwise empty string and false.
+func isBudgetBurnAlert(alertName string) (string, bool) {
+	if !strings.Contains(alertName, "BudgetBurn") {
+		return "", false
+	}
+	for _, prefix := range budgetBurnPrefixes {
+		if strings.HasPrefix(alertName, prefix) {
+			return prefix, true
+		}
+	}
+	return "", false
+}
+
+// FilterLatencyAlerts removes alerts whose alertname matches a known latency
+// prefix. These latency alerts are informational and should not trigger
+// triage workflows.
 func FilterLatencyAlerts(alerts []Alert) []Alert {
 	filtered := make([]Alert, 0, len(alerts))
 	for _, alert := range alerts {
 		alertName := alert.Labels["alertname"]
-		if strings.HasPrefix(alertName, "PulpApiLatency") ||
-			strings.HasPrefix(alertName, "PulpContentLatency") {
+		if isLatencyAlert(alertName) {
 			continue
 		}
 		filtered = append(filtered, alert)
@@ -37,9 +69,9 @@ func FilterLatencyAlerts(alerts []Alert) []Alert {
 }
 
 // GroupAlerts groups budget burn alerts by prefix and environment.
-// Alerts starting with a known burn-rate prefix (PulpApiError,
-// PulpContentError) are grouped under that prefix. All other alerts
-// are treated as standalone groups (one alert per group).
+// Alerts matching a known burn-rate prefix AND ending with "BudgetBurn"
+// are grouped under that prefix. All other alerts are treated as
+// standalone groups (one alert per group).
 func GroupAlerts(alerts []Alert) []AlertGroup {
 	// groupKey = "prefix|env" for burn-rate alerts, "alertname|env" for standalone.
 	type groupEntry struct {
@@ -57,17 +89,11 @@ func GroupAlerts(alerts []Alert) []AlertGroup {
 		alertName := alert.Labels["alertname"]
 		env := alert.Labels["env"]
 
-		prefix := ""
-		for _, burnPrefix := range budgetBurnPrefixes {
-			if strings.HasPrefix(alertName, burnPrefix) {
-				prefix = burnPrefix
-				break
-			}
-		}
+		prefix, isBurn := isBudgetBurnAlert(alertName)
 
 		var key string
 		var name string
-		if prefix != "" {
+		if isBurn {
 			key = prefix + "|" + env
 			name = prefix
 		} else {
@@ -88,7 +114,7 @@ func GroupAlerts(alerts []Alert) []AlertGroup {
 		existing.alerts = append(existing.alerts, alert)
 
 		// For burn-rate groups, extract the window suffix as metadata.
-		if prefix != "" {
+		if isBurn {
 			window := strings.TrimPrefix(alertName, prefix)
 			if window != "" {
 				existing.windows = append(existing.windows, window)

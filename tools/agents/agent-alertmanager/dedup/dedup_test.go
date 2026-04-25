@@ -137,22 +137,20 @@ func TestFileLock(t *testing.T) {
 		t.Fatalf("AcquireLock returned error: %v", err)
 	}
 
-	// Verify lock file exists on disk.
+	// Verify lock file exists on disk (flock keeps the file).
 	if _, statErr := os.Stat(lockPath); os.IsNotExist(statErr) {
 		t.Error("lock file does not exist after AcquireLock")
 	}
 
-	// Attempting to acquire the same lock should fail.
+	// Attempting to acquire the same lock should fail (flock LOCK_NB returns EWOULDBLOCK).
 	_, secondErr := AcquireLock(lockPath)
 	if secondErr == nil {
 		t.Error("second AcquireLock should have returned an error")
 	}
 
-	// After unlocking, the lock file should be removed.
+	// After unlocking, the lock file remains on disk (flock does not delete it),
+	// but the lock is released so re-acquisition should succeed.
 	unlock()
-	if _, statErr := os.Stat(lockPath); !os.IsNotExist(statErr) {
-		t.Error("lock file still exists after unlock")
-	}
 
 	// Acquiring again after unlock should succeed.
 	unlockAgain, err := AcquireLock(lockPath)

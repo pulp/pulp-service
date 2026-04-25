@@ -36,7 +36,9 @@ func OpenJiraIssue(result, question, dataSource string) string {
 			"  - If no matching open issue is found, create a new Jira issue using the jira_create_issue tool.\n"+
 			"    Use the analysis to derive an appropriate summary and description.\n"+
 			"    If the issue contains sensitive information (see Step 3), set the security level to make it visible only to the group \"Red Hat Employee\" (use visibility type \"group\", not \"role\").\n\n"+
-			"Step 3: Sensitive information check.\n"+
+			"Step 3: Include investigation links.\n"+
+			"  When creating or commenting on an issue, include the alert's runbook URL and Prometheus generatorURL in the description for direct investigation links.\n\n"+
+			"Step 4: Sensitive information check.\n"+
 			"  Before creating or commenting on an issue, inspect the content for sensitive information such as:\n"+
 			"  IP addresses, hostnames, internal URLs, credentials, tokens, API keys, usernames, or any infrastructure-specific details.\n"+
 			"  If ANY sensitive information is present, the issue or comment MUST be created as private (visible only to the group \"Red Hat Employee\"; always use visibility type \"group\", not \"role\").\n\n"+
