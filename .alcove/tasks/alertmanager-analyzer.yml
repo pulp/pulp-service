@@ -1,0 +1,21 @@
+name: AlertManager Analyzer
+description: |
+  Analyzes Prometheus AlertManager alerts for Pulp services and drafts Jira issues.
+  Runs as a pre-compiled agent binary from GitHub Releases.
+
+executable:
+  url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-latest/agent-alertmanager
+  args: ["--model", "claude-sonnet-4-6"]
+  env:
+    ALERTMANAGER_INSECURE_SKIP_VERIFY: "true"
+
+timeout: 1800
+
+credentials:
+  ALERTMANAGER_TOKEN: alertmanager
+  JIRA_TOKEN: jira
+  VERTEX_SA_JSON: google-vertex
+
+schedule:
+  cron: "* * * * *"
+  enabled: true
