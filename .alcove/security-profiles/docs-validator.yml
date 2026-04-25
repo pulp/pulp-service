@@ -1,0 +1,17 @@
+name: docs-validator
+display_name: Documentation Validator
+description: Read-only access to pulp-docs repo, restricted network egress for package installs
+tools:
+  gitlab:
+    rules:
+      - repos: ["hosted-pulp/pulp-docs"]
+        operations:
+          - clone
+          - read_contents
+network:
+  egress:
+    allow:
+      - "pypi.org"
+      - "files.pythonhosted.org"
+      - "registry.access.redhat.com"
+      - "cdn.redhat.com"
