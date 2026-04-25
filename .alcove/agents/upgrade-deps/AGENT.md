@@ -105,15 +105,64 @@ For each patch, in Dockerfile order:
 
    **B. The upstream code changed and the patch needs to be updated (DEFAULT).**
 
-   The patch's intent is still needed but the surrounding code (context lines) shifted. To fix:
-   1. Read each target file from the dev container (the new upstream version)
-   2. Copy each to `/workspace` as "original" files
-   3. Read the patch to understand what logical changes it makes to each file
-   4. Apply those same logical changes to the new versions, creating "modified" files
-   5. Generate a new patch: `diff -u original modified > new.patch` (for multi-file patches, concatenate the diffs)
+   The patch's intent is still needed but the surrounding code changed. Use the upstream git history to understand exactly what changed and how to update the patch.
+
+   Step 1: Identify the upstream package and its GitHub repo. The patch header and file paths tell you which package it targets. The mapping is:
+   - `pulpcore/` → https://github.com/pulp/pulpcore (tag: `{version}`)
+   - `pulp_container/` → https://github.com/pulp/pulp_container (tag: `{version}`)
+   - `pulp_python/` → https://github.com/pulp/pulp_python (tag: `{version}`)
+   - `pulp_rpm/` → https://github.com/pulp/pulp_rpm (tag: `{version}`)
+   - `pulp_maven/` → https://github.com/pulp/pulp_maven (tag: `{version}`)
+   - `pulp_file/` → https://github.com/pulp/pulp_file (tag: `{version}`)
+   - `pulp_npm/` → https://github.com/pulp/pulp_npm (tag: `{version}`)
+   - `pulp_gem/` → https://github.com/pulp/pulp_gem (tag: `{version}`)
+
+   Step 2: Determine the old and new versions. The OLD version is in the current (pre-upgrade) `requirements.txt` (read from git: `git show HEAD:pulp_service/requirements.txt`). The NEW version is what you updated to in Phase 2.
+
+   Step 3: Clone the upstream repo and find the breaking commits:
+   ```bash
+   git clone https://github.com/pulp/{repo}.git /workspace/{repo}
+   cd /workspace/{repo}
+   ```
+
+   Try applying the patch against the OLD tag (should succeed):
+   ```bash
+   git checkout {old_version}
+   patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
+   ```
+
+   Try against the NEW tag (should fail):
+   ```bash
+   git checkout {new_version}
+   patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
+   ```
+
+   Step 4: Find which commits broke the patch. Look at the changes to the specific files the patch modifies between the old and new tags:
+   ```bash
+   git log --oneline {old_version}..{new_version} -- {files_modified_by_patch}
+   ```
+
+   Read those commits to understand what changed in the code the patch targets:
+   ```bash
+   git diff {old_version}..{new_version} -- {files_modified_by_patch}
+   ```
+
+   Step 5: Regenerate the patch. Now that you understand how the upstream code changed, apply the patch's logical intent to the new code:
+   1. Check out the NEW tag: `git checkout {new_version}`
+   2. For each file the patch modifies, copy the upstream version as the "original"
+   3. Apply the patch's logical changes to create a "modified" version
+   4. Generate the new patch: `diff -u original modified` (use the site-packages-relative paths in the header, matching the original patch format)
+   5. For multi-file patches, concatenate the diffs
    6. Replace the patch file in `images/assets/patches/`
-   7. Verify the new patch applies cleanly with `--dry-run` in the dev container
-   8. Apply it
+
+   Step 6: Verify the regenerated patch works in the dev container:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "patch --dry-run -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
+   ```
+   If it applies cleanly, apply it. If not, re-examine the diff and fix.
 
 ## Phase 5: Restart Services and Run Migrations
 
