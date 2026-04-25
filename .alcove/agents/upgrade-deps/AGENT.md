@@ -41,9 +41,111 @@ The `/workspace` directory is a shared volume between Skiff and the dev containe
 1. Edit `/workspace/pulp-service/pulp_service/requirements.txt` to update the pinned version(s).
 2. Verify the file is syntactically correct.
 
-## Phase 3: Install Upgraded Packages in Dev Container
+## Phase 3: Analyze and Update Patches Using Upstream Git History
 
-Run the following in the dev container (not locally):
+The dev container already has the OLD packages installed with the OLD patches applied. Before installing new packages, you must figure out which patches need updating by using the upstream git repos. Do NOT test patches against the dev container yet — that happens in Phase 4.
+
+Read the `Dockerfile` and extract the ordered list of patch filenames from the COPY/RUN lines. Patches must be processed in this Dockerfile order.
+
+For each patch that targets an upgraded package, clone the upstream repo and test:
+
+### Step 1: Identify the upstream repo
+
+The patch file paths tell you which package it targets:
+- `pulpcore/` → https://github.com/pulp/pulpcore
+- `pulp_container/` → https://github.com/pulp/pulp_container
+- `pulp_python/` → https://github.com/pulp/pulp_python
+- `pulp_rpm/` → https://github.com/pulp/pulp_rpm
+- `pulp_maven/` → https://github.com/pulp/pulp_maven
+- `pulp_file/` → https://github.com/pulp/pulp_file
+- `pulp_npm/` → https://github.com/pulp/pulp_npm
+- `pulp_gem/` → https://github.com/pulp/pulp_gem
+
+Determine the OLD version (from `git show HEAD:pulp_service/requirements.txt`) and the NEW version (from Phase 2).
+
+If the package was NOT upgraded, skip the patch — it will still apply cleanly.
+
+### Step 2: Clone and test the patch against both versions
+
+```bash
+git clone https://github.com/pulp/{repo}.git /workspace/{repo}
+cd /workspace/{repo}
+```
+
+Verify the patch applies at the OLD tag:
+```bash
+git checkout {old_version}
+patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
+```
+
+Test against the NEW tag:
+```bash
+git checkout {new_version}
+patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
+```
+
+If the patch applies cleanly at the NEW tag, no changes needed — move to the next patch.
+
+### Step 3: If the patch fails at the NEW tag, determine why
+
+Find which commits changed the files the patch modifies:
+```bash
+git log --oneline {old_version}..{new_version} -- {files_modified_by_patch}
+git diff {old_version}..{new_version} -- {files_modified_by_patch}
+```
+
+There are two possibilities. Default assumption is option B.
+
+**A. The patch is upstreamed (ALL changes are already present).**
+
+A patch is upstreamed ONLY if EVERY change across ALL files in the patch is already present at the NEW tag. Check each change individually:
+- For lines the patch ADDS: verify those exact lines exist at the NEW tag
+- For lines the patch REMOVES: verify those lines are already absent at the NEW tag
+- For lines the patch MODIFIES: verify the "after" version is already present at the NEW tag
+
+IMPORTANT: A patch that modifies multiple files is only upstreamed if ALL files reflect ALL changes. If even one change is missing, the patch is NOT upstreamed.
+
+Example of a false positive: a patch removes `authentication_classes = []` AND changes a URL path. If the authentication lines happen to be absent for unrelated reasons but the URL path is still the old value, the patch is NOT upstreamed.
+
+If truly upstreamed:
+- Delete the patch file from `images/assets/patches/`
+- Remove the corresponding COPY and RUN lines from the `Dockerfile`
+- Record this in your change log
+
+**B. The upstream code changed and the patch needs to be updated (DEFAULT).**
+
+Using the git diff from Step 3, you now understand exactly how the upstream code changed. Regenerate the patch:
+
+1. Check out the NEW tag: `git checkout {new_version}`
+2. For each file the patch modifies, copy it as the "original"
+3. Apply the patch's logical changes to create a "modified" version
+4. Generate the new patch: `diff -u original modified` (use the site-packages-relative paths in the header, matching the original patch format)
+5. For multi-file patches, concatenate the diffs
+6. Replace the patch file in `images/assets/patches/`
+7. Verify the regenerated patch applies cleanly against the NEW tag:
+   ```bash
+   git checkout {new_version}
+   patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
+   ```
+
+## Phase 4: Install Upgraded Packages and Apply Patches in Dev Container
+
+The dev container has the OLD packages installed with OLD patches applied. You must reverse the old patches, install the new packages, then apply the new/updated patches.
+
+### Step 1: Reverse all existing patches in the dev container
+
+Reverse patches in REVERSE Dockerfile order (last applied first):
+```bash
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "patch -R -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
+```
+
+Use the ORIGINAL patch files from git (before your Phase 3 modifications) to reverse them. You can get them with `git show HEAD:images/assets/patches/{patch_file}`.
+
+### Step 2: Install upgraded packages
+
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Authorization: Bearer $DEV_TOKEN" \
@@ -51,118 +153,17 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "pip install -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 300}'
 ```
 
-Verify the installation succeeded by checking the exit code in the NDJSON response.
+### Step 3: Apply updated patches in Dockerfile order
 
-## Phase 4: Apply and Resolve Patches
+For each patch in Dockerfile order:
+```bash
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
+```
 
-Patches MUST be applied in the exact order they appear in the `Dockerfile`, NOT in alphabetical order from the patches directory. Read the `Dockerfile` and extract the ordered list of patch filenames from the COPY/RUN lines.
-
-For each patch, in Dockerfile order:
-
-1. Dry-run the patch in the dev container:
-   ```bash
-   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-     -H "Authorization: Bearer $DEV_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"cmd": "patch --dry-run -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
-   ```
-
-2. If the dry-run succeeds, apply it:
-   ```bash
-   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-     -H "Authorization: Bearer $DEV_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
-   ```
-
-3. If the dry-run FAILS, determine the cause. Default assumption: the patch needs to be updated (option B). Only classify as upstreamed (option A) if you have verified EVERY change in the patch.
-
-   First, read the patch file to understand ALL changes it makes. A patch may modify multiple files and make multiple changes per file. You must verify every single one.
-
-   Then read EACH target file from the dev container:
-   ```bash
-   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-     -H "Authorization: Bearer $DEV_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"cmd": "cat /usr/local/lib/pulp/lib/python3.11/site-packages/{target_file}", "timeout": 10}'
-   ```
-
-   **A. The patch is upstreamed (ALL changes are already present).**
-
-   A patch is upstreamed ONLY if EVERY change across ALL files in the patch is already present in the upstream code. Check each change individually:
-   - For lines the patch ADDS: verify those exact lines exist in the upstream file
-   - For lines the patch REMOVES: verify those lines are already absent
-   - For lines the patch MODIFIES: verify the "after" version is already present
-
-   IMPORTANT: A patch that modifies multiple files is only upstreamed if ALL files reflect ALL changes. If even one change from the patch is missing from upstream, the patch is NOT upstreamed — it needs to be updated (option B).
-
-   Example of a false positive: a patch removes `authentication_classes = []` AND changes a URL path. If the authentication lines happen to be absent in the new version for unrelated reasons but the URL path is still the old value, the patch is NOT upstreamed — it still needs to apply the URL change.
-
-   If truly upstreamed (all changes verified):
-   - Delete the patch file from `images/assets/patches/`
-   - Remove the corresponding COPY and RUN lines from the `Dockerfile`
-   - Record this in your change log
-
-   **B. The upstream code changed and the patch needs to be updated (DEFAULT).**
-
-   The patch's intent is still needed but the surrounding code changed. Use the upstream git history to understand exactly what changed and how to update the patch.
-
-   Step 1: Identify the upstream package and its GitHub repo. The patch header and file paths tell you which package it targets. The mapping is:
-   - `pulpcore/` → https://github.com/pulp/pulpcore (tag: `{version}`)
-   - `pulp_container/` → https://github.com/pulp/pulp_container (tag: `{version}`)
-   - `pulp_python/` → https://github.com/pulp/pulp_python (tag: `{version}`)
-   - `pulp_rpm/` → https://github.com/pulp/pulp_rpm (tag: `{version}`)
-   - `pulp_maven/` → https://github.com/pulp/pulp_maven (tag: `{version}`)
-   - `pulp_file/` → https://github.com/pulp/pulp_file (tag: `{version}`)
-   - `pulp_npm/` → https://github.com/pulp/pulp_npm (tag: `{version}`)
-   - `pulp_gem/` → https://github.com/pulp/pulp_gem (tag: `{version}`)
-
-   Step 2: Determine the old and new versions. The OLD version is in the current (pre-upgrade) `requirements.txt` (read from git: `git show HEAD:pulp_service/requirements.txt`). The NEW version is what you updated to in Phase 2.
-
-   Step 3: Clone the upstream repo and find the breaking commits:
-   ```bash
-   git clone https://github.com/pulp/{repo}.git /workspace/{repo}
-   cd /workspace/{repo}
-   ```
-
-   Try applying the patch against the OLD tag (should succeed):
-   ```bash
-   git checkout {old_version}
-   patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
-   ```
-
-   Try against the NEW tag (should fail):
-   ```bash
-   git checkout {new_version}
-   patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
-   ```
-
-   Step 4: Find which commits broke the patch. Look at the changes to the specific files the patch modifies between the old and new tags:
-   ```bash
-   git log --oneline {old_version}..{new_version} -- {files_modified_by_patch}
-   ```
-
-   Read those commits to understand what changed in the code the patch targets:
-   ```bash
-   git diff {old_version}..{new_version} -- {files_modified_by_patch}
-   ```
-
-   Step 5: Regenerate the patch. Now that you understand how the upstream code changed, apply the patch's logical intent to the new code:
-   1. Check out the NEW tag: `git checkout {new_version}`
-   2. For each file the patch modifies, copy the upstream version as the "original"
-   3. Apply the patch's logical changes to create a "modified" version
-   4. Generate the new patch: `diff -u original modified` (use the site-packages-relative paths in the header, matching the original patch format)
-   5. For multi-file patches, concatenate the diffs
-   6. Replace the patch file in `images/assets/patches/`
-
-   Step 6: Verify the regenerated patch works in the dev container:
-   ```bash
-   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-     -H "Authorization: Bearer $DEV_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"cmd": "patch --dry-run -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
-   ```
-   If it applies cleanly, apply it. If not, re-examine the diff and fix.
+If any patch fails to apply in the dev container, go back to Phase 3 and fix it using the upstream git history.
 
 ## Phase 5: Restart Services and Run Migrations
 
