@@ -14,6 +14,13 @@ prompt: |
   The `results` input contains a JSON array of per-doc validation results.
   The `overall` input contains a one-line summary string.
 
+  Use the Jira MCP tools for all Jira operations:
+  - jira_search (search for existing tickets)
+  - jira_create_issue (create new tickets)
+  - jira_add_comment (comment on existing tickets)
+  - jira_get_issues (read ticket details)
+  - jira_set_labels (update labels on tickets)
+
   ## Guard Clause
 
   FIRST, check for suspicious results before processing:
@@ -110,19 +117,28 @@ prompt: |
 
   ## Output
 
-  CRITICAL — YOUR VERY LAST ACTION must be writing outputs. Run:
+  CRITICAL — YOUR VERY LAST ACTION must be writing valid JSON to the
+  output file. The next workflow step WILL FAIL if you skip this or if
+  the JSON is malformed. Build the JSON carefully and validate it:
 
-  cat > /tmp/alcove-outputs.json << 'OUTPUTS'
-  {
-    "digest_ticket": "<PULP-XXXX>",
-    "tickets_created": ["PULP-...", ...],
-    "tickets_commented": ["PULP-...", ...],
-    "stale_tickets_flagged": ["PULP-...", ...],
-    "summary": "<summary string>"
+  python3 -c "
+  import json
+  data = {
+      'digest_ticket': '...',
+      'tickets_created': [...],
+      'tickets_commented': [...],
+      'stale_tickets_flagged': [...],
+      'summary': '...'
   }
-  OUTPUTS
+  json.dump(data, open('/tmp/alcove-outputs.json', 'w'), indent=2)
+  print('Output written successfully')
+  "
+
+repos: []
 
 timeout: 600
+
+enforcement_mode: monitor
 
 outputs:
   - digest_ticket
