@@ -18,6 +18,9 @@ import (
 
 // DefaultFilter is the AlertManager API v2 filter for pulp service alerts.
 // Uses PromQL-style matcher syntax with curly braces.
+// NOTE: This {key="value"} syntax works with most AlertManager versions.
+// Some versions require repeated filter[] query params instead. The format
+// should be tested against the target AlertManager instance.
 const DefaultFilter = `{service="pulp"}`
 
 // Alert represents a single alert from the AlertManager API v2.
@@ -77,6 +80,17 @@ func (client *Client) CheckAlerts(ctx context.Context) (bool, int, error) {
 	return found, len(filtered), nil
 }
 
+// FetchAlerts retrieves active alerts matching the default filter, applies
+// latency filtering, and returns the result. This is used for pre-flight
+// dedup checks before invoking the LLM pipeline.
+func (client *Client) FetchAlerts(ctx context.Context) ([]Alert, error) {
+	alerts, fetchErr := client.fetchAlerts(ctx, DefaultFilter, true, false, false)
+	if fetchErr != nil {
+		return nil, fmt.Errorf("fetch alerts: %w", fetchErr)
+	}
+	return FilterLatencyAlerts(alerts), nil
+}
+
 // fetchAlerts retrieves alerts from the AlertManager API v2.
 // The filter parameter uses PromQL-style matcher syntax (e.g. {service="pulp"}).
 func (client *Client) fetchAlerts(ctx context.Context, filter string, active, silenced, inhibited bool) ([]Alert, error) {
@@ -106,7 +120,8 @@ func (client *Client) fetchAlerts(ctx context.Context, filter string, active, si
 	}
 	defer response.Body.Close()
 
-	bodyBytes, readErr := io.ReadAll(response.Body)
+	// Limit response body to 5MB to prevent unbounded memory usage.
+	bodyBytes, readErr := io.ReadAll(io.LimitReader(response.Body, 5*1024*1024))
 	if readErr != nil {
 		return nil, fmt.Errorf("read response body: %w", readErr)
 	}
@@ -206,7 +221,16 @@ func (client *Client) RegisterTool(manager *mcpClient.MCPManager) llms.Tool {
 		if marshalErr != nil {
 			return "", fmt.Errorf("marshal result: %w", marshalErr)
 		}
-		return string(resultBytes), nil
+
+		resultStr := string(resultBytes)
+		const maxResponseChars = 25000
+		if len(resultStr) > maxResponseChars {
+			resultStr = fmt.Sprintf(
+				"NOTE: Response truncated. Showing partial results out of %d alert groups total.\n\n%s",
+				len(groups), resultStr[:maxResponseChars],
+			)
+		}
+		return resultStr, nil
 	}
 
 	manager.RegisterNativeTool(tool, handler)

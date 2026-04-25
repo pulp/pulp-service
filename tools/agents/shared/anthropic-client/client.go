@@ -20,9 +20,10 @@ type VertexClient struct {
 	Region    string
 	Model     string
 
-	once    sync.Once
-	creds   *google.Credentials
-	initErr error
+	once       sync.Once
+	creds      *google.Credentials
+	httpClient *http.Client
+	initErr    error
 }
 
 const (
@@ -42,6 +43,9 @@ func (vertex *VertexClient) Do(req *http.Request) (*http.Response, error) {
 			return
 		}
 		vertex.creds = creds
+		vertex.httpClient = &http.Client{
+			Timeout: 2 * time.Minute,
+		}
 	})
 	if vertex.initErr != nil {
 		return nil, vertex.initErr
@@ -78,8 +82,5 @@ func (vertex *VertexClient) Do(req *http.Request) (*http.Response, error) {
 	newReq.Header.Set("Content-Type", "application/json")
 	newReq.Header.Set("Authorization", "Bearer "+token.AccessToken)
 
-	httpClient := http.Client{
-		Timeout: time.Duration(time.Minute * 2),
-	}
-	return httpClient.Do(newReq)
+	return vertex.httpClient.Do(newReq)
 }

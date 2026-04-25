@@ -63,6 +63,20 @@ func TestCheckAlerts_Empty(t *testing.T) {
 	}
 }
 
+func TestCheckAlerts_ServerError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusUnauthorized)
+		writer.Write([]byte("unauthorized"))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "bad-token")
+	_, _, err := client.CheckAlerts(context.Background())
+	if err == nil {
+		t.Fatal("expected error for 401 response")
+	}
+}
+
 func TestCheckAlerts_AuthHeader(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		authHeader := request.Header.Get("Authorization")

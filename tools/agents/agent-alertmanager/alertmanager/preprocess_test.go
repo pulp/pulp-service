@@ -139,3 +139,14 @@ func TestGroupAlerts_PreservesStandalone(t *testing.T) {
 		t.Error("expected a PulpCrashing group")
 	}
 }
+
+func TestGroupAlerts_CrossEnvironment(t *testing.T) {
+	alerts := []Alert{
+		{Labels: map[string]string{"alertname": "PulpApiErrorBudgetBurn", "env": "prod"}},
+		{Labels: map[string]string{"alertname": "PulpApiErrorBudgetBurn", "env": "stage"}},
+	}
+	grouped := GroupAlerts(alerts)
+	if len(grouped) != 2 {
+		t.Fatalf("expected 2 groups (one per env), got %d", len(grouped))
+	}
+}

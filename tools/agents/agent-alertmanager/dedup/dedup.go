@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -148,7 +149,8 @@ func (cache *Cache) RecordIssueCreation() {
 	cache.data.IssueCreationTimes = append(cache.data.IssueCreationTimes, time.Now())
 }
 
-// pruneExpired removes entries older than the cooldown window.
+// pruneExpired removes entries older than the cooldown window and
+// issue creation times older than 24 hours.
 // Must be called with the mutex NOT held (called only from NewCache).
 func (cache *Cache) pruneExpired() {
 	for key, existing := range cache.data.Entries {
@@ -156,20 +158,37 @@ func (cache *Cache) pruneExpired() {
 			delete(cache.data.Entries, key)
 		}
 	}
+
+	dayAgo := time.Now().Add(-24 * time.Hour)
+	pruned := make([]time.Time, 0, len(cache.data.IssueCreationTimes))
+	for _, creationTime := range cache.data.IssueCreationTimes {
+		if creationTime.After(dayAgo) {
+			pruned = append(pruned, creationTime)
+		}
+	}
+	cache.data.IssueCreationTimes = pruned
 }
 
-// AcquireLock creates an exclusive lock file at the given path.
-// Returns an unlock function that removes the lock file.
-// If the lock is already held, returns an error.
+// AcquireLock acquires an exclusive advisory lock (flock) on the given path.
+// Returns an unlock function that releases the lock and closes the file.
+// The lock file is NOT deleted — flock releases automatically on process death,
+// which makes this crash-safe (no orphaned locks after SIGKILL/OOM).
+// If the lock is already held by another process, returns an error.
 func AcquireLock(path string) (func(), error) {
-	lockFile, openErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	lockFile, openErr := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if openErr != nil {
-		return nil, fmt.Errorf("dedup: acquire lock %s: %w", path, openErr)
+		return nil, fmt.Errorf("dedup: open lock file %s: %w", path, openErr)
 	}
-	lockFile.Close()
+
+	flockErr := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if flockErr != nil {
+		lockFile.Close()
+		return nil, fmt.Errorf("dedup: another instance is running (lock %s): %w", path, flockErr)
+	}
 
 	unlock := func() {
-		os.Remove(path)
+		syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+		lockFile.Close()
 	}
 	return unlock, nil
 }

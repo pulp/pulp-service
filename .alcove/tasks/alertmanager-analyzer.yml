@@ -6,8 +6,6 @@ description: |
 executable:
   url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-latest/agent-alertmanager
   args: ["--model", "claude-sonnet-4-6"]
-  env:
-    ALERTMANAGER_INSECURE_SKIP_VERIFY: "true"
 
 timeout: 1800
 

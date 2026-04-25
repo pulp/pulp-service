@@ -67,7 +67,6 @@ func Run(ctx context.Context, llm llms.Model, cfg RunConfig) (string, error) {
 			var answer strings.Builder
 			for _, choice := range resp.Choices {
 				if choice.Content != "" {
-					fmt.Println(choice.Content)
 					answer.WriteString(choice.Content)
 				}
 			}
