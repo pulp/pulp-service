@@ -1,21 +1,135 @@
 #!/bin/bash
+set -e
 
 PULP_SERVICE_DIR="${PULP_SERVICE_DIR:-/workspace/pulp-service}"
-TEST_DIR="${PULP_SERVICE_DIR}/pulp_service/pulp_service/tests"
+BINDINGS_DIR="/tmp/bindings"
+COMPONENTS="pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service"
+API_HOST="${API_HOST:-localhost}"
+API_PORT="${API_PORT:-24817}"
+API_PROTOCOL="${API_PROTOCOL:-http}"
 
-if [ ! -d "$TEST_DIR" ]; then
-    TEST_DIR="/tmp/pulp_service/pulp_service/tests"
-fi
+generate_bindings() {
+    echo "=== Generating client bindings ==="
+    pip install "openapi-generator-cli" 2>/dev/null || true
 
-if [ ! -d "$TEST_DIR" ]; then
-    echo "Error: Cannot find test directory."
-    echo "Mount pulp-service at /workspace/pulp-service or set PULP_SERVICE_DIR."
-    exit 1
-fi
+    mkdir -p "$BINDINGS_DIR"
 
-if [ $# -eq 0 ]; then
-    echo "Running all functional tests from: $TEST_DIR/functional/"
-    exec pytest "$TEST_DIR/functional/" "${@}"
+    for PACKAGE in $COMPONENTS; do
+        if [ "$PACKAGE" = "pulpcore" ]; then
+            COMPONENT="core"
+        else
+            COMPONENT="${PACKAGE#pulp_}"
+        fi
+
+        SCHEMA_URL="${API_PROTOCOL}://${API_HOST}:${API_PORT}/pulp/api/v3/docs/api.json?bindings&component=${COMPONENT}"
+        SCHEMA_FILE="$BINDINGS_DIR/api-${PACKAGE//_/-}.json"
+
+        echo "Fetching schema for $PACKAGE ($COMPONENT)..."
+        if ! curl -s -f "$SCHEMA_URL" -o "$SCHEMA_FILE" 2>/dev/null; then
+            echo "WARNING: Could not fetch schema for $PACKAGE, skipping"
+            continue
+        fi
+
+        echo "Generating bindings for $PACKAGE..."
+        docker run --rm \
+            -v "$BINDINGS_DIR:/local" \
+            docker.io/openapitools/openapi-generator-cli:v7.10.0 generate \
+            -i "/local/api-${PACKAGE//_/-}.json" \
+            -g python \
+            -o "/local/${PACKAGE//_/-}" \
+            --additional-properties=packageName=pulpcore.client.${PACKAGE},projectName=${PACKAGE}-client,packageVersion=1.0,domainEnabled=true \
+            --http-user-agent=crc-pulp-client \
+            --skip-validate-spec \
+            --strict-spec=false 2>/dev/null || \
+        openapi-generator-cli generate \
+            -i "$SCHEMA_FILE" \
+            -g python \
+            -o "$BINDINGS_DIR/${PACKAGE//_/-}" \
+            --additional-properties=packageName=pulpcore.client.${PACKAGE},projectName=${PACKAGE}-client,packageVersion=1.0,domainEnabled=true \
+            --http-user-agent=crc-pulp-client \
+            --skip-validate-spec \
+            --strict-spec=false 2>/dev/null || {
+            echo "WARNING: Could not generate bindings for $PACKAGE, skipping"
+            continue
+        }
+
+        echo "Installing bindings for $PACKAGE..."
+        pip install "$BINDINGS_DIR/${PACKAGE//_/-}" --quiet 2>/dev/null || true
+    done
+
+    mkdir -p "$(python3 -c 'import pulpcore; print(pulpcore.__path__[0])')/client" 2>/dev/null || true
+    cat > "$(python3 -c 'import pulpcore; print(pulpcore.__path__[0])')/client/__init__.py" 2>/dev/null <<'PYEOF' || true
+from pkgutil import extend_path
+__path__ = extend_path(__path__, __name__)
+PYEOF
+
+    echo "=== Bindings generation complete ==="
+}
+
+install_test_deps() {
+    echo "=== Installing test dependencies ==="
+    pip install "pytest<8" pytest-django gnupg --quiet 2>/dev/null
+
+    if curl -sf -o /tmp/functest_requirements.txt \
+        https://raw.githubusercontent.com/pulp/pulp_rpm/main/functest_requirements.txt 2>/dev/null; then
+        pip install -r /tmp/functest_requirements.txt --quiet 2>/dev/null || true
+    fi
+    if curl -sf -o /tmp/unittest_requirements.txt \
+        https://raw.githubusercontent.com/pulp/pulp_rpm/main/unittest_requirements.txt 2>/dev/null; then
+        pip install -r /tmp/unittest_requirements.txt --quiet 2>/dev/null || true
+    fi
+    echo "=== Test dependencies installed ==="
+}
+
+run_tests() {
+    export API_PROTOCOL API_HOST API_PORT
+    export ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+    export ADMIN_PASSWORD="${ADMIN_PASSWORD:-password}"
+
+    if [ $# -gt 0 ]; then
+        exec pytest -v -r sx --color=yes "$@"
+    fi
+
+    echo "=== Running all Tekton pipeline tests ==="
+    FAILED=0
+
+    echo "--- Test 1/6: pulp_rpm parallel (test_download_content) ---"
+    pytest -v -r sx --color=yes --pyargs pulp_rpm.tests.functional \
+        -m parallel -n 8 -k 'test_download_content' || FAILED=$((FAILED + 1))
+
+    echo "--- Test 2/6: pulp_rpm serial (test_download_policies) ---"
+    pytest -v -r sx --color=yes --pyargs pulp_rpm.tests.functional \
+        -m 'not parallel' -k 'test_download_policies' || FAILED=$((FAILED + 1))
+
+    echo "--- Test 3/6: pulpcore (test_jq_header_remote_auth) ---"
+    pytest -v -r sx --color=yes --pyargs pulpcore.tests.functional \
+        -m parallel -n 8 -k 'test_jq_header_remote_auth' || FAILED=$((FAILED + 1))
+
+    echo "--- Test 4/6: pulp_maven (test_download_content) ---"
+    pytest -v -r sx --color=yes \
+        --pyargs pulp_maven.tests.functional.api.test_download_content || FAILED=$((FAILED + 1))
+
+    echo "--- Test 5/6: pulp_npm (test_pull_through_install) ---"
+    pytest -v -r sx --color=yes --pyargs pulp_npm.tests.functional \
+        -k 'test_pull_through_install' || FAILED=$((FAILED + 1))
+
+    echo "--- Test 6/6: pulp_service functional ---"
+    pytest -v -r sx --color=yes --pyargs pulp_service.tests.functional \
+        -m 'not parallel' || FAILED=$((FAILED + 1))
+
+    echo "=== Results: $((6 - FAILED))/6 test suites passed ==="
+    [ "$FAILED" -eq 0 ]
+}
+
+# Main
+if [ "$1" = "--generate-bindings" ]; then
+    shift
+    install_test_deps
+    generate_bindings
+    run_tests "$@"
+elif [ "$1" = "--bindings-only" ]; then
+    install_test_deps
+    generate_bindings
 else
-    exec pytest "$@"
+    run_tests "$@"
 fi
