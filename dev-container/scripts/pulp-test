@@ -26,8 +26,6 @@ generate_bindings() {
 
     wait_for_api
 
-    pip install "openapi-generator-cli" 2>&1 | tail -1
-
     mkdir -p "$BINDINGS_DIR"
 
     for PACKAGE in $COMPONENTS; do
@@ -48,12 +46,13 @@ generate_bindings() {
         fi
 
         echo "Generating bindings for $PACKAGE..."
-        if ! openapi-generator-cli generate \
+        if ! java -jar /opt/openapi-generator-cli.jar generate \
             -i "$SCHEMA_FILE" \
             -g python \
             -o "$BINDINGS_DIR/${PACKAGE//_/-}" \
-            --additional-properties=packageName=pulpcore.client.${PACKAGE},projectName=${PACKAGE}-client,packageVersion=1.0,domainEnabled=true \
+            --additional-properties="packageName=pulpcore.client.${PACKAGE},projectName=${PACKAGE}-client,packageVersion=1.0,domainEnabled=true" \
             --http-user-agent=crc-pulp-client \
+            -t /opt/templates \
             --skip-validate-spec \
             --strict-spec=false 2>&1 | tail -3; then
             echo "ERROR: Could not generate bindings for $PACKAGE"
