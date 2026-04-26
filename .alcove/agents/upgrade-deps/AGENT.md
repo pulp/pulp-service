@@ -201,58 +201,27 @@ If any patch fails to apply in the dev container, go back to Phase 3 and fix it 
 
 ## Phase 6: Run Tests
 
-Run the same functional tests that the Tekton pipeline in `.tekton/pulp-deploy-and-test.yaml` executes. All tests run in the dev container via the shim. The API is at `localhost:24817` with admin/password credentials.
+Run all Tekton pipeline tests using the `pulp-test` command in the dev container. The `--generate-bindings` flag generates OpenAPI client bindings, installs test dependencies, and then runs all 6 test suites (pulp_rpm, pulpcore, pulp_maven, pulp_npm, pulp_service).
 
-First, install test dependencies in the dev container:
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Authorization: Bearer $DEV_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": "pip install \"pytest<8\" pytest-django gnupg", "timeout": 120}'
+  -d '{"cmd": "pulp-test --generate-bindings", "timeout": 1800}'
 ```
 
-Then run each test suite in order. For each test, use this pattern:
-```bash
-curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-  -H "Authorization: Bearer $DEV_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"cmd": "API_PROTOCOL=http API_HOST=localhost API_PORT=24817 ADMIN_USERNAME=admin ADMIN_PASSWORD=password pytest -v -r sx --color=yes --pyargs {test_spec}", "timeout": 600}'
-```
-
-### Test 1: pulp_rpm parallel tests
-```
---pyargs pulp_rpm.tests.functional -m parallel -n 8 -k 'test_download_content'
-```
-
-### Test 2: pulp_rpm serial tests
-```
---pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies'
-```
-
-### Test 3: pulpcore tests
-```
---pyargs pulpcore.tests.functional -m parallel -n 8 -k 'test_jq_header_remote_auth'
-```
-
-### Test 4: pulp_maven tests
-```
---pyargs pulp_maven.tests.functional.api.test_download_content
-```
-
-### Test 5: pulp_npm tests
-```
---pyargs pulp_npm.tests.functional -k 'test_pull_through_install'
-```
-
-### Test 6: pulp_service tests
-```
---pyargs pulp_service.tests.functional -m 'not parallel'
-```
+This runs:
+1. pulp_rpm parallel tests (test_download_content)
+2. pulp_rpm serial tests (test_download_policies)
+3. pulpcore tests (test_jq_header_remote_auth)
+4. pulp_maven tests (test_download_content)
+5. pulp_npm tests (test_pull_through_install)
+6. pulp_service functional tests
 
 If tests fail:
 - Analyze the failure to determine if it's caused by a patch, by `pulp_service/` code, or by an upstream API change
 - Fix the patch or code accordingly (edit files on /workspace — they're shared)
-- Restart services if needed and re-run the failing tests
+- Restart services if needed and re-run the failing tests with `pulp-test --pyargs {test_spec}`
 - Maximum 3 fix-and-retry cycles before proceeding to commit
 
 ## Phase 7: Update Dockerfile
