@@ -16,10 +16,22 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
 
 The response is NDJSON — each line is JSON with a `stream` field (`stdout`, `stderr`, or `exit`). The `exit` line has the exit `code`.
 
-Check that the dev container is ready before proceeding:
+Before doing anything else, wait for the dev container to be ready. It may take up to 2 minutes to start (PostgreSQL init, migrations, etc.). Run this retry loop FIRST:
 ```bash
-curl -s http://$DEV_CONTAINER_HOST/healthz
+for i in $(seq 1 120); do
+  if curl -s http://$DEV_CONTAINER_HOST/healthz 2>/dev/null | grep -q ok; then
+    echo "Dev container ready after ${i}s"
+    break
+  fi
+  if [ "$i" -eq 120 ]; then
+    echo "ERROR: Dev container not ready after 120s"
+    exit 1
+  fi
+  sleep 1
+done
 ```
+
+Do NOT proceed to any phase until this succeeds.
 
 The `/workspace` directory is a shared volume between Skiff and the dev container. You can edit files directly and they are visible in both environments.
 
