@@ -113,6 +113,18 @@ RUN openssl rand -base64 32 > /etc/pulp/certs/database_fields.symmetric.key && \
     chown pulp:pulp /etc/pulp/certs/database_fields.symmetric.key && \
     chmod 600 /etc/pulp/certs/database_fields.symmetric.key
 
+RUN dnf -y install java-17-openjdk-headless && dnf clean all
+
+RUN curl -L -o /opt/openapi-generator-cli.jar \
+    https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.10.0/openapi-generator-cli-7.10.0.jar
+
+RUN mkdir -p /opt/templates && \
+    cd /opt/templates && \
+    curl -sO https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/python/v7.10.0/configuration.mustache && \
+    curl -sO https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/python/v7.10.0/partial_api_args.mustache && \
+    curl -sO https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/python/v7.10.0/requirements.mustache && \
+    curl -sO https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/python/v7.10.0/setup.mustache
+
 # PostgreSQL: remove the data directory created by the RPM, so initdb can
 # create it at runtime with the correct UID ownership. On OpenShift, the
 # runtime UID is arbitrary (e.g., 1000830000) and initdb requires creating
