@@ -142,32 +142,23 @@ Using the git diff from Step 3, you now understand exactly how the upstream code
 
 ## Phase 4: Install Upgraded Packages and Apply Patches in Dev Container
 
-The dev container has the OLD packages installed with OLD patches applied. You must reverse the old patches, install the new packages, then apply the new/updated patches.
+The dev container has the OLD packages installed with OLD patches baked in. To get a clean state, force-reinstall ALL packages from the updated requirements.txt. This overwrites all patched files with clean upstream versions. Then apply the updated patches fresh.
 
-### Step 1: Reverse all existing patches in the dev container
-
-Reverse patches in REVERSE Dockerfile order (last applied first):
-```bash
-curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-  -H "Authorization: Bearer $DEV_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"cmd": "patch -R -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
-```
-
-Use the ORIGINAL patch files from git (before your Phase 3 modifications) to reverse them. You can get them with `git show HEAD:images/assets/patches/{patch_file}`.
-
-### Step 2: Install upgraded packages
+### Step 1: Force-reinstall all packages to get clean upstream files
 
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Authorization: Bearer $DEV_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": "pip install -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 300}'
+  -d '{"cmd": "pip install --force-reinstall -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 600}'
 ```
 
-### Step 3: Apply updated patches in Dockerfile order
+This replaces ALL files in site-packages with clean upstream versions — no manual patch reversal needed.
 
-For each patch in Dockerfile order:
+### Step 2: Apply all patches in Dockerfile order
+
+Apply every patch that still exists in `images/assets/patches/` (i.e. patches you didn't delete as upstreamed in Phase 3), in Dockerfile order:
+
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Authorization: Bearer $DEV_TOKEN" \
@@ -175,7 +166,7 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
 ```
 
-If any patch fails to apply in the dev container, go back to Phase 3 and fix it using the upstream git history.
+Every patch MUST apply cleanly. If any patch fails, go back to Phase 3 and fix it using the upstream git history. Do not skip failing patches.
 
 ## Phase 5: Restart Services and Run Migrations
 
