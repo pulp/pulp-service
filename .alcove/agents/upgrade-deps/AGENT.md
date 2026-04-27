@@ -126,19 +126,38 @@ If truly upstreamed:
 
 **B. The upstream code changed and the patch needs to be updated (DEFAULT).**
 
-Using the git diff from Step 3, you now understand exactly how the upstream code changed. Regenerate the patch:
+Using the git diff from Step 3, you now understand exactly how the upstream code changed. Regenerate the patch by editing the actual source files in the cloned repo:
 
-1. Check out the NEW tag: `git checkout {new_version}`
-2. For each file the patch modifies, copy it as the "original"
-3. Apply the patch's logical changes to create a "modified" version
-4. Generate the new patch: `diff -u original modified` (use the site-packages-relative paths in the header, matching the original patch format)
-5. For multi-file patches, concatenate the diffs
-6. Replace the patch file in `images/assets/patches/`
-7. Verify the regenerated patch applies cleanly against the NEW tag:
+1. Check out the NEW tag:
    ```bash
+   cd /workspace/{repo}
    git checkout {new_version}
+   ```
+
+2. For each file the patch modifies, save a copy of the original:
+   ```bash
+   cp {file} {file}.orig
+   ```
+
+3. Read the patch to understand what logical change it makes. Then apply that same change directly to the file using sed, editing, or any method. For example, if the patch replaces `return [RegistryAuthentication]` with `return [RegistryAuthentication, *api_settings.DEFAULT_AUTHENTICATION_CLASSES]`, make that exact edit in the file.
+
+4. Generate the new patch from your edits:
+   ```bash
+   diff -u {file}.orig {file} > /workspace/updated.patch
+   ```
+   For multi-file patches, concatenate the diffs from each file.
+
+5. Replace the patch file:
+   ```bash
+   cp /workspace/updated.patch /workspace/pulp-service/images/assets/patches/{patch_file}
+   ```
+
+6. Restore the repo and verify:
+   ```bash
+   git checkout -- {file}
    patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
    ```
+   The dry-run MUST succeed. If not, re-examine your edits and fix.
 
 ## Phase 4: Install Upgraded Packages and Apply Patches in Dev Container
 
