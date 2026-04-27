@@ -92,6 +92,7 @@ workflow:
     type: agent
     agent: Django Specialist Reviewer
     depends: "verify.Succeeded"
+    max_iterations: 2
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
@@ -103,6 +104,7 @@ workflow:
     type: agent
     agent: Security Reviewer
     depends: "verify.Succeeded"
+    max_iterations: 2
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
@@ -111,6 +113,7 @@ workflow:
     outputs: [approved, comments, issues]
 
   # Phase 5b: Revision — address review feedback, then re-verify and re-review.
+  # All cycle participants (verify, review-*, revision) have max_iterations for bounded cycles.
   - id: revision
     type: agent
     agent: Pulp Developer
