@@ -167,3 +167,23 @@ runuser -u pulp -- pulpcore-manager shell           # Django shell
 ### Alcove Integration
 
 When used with alcove, the `/workspace` volume is automatically shared between the Skiff container (running Claude Code) and this dev container. Repositories are cloned into `/workspace/<name>/`. The dev container image is declared in the alcove agent definition via `dev_container.image`.
+
+## Alcove Release Pipeline
+
+The repository includes an automated post-merge release pipeline using Alcove workflows that triggers on pushes to the main branch. The pipeline consists of three agents:
+
+### Agents
+
+- **Konflux Release Monitor** (`.alcove/agents/konflux-release-monitor.yml`) — Monitors GitHub check runs until the Konflux release pipeline completes, extracts the built image tag
+- **Stage Health Checker** (`.alcove/agents/stage-health-checker.yml`) — Verifies pulp-stage pod health on OpenShift after deployment using `oc` commands
+- **CLAUDE.md Updater** (`.alcove/agents/claude-md-updater.yml`) — Reviews recent commits and updates this file if new patterns, commands, or architecture changes are introduced
+
+### Workflow
+
+The main workflow (`.alcove/workflows/post-merge-release-pipeline.yml`) coordinates these agents:
+
+1. **await-konflux-release** — Polls commit check runs until Konflux build/release pipelines complete successfully
+2. **check-stage-health** — Verifies deployed pods are healthy and running the new image  
+3. **update-claude-md** — Updates documentation to reflect any architectural changes in the merged commit
+
+This ensures that every merge to main triggers a complete release verification cycle and keeps documentation current.
