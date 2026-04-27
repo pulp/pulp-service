@@ -84,6 +84,7 @@ prompt: |
   }
 
 timeout: 600
+enforcement_mode: monitor
 model: claude-sonnet-4-6
 
 profiles:
