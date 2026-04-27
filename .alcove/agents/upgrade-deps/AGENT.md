@@ -174,9 +174,11 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
 
 This replaces ALL files in site-packages with clean upstream versions — no manual patch reversal needed.
 
-### Step 2: Apply all patches in Dockerfile order
+### Step 2: Apply remaining patches in Dockerfile order
 
-Apply every patch that still exists in `images/assets/patches/` (i.e. patches you didn't delete as upstreamed in Phase 3), in Dockerfile order:
+First, list the patch files that still exist in `images/assets/patches/`. Only apply patches that remain — upstreamed patches deleted in Phase 3 must NOT be applied.
+
+For each remaining patch, in Dockerfile order:
 
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
@@ -185,17 +187,34 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
 ```
 
-Every patch MUST apply cleanly. If a patch fails with "Reversed (or previously applied) patch detected", the package still has the old patched files. Fix this by force-reinstalling just that package to get clean upstream files, then retry the patch:
+If the patch succeeds, move to the next one.
 
-```bash
-# Determine which package the patch targets from its file paths (e.g. storages/ → django-storages, pulpcore/ → pulpcore)
-curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-  -H "Authorization: Bearer $DEV_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"cmd": "pip install --force-reinstall {package_name}", "timeout": 120}'
-```
+**If the patch fails with "Reversed (or previously applied)":**
 
-Then retry applying the patch. If it still fails for a different reason, go back to Phase 3 and fix it using the upstream git history. Do not skip failing patches.
+1. Force-reinstall just the affected package:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "pip install --force-reinstall {package_name}", "timeout": 120}'
+   ```
+2. Retry applying the patch.
+3. If it STILL shows "already applied" after force-reinstall, the patch IS upstreamed — the changes are part of the new upstream release. Delete the patch file from `images/assets/patches/`, remove the corresponding COPY and RUN lines from the `Dockerfile`, record this in your change log, and continue to the next patch.
+
+**If the patch fails for any other reason (hunk failure, context mismatch):**
+
+1. Force-reinstall just the affected package to ensure clean upstream files.
+2. Fix the patch using the same approach as Phase 3 option B:
+   - Clone the upstream repo (if not already cloned)
+   - Check out the NEW version tag
+   - Copy the target file as `.orig`
+   - Edit the file to apply the patch's logical change (use sed or direct edits)
+   - Generate a new patch with `diff -u {file}.orig {file}`
+   - Replace the patch file in `images/assets/patches/`
+3. Retry applying the fixed patch in the dev container.
+4. If it still fails after fixing, record the failure and continue.
+
+Do not skip failing patches — either fix them or delete them (if upstreamed).
 
 ## Phase 5: Restart Services and Run Migrations
 
