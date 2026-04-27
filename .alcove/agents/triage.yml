@@ -78,7 +78,7 @@ prompt: |
         "candidate_files": ["file1.py", "file2.py"],
         "approach": "how to implement",
         "risks": "what could go wrong",
-        "automatable": True,
+        "automatable": "true",  # must be string "true"/"false" for pipeline condition matching
         "reviewers_needed": ["django", "security"]
     }
     with open("/tmp/alcove-outputs.json", "w") as f:
