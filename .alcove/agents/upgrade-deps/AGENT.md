@@ -189,7 +189,20 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
 
 If the patch succeeds, move to the next one.
 
-**If the patch fails with "Reversed (or previously applied)":**
+**If the patch fails with "already exists", "Reversed", or "previously applied":**
+
+First, check if the patch CREATES new files (look for `new file mode` or `--- /dev/null` in the patch). If it does, those files may be left over from a previous patch application — `pip install --force-reinstall` does NOT remove files that were added by patches. Delete those leftover files from site-packages, then retry the patch:
+
+```bash
+# Read the patch to find files it creates (lines starting with +++ b/ where the --- line is /dev/null)
+# Delete those files from site-packages
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "rm /usr/local/lib/pulp/lib/python3.11/site-packages/{new_file_path}", "timeout": 10}'
+```
+
+If the patch only MODIFIES existing files (no new files created):
 
 1. Force-reinstall just the affected package:
    ```bash
@@ -199,7 +212,7 @@ If the patch succeeds, move to the next one.
      -d '{"cmd": "pip install --force-reinstall {package_name}", "timeout": 120}'
    ```
 2. Retry applying the patch.
-3. If it STILL shows "already applied" after force-reinstall, the patch IS upstreamed — the changes are part of the new upstream release. Delete the patch file from `images/assets/patches/`, remove the corresponding COPY and RUN lines from the `Dockerfile`, record this in your change log, and continue to the next patch.
+3. If it STILL shows "already applied" after force-reinstall AND the patch does NOT create new files, the patch IS upstreamed. Delete the patch file from `images/assets/patches/`, remove the corresponding COPY and RUN lines from the `Dockerfile`, record this in your change log, and continue to the next patch.
 
 **If the patch fails for any other reason (hunk failure, context mismatch):**
 
