@@ -149,8 +149,6 @@ COPY images/assets/patches/0028-OCIStorage-create-manifest.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-OCIStorage-create-manifest.patch
 
 
-COPY images/assets/patches/0031-Replace-ResponseContentDisposition-in-cloudfront.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Replace-ResponseContentDisposition-in-cloudfront.patch
 
 COPY images/assets/patches/0032-Disable-the-timestamp-of-interest-query.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0032-Disable-the-timestamp-of-interest-query.patch
@@ -188,8 +186,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0053-python-agent-scan-task.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0053-python-agent-scan-task.patch
 
-COPY images/assets/patches/0054-defer-contentid-cleanup-old-versions.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0054-defer-contentid-cleanup-old-versions.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
