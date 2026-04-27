@@ -185,7 +185,17 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
 ```
 
-Every patch MUST apply cleanly. If any patch fails, go back to Phase 3 and fix it using the upstream git history. Do not skip failing patches.
+Every patch MUST apply cleanly. If a patch fails with "Reversed (or previously applied) patch detected", the package still has the old patched files. Fix this by force-reinstalling just that package to get clean upstream files, then retry the patch:
+
+```bash
+# Determine which package the patch targets from its file paths (e.g. storages/ → django-storages, pulpcore/ → pulpcore)
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "pip install --force-reinstall {package_name}", "timeout": 120}'
+```
+
+Then retry applying the patch. If it still fails for a different reason, go back to Phase 3 and fix it using the upstream git history. Do not skip failing patches.
 
 ## Phase 5: Restart Services and Run Migrations
 
