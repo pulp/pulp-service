@@ -83,11 +83,24 @@ prompt: |
   trigger a revision cycle. Only approve if there are no critical or
   major security issues remaining.
 
-  Output: {
-    "approved": true,
-    "comments": "summary of review",
-    "issues": [{"severity": "critical|major|minor", "file": "path", "line": 42, "issue": "description", "suggestion": "how to fix"}]
-  }
+  CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
+  Use Python to safely serialize your review (handles quotes in comments):
+
+    python3 - <<'PYEOF'
+    import json, sys
+    approved = True  # set to False if critical/major security issues found
+    output = {
+        "approved": approved,
+        "comments": "Summary of security review findings.",
+        "issues": []
+    }
+    with open("/tmp/alcove-outputs.json", "w") as f:
+        json.dump(output, f)
+    if not approved:
+        sys.exit(1)
+    PYEOF
+
+  Replace with your actual review. Exit non-zero on rejection to trigger revision.
 
 timeout: 600
 enforcement_mode: monitor

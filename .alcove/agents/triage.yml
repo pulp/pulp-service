@@ -67,15 +67,25 @@ prompt: |
   Only set `automatable: true` and produce the full output if you are confident
   an agent can implement this end-to-end.
 
-  Output: {
-    "complexity": "small|medium|large",
-    "target_area": "description of affected area",
-    "candidate_files": ["file1.py", "file2.py"],
-    "approach": "how to implement",
-    "risks": "what could go wrong",
-    "automatable": true,
-    "reviewers_needed": ["django", "security"]
-  }
+  CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
+  Use Python to safely serialize your findings:
+
+    python3 - <<'PYEOF'
+    import json
+    output = {
+        "complexity": "small",  # or "medium" or "large"
+        "target_area": "description of affected area",
+        "candidate_files": ["file1.py", "file2.py"],
+        "approach": "how to implement",
+        "risks": "what could go wrong",
+        "automatable": True,
+        "reviewers_needed": ["django", "security"]
+    }
+    with open("/tmp/alcove-outputs.json", "w") as f:
+        json.dump(output, f)
+    PYEOF
+
+  Replace values with your actual findings.
 
 timeout: 480
 enforcement_mode: monitor

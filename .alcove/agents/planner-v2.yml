@@ -60,11 +60,22 @@ prompt: |
 
   Be concrete. Name files, functions, classes. Do not be vague.
 
-  Output: {
-    "plan": "detailed implementation plan text",
-    "verification_commands": ["command1", "command2"],
-    "reviewers_needed": ["django", "security"]
-  }
+  CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
+  Use Python to safely serialize your plan (handles quotes and newlines):
+
+    python3 - <<'PYEOF'
+    import json
+    output = {
+        "plan": """Your detailed implementation plan here.
+    Can span multiple lines safely.""",
+        "verification_commands": ["black --check --line-length 100 pulp_service/", "pytest pulp_service/pulp_service/tests/functional/"],
+        "reviewers_needed": ["django", "security"]
+    }
+    with open("/tmp/alcove-outputs.json", "w") as f:
+        json.dump(output, f)
+    PYEOF
+
+  Replace values with your actual plan and commands.
 
 timeout: 600
 enforcement_mode: monitor

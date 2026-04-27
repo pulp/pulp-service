@@ -59,7 +59,19 @@ prompt: |
   If fixing CI failures or addressing review feedback, focus only on the
   specific issues listed. Do not refactor or add features beyond what's needed.
 
-  Output: {"summary": "what you implemented and key decisions made"}
+  CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
+  Use Python to safely serialize your summary:
+
+    python3 - <<'PYEOF'
+    import json
+    output = {
+        "summary": "What you implemented and key decisions made."
+    }
+    with open("/tmp/alcove-outputs.json", "w") as f:
+        json.dump(output, f)
+    PYEOF
+
+  Replace with your actual summary.
 
 timeout: 1800
 enforcement_mode: monitor
