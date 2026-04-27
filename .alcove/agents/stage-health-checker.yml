@@ -1,0 +1,53 @@
+name: Stage Health Checker
+description: |
+  Checks the health of pulp-stage pods on OpenShift after a Konflux release
+  pipeline completes. Verifies pod status, readiness, recent restarts, and
+  that the new image is deployed.
+
+prompt: |
+  The Konflux release pipeline has completed for pulp-service.
+  Your job is to verify that the pulp-stage pods are healthy.
+
+  Use the Workflow Context above to get the image tag and commit SHA from the
+  previous step.
+
+  Steps:
+  1. Log in to the OpenShift cluster:
+     oc login --token=$OCP_API_TOKEN --server=$OCP_API_URL
+
+  2. Check pod status in the pulp-stage namespace:
+     oc get pods -n pulp-stage -o wide
+     Verify all pods are in Running state and Ready.
+
+  3. Check for recent restarts or crash loops:
+     oc get pods -n pulp-stage -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.phase}{"\t"}{range .status.containerStatuses[*]}{.restartCount}{" "}{end}{"\n"}{end}'
+
+  4. Verify the new image is deployed (if image_tag was provided):
+     oc get deployment -n pulp-stage -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}'
+
+  5. Check recent events for errors or warnings:
+     oc get events -n pulp-stage --sort-by='.lastTimestamp' --field-selector type!=Normal | tail -20
+
+  6. Verify service endpoints are responding:
+     oc get endpoints -n pulp-stage
+
+  7. Summarize findings: are pods healthy? Is the new version deployed?
+     Flag any pods not in Ready state, excessive restarts (>3 in last hour),
+     or missing endpoints.
+
+  8. Write results to /tmp/alcove-outputs.json:
+     {"healthy": true|false, "pod_count": <n>, "pod_status": "<summary>", "image_deployed": true|false, "issues": "<any issues found>"}
+
+credentials:
+  OCP_API_TOKEN: openshift
+  OCP_API_URL: openshift
+
+timeout: 600
+enforcement_mode: monitor
+
+outputs:
+  - healthy
+  - pod_count
+  - pod_status
+  - image_deployed
+  - issues

@@ -1,0 +1,35 @@
+name: Pulp Service Post-Merge Release Pipeline
+description: |
+  Triggered when a commit is pushed (PR merged) to pulp-service main branch.
+  Waits for the Konflux release pipeline to complete, then verifies pulp-stage
+  pod health and ensures CLAUDE.md is up-to-date with the changes.
+
+trigger:
+  github:
+    events: [push]
+    branches: [main]
+    repos: [pulp/pulp-service]
+    delivery_mode: polling
+
+workflow:
+  - id: await-konflux-release
+    type: agent
+    agent: Konflux Release Monitor
+    outputs: [release_status, commit_sha, image_tag, details]
+
+  - id: check-stage-health
+    type: agent
+    agent: Stage Health Checker
+    depends: "await-konflux-release.Succeeded"
+    inputs:
+      image_tag: "{{steps.await-konflux-release.outputs.image_tag}}"
+      commit_sha: "{{steps.await-konflux-release.outputs.commit_sha}}"
+    outputs: [healthy, pod_count, pod_status, image_deployed, issues]
+
+  - id: update-claude-md
+    type: agent
+    agent: CLAUDE.md Updater
+    depends: "await-konflux-release.Succeeded"
+    inputs:
+      commit_sha: "{{steps.await-konflux-release.outputs.commit_sha}}"
+    outputs: [updated, branch, changes_summary]

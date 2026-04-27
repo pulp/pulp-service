@@ -1,0 +1,59 @@
+name: Konflux Release Monitor
+description: |
+  Monitors the Konflux release pipeline after a commit is merged to pulp-service main.
+  Polls GitHub check runs on the merge commit until the Konflux release pipeline completes.
+
+prompt: |
+  A commit was just merged to the pulp-service main branch.
+  Your job is to wait for the Konflux release pipeline to finish.
+
+  Steps:
+  1. Identify the latest commit SHA on main:
+     curl -s -H "Authorization: token $GITHUB_TOKEN" \
+       "https://api.github.com/repos/pulp/pulp-service/commits/main" | jq -r '.sha'
+
+  2. Poll the commit's check runs until the Konflux release pipeline completes:
+     curl -s -H "Authorization: token $GITHUB_TOKEN" \
+       "https://api.github.com/repos/pulp/pulp-service/commits/<SHA>/check-runs" | \
+       jq '.check_runs[] | {name, status, conclusion}'
+
+  3. Look for check runs with names containing "release" or "build" (Konflux pipelines).
+     Poll every 60 seconds until all Konflux-related checks reach "completed" status.
+     Timeout after 30 minutes.
+
+  4. If all release pipeline checks pass (conclusion: "success"), report success.
+     If any fail, report the failure details.
+
+  5. Derive the image_tag from the Konflux build check run. Konflux publishes
+     the built image reference in the check run's output summary or details_url.
+     Extract it as follows:
+     curl -s -H "Authorization: token $GITHUB_TOKEN" \
+       "https://api.github.com/repos/pulp/pulp-service/commits/<SHA>/check-runs" | \
+       jq -r '.check_runs[] | select(.name | test("build")) | .output.summary'
+
+     Parse the image reference (e.g. quay.io/redhat-user-workloads/pulp-stage/pulp-service/pulp-service@sha256:...)
+     from the summary text. The image_tag is the tag or digest suffix after the colon/at-sign.
+
+     If the summary does not contain an image reference, fall back to using
+     the first 7 characters of the commit SHA as the image_tag (Konflux default
+     tagging convention): image_tag = <SHA>[0:7]
+
+  6. Write results to /tmp/alcove-outputs.json:
+     {"release_status": "success|failure", "commit_sha": "<full SHA>", "image_tag": "<extracted or SHA-based tag>", "details": "<summary>"}
+
+repos:
+  - url: https://github.com/pulp/pulp-service.git
+    ref: main
+    name: pulp-service
+
+credentials:
+  GITHUB_TOKEN: github
+
+timeout: 2400
+enforcement_mode: monitor
+
+outputs:
+  - release_status
+  - commit_sha
+  - image_tag
+  - details
