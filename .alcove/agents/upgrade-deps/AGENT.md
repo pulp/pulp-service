@@ -59,6 +59,8 @@ The dev container already has the OLD packages installed with the OLD patches ap
 
 Read the `Dockerfile` and extract the ordered list of patch filenames from the COPY/RUN lines. Patches must be processed in this Dockerfile order.
 
+CRITICAL: Every patch MUST be fully resolved in Phase 3 before proceeding to Phase 4. "Resolved" means the patch either: (a) applies cleanly against the NEW tag in the cloned upstream repo, or (b) has been deleted as upstreamed. Do NOT defer any patch to Phase 4 — the dev container has contaminated state from the old patches and cannot be used to determine if a patch is upstreamed.
+
 For each patch that targets an upgraded package, clone the upstream repo and test:
 
 ### Step 1: Identify the upstream repo
@@ -161,24 +163,35 @@ Using the git diff from Step 3, you now understand exactly how the upstream code
 
 ## Phase 4: Install Upgraded Packages and Apply Patches in Dev Container
 
-The dev container has the OLD packages installed with OLD patches baked in. To get a clean state, force-reinstall ALL packages from the updated requirements.txt. This overwrites all patched files with clean upstream versions. Then apply the updated patches fresh.
+The dev container has the OLD packages installed with OLD patches baked in. To get a completely clean state, UNINSTALL all patched packages first (this removes all their files, including any files added by patches), then install the new versions fresh.
 
-### Step 1: Force-reinstall all packages to get clean upstream files
+### Step 1: Uninstall and reinstall all packages for clean upstream files
+
+First, uninstall all packages that have patches applied to them. This removes ALL files belonging to those packages from site-packages, including any files that were added by patches (which `--force-reinstall` does NOT remove):
 
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Authorization: Bearer $DEV_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": "pip install --force-reinstall -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 600}'
+  -d '{"cmd": "pip uninstall -y pulpcore pulp-python pulp-container pulp-rpm pulp-maven pulp-file pulp-npm pulp-gem django-storages oras", "timeout": 120}'
 ```
 
-This replaces ALL files in site-packages with clean upstream versions — no manual patch reversal needed.
+Then install all packages fresh from the updated requirements.txt:
+
+```bash
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "pip install -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 600}'
+```
+
+This guarantees site-packages contains ONLY clean upstream files with no leftovers from previous patches.
 
 ### Step 2: Apply remaining patches in Dockerfile order
 
-First, list the patch files that still exist in `images/assets/patches/`. Only apply patches that remain — upstreamed patches deleted in Phase 3 must NOT be applied.
+List the patch files that still exist in `images/assets/patches/`. Only apply patches that remain — upstreamed patches were already deleted in Phase 3.
 
-For each remaining patch, in Dockerfile order:
+Since Step 1 gave us completely clean upstream files (uninstall removed all leftovers), every patch that was resolved in Phase 3 MUST apply cleanly. Apply each one in Dockerfile order:
 
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
@@ -187,47 +200,10 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
 ```
 
-If the patch succeeds, move to the next one.
-
-**If the patch fails with "already exists", "Reversed", or "previously applied":**
-
-First, check if the patch CREATES new files (look for `new file mode` or `--- /dev/null` in the patch). If it does, those files may be left over from a previous patch application — `pip install --force-reinstall` does NOT remove files that were added by patches. Delete those leftover files from site-packages, then retry the patch:
-
-```bash
-# Read the patch to find files it creates (lines starting with +++ b/ where the --- line is /dev/null)
-# Delete those files from site-packages
-curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-  -H "Authorization: Bearer $DEV_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"cmd": "rm /usr/local/lib/pulp/lib/python3.11/site-packages/{new_file_path}", "timeout": 10}'
-```
-
-If the patch only MODIFIES existing files (no new files created):
-
-1. Force-reinstall just the affected package:
-   ```bash
-   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-     -H "Authorization: Bearer $DEV_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"cmd": "pip install --force-reinstall {package_name}", "timeout": 120}'
-   ```
-2. Retry applying the patch.
-3. If it STILL shows "already applied" after force-reinstall AND the patch does NOT create new files, the patch IS upstreamed. Delete the patch file from `images/assets/patches/`, remove the corresponding COPY and RUN lines from the `Dockerfile`, record this in your change log, and continue to the next patch.
-
-**If the patch fails for any other reason (hunk failure, context mismatch):**
-
-1. Force-reinstall just the affected package to ensure clean upstream files.
-2. Fix the patch using the same approach as Phase 3 option B:
-   - Clone the upstream repo (if not already cloned)
-   - Check out the NEW version tag
-   - Copy the target file as `.orig`
-   - Edit the file to apply the patch's logical change (use sed or direct edits)
-   - Generate a new patch with `diff -u {file}.orig {file}`
-   - Replace the patch file in `images/assets/patches/`
-3. Retry applying the fixed patch in the dev container.
-4. If it still fails after fixing, record the failure and continue.
-
-Do not skip failing patches — either fix them or delete them (if upstreamed).
+If any patch fails, something went wrong in Phase 3 or Step 1. Fix it by:
+1. Uninstall and reinstall just the affected package: `pip uninstall -y {package} && pip install {package}=={version}`
+2. Retry the patch
+3. If it still fails, go back to Phase 3 and re-examine the patch against the upstream repo
 
 ## Phase 5: Restart Services and Run Migrations
 
