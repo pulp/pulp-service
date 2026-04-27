@@ -5,11 +5,11 @@ description: |
   pod health and ensures CLAUDE.md is up-to-date with the changes.
 
 trigger:
-  github:
-    events: [push]
-    branches: [main]
-    repos: [pulp/pulp-service]
-    delivery_mode: polling
+#  github:
+#    events: [push]
+#    branches: [main]
+#    repos: [pulp/pulp-service]
+#    delivery_mode: polling
 
 workflow:
   - id: await-konflux-release
