@@ -62,11 +62,24 @@ prompt: |
   trigger the patch phase for corrections.
   Do not be lenient. A FAIL now is cheaper than a FAIL in CI.
 
-  Output: {
-    "verdict": "pass",
-    "fixes_required": ["list of things to fix"],
-    "code_issues": [{"severity": "critical|major|minor", "file": "path", "line": 42, "issue": "description", "suggested_fix": "what to change"}]
-  }
+  CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
+  Use Python to safely serialize your verdict:
+
+    python3 - <<'PYEOF'
+    import json, sys
+    verdict = "pass"  # or "fail"
+    output = {
+        "verdict": verdict,
+        "fixes_required": [],
+        "code_issues": []
+    }
+    with open("/tmp/alcove-outputs.json", "w") as f:
+        json.dump(output, f)
+    if verdict == "fail":
+        sys.exit(1)
+    PYEOF
+
+  Replace with your actual findings. Exit non-zero on fail to trigger patching.
 
 timeout: 600
 enforcement_mode: monitor

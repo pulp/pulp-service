@@ -36,11 +36,21 @@ prompt: |
      `pytest pulp_service/pulp_service/tests/functional/`
   8. **Commit** each fix with a descriptive message.
 
-  Output: {
-    "fixes_applied": ["list of fixes applied"],
-    "too_complex": false,
-    "too_complex_reason": ""
-  }
+  CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
+  Use Python to safely serialize your results:
+
+    python3 - <<'PYEOF'
+    import json
+    output = {
+        "fixes_applied": ["description of fix 1"],
+        "too_complex": False,
+        "too_complex_reason": ""
+    }
+    with open("/tmp/alcove-outputs.json", "w") as f:
+        json.dump(output, f)
+    PYEOF
+
+  Replace with your actual fixes applied.
 
 timeout: 480
 enforcement_mode: monitor
