@@ -62,6 +62,7 @@ prompt: |
   Output: {"summary": "what you implemented and key decisions made"}
 
 timeout: 1800
+enforcement_mode: monitor
 
 profiles:
   - pulp-service-developer

@@ -67,6 +67,7 @@ prompt: |
   }
 
 timeout: 600
+enforcement_mode: monitor
 # model: intentionally omitted — defaults to Opus for deep architectural reasoning
 
 profiles:
