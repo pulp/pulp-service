@@ -1,0 +1,17 @@
+FROM registry.access.redhat.com/ubi9/go-toolset:9.7 AS builder
+WORKDIR /opt/app-root/src
+
+COPY go.work go.work.sum ./
+COPY shared/go.mod shared/go.sum shared/
+COPY agent-alertmanager/go.mod agent-alertmanager/go.sum agent-alertmanager/
+RUN cd agent-alertmanager && go mod download
+
+COPY shared/ shared/
+COPY agent-alertmanager/ agent-alertmanager/
+RUN CGO_ENABLED=0 go build -buildvcs=false -ldflags="-s -w" -o agent-alertmanager ./agent-alertmanager
+
+FROM registry.access.redhat.com/ubi9-minimal:latest
+WORKDIR /app
+COPY --from=builder /opt/app-root/src/agent-alertmanager .
+USER 1001
+ENTRYPOINT ["./agent-alertmanager"]
