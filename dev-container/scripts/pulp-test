@@ -11,7 +11,7 @@ API_PROTOCOL="${API_PROTOCOL:-http}"
 wait_for_api() {
     echo "Waiting for Pulp API at ${API_PROTOCOL}://${API_HOST}:${API_PORT}..."
     for i in $(seq 1 60); do
-        if curl -s -f "${API_PROTOCOL}://${API_HOST}:${API_PORT}/pulp/api/v3/status/" > /dev/null 2>&1; then
+        if curl -s -f "${API_PROTOCOL}://${API_HOST}:${API_PORT}/api/pulp/api/v3/status/" > /dev/null 2>&1; then
             echo "API ready after ${i}s"
             return 0
         fi
@@ -35,7 +35,7 @@ generate_bindings() {
             COMPONENT="${PACKAGE#pulp_}"
         fi
 
-        SCHEMA_URL="${API_PROTOCOL}://${API_HOST}:${API_PORT}/pulp/api/v3/docs/api.json?bindings&component=${COMPONENT}"
+        SCHEMA_URL="${API_PROTOCOL}://${API_HOST}:${API_PORT}/api/pulp/api/v3/docs/api.json?bindings&component=${COMPONENT}"
         SCHEMA_FILE="$BINDINGS_DIR/api-${PACKAGE//_/-}.json"
 
         echo "Fetching schema for $PACKAGE ($COMPONENT)..."
