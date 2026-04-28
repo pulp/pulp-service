@@ -70,9 +70,10 @@ prompt: |
     verdict = "pass"  # or "fail"
     output = {
         "verdict": verdict,
-        "fixes_required": [],
-        "code_issues": []
+        "fixes_required": "",  # comma-separated descriptions, or empty string if none
+        "code_issues": ""  # comma-separated descriptions, or empty string if none
     }
+    # ALL values MUST be strings. Non-string values (booleans, arrays) silently discard ALL outputs.
     with open("/tmp/alcove-outputs.json", "w") as f:
         json.dump(output, f)
     if verdict == "fail":

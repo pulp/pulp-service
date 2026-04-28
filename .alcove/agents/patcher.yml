@@ -42,10 +42,11 @@ prompt: |
     python3 - <<'PYEOF'
     import json
     output = {
-        "fixes_applied": ["description of fix 1"],
-        "too_complex": False,
+        "fixes_applied": "description of fix 1, description of fix 2",  # comma-separated string, NOT a list
+        "too_complex": "false",  # string "true" or "false", NOT a boolean
         "too_complex_reason": ""
     }
+    # ALL values MUST be strings. Non-string values (booleans, arrays) silently discard ALL outputs.
     with open("/tmp/alcove-outputs.json", "w") as f:
         json.dump(output, f)
     PYEOF

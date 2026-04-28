@@ -68,9 +68,10 @@ prompt: |
     output = {
         "plan": """Your detailed implementation plan here.
     Can span multiple lines safely.""",
-        "verification_commands": ["black --check --line-length 100 pulp_service/", "pytest pulp_service/pulp_service/tests/functional/"],
-        "reviewers_needed": ["django", "security"]
+        "verification_commands": "black --check --line-length 100 pulp_service/, pytest pulp_service/pulp_service/tests/functional/",  # comma-separated string, NOT a list
+        "reviewers_needed": "django, security"  # comma-separated string, NOT a list
     }
+    # ALL values MUST be strings. Non-string values (booleans, arrays) silently discard ALL outputs.
     with open("/tmp/alcove-outputs.json", "w") as f:
         json.dump(output, f)
     PYEOF

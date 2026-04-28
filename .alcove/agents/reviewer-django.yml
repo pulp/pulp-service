@@ -84,10 +84,11 @@ prompt: |
     import json, sys
     approved = True  # set to False if critical/major issues found
     output = {
-        "approved": approved,
+        "approved": "true" if approved else "false",  # string "true" or "false", NOT a boolean
         "comments": "Summary of review findings.",
-        "issues": []
+        "issues": ""  # semicolon-separated issue descriptions, or empty string if none
     }
+    # ALL values MUST be strings. Non-string values (booleans, arrays) silently discard ALL outputs.
     with open("/tmp/alcove-outputs.json", "w") as f:
         json.dump(output, f)
     if not approved:

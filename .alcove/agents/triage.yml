@@ -75,12 +75,14 @@ prompt: |
     output = {
         "complexity": "small",  # or "medium" or "large"
         "target_area": "description of affected area",
-        "candidate_files": ["file1.py", "file2.py"],
+        "candidate_files": "file1.py, file2.py",  # comma-separated string, NOT a list
         "approach": "how to implement",
         "risks": "what could go wrong",
-        "automatable": "true",  # must be string "true"/"false" for pipeline condition matching
-        "reviewers_needed": ["django", "security"]
+        "automatable": "true",  # string "true" or "false", NOT a boolean
+        "reviewers_needed": "django, security"  # comma-separated string, NOT a list
     }
+    # ALL values MUST be strings. The pipeline deserializes into map[string]string;
+    # non-string values (booleans, arrays) silently discard ALL outputs.
     with open("/tmp/alcove-outputs.json", "w") as f:
         json.dump(output, f)
     PYEOF
