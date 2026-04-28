@@ -219,10 +219,13 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
 ```
 
-If any patch fails, something went wrong in Phase 3 or Step 1. Fix it by:
+EVERY patch MUST apply cleanly. You CANNOT skip patches, comment them out, or proceed to Phase 5 with unapplied patches. If any patch fails:
+
 1. Uninstall and reinstall just the affected package: `pip uninstall -y {package} && pip install {package}=={version}`
-2. Retry the patch
-3. If it still fails, go back to Phase 3 and re-examine the patch against the upstream repo
+2. Delete any files the patch creates (check for `--- /dev/null` lines)
+3. Retry the patch
+4. If it STILL fails, go back to Phase 3: clone the upstream repo, check out the new version tag, edit the source files to apply the patch's logical change, regenerate the patch with `diff -u`, replace it, and retry in the dev container
+5. Repeat until the patch applies cleanly. Do NOT move to Phase 5 until ALL patches are applied.
 
 ## Phase 5: Restart Services and Run Migrations
 
@@ -313,7 +316,7 @@ Do NOT create a PR — the pipeline's bridge action handles PR creation automati
 
 ## Error Handling
 
-- If ALL patches fail: commit what you have with a detailed message explaining the failures.
+- ALL patches MUST apply cleanly before proceeding past Phase 4. Never skip, comment out, or ignore a failing patch. Go back to Phase 3 and fix it.
 - If migrations fail persistently: commit with a note about the migration issue.
 - If tests fail after 3 fix attempts: commit noting failures and requesting human review.
 - Always commit and push so work is not lost. The pipeline will create a draft PR.
