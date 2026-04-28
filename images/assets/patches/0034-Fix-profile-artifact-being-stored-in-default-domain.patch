@@ -1,26 +1,43 @@
-From 29b7dc1a6537e6cc1bc93e0268421c856401ff52 Mon Sep 17 00:00:00 2001
-From: git-hyagi <45576767+git-hyagi@users.noreply.github.com>
-Date: Fri, 12 Dec 2025 16:43:10 -0300
-Subject: [PATCH] Fix profile artifact being stored in default domain
-
-ref: https://issues.redhat.com/browse/PULP-1044
----
- pulpcore/tasking/_util.py | 31 ++++++++++++++++++-------------
- 1 file changed, 18 insertions(+), 13 deletions(-)
-
 diff --git a/pulpcore/tasking/_util.py b/pulpcore/tasking/_util.py
 index 7274d7cb8..37968200a 100644
 --- a/pulpcore/tasking/_util.py
 +++ b/pulpcore/tasking/_util.py
-@@ -16,6 +16,7 @@ from django.db.models import Q
- from django.utils import timezone
+@@ -17,6 +17,7 @@
  from django_guid import set_guid
  from django_guid.utils import generate_guid
+ 
 +from pulpcore.app.contexts import with_domain
- from pulpcore.app.models import Artifact, Content, Task, TaskSchedule, ProfileArtifact
+ from pulpcore.app.models import Artifact, Content, ProfileArtifact, Task, TaskSchedule
  from pulpcore.app.util import (
      configure_analytics,
-@@ -167,18 +168,21 @@ def _pyinstrument_diagnostic_decorator(temp_dir, func):
+@@ -151,16 +152,17 @@
+         func(task)
+ 
+         stop_event.set()
+-        artifact = Artifact.init_and_validate(mem_diagnostics_file_path)
+-        try:
+-            # it is possible for the diagnostic artifact (memory report) to be identical to
+-            # a previous report, in which case we need to handle the case where saving a new
+-            # artifact fails.
+-            artifact.save()
+-        except IntegrityError:
+-            artifact = Artifact.objects.get(sha256=artifact.sha256)
++        with with_domain(task.pulp_domain):
++            artifact = Artifact.init_and_validate(mem_diagnostics_file_path)
++            try:
++                # it is possible for the diagnostic artifact (memory report) to be identical to
++                # a previous report, in which case we need to handle the case where saving a new
++                # artifact fails.
++                artifact.save()
++            except IntegrityError:
++                artifact = Artifact.objects.get(sha256=artifact.sha256)
+ 
+-        ProfileArtifact.objects.get_or_create(artifact=artifact, name="memory_profile", task=task)
++            ProfileArtifact.objects.get_or_create(artifact=artifact, name="memory_profile", task=task)
+         _logger.info("Created memory diagnostic data.")
+ 
+     return __memory_diagnostic_decorator
+@@ -179,18 +181,19 @@
                  f.write(profiler.output_html())
                  f.flush()
  
@@ -39,14 +56,12 @@ index 7274d7cb8..37968200a 100644
 +            with with_domain(task.pulp_domain):
 +                artifact = Artifact.init_and_validate(str(profile_file_path))
 +                try:
-+                    # it is possible for the diagnostic artifact (memory report) to be identical
-+                    # to a previous report, in which case we need to handle the case where saving
-+                    # a new artifact fails.
++                    # it is possible for the diagnostic artifact (memory report) to be identical to
++                    # a previous report, in which case we need to handle the case where saving a new
++                    # artifact fails.
 +                    artifact.save()
 +                except IntegrityError:
-+                    artifact = Artifact.objects.get(
-+                        sha256=artifact.sha256, pulp_domain=task.pulp_domain
-+                    )
++                    artifact = Artifact.objects.get(sha256=artifact.sha256)
 +
 +                ProfileArtifact.objects.get_or_create(
 +                    artifact=artifact, name="pyinstrument_profile", task=task
@@ -54,22 +69,60 @@ index 7274d7cb8..37968200a 100644
              _logger.info("Created pyinstrument profile data.")
          else:
              func(task)
-@@ -200,13 +204,14 @@ def _memray_diagnostic_decorator(temp_dir, func):
+@@ -211,18 +214,19 @@
+             ):
                  func(task)
  
-             artifact = Artifact.init_and_validate(str(profile_file_path))
-+            artifact.pulp_domain = task.pulp_domain
-             try:
-                 # it is possible for the diagnostic artifact (memory report) to be identical to
-                 # a previous report, in which case we need to handle the case where saving a new
-                 # artifact fails.
-                 artifact.save()
-             except IntegrityError:
+-            artifact = Artifact.init_and_validate(str(profile_file_path))
+-            try:
+-                # it is possible for the diagnostic artifact (memory report) to be identical to
+-                # a previous report, in which case we need to handle the case where saving a new
+-                # artifact fails.
+-                artifact.save()
+-            except IntegrityError:
 -                artifact = Artifact.objects.get(sha256=artifact.sha256)
-+                artifact = Artifact.objects.get(sha256=artifact.sha256, pulp_domain=task.pulp_domain)
+-
+-            ProfileArtifact.objects.get_or_create(
+-                artifact=artifact, name="memray_profile", task=task
+-            )
++            with with_domain(task.pulp_domain):
++                artifact = Artifact.init_and_validate(str(profile_file_path))
++                try:
++                    # it is possible for the diagnostic artifact (memory report) to be identical to
++                    # a previous report, in which case we need to handle the case where saving a new
++                    # artifact fails.
++                    artifact.save()
++                except IntegrityError:
++                    artifact = Artifact.objects.get(sha256=artifact.sha256)
++
++                ProfileArtifact.objects.get_or_create(
++                    artifact=artifact, name="memray_profile", task=task
++                )
+             _logger.info("Created memray memory profile data.")
+         else:
+             func(task)
+@@ -267,15 +271,16 @@
+             file_handler.close()
  
-             ProfileArtifact.objects.get_or_create(
-                 artifact=artifact, name="memray_profile", task=task
--- 
-2.46.2
-
+         # Save the log file as a ProfileArtifact
+-        artifact = Artifact.init_and_validate(log_file_path)
+-        try:
+-            # it's unlikely for a log file to be identical, but we retain the same check as the
+-            # other decorators
+-            artifact.save()
+-        except IntegrityError:
+-            artifact = Artifact.objects.get(sha256=artifact.sha256)
++        with with_domain(task.pulp_domain):
++            artifact = Artifact.init_and_validate(log_file_path)
++            try:
++                # it's unlikely for a log file to be identical, but we retain the same check as the
++                # other decorators
++                artifact.save()
++            except IntegrityError:
++                artifact = Artifact.objects.get(sha256=artifact.sha256)
+ 
+-        ProfileArtifact.objects.get_or_create(artifact=artifact, name="task_logs", task=task)
++            ProfileArtifact.objects.get_or_create(artifact=artifact, name="task_logs", task=task)
+         _logger.info("Created task logging diagnostic data.")
+ 
+     return __logging_decorator

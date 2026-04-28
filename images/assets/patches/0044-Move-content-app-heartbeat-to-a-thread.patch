@@ -1,38 +1,30 @@
-From aa15b73667de977bf6f0caaab91d6909c431bb1e Mon Sep 17 00:00:00 2001
-From: Dennis Kliban <dkliban@redhat.com>
-Date: Wed, 11 Feb 2026 21:19:28 -0500
-Subject: [PATCH] Move content app's heartbeat to a thread.
-
----
- pulpcore/content/__init__.py | 33 +++++++++++++++++----------------
- 1 file changed, 17 insertions(+), 16 deletions(-)
-
 diff --git a/pulpcore/content/__init__.py b/pulpcore/content/__init__.py
 index 96e4f6a6d..9420c2abb 100644
 --- a/pulpcore/content/__init__.py
 +++ b/pulpcore/content/__init__.py
-@@ -1,11 +1,10 @@
+@@ -1,19 +1,19 @@
 -import asyncio
- from contextlib import suppress
- from importlib import import_module
- from importlib.util import find_spec
  import logging
  import os
 +import threading
+ from contextlib import suppress
+ from importlib import import_module
+ from importlib.util import find_spec
  
--from asgiref.sync import sync_to_async
- from aiohttp import web
- from gunicorn.arbiter import Arbiter
  import django
-@@ -15,6 +14,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
+ from aiohttp import web
+-from asgiref.sync import sync_to_async
+ from gunicorn.arbiter import Arbiter
+ 
+ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
  django.setup()
  
- from django.conf import settings  # noqa: E402: module level not at top of file
-+from django.db import connection  # noqa: E402: module level not at top of file
- from django.db.utils import (  # noqa: E402: module level not at top of file
+ from django.conf import settings  # noqa: E402
++from django.db import connection  # noqa: E402
+ from django.db.utils import (  # noqa: E402
+     DatabaseError,
      IntegrityError,
-     InterfaceError,
-@@ -48,7 +48,7 @@ if settings.UVLOOP_ENABLED:
+@@ -46,7 +46,7 @@
  CONTENT_MODULE_NAME = "content"
  
  
@@ -41,7 +33,7 @@ index 96e4f6a6d..9420c2abb 100644
      name = get_worker_name()
      heartbeat_interval = settings.CONTENT_APP_TTL // 4
      msg = "Content App '{name}' heartbeat written, sleeping for '{interarrival}' seconds".format(
-@@ -60,39 +60,40 @@ async def _heartbeat():
+@@ -58,39 +58,40 @@
      versions = {app.label: app.version for app in pulp_plugin_configs()}
  
      try:
@@ -55,7 +47,10 @@ index 96e4f6a6d..9420c2abb 100644
      try:
 -        while True:
 -            await asyncio.sleep(heartbeat_interval)
-+        while not shutdown_event.wait(timeout=heartbeat_interval):
++        while not shutdown_event.is_set():
++            shutdown_event.wait(heartbeat_interval)
++            if shutdown_event.is_set():
++                break
              try:
 -                await app_status.asave_heartbeat()
 +                app_status.save_heartbeat()
@@ -74,15 +69,12 @@ index 96e4f6a6d..9420c2abb 100644
          if app_status:
 -            await app_status.adelete()
 +            app_status.delete()
-+        connection.close()
  
  
  async def _heartbeat_ctx(app):
 -    heartbeat_task = asyncio.create_task(_heartbeat())
 +    shutdown_event = threading.Event()
-+    heartbeat_thread = threading.Thread(
-+        target=_heartbeat, args=(shutdown_event,), daemon=True
-+    )
++    heartbeat_thread = threading.Thread(target=_heartbeat, args=(shutdown_event,), daemon=True)
 +    heartbeat_thread.start()
      yield
 -    heartbeat_task.cancel()
@@ -91,10 +83,7 @@ index 96e4f6a6d..9420c2abb 100644
 -    except asyncio.CancelledError:
 -        pass
 +    shutdown_event.set()
-+    heartbeat_thread.join()
++    heartbeat_thread.join(timeout=10)  # Give it 10 seconds to finish gracefully
  
  
  async def server(*args, **kwargs):
--- 
-2.52.0
-
