@@ -165,9 +165,9 @@ Using the git diff from Step 3, you now understand exactly how the upstream code
 
 The dev container has the OLD packages installed with OLD patches baked in. To get a completely clean state, UNINSTALL all patched packages first (this removes all their files, including any files added by patches), then install the new versions fresh.
 
-### Step 1: Uninstall and reinstall all packages for clean upstream files
+### Step 1: Uninstall packages, delete patch-created files, reinstall clean
 
-First, uninstall all packages that have patches applied to them. This removes ALL files belonging to those packages from site-packages, including any files that were added by patches (which `--force-reinstall` does NOT remove):
+First, uninstall all packages that have patches applied to them:
 
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
@@ -175,6 +175,21 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Content-Type: application/json" \
   -d '{"cmd": "pip uninstall -y pulpcore pulp-python pulp-container pulp-rpm pulp-maven pulp-file pulp-npm pulp-gem django-storages oras", "timeout": 120}'
 ```
+
+IMPORTANT: `pip uninstall` only removes files that pip installed. Files CREATED by patches (new files, not modifications) survive the uninstall. You MUST delete these manually before reinstalling.
+
+Read each patch file and find any files it creates (lines with `--- /dev/null`). Delete those files from site-packages:
+
+```bash
+# For each patch, find files it creates and delete them
+for patch_file in /workspace/pulp-service/images/assets/patches/*.patch; do
+  grep -A1 "^--- /dev/null" "$patch_file" | grep "^+++ b/" | sed 's|^+++ b/||' | while read -r newfile; do
+    rm -f "/usr/local/lib/pulp/lib/python3.11/site-packages/$newfile"
+  done
+done
+```
+
+Run this cleanup command in the dev container AFTER uninstall and BEFORE reinstall.
 
 Then install all packages fresh from the updated requirements.txt:
 
