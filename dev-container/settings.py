@@ -16,6 +16,7 @@ DATABASES = {
 
 REDIS_URL = "redis://localhost:6379/0"
 CACHE_ENABLED = True
+WORKER_TYPE = "redis"
 
 MEDIA_ROOT = "/var/lib/pulp/media/"
 DEFAULT_FILE_STORAGE = "pulpcore.app.models.storage.FileSystem"
