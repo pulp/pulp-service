@@ -24,3 +24,23 @@ WORKING_DIRECTORY = "/var/lib/pulp/tmp/"
 ALLOWED_CONTENT_CHECKSUMS = ["sha224", "sha256", "sha384", "sha512"]
 
 TOKEN_AUTH_DISABLED = True
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.RemoteUserBackend",
+    "django.contrib.auth.backends.ModelBackend",
+    "pulp_service.app.authentication.RHSamlAuthentication",
+]
+
+REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES = (
+    "rest_framework.authentication.BasicAuthentication",
+    "rest_framework.authentication.SessionAuthentication",
+    "pulp_service.app.authentication.RHServiceAccountCertAuthentication",
+    "pulp_service.app.authentication.RHTermsBasedRegistryAuthentication",
+)
+
+REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES = (
+    "pulp_service.app.authorization.DomainBasedPermission",
+)
+
+AUTHENTICATION_JSON_HEADER = "HTTP_X_RH_IDENTITY"
+AUTHENTICATION_JSON_HEADER_JQ_FILTER = ".identity.user.username"
