@@ -125,6 +125,33 @@ class DomainBasedPermission(BasePermission):
             except json.JSONDecodeError:
                 return
 
+    def scope_queryset(self, view, qs):
+        if qs.model is not Domain:
+            return qs
+
+        request = view.request
+        user = request.user
+
+        if user.is_superuser:
+            return qs
+
+        if not user.is_authenticated:
+            return qs.none()
+
+        decoded_header = self.get_decoded_identity_header(request)
+        org_id = self.get_org_id(decoded_header)
+
+        query = Q(domain_orgs__user=user)
+
+        group_pks = user.groups.values_list("pk", flat=True)
+        if group_pks:
+            query |= Q(domain_orgs__group_id__in=group_pks)
+
+        if org_id is not None:
+            query |= Q(domain_orgs__org_id=org_id)
+
+        return qs.filter(query).distinct()
+
 
 class AllowUnauthPull(BasePermission):
     """
