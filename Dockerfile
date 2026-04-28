@@ -141,22 +141,22 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch
 
-COPY images/assets/patches/0025-clamAV.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0025-clamAV.patch
+# COPY images/assets/patches/0025-clamAV.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0025-clamAV.patch
 
 
-COPY images/assets/patches/0028-OCIStorage-create-manifest.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-OCIStorage-create-manifest.patch
+# COPY images/assets/patches/0028-OCIStorage-create-manifest.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-OCIStorage-create-manifest.patch
 
 
-COPY images/assets/patches/0031-Replace-ResponseContentDisposition-in-cloudfront.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Replace-ResponseContentDisposition-in-cloudfront.patch
+# COPY images/assets/patches/0031-Replace-ResponseContentDisposition-in-cloudfront.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Replace-ResponseContentDisposition-in-cloudfront.patch
 
 COPY images/assets/patches/0032-Disable-the-timestamp-of-interest-query.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0032-Disable-the-timestamp-of-interest-query.patch
 
-COPY images/assets/patches/0034-Fix-profile-artifact-being-stored-in-default-domain.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0034-Fix-profile-artifact-being-stored-in-default-domain.patch
+# COPY images/assets/patches/0034-Fix-profile-artifact-being-stored-in-default-domain.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0034-Fix-profile-artifact-being-stored-in-default-domain.patch
 
 COPY images/assets/patches/0035-Revert-Mitigate-a-disk-consumption-issue-during-sync.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0035-Revert-Mitigate-a-disk-consumption-issue-during-sync.patch
@@ -168,16 +168,16 @@ COPY images/assets/patches/0047-Improve-repair_metadata-log-with-repo-and-packag
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0047-Improve-repair_metadata-log-with-repo-and-package-na.patch
 
 
-COPY images/assets/patches/0044-Move-content-app-heartbeat-to-a-thread.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
+# COPY images/assets/patches/0044-Move-content-app-heartbeat-to-a-thread.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
 
-COPY images/assets/patches/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch
+# COPY images/assets/patches/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch
 
 
 COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-redhat-release3
-COPY images/assets/patches/0048-Re-enable-attestation-verification-with-vendored-key.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0048-Re-enable-attestation-verification-with-vendored-key.patch
+# COPY images/assets/patches/0048-Re-enable-attestation-verification-with-vendored-key.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0048-Re-enable-attestation-verification-with-vendored-key.patch
 
 COPY images/assets/patches/0049-Skip-content-units-validation.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
@@ -185,11 +185,11 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0052-pulpcore-agent-scan-report.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0052-pulpcore-agent-scan-report.patch
 
-COPY images/assets/patches/0053-python-agent-scan-task.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0053-python-agent-scan-task.patch
+# COPY images/assets/patches/0053-python-agent-scan-task.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0053-python-agent-scan-task.patch
 
-COPY images/assets/patches/0054-defer-contentid-cleanup-old-versions.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0054-defer-contentid-cleanup-old-versions.patch
+# COPY images/assets/patches/0054-defer-contentid-cleanup-old-versions.patch /tmp/
+# RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0054-defer-contentid-cleanup-old-versions.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
