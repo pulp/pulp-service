@@ -1,5 +1,6 @@
 CONTENT_ORIGIN = "http://localhost:24816"
-CONTENT_PATH_PREFIX = "/pulp/content/"
+CONTENT_PATH_PREFIX = "/api/pulp-content/"
+PYPI_API_PATH_PREFIX = "/api/pypi/"
 DOMAIN_ENABLED = True
 SECRET_KEY = "dev-secret-key-not-for-production"
 
