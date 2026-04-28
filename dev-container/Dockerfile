@@ -113,6 +113,16 @@ RUN openssl rand -base64 32 > /etc/pulp/certs/database_fields.symmetric.key && \
     chown pulp:pulp /etc/pulp/certs/database_fields.symmetric.key && \
     chmod 600 /etc/pulp/certs/database_fields.symmetric.key
 
+RUN mkdir -p /etc/pki/attestation && \
+    python3 -c "\
+from cryptography.hazmat.primitives.asymmetric import rsa; \
+from cryptography.hazmat.primitives import serialization; \
+key = rsa.generate_private_key(65537, 4096); \
+open('/etc/pki/attestation/test-key-private.pem','wb').write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())); \
+open('/etc/pki/attestation/test-key.pem','wb').write(key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))" && \
+    chmod 600 /etc/pki/attestation/test-key-private.pem && \
+    chmod 644 /etc/pki/attestation/test-key.pem
+
 RUN dnf -y install java-17-openjdk-headless && dnf clean all
 
 RUN curl -L -o /opt/openapi-generator-cli.jar \
