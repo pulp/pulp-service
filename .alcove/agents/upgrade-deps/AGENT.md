@@ -74,10 +74,14 @@ The patch file paths tell you which package it targets:
 - `pulp_file/` → https://github.com/pulp/pulp_file
 - `pulp_npm/` → https://github.com/pulp/pulp_npm
 - `pulp_gem/` → https://github.com/pulp/pulp_gem
+- `oras/` → https://github.com/oras-project/oras-py
+- `storages/` → https://github.com/jschneier/django-storages
 
-Determine the OLD version (from `git show HEAD:pulp_service/requirements.txt`) and the NEW version (from Phase 2).
+Determine the OLD and NEW versions for each patched package:
+- For packages pinned in `requirements.txt`: OLD version from `git show HEAD:pulp_service/requirements.txt`, NEW version from Phase 2.
+- For transitive dependencies (e.g. django-storages): run `pip show {package}` in the dev container BEFORE upgrading to get the OLD version. After Phase 4 installs new packages, run `pip show` again to get the NEW version.
 
-If the package was NOT upgraded, skip the patch — it will still apply cleanly.
+If the package was NOT upgraded (OLD == NEW), skip the patch — it will still apply cleanly.
 
 ### Step 2: Clone and test the patch against both versions
 
