@@ -1,7 +1,9 @@
 CONTENT_ORIGIN = "http://localhost:24816"
 CONTENT_PATH_PREFIX = "/api/pulp-content/"
-PYPI_API_PATH_PREFIX = "/api/pypi/"
+PYPI_PATH_PREFIX = "/api/pypi/"
+PYPI_API_HOSTNAME = "http://localhost:24817"
 DOMAIN_ENABLED = True
+API_ROOT = "/api/pulp/"
 SECRET_KEY = "dev-secret-key-not-for-production"
 
 DATABASES = {
@@ -46,3 +48,5 @@ REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES = (
 
 AUTHENTICATION_JSON_HEADER = "HTTP_X_RH_IDENTITY"
 AUTHENTICATION_JSON_HEADER_JQ_FILTER = ".identity.user.username"
+
+ATTESTATION_VERIFICATION_KEY = "/etc/pki/attestation/test-key.pem"
