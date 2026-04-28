@@ -1,0 +1,23 @@
+name: Pulp Stack
+description: |
+  All Pulp platform repos: pulpcore and the plugins deployed in pulp-service.
+  Derived from pulp_service/requirements.txt pinned dependencies.
+repos:
+  - url: https://github.com/pulp/pulp-service
+    name: pulp-service
+  - url: https://github.com/pulp/pulpcore
+    name: pulpcore
+  - url: https://github.com/pulp/pulp_rpm
+    name: pulp_rpm
+  - url: https://github.com/pulp/pulp-python
+    name: pulp_python
+  - url: https://github.com/pulp/pulp_container
+    name: pulp_container
+  - url: https://github.com/pulp/pulp-gem
+    name: pulp_gem
+  - url: https://github.com/pulp/pulp_npm
+    name: pulp_npm
+  - url: https://github.com/pulp/pulp-maven
+    name: pulp_maven
+  - url: https://github.com/pulp/pulp_hugging_face
+    name: pulp_hugging_face

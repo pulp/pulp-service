@@ -27,8 +27,5 @@ schedule:
 dev_container:
   image: ghcr.io/pulp/hosted-pulp-dev-env:main
 
-repos:
-  - url: https://github.com/pulp/pulp-service
-    ref: main
-    name: pulp-service
+repo_group: Pulp Stack
 
