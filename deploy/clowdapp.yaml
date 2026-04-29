@@ -294,7 +294,7 @@ objects:
           annotations:
             "kubectl.kubernetes.io/default-container": pulp-api
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '${PULP_API_GUNICORN_TIMEOUT}', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s x_forwarded_for:"%({X_FORWARDED_FOR}e)s")']
+        command: ['pulpcore-api', '-b', '0.0.0.0:8000', '--timeout', '${PULP_API_GUNICORN_TIMEOUT}', '--max-requests', '${PULP_API_GUNICORN_MAX_REQUESTS}', '--max-requests-jitter', '${PULP_API_GUNICORN_MAX_REQUESTS_JITTER}', '--workers', '${PULP_API_GUNICORN_WORKERS}', '--access-logfile', '-', '--access-logformat', '(pulp [%({correlation-id}o)s]: %(h)s %(l)s user:%({REMOTE_USER}e)s org_id:%({ORG_ID}e)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(M)s x_forwarded_for:"%({X_FORWARDED_FOR}e)s")']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
@@ -1369,6 +1369,12 @@ parameters:
   - name: PULP_API_GUNICORN_TIMEOUT
     description: Workers silent for more than this many seconds are killed and restarted.
     value: "1800"
+  - name: PULP_API_GUNICORN_MAX_REQUESTS
+    description: The maximum number of requests an API worker will process before restarting.
+    value: "5000"
+  - name: PULP_API_GUNICORN_MAX_REQUESTS_JITTER
+    description: The maximum jitter to add to the API max_requests setting for each worker.
+    value: "500"
   - name: PULP_API_GUNICORN_WORKERS
     description: Number of gunicorn workers in the API pods
     value: "1"
