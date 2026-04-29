@@ -268,7 +268,9 @@ This runs:
 5. pulp_npm tests (test_pull_through_install)
 6. pulp_service functional tests
 
-If tests fail:
+Note: two feature service tests (`test_forbidden_feature_service`, `test_entitled_feature_service`) are excluded because they require a Red Hat mTLS certificate and access to `feature.stage.api.redhat.com`, which are not available in the dev container.
+
+ALL tests MUST pass. If any test fails, the workflow is NOT complete. Do NOT proceed to Phase 7 with failing tests. Instead:
 - Analyze the failure to determine if it's caused by a patch, by `pulp_service/` code, or by an upstream API change
 - Fix the patch or code accordingly (edit files on /workspace — they're shared)
 - Restart services if needed and re-run the failing tests with `pulp-test --pyargs {test_spec}`

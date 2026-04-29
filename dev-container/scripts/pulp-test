@@ -121,7 +121,10 @@ run_tests() {
 
     echo "--- Test 6/6: pulp_service functional ---"
     pytest -v -r sx --color=yes --pyargs pulp_service.tests.functional \
-        -m 'not parallel' || FAILED=$((FAILED + 1))
+        -m 'not parallel' \
+        --deselect pulp_service/tests/functional/test_feature_service.py::test_forbidden_feature_service \
+        --deselect pulp_service/tests/functional/test_feature_service.py::test_entitled_feature_service \
+        || FAILED=$((FAILED + 1))
 
     echo "=== Results: $((6 - FAILED))/6 test suites passed ==="
     [ "$FAILED" -eq 0 ]
