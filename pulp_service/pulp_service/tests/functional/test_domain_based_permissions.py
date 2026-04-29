@@ -5,11 +5,17 @@ from uuid import uuid4
 import pytest
 
 
-def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup):
+def test_user_domain_repo_creation(
+    pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup
+):
 
-    user1_orgid1 = {"identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user1"}}}
+    user1_orgid1 = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user1"}}
+    }
 
-    user2_orgid1 = {"identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user2"}}}
+    user2_orgid1 = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user2"}}
+    }
 
     with anonymous_user:
         header_user1_orgid1 = json.dumps(user1_orgid1)
@@ -28,19 +34,27 @@ def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_u
         )
 
         # Use User1 OrgID1 auth credentials
-        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = auth_user1_orgid1
+        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = (
+            auth_user1_orgid1
+        )
 
         # User1 from OrgID1 create a repo on his domain
-        gen_object_with_cleanup(file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name)
+        gen_object_with_cleanup(
+            file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name
+        )
 
         header_user2_orgid1 = json.dumps(user2_orgid1)
         auth_user2_orgid1 = b64encode(bytes(header_user2_orgid1, "ascii"))
 
         # Use User2 OrgID1 auth credentials
-        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = auth_user2_orgid1
+        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = (
+            auth_user2_orgid1
+        )
 
         # User 2 from OrgID2 create a repo on his domain
-        gen_object_with_cleanup(file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name)
+        gen_object_with_cleanup(
+            file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name
+        )
 
         # Users are not allowed to create pulp object outside of their domains
         with pytest.raises(file_bindings.ApiException) as exp:
@@ -49,9 +63,11 @@ def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_u
         assert exp.value.status == 403
 
 
-def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user):
+def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
 
-    user1_orgid1 = {"identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user1"}}}
+    user1_orgid1 = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user1"}}
+    }
 
     with anonymous_user:
         # Clear any authentication header
@@ -67,13 +83,33 @@ def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user):
 
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user1_orgid1
 
-        pulpcore_bindings.DomainsApi.list()
+        # Create a domain for the user
+        domain_name = str(uuid4())
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # List domains and verify the user sees exactly their domain
+        response = pulpcore_bindings.DomainsApi.list()
+        assert response.count == 1
+        assert response.results[0].name == domain_name
 
 
-def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_object_with_cleanup, monitor_task):
-    user1_orgid1 = {"identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user1"}}}
+def test_only_owners_can_delete_domain(
+    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, monitor_task
+):
+    user1_orgid1 = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user1"}}
+    }
 
-    user2_orgid2 = {"identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": "user2"}}}
+    user2_orgid2 = {
+        "identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": "user2"}}
+    }
 
     with anonymous_user:
         # Clear any authentication header
@@ -111,7 +147,9 @@ def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_ob
         pulpcore_bindings.DomainsApi.delete(domain.pulp_href)
 
 
-def test_operations_using_basic_auth(pulpcore_bindings, file_bindings, gen_user, gen_object_with_cleanup):
+def test_operations_using_basic_auth(
+    pulpcore_bindings, file_bindings, gen_user, gen_object_with_cleanup
+):
     pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
 
     somebody = gen_user(username="somebody")
@@ -131,7 +169,9 @@ def test_operations_using_basic_auth(pulpcore_bindings, file_bindings, gen_user,
             },
         )
 
-        gen_object_with_cleanup(file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name)
+        gen_object_with_cleanup(
+            file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name
+        )
 
 
 def test_user_permissions_without_orgId(
@@ -176,7 +216,12 @@ def test_user_permissions_without_orgId(
 
 
 def test_admin_user_with_header_auth(
-    pulpcore_bindings, file_bindings, bindings_cfg, anonymous_user, gen_object_with_cleanup, monitor_task
+    pulpcore_bindings,
+    file_bindings,
+    bindings_cfg,
+    anonymous_user,
+    gen_object_with_cleanup,
+    monitor_task,
 ):
     username = bindings_cfg.username
 
@@ -204,7 +249,9 @@ def test_admin_user_with_header_auth(
             },
         )
 
-        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = admin_auth_header
+        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = (
+            admin_auth_header
+        )
 
         repo = gen_object_with_cleanup(
             file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name
@@ -212,3 +259,402 @@ def test_admin_user_with_header_auth(
 
         monitor_task(file_bindings.RepositoriesFileApi.delete(repo.pulp_href).task)
         pulpcore_bindings.DomainsApi.delete(domain.pulp_href)
+
+
+def test_user_sees_only_their_domains(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
+    """Test that User A and User B each create domains and only see their own."""
+    user_a = {"identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "userA"}}}
+
+    user_b = {"identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": "userB"}}}
+
+    with anonymous_user:
+        # User A creates domain A
+        header_user_a = json.dumps(user_a)
+        auth_user_a = b64encode(bytes(header_user_a, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_a
+
+        domain_a_name = str(uuid4())
+        domain_a = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_a_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # User B creates domain B
+        header_user_b = json.dumps(user_b)
+        auth_user_b = b64encode(bytes(header_user_b, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_b
+
+        domain_b_name = str(uuid4())
+        domain_b = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_b_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # User A lists domains → sees only domain A
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_a
+        response_a = pulpcore_bindings.DomainsApi.list()
+        assert response_a.count == 1
+        assert response_a.results[0].name == domain_a_name
+
+        # User B lists domains → sees only domain B
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_b
+        response_b = pulpcore_bindings.DomainsApi.list()
+        assert response_b.count == 1
+        assert response_b.results[0].name == domain_b_name
+
+
+def test_cross_org_isolation(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
+    """Test that users in different orgs see only their own domains."""
+    user_org1 = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "user_org1"}}
+    }
+
+    user_org2 = {
+        "identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": "user_org2"}}
+    }
+
+    with anonymous_user:
+        # User from org 1 creates domain
+        header_user_org1 = json.dumps(user_org1)
+        auth_user_org1 = b64encode(bytes(header_user_org1, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_org1
+
+        domain_org1_name = str(uuid4())
+        domain_org1 = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_org1_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # User from org 2 creates domain
+        header_user_org2 = json.dumps(user_org2)
+        auth_user_org2 = b64encode(bytes(header_user_org2, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_org2
+
+        domain_org2_name = str(uuid4())
+        domain_org2 = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_org2_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Each user only sees their own domain, not the other org's domain
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_org1
+        response_org1 = pulpcore_bindings.DomainsApi.list()
+        assert response_org1.count == 1
+        assert response_org1.results[0].name == domain_org1_name
+
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_org2
+        response_org2 = pulpcore_bindings.DomainsApi.list()
+        assert response_org2.count == 1
+        assert response_org2.results[0].name == domain_org2_name
+
+
+def test_org_based_visibility(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
+    """Test that users with same org_id both see each other's domains."""
+    user_a_org1 = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "userA_org1"}}
+    }
+
+    user_b_org1 = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "userB_org1"}}
+    }
+
+    with anonymous_user:
+        # User A (org_id 1) creates domain A
+        header_user_a_org1 = json.dumps(user_a_org1)
+        auth_user_a_org1 = b64encode(bytes(header_user_a_org1, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_a_org1
+
+        domain_a_name = str(uuid4())
+        domain_a = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_a_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # User B (org_id 1) creates domain B
+        header_user_b_org1 = json.dumps(user_b_org1)
+        auth_user_b_org1 = b64encode(bytes(header_user_b_org1, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_b_org1
+
+        domain_b_name = str(uuid4())
+        domain_b = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_b_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Both users see both domains due to shared org_id
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_a_org1
+        response_a = pulpcore_bindings.DomainsApi.list()
+        assert response_a.count == 2
+        domain_names_a = {domain.name for domain in response_a.results}
+        assert domain_names_a == {domain_a_name, domain_b_name}
+
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_b_org1
+        response_b = pulpcore_bindings.DomainsApi.list()
+        assert response_b.count == 2
+        domain_names_b = {domain.name for domain in response_b.results}
+        assert domain_names_b == {domain_a_name, domain_b_name}
+
+
+def test_group_based_domain_visibility(
+    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_user, django_user_model
+):
+    """Test that user added to group sees group member's domain."""
+    user_a_data = {
+        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "userA_group"}}
+    }
+
+    user_b_data = {
+        "identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": "userB_group"}}
+    }
+
+    # Create Django users and group
+    from django.contrib.auth.models import Group
+    from pulp_service.app.models import DomainOrg
+
+    group_name = f"test_group_{uuid4()}"
+    test_group = Group.objects.create(name=group_name)
+
+    user_a = django_user_model.objects.create_user(username="userA_group")
+    user_b = django_user_model.objects.create_user(username="userB_group")
+
+    with anonymous_user:
+        # User A creates domain and is in group G
+        header_user_a = json.dumps(user_a_data)
+        auth_user_a = b64encode(bytes(header_user_a, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_a
+
+        domain_a_name = str(uuid4())
+        domain_a = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_a_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Add User A to the group and create DomainOrg entry for group
+        user_a.groups.add(test_group)
+        from pulpcore.plugin.models import Domain
+
+        domain_obj = Domain.objects.get(name=domain_a_name)
+        domain_org_group = DomainOrg.objects.create(group=test_group)
+        domain_org_group.domains.add(domain_obj)
+
+        # User B is added to group G
+        user_b.groups.add(test_group)
+
+        # User B can now see User A's domain
+        header_user_b = json.dumps(user_b_data)
+        auth_user_b = b64encode(bytes(header_user_b, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_b
+
+        response_b = pulpcore_bindings.DomainsApi.list()
+        assert response_b.count == 1
+        assert response_b.results[0].name == domain_a_name
+
+
+def test_superuser_sees_all_domains(
+    pulpcore_bindings, bindings_cfg, anonymous_user, gen_object_with_cleanup
+):
+    """Test that superuser sees all domains including default."""
+    admin_user_data = {
+        "identity": {
+            "org_id": 1,
+            "internal": {"org_id": 1},
+            "user": {"username": bindings_cfg.username},
+        }
+    }
+
+    regular_user_data = {
+        "identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": "regular_user"}}
+    }
+
+    with anonymous_user:
+        # Regular user creates domain
+        header_regular = json.dumps(regular_user_data)
+        auth_regular = b64encode(bytes(header_regular, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_regular
+
+        domain_regular_name = str(uuid4())
+        domain_regular = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_regular_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Superuser lists domains and sees all domains including default
+        header_admin = json.dumps(admin_user_data)
+        auth_admin = b64encode(bytes(header_admin, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_admin
+
+        response = pulpcore_bindings.DomainsApi.list()
+        # Superuser should see at least 2 domains: default + the created domain
+        assert response.count >= 2
+        domain_names = {domain.name for domain in response.results}
+        assert "default" in domain_names
+        assert domain_regular_name in domain_names
+
+
+def test_default_domain_invisible_to_regular_users(
+    pulpcore_bindings, anonymous_user, gen_object_with_cleanup
+):
+    """Test that regular users cannot see default domain (has no DomainOrg)."""
+    user_data = {
+        "identity": {
+            "org_id": 1,
+            "internal": {"org_id": 1},
+            "user": {"username": "regular_user_default_test"},
+        }
+    }
+
+    with anonymous_user:
+        header_user = json.dumps(user_data)
+        auth_user = b64encode(bytes(header_user, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user
+
+        # Create a domain so we have something in the list
+        domain_name = str(uuid4())
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Regular user lists domains and should not see default domain
+        response = pulpcore_bindings.DomainsApi.list()
+        assert response.count == 1
+        assert response.results[0].name == domain_name
+        # Only domains with DomainOrg associations are visible
+        domain_names = {domain.name for domain in response.results}
+        assert "default" not in domain_names
+
+
+def test_domain_deduplication(
+    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, django_user_model
+):
+    """Test that domain with multiple DomainOrg entries appears once."""
+    user_data = {
+        "identity": {
+            "org_id": 1,
+            "internal": {"org_id": 1},
+            "user": {"username": "dedup_test_user"},
+        }
+    }
+
+    # Create Django user and group
+    from django.contrib.auth.models import Group
+    from pulp_service.app.models import DomainOrg
+
+    user_obj = django_user_model.objects.create_user(username="dedup_test_user")
+    group_name = f"dedup_test_group_{uuid4()}"
+    test_group = Group.objects.create(name=group_name)
+    user_obj.groups.add(test_group)
+
+    with anonymous_user:
+        header_user = json.dumps(user_data)
+        auth_user = b64encode(bytes(header_user, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user
+
+        # Create domain
+        domain_name = str(uuid4())
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Create DomainOrg for both user and their group
+        from pulpcore.plugin.models import Domain
+
+        domain_obj = Domain.objects.get(name=domain_name)
+
+        # Add group access to the domain
+        domain_org_group = DomainOrg.objects.create(group=test_group)
+        domain_org_group.domains.add(domain_obj)
+
+        # User lists domains - domain should appear exactly once (not duplicated)
+        response = pulpcore_bindings.DomainsApi.list()
+        assert response.count == 1
+        assert response.results[0].name == domain_name
+
+
+def test_basic_auth_user_domain_visibility(pulpcore_bindings, gen_user, gen_object_with_cleanup):
+    """Test that basic auth user (no X-RH-IDENTITY) sees only their domains."""
+    # Create a basic auth user
+    basic_user = gen_user(username="basic_auth_user")
+
+    with basic_user:
+        # Clear any X-RH-IDENTITY header
+        pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+
+        # Basic auth user creates domain
+        domain_name = str(uuid4())
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        # Lists domains and sees only their domain (no org_id filtering applies)
+        response = pulpcore_bindings.DomainsApi.list()
+        assert response.count == 1
+        assert response.results[0].name == domain_name
+
+
+def test_scope_queryset_model_guard(django_user_model):
+    """Test that non-Domain queryset passes through unchanged."""
+    from django.contrib.auth.models import Group
+    from pulp_service.app.authorization import DomainBasedPermission
+    from unittest.mock import Mock
+
+    # Create a non-Domain queryset (Group queryset)
+    group_qs = Group.objects.all()
+
+    # Create permission instance and mock view/request
+    permission = DomainBasedPermission()
+    mock_view = Mock()
+    mock_request = Mock()
+    mock_view.request = mock_request
+
+    # Call scope_queryset method directly
+    result_qs = permission.scope_queryset(mock_view, group_qs)
+
+    # Assert queryset is returned unchanged
+    assert result_qs is group_qs
