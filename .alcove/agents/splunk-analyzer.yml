@@ -10,7 +10,6 @@ executable:
     SPLUNK_INSECURE_SKIP_VERIFY: "true"
     SPLUNK_URL: "https://splunk-api.corp.redhat.com:8089/"
     JIRA_URL: "https://redhat.atlassian.net/"
-    JIRA_USERNAME: "dkliban+pulp-sre-agent@redhat.com"
 
 timeout: 1800
 enforcement_mode: monitor

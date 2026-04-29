@@ -18,8 +18,7 @@ An AI agent that queries Splunk for 5xx errors, analyzes them using an LLM (Clau
 | `SPLUNK_URL` | Splunk instance URL |
 | `SPLUNK_TOKEN` | Splunk auth token |
 | `JIRA_URL` | Jira instance URL (e.g. `https://redhat.atlassian.net`) |
-| `JIRA_USERNAME` | Jira username (email) for API authentication |
-| `JIRA_API_TOKEN` | Jira API token for authentication |
+| `JIRA_API_TOKEN` | Jira credentials in `email:api_token` format (e.g. `user@company.com:ATATT3x...`) |
 
 ## Usage
 

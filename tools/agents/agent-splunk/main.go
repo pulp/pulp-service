@@ -115,10 +115,13 @@ func run() error {
 
 	// --- Jira (native tool) ---
 	if jiraURL := os.Getenv("JIRA_URL"); jiraURL != "" {
-		jiraUsername := os.Getenv("JIRA_USERNAME")
-		jiraToken := os.Getenv("JIRA_API_TOKEN")
-		if jiraUsername == "" || jiraToken == "" {
-			return fmt.Errorf("JIRA_USERNAME and JIRA_API_TOKEN are required when JIRA_URL is set")
+		jiraCredential := os.Getenv("JIRA_API_TOKEN")
+		if jiraCredential == "" {
+			return fmt.Errorf("JIRA_API_TOKEN is required when JIRA_URL is set (format: email:api_token)")
+		}
+		jiraUsername, jiraToken, found := strings.Cut(jiraCredential, ":")
+		if !found || jiraUsername == "" || jiraToken == "" {
+			return fmt.Errorf("JIRA_API_TOKEN must be in email:api_token format")
 		}
 		jiraClient := jira.NewClient(jiraURL, jiraUsername, jiraToken)
 		jiraTools := jiraClient.RegisterTools(mcpMgr)
