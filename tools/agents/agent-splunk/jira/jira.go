@@ -690,22 +690,241 @@ func (c *Client) transitionIssueTool(mgr *mcpClient.MCPManager) llms.Tool {
 	return tool
 }
 
-// adfTextBlock wraps plain text in Atlassian Document Format (ADF),
+// adfTextBlock converts Jira wiki markup to Atlassian Document Format (ADF),
 // which is required by Jira Cloud REST API v3 for description and comment bodies.
+// Supported: headings (h1.-h6.), bold (*text*), inline code ({{text}}),
+// bullet lists (* item), tables (||header|| and |cell|), horizontal rules (----).
+// Only ---- is recognized as a rule, matching Jira's documented syntax.
 func adfTextBlock(text string) map[string]any {
+	lines := strings.Split(text, "\n")
+	var content []map[string]any
+
+	i := 0
+	for i < len(lines) {
+		trimmed := strings.TrimSpace(lines[i])
+
+		if trimmed == "" {
+			i++
+			continue
+		}
+
+		if level, title, ok := parseWikiHeading(trimmed); ok {
+			content = append(content, map[string]any{
+				"type":    "heading",
+				"attrs":   map[string]any{"level": level},
+				"content": parseWikiInline(title),
+			})
+			i++
+			continue
+		}
+
+		if isWikiTableRow(trimmed) {
+			var rows []map[string]any
+			for i < len(lines) {
+				t := strings.TrimSpace(lines[i])
+				if !isWikiTableRow(t) {
+					break
+				}
+				rows = append(rows, parseWikiTableRow(t))
+				i++
+			}
+			content = append(content, map[string]any{
+				"type":    "table",
+				"content": rows,
+			})
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "* ") {
+			var items []map[string]any
+			for i < len(lines) {
+				t := strings.TrimSpace(lines[i])
+				if !strings.HasPrefix(t, "* ") {
+					break
+				}
+				items = append(items, map[string]any{
+					"type": "listItem",
+					"content": []map[string]any{
+						{
+							"type":    "paragraph",
+							"content": parseWikiInline(t[2:]),
+						},
+					},
+				})
+				i++
+			}
+			content = append(content, map[string]any{
+				"type":    "bulletList",
+				"content": items,
+			})
+			continue
+		}
+
+		if trimmed == "----" {
+			content = append(content, map[string]any{"type": "rule"})
+			i++
+			continue
+		}
+
+		content = append(content, map[string]any{
+			"type":    "paragraph",
+			"content": parseWikiInline(trimmed),
+		})
+		i++
+	}
+
+	if len(content) == 0 {
+		content = []map[string]any{
+			{
+				"type":    "paragraph",
+				"content": []map[string]any{{"type": "text", "text": text}},
+			},
+		}
+	}
+
 	return map[string]any{
 		"type":    "doc",
 		"version": 1,
-		"content": []map[string]any{
-			{
-				"type": "paragraph",
-				"content": []map[string]any{
-					{
-						"type": "text",
-						"text": text,
-					},
+		"content": content,
+	}
+}
+
+func parseWikiHeading(line string) (int, string, bool) {
+	for _, p := range [6]string{"h1. ", "h2. ", "h3. ", "h4. ", "h5. ", "h6. "} {
+		if strings.HasPrefix(line, p) {
+			return int(p[1] - '0'), line[len(p):], true
+		}
+	}
+	return 0, "", false
+}
+
+func isWikiTableRow(line string) bool {
+	return (strings.HasPrefix(line, "||") && strings.HasSuffix(line, "||")) ||
+		(strings.HasPrefix(line, "|") && strings.HasSuffix(line, "|"))
+}
+
+func parseWikiTableRow(line string) map[string]any {
+	isHeader := strings.HasPrefix(line, "||")
+	var cells []string
+	var cellType string
+
+	if isHeader {
+		cellType = "tableHeader"
+		inner := line[2 : len(line)-2]
+		cells = strings.Split(inner, "||")
+	} else {
+		cellType = "tableCell"
+		inner := line[1 : len(line)-1]
+		cells = strings.Split(inner, "|")
+	}
+
+	var rowContent []map[string]any
+	for _, cell := range cells {
+		rowContent = append(rowContent, map[string]any{
+			"type": cellType,
+			"content": []map[string]any{
+				{
+					"type":    "paragraph",
+					"content": parseWikiInline(strings.TrimSpace(cell)),
 				},
 			},
-		},
+		})
 	}
+
+	return map[string]any{
+		"type":    "tableRow",
+		"content": rowContent,
+	}
+}
+
+func parseWikiInline(text string) []map[string]any {
+	var nodes []map[string]any
+	var buf strings.Builder
+
+	flushBuf := func() {
+		if buf.Len() > 0 {
+			nodes = append(nodes, map[string]any{
+				"type": "text",
+				"text": unescapeWiki(buf.String()),
+			})
+			buf.Reset()
+		}
+	}
+
+	i := 0
+	for i < len(text) {
+		// Escape sequence — accumulate literally so unescapeWiki handles it later.
+		if text[i] == '\\' && i+1 < len(text) && (text[i+1] == '{' || text[i+1] == '}' || text[i+1] == '\\') {
+			buf.WriteByte(text[i])
+			buf.WriteByte(text[i+1])
+			i += 2
+			continue
+		}
+
+		// Inline code: {{...}}
+		if i+1 < len(text) && text[i] == '{' && text[i+1] == '{' {
+			if end := strings.Index(text[i+2:], "}}"); end >= 0 {
+				flushBuf()
+				nodes = append(nodes, map[string]any{
+					"type":  "text",
+					"text":  unescapeWiki(text[i+2 : i+2+end]),
+					"marks": []map[string]any{{"type": "code"}},
+				})
+				i = i + 2 + end + 2
+				continue
+			}
+		}
+
+		// Bold: *...*  (word-boundary rules matching Jira's renderer)
+		if text[i] == '*' {
+			if end := strings.Index(text[i+1:], "*"); end > 0 {
+				bold := text[i+1 : i+1+end]
+				closeIdx := i + 1 + end
+				beforeOK := i == 0 || !isAlnum(text[i-1])
+				afterOK := closeIdx+1 >= len(text) || !isAlnum(text[closeIdx+1])
+				if bold[0] != ' ' && bold[len(bold)-1] != ' ' && beforeOK && afterOK {
+					flushBuf()
+					nodes = append(nodes, map[string]any{
+						"type":  "text",
+						"text":  unescapeWiki(bold),
+						"marks": []map[string]any{{"type": "strong"}},
+					})
+					i = i + 1 + end + 1
+					continue
+				}
+			}
+		}
+
+		buf.WriteByte(text[i])
+		i++
+	}
+
+	flushBuf()
+
+	if len(nodes) == 0 {
+		return []map[string]any{{"type": "text", "text": ""}}
+	}
+	return nodes
+}
+
+// unescapeWiki resolves wiki escape sequences: \{ → {, \} → }, \\ → \.
+// This means \\{ in the input produces a literal \{ in the output.
+func unescapeWiki(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			if next := s[i+1]; next == '{' || next == '}' || next == '\\' {
+				b.WriteByte(next)
+				i++
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+func isAlnum(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
