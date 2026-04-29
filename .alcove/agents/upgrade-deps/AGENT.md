@@ -286,9 +286,9 @@ If tests fail:
 
 ## Phase 8: Commit and Push
 
-1. Create a new branch using the name from the Workflow Context (the `branch` input):
+1. Create the branch `upgrade/deps-auto` (or switch to it if it exists):
    ```
-   git checkout -b $BRANCH
+   git checkout -B upgrade/deps-auto
    ```
 
 2. Stage all changed files:
@@ -307,9 +307,9 @@ If tests fail:
    - Which patches were regenerated
    - Any code fixes made
 
-4. Push the branch:
+4. Force push the branch (it may already exist from a previous run):
    ```
-   git push -u origin $BRANCH
+   git push --force origin upgrade/deps-auto
    ```
 
 Do NOT create a PR — the pipeline's bridge action handles PR creation automatically after this step completes.
