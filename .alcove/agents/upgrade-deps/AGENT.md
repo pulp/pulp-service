@@ -227,6 +227,19 @@ EVERY patch MUST apply cleanly. You CANNOT skip patches, comment them out, or pr
 4. If it STILL fails, go back to Phase 3: clone the upstream repo, check out the new version tag, edit the source files to apply the patch's logical change, regenerate the patch with `diff -u`, replace it, and retry in the dev container
 5. Repeat until the patch applies cleanly. Do NOT move to Phase 5 until ALL patches are applied.
 
+### CHECKPOINT: Verify all patches before proceeding
+
+Before moving to Phase 5, you MUST verify that every patch was applied. Run this in the dev container:
+
+```bash
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "cd /usr/local/lib/pulp/lib/python3.11/site-packages && for p in /workspace/pulp-service/images/assets/patches/*.patch; do echo -n \"$(basename $p): \"; patch --dry-run -R -p1 < $p > /dev/null 2>&1 && echo APPLIED || echo NOT_APPLIED; done", "timeout": 60}'
+```
+
+This checks each patch by attempting a reverse dry-run — if it succeeds, the patch is applied. Every patch MUST show APPLIED. If ANY patch shows NOT_APPLIED, go back and fix it. Do NOT proceed to Phase 5.
+
 ## Phase 5: Restart Services and Run Migrations
 
 1. Restart all services in the dev container:
