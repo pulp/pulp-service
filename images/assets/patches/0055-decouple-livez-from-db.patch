@@ -12,14 +12,15 @@ Add a skip_domain_middleware marker to LivezView and honour it in
 DomainMiddleware so the probe depends only on the gunicorn worker being
 alive.
 ---
- pulpcore/app/views/status.py | 3 +++
- pulpcore/middleware.py       | 5 +++++
- 2 files changed, 8 insertions(+)
+ pulpcore/app/views/status.py | 2 ++
+ pulpcore/middleware.py       | 4 ++++
+ 2 files changed, 6 insertions(+)
 
 diff --git a/pulpcore/app/views/status.py b/pulpcore/app/views/status.py
+index 77a448693..7d494e272 100644
 --- a/pulpcore/app/views/status.py
 +++ b/pulpcore/app/views/status.py
-@@ -143,6 +143,9 @@ class LivezView(APIView):
+@@ -145,6 +145,8 @@ class LivezView(APIView):
      # allow anyone to access the liveness api
      authentication_classes = []
      permission_classes = []
@@ -29,9 +30,11 @@ diff --git a/pulpcore/app/views/status.py b/pulpcore/app/views/status.py
      @extend_schema(
          summary="Inspect liveness of Pulp's REST API.",
 diff --git a/pulpcore/middleware.py b/pulpcore/middleware.py
+index 0a778f0c0..dd6c98a6f 100644
 --- a/pulpcore/middleware.py
 +++ b/pulpcore/middleware.py
-@@ -39,6 +39,11 @@ class DomainMiddleware:
+@@ -38,6 +38,10 @@ class DomainMiddleware:
+ 
      def process_view(self, request, view_func, view_args, view_kwargs):
          """Remove the domain name if present, called right before view_func is called."""
 +        view_class = getattr(view_func, "view_class", None) or getattr(view_func, "cls", None)
