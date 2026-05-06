@@ -57,10 +57,12 @@ The `/workspace` directory is a shared volume between Skiff and the dev containe
 
 Do NOT try to analyze or regenerate patches manually. Use the `pulp-upgrade-workflow` swamp workflow which automates patch testing, regeneration, and upstreamed detection deterministically.
 
-### Step 1: Install swamp
+### Step 1: Install swamp and dependencies
 
 ```bash
 curl -fsSL https://swamp-club.com/install.sh | sh
+export PATH="$HOME/.swamp/bin:$PATH"
+pip install packaging
 ```
 
 ### Step 2: Clone the upgrade workflow
