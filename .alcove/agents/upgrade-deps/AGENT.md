@@ -53,117 +53,57 @@ The `/workspace` directory is a shared volume between Skiff and the dev containe
 1. Edit `/workspace/pulp-service/pulp_service/requirements.txt` to update the pinned version(s).
 2. Verify the file is syntactically correct.
 
-## Phase 3: Analyze and Update Patches Using Upstream Git History
+## Phase 3: Update Patches Using Swamp Workflow
 
-The dev container already has the OLD packages installed with the OLD patches applied. Before installing new packages, you must figure out which patches need updating by using the upstream git repos. Do NOT test patches against the dev container yet — that happens in Phase 4.
+Do NOT try to analyze or regenerate patches manually. Use the `pulp-upgrade-workflow` swamp workflow which automates patch testing, regeneration, and upstreamed detection deterministically.
 
-Read the `Dockerfile` and extract the ordered list of patch filenames from the COPY/RUN lines. Patches must be processed in this Dockerfile order.
-
-CRITICAL: Every patch MUST be fully resolved in Phase 3 before proceeding to Phase 4. "Resolved" means the patch either: (a) applies cleanly against the NEW tag in the cloned upstream repo, or (b) has been deleted as upstreamed. Do NOT defer any patch to Phase 4 — the dev container has contaminated state from the old patches and cannot be used to determine if a patch is upstreamed.
-
-For each patch that targets an upgraded package, clone the upstream repo and test:
-
-### Step 1: Identify the upstream repo
-
-The patch file paths tell you which package it targets:
-- `pulpcore/` → https://github.com/pulp/pulpcore
-- `pulp_container/` → https://github.com/pulp/pulp_container
-- `pulp_python/` → https://github.com/pulp/pulp_python
-- `pulp_rpm/` → https://github.com/pulp/pulp_rpm
-- `pulp_maven/` → https://github.com/pulp/pulp_maven
-- `pulp_file/` → https://github.com/pulp/pulp_file
-- `pulp_npm/` → https://github.com/pulp/pulp_npm
-- `pulp_gem/` → https://github.com/pulp/pulp_gem
-- `oras/` → https://github.com/oras-project/oras-py
-- `storages/` → https://github.com/jschneier/django-storages
-
-Determine the OLD and NEW versions for each patched package:
-- For packages pinned in `requirements.txt`: OLD version from `git show HEAD:pulp_service/requirements.txt`, NEW version from Phase 2.
-- For transitive dependencies (e.g. django-storages): run `pip show {package}` in the dev container BEFORE upgrading to get the OLD version. After Phase 4 installs new packages, run `pip show` again to get the NEW version.
-
-If the package was NOT upgraded (OLD == NEW), skip the patch — it will still apply cleanly.
-
-### Step 2: Clone and test the patch against both versions
+### Step 1: Install swamp
 
 ```bash
-git clone https://github.com/pulp/{repo}.git /workspace/{repo}
-cd /workspace/{repo}
+curl -fsSL https://swamp-club.com/install.sh | sh
 ```
 
-Verify the patch applies at the OLD tag:
+### Step 2: Clone the upgrade workflow
+
 ```bash
-git checkout {old_version}
-patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
+git clone https://github.com/dkliban/pulp-upgrade-workflow /workspace/pulp-upgrade-workflow
 ```
 
-Test against the NEW tag:
+### Step 3: Run the workflow
+
 ```bash
-git checkout {new_version}
-patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
+cd /workspace/pulp-upgrade-workflow
+swamp workflow run pulp-upgrade-check
 ```
 
-If the patch applies cleanly at the NEW tag, no changes needed — move to the next patch.
+The workflow will:
+- Read `requirements.txt` from `/workspace/pulp-service` for current versions
+- Query PyPI for latest versions of each package
+- Clone all upstream repos at old and new version tags
+- Test every patch against the new version
+- Automatically regenerate patches that fail (using fuzz apply and git 3-way merge)
+- Detect upstreamed patches (patches that produce no diff after apply)
+- Output updated patch files
 
-### Step 3: If the patch fails at the NEW tag, determine why
+### Step 4: Apply the results
 
-Find which commits changed the files the patch modifies:
+Read the swamp workflow output. For each package result:
+- If a patch was **regenerated**: copy the updated patch file to `/workspace/pulp-service/images/assets/patches/`
+- If a patch was **upstreamed**: delete the patch file from `images/assets/patches/` and remove its COPY/RUN lines from the `Dockerfile`
+- If a patch **failed** (could not be regenerated automatically): the workflow output will include the error details and the diff between old and new versions. Use this information to manually edit the patch.
+
+### Step 5: Verify all patches
+
+After applying the swamp results, verify every patch applies cleanly against the upstream repo at the new tag:
+
 ```bash
-git log --oneline {old_version}..{new_version} -- {files_modified_by_patch}
-git diff {old_version}..{new_version} -- {files_modified_by_patch}
+for patch_file in /workspace/pulp-service/images/assets/patches/*.patch; do
+  echo -n "$(basename $patch_file): "
+  # Determine which repo this patch targets and test it
+done
 ```
 
-There are two possibilities. Default assumption is option B.
-
-**A. The patch is upstreamed (ALL changes are already present).**
-
-A patch is upstreamed ONLY if EVERY change across ALL files in the patch is already present at the NEW tag. Check each change individually:
-- For lines the patch ADDS: verify those exact lines exist at the NEW tag
-- For lines the patch REMOVES: verify those lines are already absent at the NEW tag
-- For lines the patch MODIFIES: verify the "after" version is already present at the NEW tag
-
-IMPORTANT: A patch that modifies multiple files is only upstreamed if ALL files reflect ALL changes. If even one change is missing, the patch is NOT upstreamed.
-
-Example of a false positive: a patch removes `authentication_classes = []` AND changes a URL path. If the authentication lines happen to be absent for unrelated reasons but the URL path is still the old value, the patch is NOT upstreamed.
-
-If truly upstreamed:
-- Delete the patch file from `images/assets/patches/`
-- Remove the corresponding COPY and RUN lines from the `Dockerfile`
-- Record this in your change log
-
-**B. The upstream code changed and the patch needs to be updated (DEFAULT).**
-
-Using the git diff from Step 3, you now understand exactly how the upstream code changed. Regenerate the patch by editing the actual source files in the cloned repo:
-
-1. Check out the NEW tag:
-   ```bash
-   cd /workspace/{repo}
-   git checkout {new_version}
-   ```
-
-2. For each file the patch modifies, save a copy of the original:
-   ```bash
-   cp {file} {file}.orig
-   ```
-
-3. Read the patch to understand what logical change it makes. Then apply that same change directly to the file using sed, editing, or any method. For example, if the patch replaces `return [RegistryAuthentication]` with `return [RegistryAuthentication, *api_settings.DEFAULT_AUTHENTICATION_CLASSES]`, make that exact edit in the file.
-
-4. Generate the new patch from your edits:
-   ```bash
-   diff -u {file}.orig {file} > /workspace/updated.patch
-   ```
-   For multi-file patches, concatenate the diffs from each file.
-
-5. Replace the patch file:
-   ```bash
-   cp /workspace/updated.patch /workspace/pulp-service/images/assets/patches/{patch_file}
-   ```
-
-6. Restore the repo and verify:
-   ```bash
-   git checkout -- {file}
-   patch --dry-run -p1 < /workspace/pulp-service/images/assets/patches/{patch_file}
-   ```
-   The dry-run MUST succeed. If not, re-examine your edits and fix.
+Every patch MUST be resolved before proceeding to Phase 4.
 
 ## Phase 4: Install Upgraded Packages and Apply Patches in Dev Container
 
