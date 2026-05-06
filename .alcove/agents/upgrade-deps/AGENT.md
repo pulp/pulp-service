@@ -58,7 +58,7 @@ cd /workspace/pulp-upgrade-workflow
 swamp workflow run pulp-upgrade-check
 ```
 
-The workflow clones pulp-service to `/workspace/pulp-upgrade-work/pulp-service`, then for each package:
+The workflow uses `/workspace/pulp-service` directly — it modifies `requirements.txt`, patches, and the Dockerfile in place. For each package it:
 - Reads `requirements.txt` for current versions and queries PyPI for latest versions
 - Updates `requirements.txt` with new version pins
 - Clones upstream repos at both old and new version tags
@@ -67,28 +67,9 @@ The workflow clones pulp-service to `/workspace/pulp-upgrade-work/pulp-service`,
 - Detects upstreamed patches and deletes them
 - Updates the Dockerfile to remove entries for deleted patches
 
-When the workflow finishes, `/workspace/pulp-upgrade-work/pulp-service` has an updated working tree with all patches applying cleanly.
+When the workflow finishes, `/workspace/pulp-service` has all changes applied in place. No copying needed.
 
-### Step 4: Copy updated files back to workspace
-
-```bash
-cp /workspace/pulp-upgrade-work/pulp-service/pulp_service/requirements.txt /workspace/pulp-service/pulp_service/requirements.txt
-cp /workspace/pulp-upgrade-work/pulp-service/Dockerfile /workspace/pulp-service/Dockerfile
-cp /workspace/pulp-upgrade-work/pulp-service/images/assets/patches/*.patch /workspace/pulp-service/images/assets/patches/
-```
-
-Delete any patches that were removed as upstreamed:
-
-```bash
-for p in /workspace/pulp-service/images/assets/patches/*.patch; do
-  if [ ! -f "/workspace/pulp-upgrade-work/pulp-service/images/assets/patches/$(basename $p)" ]; then
-    echo "Deleting upstreamed patch: $(basename $p)"
-    rm "$p"
-  fi
-done
-```
-
-### Step 5: Check for unresolved patches
+### Step 4: Check for unresolved patches
 
 ```bash
 export PATH="$HOME/.swamp/bin:$PATH"
