@@ -76,32 +76,47 @@ cd /workspace/pulp-upgrade-workflow
 swamp workflow run pulp-upgrade-check
 ```
 
-The workflow will:
-- Read `requirements.txt` from `/workspace/pulp-service` for current versions
-- Query PyPI for latest versions of each package
-- Clone all upstream repos at old and new version tags
-- Test every patch against the new version
-- Automatically regenerate patches that fail (using fuzz apply and git 3-way merge)
-- Detect upstreamed patches (patches that produce no diff after apply)
-- Output updated patch files
+The workflow clones pulp-service to `/tmp/pulp-upgrade-work/pulp-service`, then for each package:
+- Queries PyPI for the latest version
+- Clones the upstream repo at both old and new version tags
+- Tests every patch against the new version
+- Automatically regenerates patches that fail (fuzz apply → git 3-way merge)
+- Detects upstreamed patches and deletes them
+- Updates the Dockerfile to remove entries for deleted patches
+- Writes all changes to the temp clone at `/tmp/pulp-upgrade-work/pulp-service`
 
-### Step 4: Apply the results
+### Step 4: Copy updated files back to workspace
 
-Read the swamp workflow output. For each package result:
-- If a patch was **regenerated**: copy the updated patch file to `/workspace/pulp-service/images/assets/patches/`
-- If a patch was **upstreamed**: delete the patch file from `images/assets/patches/` and remove its COPY/RUN lines from the `Dockerfile`
-- If a patch **failed** (could not be regenerated automatically): the workflow output will include the error details and the diff between old and new versions. Use this information to manually edit the patch.
-
-### Step 5: Verify all patches
-
-After applying the swamp results, verify every patch applies cleanly against the upstream repo at the new tag:
+The swamp workflow modifies patches and the Dockerfile in its temp clone, NOT in `/workspace/pulp-service`. You MUST copy the results back:
 
 ```bash
-for patch_file in /workspace/pulp-service/images/assets/patches/*.patch; do
-  echo -n "$(basename $patch_file): "
-  # Determine which repo this patch targets and test it
+cp /tmp/pulp-upgrade-work/pulp-service/images/assets/patches/*.patch /workspace/pulp-service/images/assets/patches/
+cp /tmp/pulp-upgrade-work/pulp-service/Dockerfile /workspace/pulp-service/Dockerfile
+```
+
+Also delete any patches from `/workspace/pulp-service` that were removed as upstreamed by the workflow:
+
+```bash
+for p in /workspace/pulp-service/images/assets/patches/*.patch; do
+  if [ ! -f "/tmp/pulp-upgrade-work/pulp-service/images/assets/patches/$(basename $p)" ]; then
+    echo "Deleting upstreamed patch: $(basename $p)"
+    rm "$p"
+  fi
 done
 ```
+
+### Step 5: Check for unresolved patches
+
+Read the swamp results to check if any patches could not be regenerated:
+
+```bash
+export PATH="$HOME/.swamp/bin:$PATH"
+for pkg in pulpcore pulp-container pulp-python pulp-rpm pulp-maven pulp-file pulp-npm pulp-gem oras django-storages; do
+  swamp data get --workflow "pulp-upgrade-check" "result-${pkg}" 2>/dev/null | grep -E '"status":\s*"(conflicts|regen_verify_failed|failed)"' && echo "^^^ $pkg has unresolved patches"
+done
+```
+
+If any patches show `conflicts`, `failed`, or `regen_verify_failed`, you MUST manually fix them before proceeding. Use the error details in the swamp output to understand what went wrong, then edit the patch file in `/workspace/pulp-service/images/assets/patches/` and verify it applies against the upstream repo.
 
 Every patch MUST be resolved before proceeding to Phase 4.
 
