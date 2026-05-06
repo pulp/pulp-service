@@ -35,27 +35,9 @@ Do NOT proceed to any phase until this succeeds.
 
 The `/workspace` directory is a shared volume between Skiff and the dev container. You can edit files directly and they are visible in both environments.
 
-## Phase 1: Determine Target Versions
+## Phase 1: Run Swamp Upgrade Workflow
 
-1. Read `/workspace/pulp-service/pulp_service/requirements.txt` to get current pinned versions.
-2. If the `PACKAGES` environment variable is set and non-empty, parse it as JSON mapping package names to target versions (e.g. `{"pulpcore": "3.109.0"}`).
-3. If `PACKAGES` is empty, query PyPI for each pinned package using the `.info.version` field which returns the latest stable version:
-   ```
-   curl -s https://pypi.org/pypi/{package_name}/json | jq -r '.info.version'
-   ```
-   IMPORTANT: Do NOT determine the latest version by sorting the releases list or using pip to resolve versions. PyPI publishes LTS patch releases for old branches (e.g. 3.49.58, 3.73.31) that may have been uploaded more recently than the actual latest version. The `.info.version` field is the only reliable source for the latest version.
-4. Sanity check: the target version MUST be greater than the current pinned version when compared using semantic versioning (e.g. 3.109.0 > 3.108.0). Use `python3 -c "from packaging.version import Version; print(Version('TARGET') > Version('CURRENT'))"` to verify.
-5. Compare current vs latest versions. Only proceed with packages that have newer versions available.
-6. If no upgrades are available, report this and exit cleanly.
-
-## Phase 2: Update requirements.txt
-
-1. Edit `/workspace/pulp-service/pulp_service/requirements.txt` to update the pinned version(s).
-2. Verify the file is syntactically correct.
-
-## Phase 3: Update Patches Using Swamp Workflow
-
-Do NOT try to analyze or regenerate patches manually. Use the `pulp-upgrade-workflow` swamp workflow which automates patch testing, regeneration, and upstreamed detection deterministically.
+Do NOT manually detect versions, update requirements.txt, or analyze patches. The swamp workflow handles all of this deterministically.
 
 ### Step 1: Install swamp
 
@@ -76,29 +58,30 @@ cd /workspace/pulp-upgrade-workflow
 swamp workflow run pulp-upgrade-check
 ```
 
-The workflow clones pulp-service to `/tmp/pulp-upgrade-work/pulp-service`, then for each package:
-- Queries PyPI for the latest version
-- Clones the upstream repo at both old and new version tags
+The workflow clones pulp-service to `/workspace/pulp-upgrade-work/pulp-service`, then for each package:
+- Reads `requirements.txt` for current versions and queries PyPI for latest versions
+- Updates `requirements.txt` with new version pins
+- Clones upstream repos at both old and new version tags
 - Tests every patch against the new version
 - Automatically regenerates patches that fail (fuzz apply → git 3-way merge)
 - Detects upstreamed patches and deletes them
 - Updates the Dockerfile to remove entries for deleted patches
-- Writes all changes to the temp clone at `/tmp/pulp-upgrade-work/pulp-service`
+
+When the workflow finishes, `/workspace/pulp-upgrade-work/pulp-service` has an updated working tree with all patches applying cleanly.
 
 ### Step 4: Copy updated files back to workspace
 
-The swamp workflow modifies patches and the Dockerfile in its temp clone, NOT in `/workspace/pulp-service`. You MUST copy the results back:
-
 ```bash
-cp /tmp/pulp-upgrade-work/pulp-service/images/assets/patches/*.patch /workspace/pulp-service/images/assets/patches/
-cp /tmp/pulp-upgrade-work/pulp-service/Dockerfile /workspace/pulp-service/Dockerfile
+cp /workspace/pulp-upgrade-work/pulp-service/pulp_service/requirements.txt /workspace/pulp-service/pulp_service/requirements.txt
+cp /workspace/pulp-upgrade-work/pulp-service/Dockerfile /workspace/pulp-service/Dockerfile
+cp /workspace/pulp-upgrade-work/pulp-service/images/assets/patches/*.patch /workspace/pulp-service/images/assets/patches/
 ```
 
-Also delete any patches from `/workspace/pulp-service` that were removed as upstreamed by the workflow:
+Delete any patches that were removed as upstreamed:
 
 ```bash
 for p in /workspace/pulp-service/images/assets/patches/*.patch; do
-  if [ ! -f "/tmp/pulp-upgrade-work/pulp-service/images/assets/patches/$(basename $p)" ]; then
+  if [ ! -f "/workspace/pulp-upgrade-work/pulp-service/images/assets/patches/$(basename $p)" ]; then
     echo "Deleting upstreamed patch: $(basename $p)"
     rm "$p"
   fi
@@ -106,8 +89,6 @@ done
 ```
 
 ### Step 5: Check for unresolved patches
-
-Read the swamp results to check if any patches could not be regenerated:
 
 ```bash
 export PATH="$HOME/.swamp/bin:$PATH"
@@ -118,11 +99,11 @@ done
 
 If any patches show `conflicts`, `failed`, or `regen_verify_failed`, you MUST manually fix them before proceeding. Use the error details in the swamp output to understand what went wrong, then edit the patch file in `/workspace/pulp-service/images/assets/patches/` and verify it applies against the upstream repo.
 
-Every patch MUST be resolved before proceeding to Phase 4.
+Every patch MUST be resolved before proceeding to Phase 2.
 
-## Phase 4: Install Upgraded Packages and Apply Patches in Dev Container
+## Phase 2: Install Upgraded Packages and Apply Patches in Dev Container
 
-The dev container has the OLD packages installed with OLD patches baked in. To get a completely clean state, UNINSTALL all patched packages first (this removes all their files, including any files added by patches), then install the new versions fresh.
+The dev container has the OLD packages installed with OLD patches baked in. To get a completely clean state, UNINSTALL all patched packages first, then install the new versions fresh.
 
 ### Step 1: Uninstall packages, delete patch-created files, reinstall clean
 
@@ -159,13 +140,11 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "pip install -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 600}'
 ```
 
-This guarantees site-packages contains ONLY clean upstream files with no leftovers from previous patches.
-
 ### Step 2: Apply remaining patches in Dockerfile order
 
-List the patch files that still exist in `images/assets/patches/`. Only apply patches that remain — upstreamed patches were already deleted in Phase 3.
+List the patch files that still exist in `images/assets/patches/`. Only apply patches that remain — upstreamed patches were already deleted in Phase 1.
 
-Since Step 1 gave us completely clean upstream files (uninstall removed all leftovers), every patch that was resolved in Phase 3 MUST apply cleanly. Apply each one in Dockerfile order:
+Apply each one in Dockerfile order:
 
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
@@ -174,15 +153,28 @@ curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -d '{"cmd": "patch -p1 -d /usr/local/lib/pulp/lib/python3.11/site-packages < /workspace/pulp-service/images/assets/patches/{patch_file}", "timeout": 30}'
 ```
 
-EVERY patch MUST apply cleanly. You CANNOT skip patches, comment them out, or proceed to Phase 5 with unapplied patches. If any patch fails:
+EVERY patch MUST apply cleanly. You CANNOT skip patches, comment them out, or proceed to Phase 3 with unapplied patches. If any patch fails:
 
 1. Uninstall and reinstall just the affected package: `pip uninstall -y {package} && pip install {package}=={version}`
 2. Delete any files the patch creates (check for `--- /dev/null` lines)
 3. Retry the patch
-4. If it STILL fails, go back to Phase 3: clone the upstream repo, check out the new version tag, edit the source files to apply the patch's logical change, regenerate the patch with `diff -u`, replace it, and retry in the dev container
-5. Repeat until the patch applies cleanly. Do NOT move to Phase 5 until ALL patches are applied.
+4. If it STILL fails, clone the upstream repo, check out the new version tag, edit the source files to apply the patch's logical change, regenerate the patch with `diff -u`, replace it, and retry in the dev container
+5. Repeat until the patch applies cleanly. Do NOT move to Phase 3 until ALL patches are applied.
 
-## Phase 5: Restart Services and Run Migrations
+### CHECKPOINT: Verify all patches before proceeding
+
+Before moving to Phase 3, you MUST verify that every patch was applied. Run this in the dev container:
+
+```bash
+curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+  -H "Authorization: Bearer $DEV_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "cd /usr/local/lib/pulp/lib/python3.11/site-packages && for p in /workspace/pulp-service/images/assets/patches/*.patch; do echo -n \"$(basename $p): \"; patch --dry-run -R -p1 < $p > /dev/null 2>&1 && echo APPLIED || echo NOT_APPLIED; done", "timeout": 60}'
+```
+
+Every patch MUST show APPLIED. If ANY patch shows NOT_APPLIED, go back and fix it. Do NOT proceed to Phase 3.
+
+## Phase 3: Restart Services and Run Migrations
 
 1. Restart all services in the dev container:
    ```bash
@@ -197,14 +189,14 @@ EVERY patch MUST apply cleanly. You CANNOT skip patches, comment them out, or pr
    curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
      -H "Authorization: Bearer $DEV_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"cmd": "runuser -u pulp -- bash -c '\''PATH=/usr/local/lib/pulp/bin:$PATH pulpcore-manager migrate --noinput'\''", "timeout": 300}'
+     -d '{"cmd": "pulpcore-manager migrate --noinput", "timeout": 300}'
    ```
 
 3. If migrations fail:
    - If it's a patch-related issue (e.g. a patch modifies a migration file), fix the patch and retry
    - If it's a version compatibility issue in `pulp_service/` code, fix the code and retry
 
-## Phase 6: Run Tests
+## Phase 4: Run Tests
 
 Run all Tekton pipeline tests using the `pulp-test` command in the dev container. The `--generate-bindings` flag generates OpenAPI client bindings, installs test dependencies, and then runs all 6 test suites (pulp_rpm, pulpcore, pulp_maven, pulp_npm, pulp_service).
 
@@ -225,23 +217,13 @@ This runs:
 
 Note: two feature service tests (`test_forbidden_feature_service`, `test_entitled_feature_service`) are excluded because they require a Red Hat mTLS certificate and access to `feature.stage.api.redhat.com`, which are not available in the dev container.
 
-ALL tests MUST pass. If any test fails, the workflow is NOT complete. Do NOT proceed to Phase 7 with failing tests. Instead:
+ALL tests MUST pass. If any test fails, the workflow is NOT complete. Do NOT proceed to Phase 5 with failing tests. Instead:
 - Analyze the failure to determine if it's caused by a patch, by `pulp_service/` code, or by an upstream API change
 - Fix the patch or code accordingly (edit files on /workspace — they're shared)
 - Restart services if needed and re-run the failing tests with `pulp-test --pyargs {test_spec}`
 - Maximum 3 fix-and-retry cycles before proceeding to commit
 
-## Phase 7: Update Dockerfile
-
-1. Read the production `Dockerfile` and verify all COPY/RUN lines for patches match the current set of files in `images/assets/patches/`.
-2. Remove entries for deleted patches.
-3. Add entries for any new patches, following the existing pattern:
-   ```dockerfile
-   COPY images/assets/patches/{name}.patch /tmp/
-   RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/{name}.patch
-   ```
-
-## Phase 8: Commit and Push
+## Phase 5: Commit and Push
 
 1. Create the branch `upgrade/deps-auto` (or switch to it if it exists):
    ```
@@ -273,7 +255,7 @@ Do NOT create a PR — the pipeline's bridge action handles PR creation automati
 
 ## Error Handling
 
-- ALL patches MUST apply cleanly before proceeding past Phase 4. Never skip, comment out, or ignore a failing patch. Go back to Phase 3 and fix it.
+- ALL patches MUST apply cleanly before proceeding past Phase 2. Never skip, comment out, or ignore a failing patch.
 - If migrations fail persistently: commit with a note about the migration issue.
 - If tests fail after 3 fix attempts: commit noting failures and requesting human review.
 - Always commit and push so work is not lost. The pipeline will create a draft PR.
