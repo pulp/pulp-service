@@ -194,6 +194,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0055-decouple-livez-from-db.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0055-decouple-livez-from-db.patch
 
+COPY images/assets/patches/0056-repo-publication-delete.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0056-repo-publication-delete.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
