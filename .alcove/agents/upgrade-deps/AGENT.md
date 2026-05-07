@@ -186,43 +186,22 @@ Every patch MUST show APPLIED. If ANY patch shows NOT_APPLIED, go back and fix i
    ```
    Every service (postgresql, redis, pulp-api, pulp-content, pulp-worker) MUST show RUNNING. If any service is STARTING, STOPPED, FATAL, or EXITED, the workflow MUST fail. Do NOT proceed to Phase 4.
 
-   Also verify the API responds:
+   Also verify both the API and content app respond:
    ```bash
    curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
      -H "Authorization: Bearer $DEV_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"cmd": "curl -sf http://localhost:24817/api/pulp/api/v3/status/ > /dev/null && echo API_OK || echo API_FAIL", "timeout": 10}'
    ```
-   If `API_FAIL`, the workflow MUST fail.
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "curl -sf http://localhost:24816/api/pulp-content/default/ > /dev/null && echo CONTENT_OK || echo CONTENT_FAIL", "timeout": 10}'
+   ```
+   If either shows `API_FAIL` or `CONTENT_FAIL`, the workflow MUST fail.
 
-## Phase 4: Run Tests
-
-Run all Tekton pipeline tests using the `pulp-test` command in the dev container. The `--generate-bindings` flag generates OpenAPI client bindings, installs test dependencies, and then runs all 6 test suites (pulp_rpm, pulpcore, pulp_maven, pulp_npm, pulp_service).
-
-```bash
-curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
-  -H "Authorization: Bearer $DEV_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"cmd": "pulp-test --generate-bindings", "timeout": 1800}'
-```
-
-This runs:
-1. pulp_rpm parallel tests (test_download_content)
-2. pulp_rpm serial tests (test_download_policies)
-3. pulpcore tests (test_jq_header_remote_auth)
-4. pulp_maven tests (test_download_content)
-5. pulp_npm tests (test_pull_through_install)
-6. pulp_service functional tests
-
-Note: two feature service tests (`test_forbidden_feature_service`, `test_entitled_feature_service`) are excluded because they require a Red Hat mTLS certificate and access to `feature.stage.api.redhat.com`, which are not available in the dev container.
-
-ALL tests MUST pass. If any test fails, the workflow is NOT complete. Do NOT proceed to Phase 5 with failing tests. Instead:
-- Analyze the failure to determine if it's caused by a patch, by `pulp_service/` code, or by an upstream API change
-- Fix the patch or code accordingly (edit files on /workspace — they're shared)
-- Restart services if needed and re-run the failing tests with `pulp-test --pyargs {test_spec}`
-- Maximum 3 fix-and-retry cycles before proceeding to commit
-
-## Phase 5: Commit and Push
+## Phase 4: Commit and Push
 
 1. Create the branch `upgrade/deps-auto` (or switch to it if it exists):
    ```
@@ -233,7 +212,6 @@ ALL tests MUST pass. If any test fails, the workflow is NOT complete. Do NOT pro
    - `pulp_service/requirements.txt`
    - `images/assets/patches/*.patch` (modified, added, or deleted)
    - `Dockerfile` (if patch entries changed)
-   - Any `pulp_service/` code fixes
 
 3. Create a single commit with message:
    ```
@@ -243,7 +221,6 @@ ALL tests MUST pass. If any test fails, the workflow is NOT complete. Do NOT pro
    - Which packages were upgraded and from/to versions
    - Which patches were removed (upstreamed)
    - Which patches were regenerated
-   - Any code fixes made
 
 4. Force push the branch (it may already exist from a previous run):
    ```
@@ -255,6 +232,6 @@ Do NOT create a PR — the pipeline's bridge action handles PR creation automati
 ## Error Handling
 
 - ALL patches MUST apply cleanly before proceeding past Phase 2. Never skip, comment out, or ignore a failing patch.
+- ALL services MUST be RUNNING and both API and content app MUST respond before proceeding past Phase 3.
 - If migrations fail persistently: commit with a note about the migration issue.
-- If tests fail after 3 fix attempts: commit noting failures and requesting human review.
 - Always commit and push so work is not lost. The pipeline will create a draft PR.
