@@ -112,13 +112,13 @@ done
 
 Run this cleanup command in the dev container AFTER uninstall and BEFORE reinstall.
 
-Then install all packages fresh from the updated requirements.txt:
+Then install all packages fresh from the updated requirements.txt. Also reinstall django-storages explicitly — it's a pulpcore dependency but pip won't reinstall it after uninstall because it treats the requirement as already satisfied through pulpcore's metadata:
 
 ```bash
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Authorization: Bearer $DEV_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": "pip install -r /workspace/pulp-service/pulp_service/requirements.txt", "timeout": 600}'
+  -d '{"cmd": "pip install -r /workspace/pulp-service/pulp_service/requirements.txt && pip install \"django-storages[boto3,azure]\"", "timeout": 600}'
 ```
 
 ### Step 2: Apply remaining patches in Dockerfile order
