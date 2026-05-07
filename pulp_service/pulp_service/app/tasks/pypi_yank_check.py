@@ -15,9 +15,7 @@ _logger = logging.getLogger(__name__)
 
 async def _gather_packages(content_qs):
     """Return {name: {version, ...}} from a PythonPackageContent queryset."""
-    qs = await sync_to_async(list)(
-        content_qs.values_list("name", "version").distinct()
-    )
+    qs = await sync_to_async(list)(content_qs.values_list("name", "version").distinct())
     packages = {}
     for name, version in qs:
         if name and version:
@@ -31,10 +29,7 @@ async def _run_yank_check(packages):
     semaphore = asyncio.Semaphore(PYPI_CHECK_CONCURRENCY)
     async with aiohttp.ClientSession() as session:
         results = await asyncio.gather(
-            *[
-                _check_package(session, semaphore, name, versions)
-                for name, versions in packages.items()
-            ],
+            *[_check_package(session, semaphore, name, versions) for name, versions in packages.items()],
             return_exceptions=True,
         )
     for result in results:
@@ -45,14 +40,11 @@ async def _run_yank_check(packages):
     return yanked
 
 
-
 def dispatch_pypi_yank_checks():
     """Dispatch a per-monitor yank check task for every registered PyPIYankMonitor."""
     from pulp_service.app.models import PyPIYankMonitor
 
-    monitors = PyPIYankMonitor.objects.select_related(
-        "repository", "repository_version__repository"
-    )
+    monitors = PyPIYankMonitor.objects.select_related("repository", "repository_version__repository")
     for monitor in monitors:
         repo = monitor.repository or monitor.repository_version.repository
         dispatch(
@@ -68,21 +60,15 @@ async def check_packages_for_monitor(monitor_pk):
     from pulp_service.app.models import PyPIYankMonitor
 
     monitor = await sync_to_async(
-        PyPIYankMonitor.objects.select_related(
-            "repository", "repository_version__repository"
-        ).get
+        PyPIYankMonitor.objects.select_related("repository", "repository_version__repository").get
     )(pk=monitor_pk)
 
     repo_version, repo_name = await sync_to_async(monitor.get_repo_version_and_name)()
 
-    packages = await _gather_packages(
-        PythonPackageContent.objects.filter(pk__in=repo_version.content)
-    )
+    packages = await _gather_packages(PythonPackageContent.objects.filter(pk__in=repo_version.content))
     yanked = await _run_yank_check(packages)
 
-    await sync_to_async(YankedPackageReport.objects.create)(
-        report=yanked, monitor=monitor, repository_name=repo_name
-    )
+    await sync_to_async(YankedPackageReport.objects.create)(report=yanked, monitor=monitor, repository_name=repo_name)
     monitor.last_checked = timezone.now()
     await sync_to_async(monitor.save)(update_fields=["last_checked"])
 
@@ -109,8 +95,6 @@ async def _check_package(session, semaphore, name, versions):
     for version in versions:
         files = releases.get(version, [])
         if files and all(f.get("yanked") for f in files):
-            reason = next(
-                (f.get("yanked_reason") for f in files if f.get("yanked_reason")), None
-            )
+            reason = next((f.get("yanked_reason") for f in files if f.get("yanked_reason")), None)
             yanked[f"{name}=={version}"] = {"yanked_reason": reason}
     return yanked

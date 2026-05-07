@@ -19,36 +19,36 @@ from pulpcore.plugin.models import Domain, Group
 from pulpcore.app.models import Task
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
 
-USERNAME_PATTERN = r'^[\w.@+=/\-|]+$'
+USERNAME_PATTERN = r"^[\w.@+=/\-|]+$"
 USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these special characters: @, ., +, -, =, /, _, |"
-USERNAME_HELP_TEXT = "Required. 150 characters or fewer. Letters, numbers, and these special characters: @, ., +, -, =, /, _, |"
-
-
-# Override Django's username validator
-pulp_username_validator = RegexValidator(
-    USERNAME_PATTERN,
-    USERNAME_ERROR_MSG,
-    'invalid'
+USERNAME_HELP_TEXT = (
+    "Required. 150 characters or fewer. Letters, numbers, and these special characters: @, ., +, -, =, /, _, |"
 )
 
 
+# Override Django's username validator
+pulp_username_validator = RegexValidator(USERNAME_PATTERN, USERNAME_ERROR_MSG, "invalid")
+
+
 # Apply the new validator to the User model
-User._meta.get_field('username').validators = [pulp_username_validator]
+User._meta.get_field("username").validators = [pulp_username_validator]
 # Update the help_text as well
-User._meta.get_field('username').help_text = USERNAME_HELP_TEXT
+User._meta.get_field("username").help_text = USERNAME_HELP_TEXT
+
 
 # Custom/Pulp forms to allow additional characters
 class PulpUserFormMixin:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Override help_text in the form field
-        self.fields['username'].help_text = USERNAME_HELP_TEXT
-        
+        self.fields["username"].help_text = USERNAME_HELP_TEXT
+
     def clean_username(self):
-        username = self.cleaned_data['username']
+        username = self.cleaned_data["username"]
         if not re.match(USERNAME_PATTERN, username):
             raise forms.ValidationError(USERNAME_ERROR_MSG)
         return username
+
 
 class PulpUserCreationForm(PulpUserFormMixin, UserCreationForm):
     pass
@@ -66,38 +66,38 @@ class PulpUserAdmin(HijackUserAdminMixin, UserAdmin):
 class PulpGroupForm(forms.ModelForm):
     users = forms.ModelMultipleChoiceField(
         queryset=User.objects.all(),
-        widget=admin.widgets.FilteredSelectMultiple('Users', False),
+        widget=admin.widgets.FilteredSelectMultiple("Users", False),
         required=False,
-        help_text='Select users to add to this group.'
+        help_text="Select users to add to this group.",
     )
 
     class Meta:
         model = Group
-        fields = ['name']
+        fields = ["name"]
 
     def __init__(self, *args, **kwargs):
         # Extract the request object if passed
-        self.request = kwargs.pop('request', None)
+        self.request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
 
         if self.instance.pk:
             # Existing group - populate with current members
-            self.fields['users'].initial = self.instance.user_set.all()
+            self.fields["users"].initial = self.instance.user_set.all()
         elif self.request and self.request.user.is_authenticated:
             # New group - prepopulate with current user
-            self.fields['users'].initial = [self.request.user.pk]
+            self.fields["users"].initial = [self.request.user.pk]
             # Store the current user for validation
             self._current_user = self.request.user
 
     def clean_users(self):
-        users = self.cleaned_data.get('users')
+        users = self.cleaned_data.get("users")
 
         # For new groups, ensure the creating user is included (unless they're a superuser)
-        if not self.instance.pk and hasattr(self, '_current_user'):
+        if not self.instance.pk and hasattr(self, "_current_user"):
             if not self._current_user.is_superuser and self._current_user not in users:
                 raise ValidationError(
-                    f'You must include yourself ({self._current_user.username}) in the group members. '
-                    'This ensures you maintain access to the group after creation.'
+                    f"You must include yourself ({self._current_user.username}) in the group members. "
+                    "This ensures you maintain access to the group after creation."
                 )
 
         return users
@@ -106,7 +106,7 @@ class PulpGroupForm(forms.ModelForm):
         group = super().save(commit=False)
 
         def save_m2m():
-            group.user_set.set(self.cleaned_data['users'])
+            group.user_set.set(self.cleaned_data["users"])
 
         if commit:
             group.save()
@@ -119,7 +119,7 @@ class PulpGroupForm(forms.ModelForm):
 
 class PulpGroupAdmin(GroupAdmin):
     form = PulpGroupForm
-    fields = ('name', 'users')  # Show name and users fields
+    fields = ("name", "users")  # Show name and users fields
 
     def get_queryset(self, request):
         """
@@ -132,7 +132,7 @@ class PulpGroupAdmin(GroupAdmin):
 
         # Regular users can only see their own groups
         user_groups = request.user.groups.all()
-        return qs.filter(pk__in=user_groups.values_list('pk', flat=True))
+        return qs.filter(pk__in=user_groups.values_list("pk", flat=True))
 
     def has_change_permission(self, request, obj=None):
         """
@@ -179,12 +179,12 @@ class PulpGroupAdmin(GroupAdmin):
         if not request.user.is_superuser:
             # Non-superusers can see all users in the form
             # but can only save groups they belong to (checked in has_change_permission)
-            form_class.base_fields['users'].queryset = User.objects.all().order_by('username')
+            form_class.base_fields["users"].queryset = User.objects.all().order_by("username")
 
         # Create a wrapper to inject request into form instantiation
         class FormWithRequest(form_class):
             def __init__(self, *args, **form_kwargs):
-                form_kwargs['request'] = request
+                form_kwargs["request"] = request
                 super().__init__(*args, **form_kwargs)
 
         return FormWithRequest
@@ -195,12 +195,14 @@ class PulpGroupAdmin(GroupAdmin):
         """
         return request.user.is_authenticated and request.user.is_active
 
+
 class PulpAuthenticationForm(AuthenticationForm):
     def confirm_login_allowed(self, user):
         """
         This override allows non-staff users to login into pulp-mgmt.
         """
         super().confirm_login_allowed(user)
+
 
 class PulpAdminSite(admin.AdminSite):
     site_header = "Pulp administration"
@@ -214,8 +216,8 @@ class PulpAdminSite(admin.AdminSite):
 
 
 class ContentSourceDomainFilter(admin.SimpleListFilter):
-    title = 'ContentSource Domains'
-    parameter_name = 'content_source_filter'
+    title = "ContentSource Domains"
+    parameter_name = "content_source_filter"
 
     def lookups(self, request, model_admin):
         return [
@@ -238,14 +240,14 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
 class DomainOrgForm(forms.ModelForm):
     class Meta:
         model = DomainOrg
-        fields = '__all__'
+        fields = "__all__"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Make user and group field optional since it can be null
-        self.fields['org_id'].required = False
-        self.fields['user'].required = False
-        self.fields['group'].required = False
+        self.fields["org_id"].required = False
+        self.fields["user"].required = False
+        self.fields["group"].required = False
 
 
 class DomainOrgAdmin(admin.ModelAdmin):
@@ -261,11 +263,11 @@ class DomainOrgAdmin(admin.ModelAdmin):
 
         links = []
         for domain in domains:
-            url = reverse('admin:core_domain_change', args=[domain.pk])
+            url = reverse("admin:core_domain_change", args=[domain.pk])
             label = domain.name if domain.name else "Unnamed domain"
             links.append(format_html('<a href="{}">{}</a>', url, label))
 
-        return format_html(', '.join(links))
+        return format_html(", ".join(links))
 
     def get_queryset(self, request):
         """
@@ -370,7 +372,7 @@ class DomainOrgAdmin(admin.ModelAdmin):
 class DomainAdminForm(forms.ModelForm):
     class Meta:
         model = Domain
-        fields = '__all__'
+        fields = "__all__"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -399,7 +401,7 @@ class DomainAdmin(admin.ModelAdmin):
 
         links = []
         for domain_org in domain_orgs:
-            url = reverse('myadmin:service_domainorg_change', args=[domain_org.pk])
+            url = reverse("myadmin:service_domainorg_change", args=[domain_org.pk])
             parts = []
             if domain_org.org_id:
                 parts.append(f"Org: {domain_org.org_id}")
@@ -411,7 +413,7 @@ class DomainAdmin(admin.ModelAdmin):
             label = " | ".join(parts) if parts else f"DomainOrg #{domain_org.pk}"
             links.append(format_html('<a href="{}">{}</a>', url, label))
 
-        return format_html('<br>'.join(links))
+        return format_html("<br>".join(links))
 
     def domain_orgs_detail(self, obj):
         """Display related DomainOrg entries with links in detail view."""
@@ -421,7 +423,7 @@ class DomainAdmin(admin.ModelAdmin):
 
         links = []
         for domain_org in domain_orgs:
-            url = reverse('myadmin:service_domainorg_change', args=[domain_org.pk])
+            url = reverse("myadmin:service_domainorg_change", args=[domain_org.pk])
             parts = []
             if domain_org.org_id:
                 parts.append(f"Org: {domain_org.org_id}")
@@ -433,7 +435,7 @@ class DomainAdmin(admin.ModelAdmin):
             label = " | ".join(parts) if parts else f"DomainOrg #{domain_org.pk}"
             links.append(format_html('<a href="{}">{}</a>', url, label))
 
-        return format_html('<br>'.join(links))
+        return format_html("<br>".join(links))
 
     def get_queryset(self, request):
         """
@@ -508,6 +510,7 @@ class TaskAdmin(admin.ModelAdmin):
     Admin interface for Task model - restricted to superusers only.
     Only the state field is editable.
     """
+
     list_display = ["pk", "name", "state", "domain_name", "pulp_created"]
     list_filter = ["state", "pulp_domain", "pulp_created", "started_at"]
     search_fields = ["name", "pk"]
@@ -545,27 +548,27 @@ class TaskAdmin(admin.ModelAdmin):
     @admin.display(description="Created")
     def pulp_created_display(self, obj):
         """Display pulp_created with full precision."""
-        return obj.pulp_created.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.pulp_created else "-"
+        return obj.pulp_created.strftime("%Y-%m-%d %H:%M:%S.%f %Z") if obj.pulp_created else "-"
 
     @admin.display(description="Last Updated")
     def pulp_last_updated_display(self, obj):
         """Display pulp_last_updated with full precision."""
-        return obj.pulp_last_updated.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.pulp_last_updated else "-"
+        return obj.pulp_last_updated.strftime("%Y-%m-%d %H:%M:%S.%f %Z") if obj.pulp_last_updated else "-"
 
     @admin.display(description="Unblocked At")
     def unblocked_at_display(self, obj):
         """Display unblocked_at with full precision."""
-        return obj.unblocked_at.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.unblocked_at else "-"
+        return obj.unblocked_at.strftime("%Y-%m-%d %H:%M:%S.%f %Z") if obj.unblocked_at else "-"
 
     @admin.display(description="Started At")
     def started_at_display(self, obj):
         """Display started_at with full precision."""
-        return obj.started_at.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.started_at else "-"
+        return obj.started_at.strftime("%Y-%m-%d %H:%M:%S.%f %Z") if obj.started_at else "-"
 
     @admin.display(description="Finished At")
     def finished_at_display(self, obj):
         """Display finished_at with full precision."""
-        return obj.finished_at.strftime('%Y-%m-%d %H:%M:%S.%f %Z') if obj.finished_at else "-"
+        return obj.finished_at.strftime("%Y-%m-%d %H:%M:%S.%f %Z") if obj.finished_at else "-"
 
     def has_view_permission(self, request, obj=None):
         """Only superusers can view tasks."""

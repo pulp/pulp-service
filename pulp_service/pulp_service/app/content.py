@@ -28,6 +28,7 @@ class HeadersWithModifiedXForwardedFor:
     This allows us to prepend True-Client-IP to X-Forwarded-For without
     modifying the immutable headers object or using private APIs.
     """
+
     def __init__(self, original_headers, modified_xff):
         self._original = original_headers
         self._modified_xff = modified_xff
@@ -93,10 +94,7 @@ async def add_true_client_ip_to_forwarded_for(request, handler):
             modified_xff = true_client_ip.strip()
 
         # Replace request.headers with wrapper that returns modified X-Forwarded-For
-        request._cache['headers'] = HeadersWithModifiedXForwardedFor(
-            request.headers,
-            modified_xff
-        )
+        request._cache["headers"] = HeadersWithModifiedXForwardedFor(request.headers, modified_xff)
 
     return await handler(request)
 
@@ -122,8 +120,4 @@ async def add_rh_org_id_resp_header(request, handler):
     return response
 
 
-app._middlewares = FrozenList([
-    add_true_client_ip_to_forwarded_for,
-    add_rh_org_id_resp_header,
-    *app.middlewares
-])
+app._middlewares = FrozenList([add_true_client_ip_to_forwarded_for, add_rh_org_id_resp_header, *app.middlewares])

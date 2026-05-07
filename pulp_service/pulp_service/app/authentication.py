@@ -14,7 +14,6 @@ _logger = logging.getLogger(__name__)
 
 
 class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
-
     header = "HTTP_X_RH_IDENTITY"
     jq_filter = ".identity.x509.subject_dn"
 
@@ -23,12 +22,9 @@ class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
 
 
 class RHTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
-
     header = "HTTP_X_RH_IDENTITY"
     # Combines org_id with username - falls back to "|username" if org_id is missing
-    jq_filter = (
-        '.identity | if .user.username then "\(.org_id // "")|\(.user.username)" else null end'
-    )
+    jq_filter = '.identity | if .user.username then "\(.org_id // "")|\(.user.username)" else null end'
 
     def authenticate_header(self, request):
         return "Bearer"
@@ -52,7 +48,7 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
     jq_filter = (
         'if .identity.auth_type == "registry-auth" and .identity.registry.username '
         'then "\(.identity.registry.org_id // "")|\(.identity.registry.username)" '
-        'else null end'
+        "else null end"
     )
 
     def authenticate_header(self, request):

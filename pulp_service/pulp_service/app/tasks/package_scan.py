@@ -32,9 +32,7 @@ async def check_content_from_repo_version(repo_version_pk):
     make a request to osv.dev API to check the vulnerabilities.
     """
     # create a thread to collect the Contents from RepositoryVersion
-    background_thread = threading.Thread(
-        target=_get_content_from_repo_version, args=(repo_version_pk,)
-    )
+    background_thread = threading.Thread(target=_get_content_from_repo_version, args=(repo_version_pk,))
     await _start_thread_and_run_scan(background_thread)
 
 
@@ -65,9 +63,7 @@ async def _scan_packages(background_thread):
     scanned_packages = {}
     async with aiohttp.ClientSession() as session:
         try:
-            for osv_data in iter(
-                lambda: content_queue.get(timeout=VULNERABILITY_TASK_THREAD_TIMEOUT), None
-            ):
+            for osv_data in iter(lambda: content_queue.get(timeout=VULNERABILITY_TASK_THREAD_TIMEOUT), None):
                 if isinstance(osv_data, Exception):
                     raise RuntimeError(f"Background vuln report task failed to execute: {osv_data}")
                 data = json.dumps(osv_data)
@@ -134,9 +130,7 @@ def _parse_npm_pkg_dependencies(package_lock_content):
     for pkg in package_lock_content.get("packages", None):
         if not package_lock_content["packages"][pkg].get("dependencies", None):
             continue
-        for package_name, package_version in package_lock_content["packages"][pkg][
-            "dependencies"
-        ].items():
+        for package_name, package_version in package_lock_content["packages"][pkg]["dependencies"].items():
             # we will not handle version range yet, for now, we will consider
             # only the specific version
             package_version = package_version.strip("^~")

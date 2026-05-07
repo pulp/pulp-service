@@ -3,6 +3,7 @@ from base64 import b64encode
 import pytest
 from uuid import uuid4
 
+
 def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, gen_object_with_cleanup, anonymous_user):
     """
     Tests that a user can access a domain created by another user in the same group.
@@ -14,9 +15,7 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
     # Username must match RHTermsBasedRegistryAuthentication format: "org_id|username"
     user_a_name = f"user-a-in-team-{uuid4()}"
     user_a_combined = f"1|{user_a_name}"
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_a_combined, "groups": [test_group.pulp_href]}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_a_combined, "groups": [test_group.pulp_href]})
 
     gen_object_with_cleanup(
         pulpcore_bindings.GroupsUsersApi, group_href=test_group.pulp_href, group_user={"username": user_a_combined}
@@ -41,9 +40,7 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
     # 4. Create user_b and associate with the same group
     user_b_name = f"user-b-in-team-{uuid4()}"
     user_b_combined = f"1|{user_b_name}"
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_b_combined}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_b_combined})
     gen_object_with_cleanup(
         pulpcore_bindings.GroupsUsersApi, group_href=test_group.pulp_href, group_user={"username": user_b_combined}
     )
@@ -62,9 +59,7 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
     # 6. Create user_c, not in the group (different org)
     user_c_name = f"user-c-not-in-team-{uuid4()}"
     user_c_combined = f"2|{user_c_name}"
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_c_combined}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_c_combined})
 
     # 7. Verify user_c cannot create a repository in the domain
     user_c_identity = {"identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": user_c_name}}}
@@ -79,7 +74,10 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
             )
         assert exp.value.status == 403
 
-def test_domain_permission_for_user_without_group(pulpcore_bindings, file_bindings, gen_object_with_cleanup, anonymous_user):
+
+def test_domain_permission_for_user_without_group(
+    pulpcore_bindings, file_bindings, gen_object_with_cleanup, anonymous_user
+):
     """
     Tests that a user without a group can manage their own domain,
     and that another user cannot access it.
@@ -88,9 +86,7 @@ def test_domain_permission_for_user_without_group(pulpcore_bindings, file_bindin
     # Username must match RHTermsBasedRegistryAuthentication format: "org_id|username"
     user_a_name = f"user-a-no-group-{uuid4()}"
     user_a_combined = f"1|{user_a_name}"
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_a_combined}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_a_combined})
 
     # 2. Create a domain as user_a
     domain_name = str(uuid4())
@@ -120,9 +116,7 @@ def test_domain_permission_for_user_without_group(pulpcore_bindings, file_bindin
     # 4. Create user_b, also not in any group (different org)
     user_b_name = f"user-b-no-group-{uuid4()}"
     user_b_combined = f"2|{user_b_name}"
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_b_combined}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_b_combined})
 
     # 5. Verify user_b cannot create a repository in user_a's domain
     user_b_identity = {"identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": user_b_name}}}

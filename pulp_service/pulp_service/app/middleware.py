@@ -20,12 +20,11 @@ from pulpcore.plugin.util import extract_pk, get_artifact_url, resolve_prn
 from pulp_service.app.authentication import RHSamlAuthentication
 
 
-
 _logger = logging.getLogger(__name__)
-repository_name_var = ContextVar('repository_name')
-x_quay_auth_var = ContextVar('x_quay_auth')
-x_task_diagnostics_var = ContextVar('x_profile_task')
-request_path_var = ContextVar('request_path', default=None)
+repository_name_var = ContextVar("repository_name")
+x_quay_auth_var = ContextVar("x_quay_auth")
+x_task_diagnostics_var = ContextVar("x_profile_task")
+request_path_var = ContextVar("request_path", default=None)
 
 
 def _is_valid_ip(ip_str):
@@ -49,10 +48,11 @@ class ProfilerMiddleware(MiddlewareMixin):
     This is adapted from an example found here:
     https://github.com/omarish/django-cprofile-middleware/blob/master/django_cprofile_middleware/middleware.py
     """
-    PROFILER_REQUEST_ATTR_NAME = '_django_cprofile_middleware_profiler'
+
+    PROFILER_REQUEST_ATTR_NAME = "_django_cprofile_middleware_profiler"
 
     def can(self, request):
-        if 'HTTP_X_PROFILE_REQUEST' in request.META:
+        if "HTTP_X_PROFILE_REQUEST" in request.META:
             return True
         return False
 
@@ -62,8 +62,7 @@ class ProfilerMiddleware(MiddlewareMixin):
             setattr(request, self.PROFILER_REQUEST_ATTR_NAME, profiler)
             args = (request,) + callback_args
             try:
-                return profiler.runcall(
-                    callback, *args, **callback_kwargs)
+                return profiler.runcall(callback, *args, **callback_kwargs)
             except Exception:
                 # we want the process_exception middleware to fire
                 # https://code.djangoproject.com/ticket/12250
@@ -97,6 +96,7 @@ class TrueClientIPMiddleware(MiddlewareMixin):
 
     Validates True-Client-IP is a valid IP address before using it.
     """
+
     def process_view(self, request, *args, **kwargs):
         true_client_ip = request.META.get("HTTP_TRUE_CLIENT_IP")
         if true_client_ip and _is_valid_ip(true_client_ip):
@@ -117,7 +117,7 @@ class RhEdgeHostMiddleware(MiddlewareMixin):
 
 class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
-        if '/pulp-mgmt/' in request.path:
+        if "/pulp-mgmt/" in request.path:
             if "HTTP_X_RH_IDENTITY" in request.META:
                 _logger.debug(f"{request.META['HTTP_X_RH_IDENTITY']}")
 
@@ -127,7 +127,7 @@ class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
                     user, _ = backend.authenticate(request)
 
                     if user:
-                        login(request, user, backend='pulp_service.app.authentication.RHSamlAuthentication')
+                        login(request, user, backend="pulp_service.app.authentication.RHSamlAuthentication")
                         request.session.modified = True
                         # Update request.user for the current request
                         request.user = user

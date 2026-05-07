@@ -14,7 +14,7 @@ import logging
 
 
 _logger = logging.getLogger(__name__)
-org_id_var = ContextVar('org_id')
+org_id_var = ContextVar("org_id")
 org_id_json_path = jq.compile(".identity.internal.org_id")
 
 user_id_var = ContextVar("user_id")
@@ -77,11 +77,11 @@ class DomainBasedPermission(BasePermission):
             return True
         elif action == "domain_update":
             # The PK is part of the URL
-            domain_pk = extract_pk(request.META['PATH_INFO'])
+            domain_pk = extract_pk(request.META["PATH_INFO"])
             return self._has_domain_access(domain_pk, org_id, user)
         elif action == "domain_delete":
             # The PK is part of the URL
-            domain_pk = extract_pk(request.META['PATH_INFO'])
+            domain_pk = extract_pk(request.META["PATH_INFO"])
             return self._has_domain_access(domain_pk, org_id, user)
         # User has permission if the org_id matches the domain's org_id
         # The user that created the domain has permission to access that domain
@@ -91,19 +91,19 @@ class DomainBasedPermission(BasePermission):
 
     def get_user_action(self, request):
         view_name = request.resolver_match.view_name
-        method = request.META['REQUEST_METHOD']
+        method = request.META["REQUEST_METHOD"]
 
         # Map view names to actions
         if view_name in ["domains-list"]:
-            if method == 'POST':
+            if method == "POST":
                 return "domain_create"
-            if method == 'GET':
+            if method == "GET":
                 return "domain_list"
         elif view_name in ["domains-set-label", "domains-unset-label"]:
             return "domain_update"
         elif view_name == "domains-detail":
-            if method in ['PATCH', 'DELETE']:
-                return "domain_update" if method == 'PATCH' else "domain_delete"
+            if method in ["PATCH", "DELETE"]:
+                return "domain_update" if method == "PATCH" else "domain_delete"
         elif view_name in ["create-domain", "pulp_service.app.viewsets.CreateDomainView"]:
             return "domain_create"
         else:
@@ -111,7 +111,7 @@ class DomainBasedPermission(BasePermission):
 
     def get_decoded_identity_header(self, request):
         try:
-            header_content = request.META.get('HTTP_X_RH_IDENTITY')
+            header_content = request.META.get("HTTP_X_RH_IDENTITY")
             if header_content:
                 header_decoded_content = b64decode(header_content)
                 return header_decoded_content

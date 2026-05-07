@@ -34,9 +34,7 @@ class DomainOrg(models.Model):
     """
 
     org_id = models.CharField(null=True, db_index=True)
-    domains = models.ManyToManyField(
-        Domain, related_name="domain_orgs"
-    )
+    domains = models.ManyToManyField(Domain, related_name="domain_orgs")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         related_name="users",
@@ -64,18 +62,12 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         cert_context.load_cert_chain(certfile=settings.FEATURE_SERVICE_API_CERT_PATH)
 
         account_id_query_param = f"accountId={account_id}"
-        features_query_param = "&".join(
-            f"features={feature}" for feature in self.features
-        )
-        feature_service_api_url = (
-            f"{settings.FEATURE_SERVICE_API_URL}?{account_id_query_param}&{features_query_param}"
-        )
+        features_query_param = "&".join(f"features={feature}" for feature in self.features)
+        feature_service_api_url = f"{settings.FEATURE_SERVICE_API_URL}?{account_id_query_param}&{features_query_param}"
 
         async def fetch_feature():
             async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    feature_service_api_url, ssl=cert_context, raise_for_status=True
-                ) as response:
+                async with session.get(feature_service_api_url, ssl=cert_context, raise_for_status=True) as response:
                     return await response.json()
 
         try:
@@ -85,9 +77,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         except aiohttp.ClientResponseError as err:
             if err.status == 400:
                 _logger.error(
-                    "Failed to request information for a user. BadRequest. URL: {}".format(
-                        err.request_info.url
-                    )
+                    "Failed to request information for a user. BadRequest. URL: {}".format(err.request_info.url)
                 )
 
             if err.status == 403:
@@ -95,23 +85,17 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                     "Failed to request information for a user. Permission Denied. Verify if the certificate is still valid."
                 )
 
-            _logger.warn(
-                _("Failed to fetch the Subscription feature information for a user.")
-            )
+            _logger.warn(_("Failed to fetch the Subscription feature information for a user."))
             raise PermissionError(_("Access denied."))
 
-        features_available = { feature["name"] for feature in response["features"] }
+        features_available = {feature["name"] for feature in response["features"]}
         return features_available == set(self.features)
 
     def permit(self, request):
         try:
             header_content = request.headers[self.header_name]
         except KeyError:
-            _logger.error(
-                "Access not allowed. Header {header_name} not found.".format(
-                    header_name=self.header_name
-                )
-            )
+            _logger.error("Access not allowed. Header {header_name} not found.".format(header_name=self.header_name))
             raise PermissionError(_("Access denied."))
 
         try:
@@ -125,11 +109,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             json_path = jq.compile(self.jq_filter)
 
             if settings.AUTHENTICATION_HEADER_DEBUG:
-                _logger.info(
-                    "Authentication Header Debug enabled: {header_value}".format(
-                        header_value=header_value
-                    )
-                )
+                _logger.info("Authentication Header Debug enabled: {header_value}".format(header_value=header_value))
 
             header_value = json_path.input_value(header_value).first()
 
@@ -156,9 +136,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                 account_allowed = json.loads(account_allowed)
 
             if not account_allowed:
-                _logger.warn(
-                    "Access not allowed - Features not available for the user."
-                )
+                _logger.warn("Access not allowed - Features not available for the user.")
                 raise PermissionError(_("Access denied."))
 
         except aiohttp.ClientResponseError as err:
@@ -205,12 +183,8 @@ class PyPIYankMonitor(BaseModel):
     name = models.TextField(db_index=True, unique=True)
     description = models.TextField(null=True, blank=True)
     pulp_labels = HStoreField(default=dict)
-    repository = models.ForeignKey(
-        "core.Repository", on_delete=models.CASCADE, null=True, blank=True
-    )
-    repository_version = models.ForeignKey(
-        "core.RepositoryVersion", on_delete=models.CASCADE, null=True, blank=True
-    )
+    repository = models.ForeignKey("core.Repository", on_delete=models.CASCADE, null=True, blank=True)
+    repository_version = models.ForeignKey("core.RepositoryVersion", on_delete=models.CASCADE, null=True, blank=True)
     last_checked = models.DateTimeField(null=True, blank=True)
 
     def get_repo_version_and_name(self):
@@ -238,6 +212,7 @@ class VulnerabilityReport(BaseModel):
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
+
 
 class AgentScanReport(BaseModel):
     content = models.OneToOneField(

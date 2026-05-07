@@ -37,9 +37,7 @@ def test_authentication_with_username_and_org_id(
         assert domain.name == domain_name
 
         # Create a repository in the domain to verify permissions work
-        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
-            auth_header
-        )
+        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_header
 
         repo = gen_object_with_cleanup(
             python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
@@ -77,9 +75,7 @@ def test_authentication_with_org_id_and_username(
         assert domain.name == domain_name
 
         # Create a repository in the domain to verify permissions work
-        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
-            auth_header
-        )
+        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_header
 
         repo = gen_object_with_cleanup(
             python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
@@ -149,18 +145,14 @@ def test_get_requests_without_auth_to_simple_api(
         )
 
         # Create a Python repository
-        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
-            auth_header
-        )
+        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_header
 
         repo = gen_object_with_cleanup(
             python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
         )
 
         # Create a Python distribution
-        python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = (
-            auth_header
-        )
+        python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = auth_header
         base_path = str(uuid4())
         gen_object_with_cleanup(
             python_bindings.DistributionsPypiApi,
@@ -177,9 +169,7 @@ def test_get_requests_without_auth_to_simple_api(
 
         # GET request should succeed for any domain without auth
         response = requests.get(simple_url)
-        assert (
-            response.status_code == 200
-        ), f"Expected 200 for GET on domain, got {response.status_code}"
+        assert response.status_code == 200, f"Expected 200 for GET on domain, got {response.status_code}"
 
         # POST request should be blocked (401/403) without auth
         response = requests.post(simple_url, data={})
@@ -258,9 +248,7 @@ def test_public_domain_allows_unauthenticated_get(
         )
 
         # Create a repository in the public domain
-        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = (
-            auth_header
-        )
+        python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_header
         gen_object_with_cleanup(
             python_bindings.RepositoriesPythonApi,
             {"name": str(uuid4())},
@@ -275,18 +263,12 @@ def test_public_domain_allows_unauthenticated_get(
         )
 
         api_host = pulpcore_bindings.DomainsApi.api_client.configuration.host
-        public_repos_url = (
-            f"{api_host}/api/pulp/{public_domain_name}/api/v3/repositories/python/python/"
-        )
-        private_repos_url = (
-            f"{api_host}/api/pulp/{private_domain_name}/api/v3/repositories/python/python/"
-        )
+        public_repos_url = f"{api_host}/api/pulp/{public_domain_name}/api/v3/repositories/python/python/"
+        private_repos_url = f"{api_host}/api/pulp/{private_domain_name}/api/v3/repositories/python/python/"
 
         # GET request on public domain should succeed without auth
         response = requests.get(public_repos_url)
-        assert (
-            response.status_code == 200
-        ), f"Expected 200 for GET on public domain, got {response.status_code}"
+        assert response.status_code == 200, f"Expected 200 for GET on public domain, got {response.status_code}"
 
         # GET request on non-public domain should be blocked without auth
         response = requests.get(private_repos_url)
@@ -326,4 +308,3 @@ def test_public_domain_allows_unauthenticated_get(
         # Clean up headers
         pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
         python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
- 

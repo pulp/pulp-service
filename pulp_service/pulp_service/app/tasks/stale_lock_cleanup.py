@@ -61,9 +61,7 @@ def cleanup_stale_locks():
 
     liveness = check_lock_holder_liveness(all_holders)
 
-    dead_holders = {
-        name for name, info in liveness.items() if not info.get("online", False)
-    }
+    dead_holders = {name for name, info in liveness.items() if not info.get("online", False)}
 
     # -- Phase 3: clean up orphaned resource locks --------------------------
     resource_locks_scanned = len(resource_locks)

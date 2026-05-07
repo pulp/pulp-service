@@ -45,8 +45,6 @@ def rhel_ai_repos_count():
 
 
 def _get_rhel_ai_repos_count(options):
-    rhel_ai_repos = Repository.objects.select_related("pulp_domain").filter(
-        pulp_domain__name=RHEL_AI_DOMAIN_NAME
-    )
+    rhel_ai_repos = Repository.objects.select_related("pulp_domain").filter(pulp_domain__name=RHEL_AI_DOMAIN_NAME)
     rhel_ai_repos_count = rhel_ai_repos.count()
     yield Observation(rhel_ai_repos_count)

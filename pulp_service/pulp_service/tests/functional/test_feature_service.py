@@ -39,9 +39,7 @@ def configure_guarded_content(
         add_to_cleanup(service_content_guards_api_client, content_certguard.pulp_href)
 
         # create the distribution
-        distribution = rpm_distribution_factory(
-            repository=repo.pulp_href, content_guard=content_certguard.pulp_href
-        )
+        distribution = rpm_distribution_factory(repository=repo.pulp_href, content_guard=content_certguard.pulp_href)
 
         # sync content
         repository_sync_data = RpmRepositorySyncURL(remote=remote.pulp_href)

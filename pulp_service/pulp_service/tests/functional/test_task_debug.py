@@ -338,9 +338,7 @@ class TestStaleLockScanView:
         assert summary["total_resource_locks"] == (
             summary["orphaned_resource_locks"] + summary["healthy_resource_locks"]
         )
-        assert summary["total_task_locks"] == (
-            summary["orphaned_task_locks"] + summary["healthy_task_locks"]
-        )
+        assert summary["total_task_locks"] == (summary["orphaned_task_locks"] + summary["healthy_task_locks"])
 
         # --- orphaned locks sections ---
         assert "orphaned_resource_locks" in data
@@ -408,10 +406,7 @@ class TestStaleLockScanView:
         assert resp.status_code == 200
         data = resp.json()
 
-        all_resource_locks = (
-            data["orphaned_resource_locks"]
-            + data.get("healthy_resource_locks", [])
-        )
+        all_resource_locks = data["orphaned_resource_locks"] + data.get("healthy_resource_locks", [])
         for lock_info in all_resource_locks:
             assert "lock_key" in lock_info
             assert "resource" in lock_info
@@ -431,10 +426,7 @@ class TestStaleLockScanView:
         assert resp.status_code == 200
         data = resp.json()
 
-        all_task_locks = (
-            data["orphaned_task_locks"]
-            + data.get("healthy_task_locks", [])
-        )
+        all_task_locks = data["orphaned_task_locks"] + data.get("healthy_task_locks", [])
         for lock_info in all_task_locks:
             assert "lock_key" in lock_info
             assert "task_id" in lock_info
