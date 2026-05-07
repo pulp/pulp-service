@@ -25,8 +25,20 @@ The plugin is registered via the `pulpcore.plugin` entry point in `pulp_service/
 # Install in development mode
 cd pulp_service && pip install -e .
 
-# Format code (line length 100)
-black --line-length 100 pulp_service/
+# Format code
+make format
+
+# Lint (report only)
+make lint
+
+# Lint (auto-fix safe violations)
+make lint-fix
+
+# Lint only new violations (changed lines vs main)
+make lint-diff
+
+# Install git pre-commit hook (optional)
+make install-hook
 
 # Run all functional tests
 pytest pulp_service/pulp_service/tests/functional/
@@ -65,8 +77,10 @@ Uses **towncrier**. For any non-trivial change, create a file in `CHANGES/` name
 
 ## Code Style
 
-- **Black** formatter, line length 100, targeting py36/py37
-- Excludes: migrations, docs, build directories
+- **Ruff** formatter and linter, line length 120, targeting py311
+- 23 lint rule categories as "harness sensors" for agentic development (including security via flake8-bandit)
+- Complexity thresholds: max-complexity=10, max-branches=10, max-args=6, max-statements=40
+- Per-file exceptions: viewsets.py and rds_connection_tests.py (complexity rules), storage.py (hardcoded temp paths), tests (argument count, print, unused args, security), migrations (excluded entirely)
 
 ## Dev Container: hosted-pulp-dev-env
 
