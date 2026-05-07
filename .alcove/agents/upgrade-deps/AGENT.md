@@ -177,6 +177,24 @@ Every patch MUST show APPLIED. If ANY patch shows NOT_APPLIED, go back and fix i
    - If it's a patch-related issue (e.g. a patch modifies a migration file), fix the patch and retry
    - If it's a version compatibility issue in `pulp_service/` code, fix the code and retry
 
+4. Verify all services are healthy. Run this in the dev container:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "supervisorctl status", "timeout": 10}'
+   ```
+   Every service (postgresql, redis, pulp-api, pulp-content, pulp-worker) MUST show RUNNING. If any service is STARTING, STOPPED, FATAL, or EXITED, the workflow MUST fail. Do NOT proceed to Phase 4.
+
+   Also verify the API responds:
+   ```bash
+   curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
+     -H "Authorization: Bearer $DEV_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"cmd": "curl -sf http://localhost:24817/api/pulp/api/v3/status/ > /dev/null && echo API_OK || echo API_FAIL", "timeout": 10}'
+   ```
+   If `API_FAIL`, the workflow MUST fail.
+
 ## Phase 4: Run Tests
 
 Run all Tekton pipeline tests using the `pulp-test` command in the dev container. The `--generate-bindings` flag generates OpenAPI client bindings, installs test dependencies, and then runs all 6 test suites (pulp_rpm, pulpcore, pulp_maven, pulp_npm, pulp_service).
