@@ -87,7 +87,9 @@ COPY images/assets/wait_on_database_migrations.sh /usr/bin/wait_on_database_migr
 COPY images/assets/set_init_password.sh /usr/bin/set_init_password.sh
 COPY images/assets/add_signing_service.sh /usr/bin/add_signing_service.sh
 COPY images/assets/pulp-api /usr/bin/pulp-api
+RUN sed -i 's/--access-logfile -/--access-logfile - --max-requests 0/' /usr/bin/pulp-api
 COPY images/assets/pulp-content /usr/bin/pulp-content
+RUN sed -i 's/--access-logfile -/--access-logfile - --max-requests 0/' /usr/bin/pulp-content
 COPY images/assets/pulp-resource-manager /usr/bin/pulp-resource-manager
 COPY images/assets/pulp-worker /usr/bin/pulp-worker
 COPY images/assets/log_middleware.py /usr/bin/log_middleware.py
