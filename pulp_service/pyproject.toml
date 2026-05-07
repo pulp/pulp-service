@@ -48,21 +48,83 @@ underlines = ["", "", ""]
         showcontent = false
 
 
-[tool.black]
-line-length = 100
-target-version = ["py36", "py37"]
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.venv
-  | _build
-  | build
-  | dist
-  | migrations
-  | docs
-)/
-'''
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+exclude = [
+    ".venv",
+    ".eggs",
+    "build",
+    "dist",
+    "*.egg-info",
+    "*/migrations/*",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = [
+    # --- Baseline ---
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes — unused imports, undefined names
+    "I",      # isort — import ordering
+    # --- Bug prevention ---
+    "B",      # flake8-bugbear — mutable defaults, assert usage, loop-variable capture
+    "SIM",    # flake8-simplify — unnecessarily complex constructs
+    "C4",     # flake8-comprehensions — verbose list/dict constructions
+    "C90",    # mccabe — cyclomatic complexity
+    "PIE",    # flake8-pie — dead code, unnecessary pass
+    "RET",    # flake8-return — unnecessary else-after-return
+    "ISC",    # flake8-implicit-str-concat — implicit string concatenation bugs
+    # --- Modernization ---
+    "UP",     # pyupgrade — enforce modern Python syntax for py311+
+    "N",      # pep8-naming — function/class/argument naming conventions
+    "PERF",   # perflint — performance anti-patterns (for-loop append, try-in-loop)
+    # --- AI anti-pattern sensors ---
+    "ERA",    # eradicate — commented-out code
+    "T20",    # flake8-print — stray print() statements
+    "FIX",    # flake8-fixme — TODO/FIXME/XXX breadcrumbs agents leave behind
+    "ARG",    # flake8-unused-arguments — vestigial parameters after refactoring
+    "TRY",    # tryceratops — exception handling anti-patterns
+    # --- Security ---
+    "S",      # flake8-bandit — security anti-patterns (hardcoded secrets, insecure hashes, etc.)
+    # --- Django-specific ---
+    "DJ",     # flake8-django — nullable string fields, __all__ in ModelForm, etc.
+    "DTZ",    # flake8-datetimez — naive datetime usage (USE_TZ=True matters)
+    # --- Complexity firewall (specific PLR sub-rules) ---
+    "PLR0911",  # too-many-return-statements
+    "PLR0912",  # too-many-branches
+    "PLR0913",  # too-many-arguments
+    "PLR0915",  # too-many-statements
+    # --- Ruff-specific ---
+    "RUF",    # ruff-native rules — unused noqa, mutable class defaults, ambiguous unicode
+]
+ignore = [
+    "UP007",    # non-pep604-annotation — Django models don't always support X | Y union syntax
+    "RET504",   # unnecessary-assign — readability assignments before return are common in Django viewsets
+    "TRY003",   # raise-vanilla-args — enforcing exception classes for every raise is too strict initially
+    "FIX002",   # line-contains-TODO — demoted to warning; TODOs are flagged but not blocking
+    "ARG002",   # unused-method-argument — Django views/DRF methods receive request, *args, **kwargs by convention
+    "RUF012",   # mutable-class-variables — Django model fields are class-level mutables by design
+    "S101",     # assert-used — Django and tests use assert extensively
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-branches = 10
+max-args = 6
+max-statements = 40
+
+[tool.ruff.lint.per-file-ignores]
+"pulp_service/tests/**/*.py" = ["PLR0913", "T20", "ARG", "DJ", "S"]
+"pulp_service/app/storage.py" = ["S108"]
+"pulp_service/app/viewsets.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
+"pulp_service/app/tasks/rds_connection_tests.py" = ["C901", "PLR0912", "PLR0915"]
 
 
 

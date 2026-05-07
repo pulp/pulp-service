@@ -1,0 +1,54 @@
+name: Ruff Harness Sensors
+
+on:
+  pull_request:
+    paths:
+      - 'pulp_service/**.py'
+      - 'pulp_service/pyproject.toml'
+      - '.github/workflows/ruff-sensors.yml'
+      - 'scripts/ruff-diff-check.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  diff-check:
+    name: "Ruff: New Violations"
+    runs-on: ubuntu-latest
+    env:
+      BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "--version"
+      - name: Fetch base branch
+        run: git fetch origin "$BASE_REF"
+      - name: Check for new violations in changed lines
+        run: bash scripts/ruff-diff-check.sh "origin/$BASE_REF"
+
+  format:
+    name: "Ruff: Format"
+    runs-on: ubuntu-latest
+    env:
+      BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "--version"
+      - name: Fetch base branch
+        run: git fetch origin "$BASE_REF"
+      - name: Check formatting of changed files
+        run: |
+          files=$(git diff --name-only --diff-filter=ACM "origin/$BASE_REF" -- '*.py' \
+            | grep '^pulp_service/' | grep -v '/migrations/' || true)
+          if [ -z "$files" ]; then
+            echo "No Python files changed. Skipping format check."
+            exit 0
+          fi
+          ruff format --config pulp_service/pyproject.toml --check --diff $files
