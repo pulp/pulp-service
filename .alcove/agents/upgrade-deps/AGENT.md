@@ -186,20 +186,20 @@ Every patch MUST show APPLIED. If ANY patch shows NOT_APPLIED, go back and fix i
    ```
    Every service (postgresql, redis, pulp-api, pulp-content, pulp-worker) MUST show RUNNING. If any service is STARTING, STOPPED, FATAL, or EXITED, the workflow MUST fail. Do NOT proceed to Phase 4.
 
-   Also verify both the API and content app respond:
+   Also verify both the API and content app respond. The content app takes a few seconds to boot after restart, so use a retry loop:
    ```bash
    curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
      -H "Authorization: Bearer $DEV_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"cmd": "curl -sf http://localhost:24817/api/pulp/api/v3/status/ > /dev/null && echo API_OK || echo API_FAIL", "timeout": 10}'
+     -d '{"cmd": "for i in $(seq 1 30); do curl -sf http://localhost:24817/api/pulp/api/v3/status/ > /dev/null && echo API_OK && exit 0; sleep 1; done; echo API_FAIL && exit 1", "timeout": 60}'
    ```
    ```bash
    curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
      -H "Authorization: Bearer $DEV_TOKEN" \
      -H "Content-Type: application/json" \
-     -d '{"cmd": "curl -sf http://localhost:24816/api/pulp-content/default/ > /dev/null && echo CONTENT_OK || echo CONTENT_FAIL", "timeout": 10}'
+     -d '{"cmd": "for i in $(seq 1 30); do curl -sf http://localhost:24816/api/pulp-content/default/ > /dev/null && echo CONTENT_OK && exit 0; sleep 1; done; echo CONTENT_FAIL && exit 1", "timeout": 60}'
    ```
-   If either shows `API_FAIL` or `CONTENT_FAIL`, the workflow MUST fail.
+   If either outputs `API_FAIL` or `CONTENT_FAIL`, the workflow MUST fail.
 
 ## Phase 4: Commit and Push
 
