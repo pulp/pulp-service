@@ -420,62 +420,78 @@ def test_org_based_visibility(pulpcore_bindings, anonymous_user, gen_object_with
 
 
 def test_group_based_domain_visibility(
-    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_user, django_user_model
+    pulpcore_bindings,
+    anonymous_user,
+    gen_object_with_cleanup,
+    gen_group,
+    domain_factory,
+    domain_org_factory,
 ):
-    """Test that user added to group sees group member's domain."""
-    user_a_data = {
-        "identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": "userA_group"}}
-    }
-
-    user_b_data = {
-        "identity": {"org_id": 2, "internal": {"org_id": 2}, "user": {"username": "userB_group"}}
-    }
-
-    # Create Django users and group
+    """Test that user added to a group sees domains linked to that group via DomainOrg."""
     from django.contrib.auth.models import Group
-    from pulp_service.app.models import DomainOrg
+    from pulpcore.plugin.models import Domain
 
-    group_name = f"test_group_{uuid4()}"
-    test_group = Group.objects.create(name=group_name)
+    user_a_name = f"user-a-group-{uuid4()}"
+    user_a_combined = f"1|{user_a_name}"
+    user_b_name = f"user-b-group-{uuid4()}"
+    user_b_combined = f"2|{user_b_name}"
 
-    user_a = django_user_model.objects.create_user(username="userA_group")
-    user_b = django_user_model.objects.create_user(username="userB_group")
+    test_group = gen_group()
+
+    gen_object_with_cleanup(
+        pulpcore_bindings.UsersApi, {"username": user_a_combined}
+    )
+    gen_object_with_cleanup(
+        pulpcore_bindings.GroupsUsersApi,
+        group_href=test_group.pulp_href,
+        group_user={"username": user_a_combined},
+    )
+
+    gen_object_with_cleanup(
+        pulpcore_bindings.UsersApi, {"username": user_b_combined}
+    )
+    gen_object_with_cleanup(
+        pulpcore_bindings.GroupsUsersApi,
+        group_href=test_group.pulp_href,
+        group_user={"username": user_b_combined},
+    )
 
     with anonymous_user:
-        # User A creates domain and is in group G
+        # User A creates a domain
+        user_a_data = {
+            "identity": {
+                "org_id": 1,
+                "internal": {"org_id": 1},
+                "user": {"username": user_a_name},
+            }
+        }
         header_user_a = json.dumps(user_a_data)
         auth_user_a = b64encode(bytes(header_user_a, "ascii"))
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_a
 
-        domain_a_name = str(uuid4())
-        domain_a = gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_a_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+        domain = domain_factory()
 
-        # Add User A to the group and create DomainOrg entry for group
-        user_a.groups.add(test_group)
-        from pulpcore.plugin.models import Domain
+        # Link domain to the group via DomainOrg
+        django_group = Group.objects.get(name=test_group.name)
+        domain_obj = Domain.objects.get(name=domain.name)
+        domain_org = domain_org_factory(group=django_group)
+        domain_org.domains.add(domain_obj)
 
-        domain_obj = Domain.objects.get(name=domain_a_name)
-        domain_org_group = DomainOrg.objects.create(group=test_group)
-        domain_org_group.domains.add(domain_obj)
-
-        # User B is added to group G
-        user_b.groups.add(test_group)
-
-        # User B can now see User A's domain
+        # User B lists domains and sees the group-linked domain
+        user_b_data = {
+            "identity": {
+                "org_id": 2,
+                "internal": {"org_id": 2},
+                "user": {"username": user_b_name},
+            }
+        }
         header_user_b = json.dumps(user_b_data)
         auth_user_b = b64encode(bytes(header_user_b, "ascii"))
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_b
 
         response_b = pulpcore_bindings.DomainsApi.list()
         assert response_b.count == 1
-        assert response_b.results[0].name == domain_a_name
+        assert response_b.results[0].name == domain.name
 
 
 def test_superuser_sees_all_domains(
@@ -561,55 +577,55 @@ def test_default_domain_invisible_to_regular_users(
 
 
 def test_domain_deduplication(
-    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, django_user_model
+    pulpcore_bindings,
+    anonymous_user,
+    gen_object_with_cleanup,
+    gen_group,
+    domain_factory,
+    domain_org_factory,
 ):
-    """Test that domain with multiple DomainOrg entries appears once."""
-    user_data = {
-        "identity": {
-            "org_id": 1,
-            "internal": {"org_id": 1},
-            "user": {"username": "dedup_test_user"},
-        }
-    }
-
-    # Create Django user and group
+    """Test that a domain with multiple DomainOrg entries (user + group) appears only once."""
     from django.contrib.auth.models import Group
-    from pulp_service.app.models import DomainOrg
+    from pulpcore.plugin.models import Domain
 
-    user_obj = django_user_model.objects.create_user(username="dedup_test_user")
-    group_name = f"dedup_test_group_{uuid4()}"
-    test_group = Group.objects.create(name=group_name)
-    user_obj.groups.add(test_group)
+    user_name = f"dedup-user-{uuid4()}"
+    user_combined = f"1|{user_name}"
+
+    test_group = gen_group()
+
+    gen_object_with_cleanup(
+        pulpcore_bindings.UsersApi, {"username": user_combined}
+    )
+    gen_object_with_cleanup(
+        pulpcore_bindings.GroupsUsersApi,
+        group_href=test_group.pulp_href,
+        group_user={"username": user_combined},
+    )
 
     with anonymous_user:
+        user_data = {
+            "identity": {
+                "org_id": 1,
+                "internal": {"org_id": 1},
+                "user": {"username": user_name},
+            }
+        }
         header_user = json.dumps(user_data)
         auth_user = b64encode(bytes(header_user, "ascii"))
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user
 
-        # Create domain
-        domain_name = str(uuid4())
-        domain = gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+        domain = domain_factory()
 
-        # Create DomainOrg for both user and their group
-        from pulpcore.plugin.models import Domain
+        # Add group-based DomainOrg on top of the user-based one created by domain_factory
+        django_group = Group.objects.get(name=test_group.name)
+        domain_obj = Domain.objects.get(name=domain.name)
+        domain_org = domain_org_factory(group=django_group)
+        domain_org.domains.add(domain_obj)
 
-        domain_obj = Domain.objects.get(name=domain_name)
-
-        # Add group access to the domain
-        domain_org_group = DomainOrg.objects.create(group=test_group)
-        domain_org_group.domains.add(domain_obj)
-
-        # User lists domains - domain should appear exactly once (not duplicated)
+        # Domain should appear exactly once despite matching via both user and group
         response = pulpcore_bindings.DomainsApi.list()
         assert response.count == 1
-        assert response.results[0].name == domain_name
+        assert response.results[0].name == domain.name
 
 
 def test_basic_auth_user_domain_visibility(pulpcore_bindings, gen_user, gen_object_with_cleanup):
@@ -638,23 +654,18 @@ def test_basic_auth_user_domain_visibility(pulpcore_bindings, gen_user, gen_obje
         assert response.results[0].name == domain_name
 
 
-def test_scope_queryset_model_guard(django_user_model):
+def test_scope_queryset_model_guard():
     """Test that non-Domain queryset passes through unchanged."""
     from django.contrib.auth.models import Group
-    from pulp_service.app.authorization import DomainBasedPermission
-    from unittest.mock import Mock
+    from types import SimpleNamespace
 
-    # Create a non-Domain queryset (Group queryset)
+    from pulp_service.app.authorization import DomainBasedPermission
+
     group_qs = Group.objects.all()
 
-    # Create permission instance and mock view/request
     permission = DomainBasedPermission()
-    mock_view = Mock()
-    mock_request = Mock()
-    mock_view.request = mock_request
+    view = SimpleNamespace(request=SimpleNamespace())
 
-    # Call scope_queryset method directly
-    result_qs = permission.scope_queryset(mock_view, group_qs)
+    result_qs = permission.scope_queryset(view, group_qs)
 
-    # Assert queryset is returned unchanged
     assert result_qs is group_qs
