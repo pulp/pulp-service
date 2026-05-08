@@ -97,20 +97,20 @@ class PyPIYankMonitorSerializer(ModelSerializer):
                 _("Exactly one of 'repository' or 'repository_version' must be specified.")
             )
         if repo and repo.pulp_type != PYTHON_REPOSITORY_PULP_TYPE:
-            raise serializers.ValidationError(
-                _("Only Python repositories can be monitored for PyPI yanking.")
-            )
+            raise serializers.ValidationError(_("Only Python repositories can be monitored for PyPI yanking."))
         if repo_version and repo_version.repository.pulp_type != PYTHON_REPOSITORY_PULP_TYPE:
-            raise serializers.ValidationError(
-                _("Only Python repository versions can be monitored for PyPI yanking.")
-            )
+            raise serializers.ValidationError(_("Only Python repository versions can be monitored for PyPI yanking."))
         return data
 
     class Meta:
         model = PyPIYankMonitor
         fields = ModelSerializer.Meta.fields + (
-            "name", "description", "pulp_labels",
-            "repository", "repository_version", "last_checked",
+            "name",
+            "description",
+            "pulp_labels",
+            "repository",
+            "repository_version",
+            "last_checked",
         )
 
 
@@ -133,9 +133,7 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
     def validate(self, data):
         data = super().validate(data)
         if bool(repo_ver := data.get("repo_version")) == bool(pkg_json := data.get("package_json")):
-            raise serializers.ValidationError(
-                _("Exactly one of 'repo_version' or 'package_json' must be specified.")
-            )
+            raise serializers.ValidationError(_("Exactly one of 'repo_version' or 'package_json' must be specified."))
 
         # no more validations needed for pkg_json
         if pkg_json:

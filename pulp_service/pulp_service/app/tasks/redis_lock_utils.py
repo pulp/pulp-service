@@ -40,7 +40,7 @@ def scan_resource_locks(redis_conn, cursor=0, max_keys=None):
         cursor, keys = redis_conn.scan(cursor=cursor, match=pattern, count=200)
         for key in keys:
             key_str = key.decode("utf-8") if isinstance(key, bytes) else key
-            resource_name = key_str[len(REDIS_LOCK_PREFIX):]
+            resource_name = key_str[len(REDIS_LOCK_PREFIX) :]
 
             lock_type = redis_conn.type(key)
             if isinstance(lock_type, bytes):
@@ -57,13 +57,15 @@ def scan_resource_locks(redis_conn, cursor=0, max_keys=None):
                 members = redis_conn.smembers(key)
                 holders = sorted(m.decode("utf-8") for m in members)
 
-            locks.append({
-                "lock_key": key_str,
-                "resource": resource_name,
-                "lock_type": lock_type,
-                "holders": holders,
-                "ttl": ttl,
-            })
+            locks.append(
+                {
+                    "lock_key": key_str,
+                    "resource": resource_name,
+                    "lock_type": lock_type,
+                    "holders": holders,
+                    "ttl": ttl,
+                }
+            )
 
         if max_keys is not None and len(locks) >= max_keys:
             # Return early with the current cursor so the caller can resume.
@@ -109,13 +111,15 @@ def scan_task_locks(redis_conn, cursor=0, max_keys=None):
                 if val:
                     holder = val.decode("utf-8")
 
-            locks.append({
-                "lock_key": key_str,
-                "task_id": task_id,
-                "lock_type": lock_type,
-                "holder": holder,
-                "ttl": ttl,
-            })
+            locks.append(
+                {
+                    "lock_key": key_str,
+                    "task_id": task_id,
+                    "lock_type": lock_type,
+                    "holder": holder,
+                    "ttl": ttl,
+                }
+            )
 
         if max_keys is not None and len(locks) >= max_keys:
             return locks[:max_keys], cursor
@@ -146,10 +150,7 @@ def check_lock_holder_liveness(lock_holders):
     if not lock_holders:
         return {}
 
-    app_statuses = {
-        app.name: app
-        for app in AppStatus.objects.filter(name__in=lock_holders)
-    }
+    app_statuses = {app.name: app for app in AppStatus.objects.filter(name__in=lock_holders)}
 
     result = {}
     for holder_name in lock_holders:
@@ -167,13 +168,7 @@ def check_lock_holder_liveness(lock_holders):
                 "exists_in_db": True,
                 "online": app.online,
                 "app_type": app.app_type,
-                "last_heartbeat": (
-                    app.last_heartbeat.isoformat() if app.last_heartbeat else None
-                ),
-                "verdict": (
-                    "alive"
-                    if app.online
-                    else "DEAD: AppStatus exists but is not online, lock is orphaned"
-                ),
+                "last_heartbeat": (app.last_heartbeat.isoformat() if app.last_heartbeat else None),
+                "verdict": ("alive" if app.online else "DEAD: AppStatus exists but is not online, lock is orphaned"),
             }
     return result

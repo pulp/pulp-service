@@ -181,7 +181,6 @@ class DebugAuthenticationHeadersView(APIView):
     list=extend_schema(operation_id="admin_tasks"),
 )
 class TaskViewSet(TaskViewSet):
-
     LOCKED_ROLES = {}
 
     def get_queryset(self):
@@ -204,7 +203,6 @@ class TaskViewSet(TaskViewSet):
 
 
 class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
-
     endpoint_name = "vuln_report_service"
     queryset = VulnReport.objects.all()
     serializer_class = VulnerabilityReportSerializer
@@ -223,9 +221,7 @@ class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin,
         """Dispatch a task to scan the Content Units from a Repository"""
         if repo_version := serializer.validated_data.get("repo_version", None):
             shared_resources = [repo_version.repository]
-            dispatch_task, kwargs = check_content_from_repo_version, {
-                "repo_version_pk": repo_version.pk
-            }
+            dispatch_task, kwargs = check_content_from_repo_version, {"repo_version_pk": repo_version.pk}
 
         """Dispatch a task to scan the npm dependencies' vulnerabilities"""
         if serializer.validated_data.get("package_json", None):
@@ -239,7 +235,6 @@ class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin,
 class IsSuperuser(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_superuser
-
 
 
 class PyPIYankMonitorFilter(BaseFilterSet):
@@ -285,7 +280,6 @@ class PyPIYankMonitorViewSet(
 
 
 class TaskIngestionDispatcherView(APIView):
-
     authentication_classes = []
     permission_classes = []
 
@@ -374,9 +368,7 @@ class RDSConnectionTestDispatcherView(APIView):
         """
         # Check if RDS tests are enabled (similar to TEST_TASK_INGESTION check)
         if not settings.DEBUG and not settings.RDS_CONNECTION_TESTS_ENABLED:
-            _logger.warning(
-                f"Unauthorized RDS test access attempt from {request.META.get('REMOTE_ADDR', 'unknown')}"
-            )
+            _logger.warning(f"Unauthorized RDS test access attempt from {request.META.get('REMOTE_ADDR', 'unknown')}")
             return Response(
                 {
                     "error": "RDS connection tests are not enabled.",
@@ -555,9 +547,7 @@ class DatabaseTriggersView(APIView):
                 trigger_info = dict(zip(columns, row))
                 triggers.append(trigger_info)
 
-        return Response(
-            {"table": "core_task", "trigger_count": len(triggers), "triggers": triggers}
-        )
+        return Response({"table": "core_task", "trigger_count": len(triggers), "triggers": triggers})
 
 
 class ReleaseTaskLocksView(APIView):
@@ -620,15 +610,11 @@ class ReleaseTaskLocksView(APIView):
             try:
                 task = Task.objects.select_related("pulp_domain").get(pk=task_id)
             except Task.DoesNotExist:
-                return Response(
-                    {"error": f"Task {task_id} not found"}, status=status.HTTP_404_NOT_FOUND
-                )
+                return Response({"error": f"Task {task_id} not found"}, status=status.HTTP_404_NOT_FOUND)
 
             # Extract exclusive and shared resources from the task
             exclusive_resources = [
-                resource
-                for resource in task.reserved_resources_record or []
-                if not resource.startswith("shared:")
+                resource for resource in task.reserved_resources_record or [] if not resource.startswith("shared:")
             ]
 
             shared_resources = [
@@ -815,18 +801,16 @@ def _check_version_compatibility(task):
         for label, required_version in task_versions.items():
             worker_version = worker_versions.get(label)
             if worker_version is None:
-                unmatched.append(
-                    f"{label}>={required_version} (worker has: missing)"
-                )
+                unmatched.append(f"{label}>={required_version} (worker has: missing)")
             elif parse_version(worker_version) < parse_version(required_version):
-                unmatched.append(
-                    f"{label}>={required_version} (worker has: {worker_version})"
-                )
+                unmatched.append(f"{label}>={required_version} (worker has: {worker_version})")
         if unmatched:
-            incompatible.append({
-                "worker_name": worker.name,
-                "unmatched_versions": unmatched,
-            })
+            incompatible.append(
+                {
+                    "worker_name": worker.name,
+                    "unmatched_versions": unmatched,
+                }
+            )
         else:
             compatible.append(worker.name)
 
@@ -860,9 +844,9 @@ def _check_lock_holder_liveness(lock_holders):
     return check_lock_holder_liveness(lock_holders)
 
 
-def _diagnose_stuck_task(task, app_lock_info, redis_locks, queue_position,
-                         version_compat, lock_holder_liveness,
-                         fifo_analysis=None):
+def _diagnose_stuck_task(
+    task, app_lock_info, redis_locks, queue_position, version_compat, lock_holder_liveness, fifo_analysis=None
+):
     """
     Produce a human-readable diagnosis explaining WHY a task is stuck.
 
@@ -874,11 +858,13 @@ def _diagnose_stuck_task(task, app_lock_info, redis_locks, queue_position,
     diagnoses = []
 
     if task.state not in (TASK_STATES.WAITING, TASK_STATES.RUNNING, TASK_STATES.CANCELING):
-        return [{
-            "bug": None,
-            "severity": "info",
-            "summary": f"Task is in final state '{task.state}' -- not stuck.",
-        }]
+        return [
+            {
+                "bug": None,
+                "severity": "info",
+                "summary": f"Task is in final state '{task.state}' -- not stuck.",
+            }
+        ]
 
     # Bug 1: app_lock set but task is still WAITING (is_compatible returned False,
     # app_lock was never cleared)
@@ -889,30 +875,34 @@ def _diagnose_stuck_task(task, app_lock_info, redis_locks, queue_position,
         # but app_lock is NOT cleared in the DB.
         redis_task_lock_held = redis_locks["task_lock"]["held"]
         if not redis_task_lock_held:
-            diagnoses.append({
-                "bug": "BUG_1_APPLOCK_NOT_CLEARED",
-                "severity": "critical",
-                "summary": (
-                    f"Task is WAITING with app_lock set to "
-                    f"'{app_lock_info['app_status_name']}' but NO Redis task lock exists. "
-                    f"This matches Bug 1: a worker called is_compatible(), found a version "
-                    f"mismatch, released Redis locks, but did NOT clear app_lock in the DB. "
-                    f"The task is now invisible to all workers (they filter for "
-                    f"app_lock=None). REMEDIATION: clear app_lock in the DB via "
-                    f"Task.objects.filter(pk='{task.pk}').update(app_lock=None)"
-                ),
-            })
+            diagnoses.append(
+                {
+                    "bug": "BUG_1_APPLOCK_NOT_CLEARED",
+                    "severity": "critical",
+                    "summary": (
+                        f"Task is WAITING with app_lock set to "
+                        f"'{app_lock_info['app_status_name']}' but NO Redis task lock exists. "
+                        f"This matches Bug 1: a worker called is_compatible(), found a version "
+                        f"mismatch, released Redis locks, but did NOT clear app_lock in the DB. "
+                        f"The task is now invisible to all workers (they filter for "
+                        f"app_lock=None). REMEDIATION: clear app_lock in the DB via "
+                        f"Task.objects.filter(pk='{task.pk}').update(app_lock=None)"
+                    ),
+                }
+            )
         else:
-            diagnoses.append({
-                "bug": "BUG_1_VARIANT_APPLOCK_WITH_REDIS_LOCK",
-                "severity": "warning",
-                "summary": (
-                    f"Task is WAITING with app_lock set to "
-                    f"'{app_lock_info['app_status_name']}' AND Redis task lock held by "
-                    f"'{redis_locks['task_lock']['holder']}'. A worker may be in the "
-                    f"process of claiming this task, or a worker died mid-claim."
-                ),
-            })
+            diagnoses.append(
+                {
+                    "bug": "BUG_1_VARIANT_APPLOCK_WITH_REDIS_LOCK",
+                    "severity": "warning",
+                    "summary": (
+                        f"Task is WAITING with app_lock set to "
+                        f"'{app_lock_info['app_status_name']}' AND Redis task lock held by "
+                        f"'{redis_locks['task_lock']['holder']}'. A worker may be in the "
+                        f"process of claiming this task, or a worker died mid-claim."
+                    ),
+                }
+            )
 
     # Bug 2: Orphaned Redis locks (lock holder is dead, no TTL)
     for holder_name, liveness in lock_holder_liveness.items():
@@ -930,54 +920,60 @@ def _diagnose_stuck_task(task, app_lock_info, redis_locks, queue_position,
                 if res["holders"] and holder_name in res["holders"] and res.get("ttl") == -1:
                     has_no_ttl = True
 
-            diagnoses.append({
-                "bug": "BUG_2_ORPHANED_LOCK",
-                "severity": "critical",
-                "summary": (
-                    f"Redis lock held by '{holder_name}' which is "
-                    f"{liveness['verdict']}. "
-                    f"Redis locks have no TTL (they persist forever). "
-                    f"{'The lock has no expiration set. ' if has_no_ttl else ''}"
-                    f"Worker cleanup should release these locks, but may have missed "
-                    f"this case. REMEDIATION: use the release-task-locks endpoint or "
-                    f"manually delete the Redis keys."
-                ),
-            })
+            diagnoses.append(
+                {
+                    "bug": "BUG_2_ORPHANED_LOCK",
+                    "severity": "critical",
+                    "summary": (
+                        f"Redis lock held by '{holder_name}' which is "
+                        f"{liveness['verdict']}. "
+                        f"Redis locks have no TTL (they persist forever). "
+                        f"{'The lock has no expiration set. ' if has_no_ttl else ''}"
+                        f"Worker cleanup should release these locks, but may have missed "
+                        f"this case. REMEDIATION: use the release-task-locks endpoint or "
+                        f"manually delete the Redis keys."
+                    ),
+                }
+            )
 
     # Bug 3: FETCH_TASK_LIMIT starvation
     if task.state == TASK_STATES.WAITING and not queue_position["within_fetch_window"]:
-        diagnoses.append({
-            "bug": "BUG_3_FETCH_LIMIT_STARVATION",
-            "severity": "high",
-            "summary": (
-                f"Task is outside the fetch window: {queue_position['older_waiting_tasks']} "
-                f"older WAITING tasks exist but the worker only examines the oldest "
-                f"{queue_position['fetch_task_limit']} (FETCH_TASK_LIMIT). "
-                f"Of those older tasks, {queue_position.get('stuck_in_window', 'unknown')} "
-                f"are themselves stuck (have app_lock set = invisible to workers). "
-                f"This task will not be examined until older tasks are completed or "
-                f"removed. REMEDIATION: resolve or cancel stuck older tasks."
-            ),
-        })
+        diagnoses.append(
+            {
+                "bug": "BUG_3_FETCH_LIMIT_STARVATION",
+                "severity": "high",
+                "summary": (
+                    f"Task is outside the fetch window: {queue_position['older_waiting_tasks']} "
+                    f"older WAITING tasks exist but the worker only examines the oldest "
+                    f"{queue_position['fetch_task_limit']} (FETCH_TASK_LIMIT). "
+                    f"Of those older tasks, {queue_position.get('stuck_in_window', 'unknown')} "
+                    f"are themselves stuck (have app_lock set = invisible to workers). "
+                    f"This task will not be examined until older tasks are completed or "
+                    f"removed. REMEDIATION: resolve or cancel stuck older tasks."
+                ),
+            }
+        )
 
     # Bug 4: FIFO resource blocking
     if fifo_analysis and fifo_analysis.get("is_fifo_blocked"):
         blocking_resources = fifo_analysis.get("blocked_resources", [])
         blocking_task_ids = fifo_analysis.get("blocking_task_ids", [])
-        diagnoses.append({
-            "bug": "BUG_4_FIFO_RESOURCE_BLOCKING",
-            "severity": "high",
-            "summary": (
-                f"Task is FIFO-blocked: an earlier task in the fetch window failed to "
-                f"acquire locks for resources that overlap with this task's resources. "
-                f"The worker's FIFO algorithm adds ALL exclusive resources of a failed "
-                f"task to the blocked set, preventing later tasks from acquiring them "
-                f"even if different resources caused the original failure. "
-                f"Blocked resources: {blocking_resources}. "
-                f"Earlier blocking tasks: {blocking_task_ids}. "
-                f"REMEDIATION: resolve or cancel the earlier blocking tasks."
-            ),
-        })
+        diagnoses.append(
+            {
+                "bug": "BUG_4_FIFO_RESOURCE_BLOCKING",
+                "severity": "high",
+                "summary": (
+                    f"Task is FIFO-blocked: an earlier task in the fetch window failed to "
+                    f"acquire locks for resources that overlap with this task's resources. "
+                    f"The worker's FIFO algorithm adds ALL exclusive resources of a failed "
+                    f"task to the blocked set, preventing later tasks from acquiring them "
+                    f"even if different resources caused the original failure. "
+                    f"Blocked resources: {blocking_resources}. "
+                    f"Earlier blocking tasks: {blocking_task_ids}. "
+                    f"REMEDIATION: resolve or cancel the earlier blocking tasks."
+                ),
+            }
+        )
 
     # Bug 5: Split-Redis (API and workers use different Redis instances)
     if task.state == TASK_STATES.WAITING and task.immediate and task.deferred:
@@ -985,78 +981,86 @@ def _diagnose_stuck_task(task, app_lock_info, redis_locks, queue_position,
         # on the API Redis but couldn't execute (resource conflict), it clears app_lock
         # but the Redis locks might remain on the API's Redis (invisible to workers).
         # Also flag if lock holder is an API process.
-        api_holders = [
-            name for name, info in lock_holder_liveness.items()
-            if info.get("app_type") == "api"
-        ]
+        api_holders = [name for name, info in lock_holder_liveness.items() if info.get("app_type") == "api"]
         if api_holders:
-            diagnoses.append({
-                "bug": "BUG_5_SPLIT_REDIS",
-                "severity": "critical",
-                "summary": (
-                    f"Redis lock(s) held by API process(es): {api_holders}. "
-                    f"API and worker clusters use DIFFERENT Redis instances but share "
-                    f"the same database. Locks acquired by the API for immediate task "
-                    f"execution are invisible to workers. If the API process died or "
-                    f"deferred the task, these locks may be orphaned on the API Redis "
-                    f"and simultaneously absent from the worker Redis, or vice versa. "
-                    f"REMEDIATION: check both Redis instances; release orphaned locks "
-                    f"on the API Redis."
-                ),
-            })
+            diagnoses.append(
+                {
+                    "bug": "BUG_5_SPLIT_REDIS",
+                    "severity": "critical",
+                    "summary": (
+                        f"Redis lock(s) held by API process(es): {api_holders}. "
+                        f"API and worker clusters use DIFFERENT Redis instances but share "
+                        f"the same database. Locks acquired by the API for immediate task "
+                        f"execution are invisible to workers. If the API process died or "
+                        f"deferred the task, these locks may be orphaned on the API Redis "
+                        f"and simultaneously absent from the worker Redis, or vice versa. "
+                        f"REMEDIATION: check both Redis instances; release orphaned locks "
+                        f"on the API Redis."
+                    ),
+                }
+            )
         elif app_lock_info["locked"] and app_lock_info.get("app_type") == "api":
-            diagnoses.append({
-                "bug": "BUG_5_SPLIT_REDIS",
-                "severity": "warning",
-                "summary": (
-                    f"Task has app_lock held by an API process "
-                    f"('{app_lock_info['app_status_name']}'). "
-                    f"API and worker clusters use different Redis instances. If this "
-                    f"task was dispatched as immediate but deferred to workers, there "
-                    f"may be lock state on the API Redis that is invisible to workers."
-                ),
-            })
+            diagnoses.append(
+                {
+                    "bug": "BUG_5_SPLIT_REDIS",
+                    "severity": "warning",
+                    "summary": (
+                        f"Task has app_lock held by an API process "
+                        f"('{app_lock_info['app_status_name']}'). "
+                        f"API and worker clusters use different Redis instances. If this "
+                        f"task was dispatched as immediate but deferred to workers, there "
+                        f"may be lock state on the API Redis that is invisible to workers."
+                    ),
+                }
+            )
 
     # Version incompatibility (related to Bug 1 root cause)
-    if (task.state == TASK_STATES.WAITING
-            and version_compat.get("no_compatible_worker_exists")):
-        diagnoses.append({
-            "bug": "VERSION_INCOMPATIBILITY",
-            "severity": "critical",
-            "summary": (
-                f"No online worker can satisfy this task's version requirements: "
-                f"{version_compat.get('task_versions', {})}. "
-                f"All workers found incompatible: "
-                f"{version_compat.get('incompatible_workers', [])}. "
-                f"This task will never be picked up until a compatible worker comes "
-                f"online. If a worker already tried and failed is_compatible(), it "
-                f"may have triggered Bug 1 (app_lock not cleared)."
-            ),
-        })
+    if task.state == TASK_STATES.WAITING and version_compat.get("no_compatible_worker_exists"):
+        diagnoses.append(
+            {
+                "bug": "VERSION_INCOMPATIBILITY",
+                "severity": "critical",
+                "summary": (
+                    f"No online worker can satisfy this task's version requirements: "
+                    f"{version_compat.get('task_versions', {})}. "
+                    f"All workers found incompatible: "
+                    f"{version_compat.get('incompatible_workers', [])}. "
+                    f"This task will never be picked up until a compatible worker comes "
+                    f"online. If a worker already tried and failed is_compatible(), it "
+                    f"may have triggered Bug 1 (app_lock not cleared)."
+                ),
+            }
+        )
 
     if not diagnoses:
         if task.state == TASK_STATES.RUNNING:
-            diagnoses.append({
-                "bug": None,
-                "severity": "info",
-                "summary": "Task is currently running. No stuck-task indicators detected.",
-            })
+            diagnoses.append(
+                {
+                    "bug": None,
+                    "severity": "info",
+                    "summary": "Task is currently running. No stuck-task indicators detected.",
+                }
+            )
         elif task.state == TASK_STATES.WAITING:
-            diagnoses.append({
-                "bug": None,
-                "severity": "info",
-                "summary": (
-                    "Task is WAITING with no obvious stuck indicators. It may be "
-                    "legitimately waiting for resource locks held by running tasks, "
-                    "or for a worker to pick it up."
-                ),
-            })
+            diagnoses.append(
+                {
+                    "bug": None,
+                    "severity": "info",
+                    "summary": (
+                        "Task is WAITING with no obvious stuck indicators. It may be "
+                        "legitimately waiting for resource locks held by running tasks, "
+                        "or for a worker to pick it up."
+                    ),
+                }
+            )
         else:
-            diagnoses.append({
-                "bug": None,
-                "severity": "info",
-                "summary": f"Task is in state '{task.state}'. No stuck indicators detected.",
-            })
+            diagnoses.append(
+                {
+                    "bug": None,
+                    "severity": "info",
+                    "summary": f"Task is in state '{task.state}'. No stuck indicators detected.",
+                }
+            )
 
     return diagnoses
 
@@ -1090,14 +1094,11 @@ def _simulate_fifo_blocking(task, redis_conn):
     # Fetch the oldest 20 waiting tasks (same query as fetch_task) that are
     # older than our target task
     fetch_limit = 20
-    older_tasks = (
-        Task.objects.filter(
-            state=TASK_STATES.WAITING,
-            app_lock__isnull=True,
-            pulp_created__lt=task.pulp_created,
-        )
-        .order_by("pulp_created")[:fetch_limit]
-    )
+    older_tasks = Task.objects.filter(
+        state=TASK_STATES.WAITING,
+        app_lock__isnull=True,
+        pulp_created__lt=task.pulp_created,
+    ).order_by("pulp_created")[:fetch_limit]
 
     blocked_exclusive = set()
     blocked_shared = set()
@@ -1249,11 +1250,7 @@ class TaskDebugView(APIView):
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            exclusive_resources = [
-                r
-                for r in task.reserved_resources_record or []
-                if not r.startswith("shared:")
-            ]
+            exclusive_resources = [r for r in task.reserved_resources_record or [] if not r.startswith("shared:")]
 
             # Queue position (enhanced for Bug 3)
             older_waiting = Task.objects.filter(
@@ -1289,8 +1286,7 @@ class TaskDebugView(APIView):
                     overlap = [
                         r
                         for r in bt.reserved_resources_record or []
-                        if r in exclusive_resources
-                        or r.removeprefix("shared:") in exclusive_resources
+                        if r in exclusive_resources or r.removeprefix("shared:") in exclusive_resources
                     ]
                     blocking.append(
                         {
@@ -1332,8 +1328,13 @@ class TaskDebugView(APIView):
 
             # Automated diagnosis
             diagnosis = _diagnose_stuck_task(
-                task, app_lock_info, redis_locks, queue_position,
-                version_compat, lock_holder_liveness, fifo_analysis,
+                task,
+                app_lock_info,
+                redis_locks,
+                queue_position,
+                version_compat,
+                lock_holder_liveness,
+                fifo_analysis,
             )
 
             return Response(
@@ -1344,23 +1345,15 @@ class TaskDebugView(APIView):
                         "name": task.name,
                         "logging_cid": task.logging_cid,
                         "pulp_created": task.pulp_created.isoformat(),
-                        "unblocked_at": task.unblocked_at.isoformat()
-                        if task.unblocked_at
-                        else None,
-                        "started_at": task.started_at.isoformat()
-                        if task.started_at
-                        else None,
-                        "finished_at": task.finished_at.isoformat()
-                        if task.finished_at
-                        else None,
+                        "unblocked_at": task.unblocked_at.isoformat() if task.unblocked_at else None,
+                        "started_at": task.started_at.isoformat() if task.started_at else None,
+                        "finished_at": task.finished_at.isoformat() if task.finished_at else None,
                         "immediate": task.immediate,
                         "deferred": task.deferred,
                         "error": task.error,
                         "reserved_resources_record": task.reserved_resources_record,
                         "versions": task.versions,
-                        "parent_task": str(task.parent_task_id)
-                        if task.parent_task_id
-                        else None,
+                        "parent_task": str(task.parent_task_id) if task.parent_task_id else None,
                         "domain": task.pulp_domain.name if task.pulp_domain else None,
                     },
                     "diagnosis": diagnosis,
@@ -1429,9 +1422,7 @@ class TaskQueueView(APIView):
             ).count()
 
             tasks = (
-                Task.objects.filter(
-                    state__in=[TASK_STATES.WAITING, TASK_STATES.RUNNING]
-                )
+                Task.objects.filter(state__in=[TASK_STATES.WAITING, TASK_STATES.RUNNING])
                 .select_related("pulp_domain", "app_lock")
                 .order_by("pulp_created")[:limit]
             )
@@ -1483,9 +1474,7 @@ class TaskQueueView(APIView):
                         "name": task.name,
                         "logging_cid": task.logging_cid,
                         "pulp_created": task.pulp_created.isoformat(),
-                        "started_at": task.started_at.isoformat()
-                        if task.started_at
-                        else None,
+                        "started_at": task.started_at.isoformat() if task.started_at else None,
                         "immediate": task.immediate,
                         "deferred": task.deferred,
                         "domain": task.pulp_domain.name if task.pulp_domain else None,
@@ -1499,9 +1488,7 @@ class TaskQueueView(APIView):
                             "exclusive_resources_locked": sum(
                                 1 for r in redis_locks["exclusive_resources"] if r["held"]
                             ),
-                            "shared_resources_locked": sum(
-                                1 for r in redis_locks["shared_resources"] if r["held"]
-                            ),
+                            "shared_resources_locked": sum(1 for r in redis_locks["shared_resources"] if r["held"]),
                             "blocked_by": sorted(blocked_by),
                         },
                         "diagnoses": task_diagnoses,
@@ -1515,10 +1502,7 @@ class TaskQueueView(APIView):
             }
 
             # Identify orphaned lock holders across all examined tasks
-            orphaned_holders = [
-                name for name, info in lock_holder_liveness.items()
-                if not info.get("online", True)
-            ]
+            orphaned_holders = [name for name, info in lock_holder_liveness.items() if not info.get("online", True)]
             if orphaned_holders:
                 queue_health["orphaned_lock_holders"] = orphaned_holders
 
@@ -1586,13 +1570,15 @@ def _correlate_orphaned_locks_to_tasks(orphaned_resource_locks):
 
         task_summaries = []
         for task in matching_tasks:
-            task_summaries.append({
-                "task_id": str(task.pk),
-                "state": task.state,
-                "name": task.name,
-                "pulp_created": task.pulp_created.isoformat(),
-                "app_lock": task.app_lock.name if task.app_lock else None,
-            })
+            task_summaries.append(
+                {
+                    "task_id": str(task.pk),
+                    "state": task.state,
+                    "name": task.name,
+                    "pulp_created": task.pulp_created.isoformat(),
+                    "app_lock": task.app_lock.name if task.app_lock else None,
+                }
+            )
 
         if task_summaries:
             correlations[resource] = task_summaries
@@ -1652,7 +1638,9 @@ class StaleLockScanView(APIView):
             )
 
         include_healthy = request.GET.get("include_healthy", "").lower() in (
-            "true", "1", "yes",
+            "true",
+            "1",
+            "yes",
         )
 
         # Pagination parameters
@@ -1687,12 +1675,16 @@ class StaleLockScanView(APIView):
 
             if scan_type in ("resource", "all"):
                 resource_locks, next_resource_cursor = scan_resource_locks(
-                    redis_conn, cursor=req_cursor, max_keys=page_size,
+                    redis_conn,
+                    cursor=req_cursor,
+                    max_keys=page_size,
                 )
 
             if scan_type in ("task", "all"):
                 task_locks_list, next_task_cursor = scan_task_locks(
-                    redis_conn, cursor=req_cursor, max_keys=page_size,
+                    redis_conn,
+                    cursor=req_cursor,
+                    max_keys=page_size,
                 )
 
             # Determine the combined next_cursor.  When scanning "all" we
@@ -1722,14 +1714,11 @@ class StaleLockScanView(APIView):
             healthy_resource_locks = []
             for lock_info in resource_locks:
                 orphaned_holders = [
-                    h for h in lock_info["holders"]
-                    if not lock_holder_liveness.get(h, {}).get("online", False)
+                    h for h in lock_info["holders"] if not lock_holder_liveness.get(h, {}).get("online", False)
                 ]
                 if orphaned_holders:
                     lock_info["orphaned_holders"] = orphaned_holders
-                    lock_info["healthy_holders"] = [
-                        h for h in lock_info["holders"] if h not in orphaned_holders
-                    ]
+                    lock_info["healthy_holders"] = [h for h in lock_info["holders"] if h not in orphaned_holders]
                     orphaned_resource_locks.append(lock_info)
                 else:
                     healthy_resource_locks.append(lock_info)
@@ -1738,17 +1727,13 @@ class StaleLockScanView(APIView):
             healthy_task_locks = []
             for lock_info in task_locks_list:
                 holder = lock_info["holder"]
-                if holder and not lock_holder_liveness.get(
-                    holder, {}
-                ).get("online", False):
+                if holder and not lock_holder_liveness.get(holder, {}).get("online", False):
                     orphaned_task_locks.append(lock_info)
                 else:
                     healthy_task_locks.append(lock_info)
 
             # Phase 4: Correlate orphaned resource locks to tasks
-            task_correlations = _correlate_orphaned_locks_to_tasks(
-                orphaned_resource_locks
-            )
+            task_correlations = _correlate_orphaned_locks_to_tasks(orphaned_resource_locks)
 
             # Also correlate orphaned task locks -- check if the task still
             # exists and what state it is in
@@ -1776,10 +1761,7 @@ class StaleLockScanView(APIView):
                 "orphaned_task_locks": len(orphaned_task_locks),
                 "healthy_task_locks": len(healthy_task_locks),
                 "unique_lock_holders": len(all_holders),
-                "dead_lock_holders": sum(
-                    1 for info in lock_holder_liveness.values()
-                    if not info.get("online", False)
-                ),
+                "dead_lock_holders": sum(1 for info in lock_holder_liveness.values() if not info.get("online", False)),
             }
 
             response_data = {
@@ -1842,26 +1824,27 @@ class StaleLockCleanupDispatcherView(APIView):
 
     def get(self, request):
         """Return endpoint documentation."""
-        return Response({
-            "description": (
-                "POST to dispatch a background task that scans all Redis "
-                "resource locks and task locks, identifies orphaned locks "
-                "held by dead workers, and removes them.  The task result "
-                "contains a summary with counts of scanned, orphaned, and "
-                "cleaned locks."
-            ),
-            "task_name": "pulp_service.app.tasks.stale_lock_cleanup.cleanup_stale_locks",
-            "schedule": "Runs automatically every 6 hours",
-            "usage": {
-                "endpoint": "/api/pulp/debug/cleanup-stale-locks/",
-                "method": "POST",
-                "authentication": "Admin user required",
-            },
-        })
+        return Response(
+            {
+                "description": (
+                    "POST to dispatch a background task that scans all Redis "
+                    "resource locks and task locks, identifies orphaned locks "
+                    "held by dead workers, and removes them.  The task result "
+                    "contains a summary with counts of scanned, orphaned, and "
+                    "cleaned locks."
+                ),
+                "task_name": "pulp_service.app.tasks.stale_lock_cleanup.cleanup_stale_locks",
+                "schedule": "Runs automatically every 6 hours",
+                "usage": {
+                    "endpoint": "/api/pulp/debug/cleanup-stale-locks/",
+                    "method": "POST",
+                    "authentication": "Admin user required",
+                },
+            }
+        )
 
 
 class CreateDomainView(APIView):
-
     permission_classes = [DomainBasedPermission]
     """
     Custom endpoint to create domains with service-specific logic.
@@ -1884,17 +1867,13 @@ class CreateDomainView(APIView):
         custom_group_name = request.data.get("group_name")
 
         if not domain_name:
-            return Response(
-                {"error": "Domain name is required."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Domain name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             if custom_group_name:
                 group, created = Group.objects.get_or_create(name=custom_group_name)
                 if created:
-                    _logger.info(
-                        f"Created new group '{custom_group_name}' for user {user.username}."
-                    )
+                    _logger.info(f"Created new group '{custom_group_name}' for user {user.username}.")
                     user.groups.add(group)
                     _logger.info(f"Added user {user.username} to new group '{custom_group_name}'.")
                 else:
@@ -1905,8 +1884,7 @@ class CreateDomainView(APIView):
             elif not user.groups.exists():
                 group_name = f"domain-{domain_name}"
                 _logger.info(
-                    f"User {user.username} has no groups. "
-                    f"Creating or finding group '{group_name}' for domain creation."
+                    f"User {user.username} has no groups. Creating or finding group '{group_name}' for domain creation."
                 )
                 group, created = Group.objects.get_or_create(name=group_name)
                 if created:
@@ -1957,14 +1935,9 @@ class CreateDomainView(APIView):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
-class AgentScanReportView(
-    NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin
-):
-
+class AgentScanReportView(NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
     endpoint_name = "agent_scan_report"
-    queryset = AgentScanReport.objects.prefetch_related("repo_versions").select_related(
-        "content"
-    )
+    queryset = AgentScanReport.objects.prefetch_related("repo_versions").select_related("content")
     serializer_class = AgentScanReportSerializer
 
     @classmethod

@@ -56,6 +56,7 @@ def _make_group(name, pk=1):
 # -- Template domain & serializer patches used by every test that reaches
 #    past the group-resolution block.
 
+
 def _patch_domain_and_serializer():
     """Return a dict of patch targets suitable for ``with`` / ``patch.multiple``."""
     template = MagicMock()
@@ -129,9 +130,7 @@ class TestGroupNameResolution:
         mock_group_objects.get_or_create.return_value = (new_group, True)
 
         user = _make_user()
-        request = _make_request(
-            {"name": "test-domain", "group_name": "my-team"}, user=user
-        )
+        request = _make_request({"name": "test-domain", "group_name": "my-team"}, user=user)
 
         response = self._call_view(request)
 
@@ -150,9 +149,7 @@ class TestGroupNameResolution:
         mock_group_objects.get_or_create.return_value = (existing_group, False)
 
         user = _make_user()
-        request = _make_request(
-            {"name": "test-domain", "group_name": "existing-team"}, user=user
-        )
+        request = _make_request({"name": "test-domain", "group_name": "existing-team"}, user=user)
 
         response = self._call_view(request)
 
@@ -174,9 +171,7 @@ class TestGroupNameResolution:
         response = self._call_view(request)
 
         assert response.status_code == 201
-        mock_group_objects.get_or_create.assert_called_once_with(
-            name="domain-test-domain"
-        )
+        mock_group_objects.get_or_create.assert_called_once_with(name="domain-test-domain")
         user.groups.add.assert_called_once_with(auto_group)
 
     # -- Path 4: no group_name, user already has a group ----------------
@@ -200,9 +195,7 @@ class TestGroupNameResolution:
         mock_group_objects.get_or_create.side_effect = Exception("DB down")
 
         user = _make_user()
-        request = _make_request(
-            {"name": "test-domain", "group_name": "bad-group"}, user=user
-        )
+        request = _make_request({"name": "test-domain", "group_name": "bad-group"}, user=user)
 
         with patch.object(CreateDomainView, "permission_classes", []):
             view = CreateDomainView.as_view()
@@ -228,9 +221,7 @@ class TestGroupVarContextVariable:
         template, serializer_inst, domain_inst = _patch_domain_and_serializer()
 
         user = _make_user()
-        request = _make_request(
-            {"name": "test-domain", "group_name": "custom-team"}, user=user
-        )
+        request = _make_request({"name": "test-domain", "group_name": "custom-team"}, user=user)
 
         captured_group = None
 

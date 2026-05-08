@@ -46,6 +46,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
     Returns:
         Decorated function that returns standardized test results
     """
+
     def decorator(test_func):
         @wraps(test_func)
         def wrapper(*args, **kwargs):
@@ -71,7 +72,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                     log(f"Warning: Could not retrieve backend PID: {e}")
 
                 if backend_pid:
-                    extra_data['backend_pid'] = backend_pid
+                    extra_data["backend_pid"] = backend_pid
 
                 try:
                     # Run the actual test logic
@@ -89,10 +90,10 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                     log(f"TEST FAILED with exception: {type(e).__name__}: {e}")
                     log(f"Exception traceback: {traceback.format_exc()}")
                     alive = False
-                    extra_data['error'] = {
-                        'type': type(e).__name__,
-                        'message': str(e),
-                        'traceback': traceback.format_exc()
+                    extra_data["error"] = {
+                        "type": type(e).__name__,
+                        "message": str(e),
+                        "traceback": traceback.format_exc(),
                     }
 
                 finished_at = datetime.now()
@@ -109,26 +110,26 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                 alive = False
                 finished_at = datetime.now()
                 duration = (finished_at - started_at).total_seconds() / 60
-                extra_data['error'] = {
-                    'type': type(fatal_error).__name__,
-                    'message': str(fatal_error),
-                    'traceback': traceback.format_exc()
+                extra_data["error"] = {
+                    "type": type(fatal_error).__name__,
+                    "message": str(fatal_error),
+                    "traceback": traceback.format_exc(),
                 }
 
             # Build result dictionary
             result = {
-                'test': test_name,
-                'started_at': started_at.isoformat(),
-                'finished_at': finished_at.isoformat() if finished_at else datetime.now().isoformat(),
-                'duration_minutes': round(duration, 2),
-                'connection_alive': alive,
-                'success': alive,
-                'status': 'PASSED' if alive else 'FAILED'
+                "test": test_name,
+                "started_at": started_at.isoformat(),
+                "finished_at": finished_at.isoformat() if finished_at else datetime.now().isoformat(),
+                "duration_minutes": round(duration, 2),
+                "connection_alive": alive,
+                "success": alive,
+                "status": "PASSED" if alive else "FAILED",
             }
 
             # Add connection pinning info if applicable
             if connection_pinned:
-                result['connection_pinned'] = True
+                result["connection_pinned"] = True
 
             # Merge any extra data from the test
             result.update(extra_data)
@@ -148,6 +149,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
             return result
 
         return wrapper
+
     return decorator
 
 
@@ -233,7 +235,7 @@ def test_2_active_heartbeat(duration_minutes=50):
             time.sleep(heartbeat_interval_seconds)
 
     log("All heartbeats successful!")
-    return True, {'iterations_completed': iterations}
+    return True, {"iterations_completed": iterations}
 
 
 @rds_test_wrapper("TEST 3: LONG-RUNNING TRANSACTION (DJANGO ORM)")
@@ -279,7 +281,7 @@ def test_4_transaction_with_work(duration_minutes=50):
 
         for i in range(iterations):
             # Query 1: Count waiting tasks (Django ORM)
-            waiting_count = Task.objects.filter(state='waiting').count()
+            waiting_count = Task.objects.filter(state="waiting").count()
 
             # Query 2: Get a task
             task = Task.objects.first()
@@ -288,8 +290,10 @@ def test_4_transaction_with_work(duration_minutes=50):
             worker_count = AppStatus.objects.filter(app_type="worker").count()
 
             elapsed_minutes = (i + 1) * 2
-            log(f"Iteration {i+1}/{iterations} ({elapsed_minutes} min): "
-                f"{waiting_count} waiting tasks, {worker_count} workers")
+            log(
+                f"Iteration {i + 1}/{iterations} ({elapsed_minutes} min): "
+                f"{waiting_count} waiting tasks, {worker_count} workers"
+            )
 
             if i < iterations - 1:
                 time.sleep(120)  # 2 minutes
@@ -396,11 +400,11 @@ def _notification_sender_worker(channel_name, interval_seconds, duration_minutes
     try:
         # Create a new database connection (can't share with parent process)
         conn = psycopg.connect(
-            host=db_settings['HOST'],
-            port=db_settings.get('PORT', 5432),
-            dbname=db_settings['NAME'],
-            user=db_settings['USER'],
-            password=db_settings['PASSWORD'],
+            host=db_settings["HOST"],
+            port=db_settings.get("PORT", 5432),
+            dbname=db_settings["NAME"],
+            user=db_settings["USER"],
+            password=db_settings["PASSWORD"],
         )
         conn.autocommit = True
 
@@ -414,10 +418,10 @@ def _notification_sender_worker(channel_name, interval_seconds, duration_minutes
 
             try:
                 cursor = conn.cursor()
-                payload = f"heartbeat_{i+1}"
+                payload = f"heartbeat_{i + 1}"
                 cursor.execute(f"NOTIFY {channel_name}, '{payload}'")
                 cursor.close()
-                worker_log(f"Sent NOTIFY #{i+1}/{iterations}: '{payload}'")
+                worker_log(f"Sent NOTIFY #{i + 1}/{iterations}: '{payload}'")
             except Exception as e:
                 worker_log(f"Error sending NOTIFY: {e}")
                 break
@@ -454,7 +458,7 @@ def test_7_listen_with_activity(duration_minutes=50):
 
     notify_process = multiprocessing.Process(
         target=_notification_sender_worker,
-        args=(channel_name, 120, duration_minutes, db_settings)  # Send every 2 minutes for duration
+        args=(channel_name, 120, duration_minutes, db_settings),  # Send every 2 minutes for duration
     )
     notify_process.start()
     log(f"NOTIFY sender process started (PID: {notify_process.pid})")
@@ -466,7 +470,7 @@ def test_7_listen_with_activity(duration_minutes=50):
         for i in range(iterations):
             # Wait 60 seconds
             time.sleep(60)
-            log(f"Minute {i+1}/{iterations}: Listening for notifications...")
+            log(f"Minute {i + 1}/{iterations}: Listening for notifications...")
 
     finally:
         # Clean up LISTEN

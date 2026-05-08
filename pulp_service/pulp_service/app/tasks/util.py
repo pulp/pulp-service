@@ -30,6 +30,7 @@ def except_catch_and_raise(queue):
     """
     Decorator to catch all exceptions, put them into a queue, and raise them again.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -40,7 +41,9 @@ def except_catch_and_raise(queue):
                 queue.put(e)
                 # Re-raise the exception
                 raise
+
         return wrapper
+
     return decorator
 
 
@@ -56,4 +59,4 @@ def register_pypi_yank_monitor_schedule():
 def no_op_task():
     with connections["default"].cursor() as cursor:
         cursor.execute("SELECT 1")
-    time.sleep(0.3) # This task will not take less than 300ms to execute
+    time.sleep(0.3)  # This task will not take less than 300ms to execute

@@ -29,15 +29,14 @@ def log_new_user(sender, instance, created, **kwargs):
         from pulp_service.app.middleware import request_path_var
 
         request_path = request_path_var.get(None)
-        _logger.info(
-            f"New user created: username={instance.username}, route={request_path or 'unknown'}"
-        )
+        _logger.info(f"New user created: username={instance.username}, route={request_path or 'unknown'}")
 
 
 @receiver(post_save, sender=Domain)
 def post_create_domain(sender, **kwargs):
-    if kwargs['created']:
+    if kwargs["created"]:
         from pulp_service.app.authorization import org_id_var, user_id_var
+
         org_id = org_id_var.get(None)
         org_id_var.set(None)
         user_id = user_id_var.get(None)
@@ -52,4 +51,4 @@ def post_create_domain(sender, **kwargs):
                 do = DomainOrg.objects.create(org_id=org_id, group=group)
             else:
                 do = DomainOrg.objects.create(org_id=org_id, user=user)
-            do.domains.add(kwargs['instance'])
+            do.domains.add(kwargs["instance"])

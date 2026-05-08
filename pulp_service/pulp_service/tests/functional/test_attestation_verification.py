@@ -103,10 +103,7 @@ def _make_provenance(attestation):
 def test_private_key(pulp_settings):
     """Load the CI-generated test attestation signing key."""
     if not os.path.exists(TEST_PRIVATE_KEY_PATH):
-        pytest.skip(
-            f"Test attestation private key not found at {TEST_PRIVATE_KEY_PATH} "
-            "(not running in CI container?)"
-        )
+        pytest.skip(f"Test attestation private key not found at {TEST_PRIVATE_KEY_PATH} (not running in CI container?)")
     if pulp_settings.ATTESTATION_VERIFICATION_KEY != TEST_PUBLIC_KEY_PATH:
         pytest.fail(f"ATTESTATION_VERIFICATION_KEY is not set to {TEST_PUBLIC_KEY_PATH}")
     with open(TEST_PRIVATE_KEY_PATH, "rb") as f:

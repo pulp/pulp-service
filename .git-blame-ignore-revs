@@ -1,0 +1,2 @@
+# ruff format adoption (line-length 100 -> 120, py36/py37 -> py311)
+6a2a194f4818cac64528836c973711890c826cc7

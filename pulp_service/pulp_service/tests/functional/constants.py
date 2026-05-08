@@ -32,11 +32,11 @@ NOT_YANKED_PACKAGES = [
 ]
 
 # CONTENT GUARD CONSTANTS
-CONTENT_GUARD_HEADER_NAME="x-rh-identity"
-CONTENT_GUARD_HEADER_VALUE='eyJpZGVudGl0eSI6IHsib3JnX2lkIjogIjE5Nzk3MTAifX0=' 
-CONTENT_GUARD_FEATURES=[ "OPENSHIFT-OCP-x86_64", "RHEL-HA-x86_64" ]
-CONTENT_GUARD_FEATURES_NOT_SUBSCRIBED=[ "rhods" ]
-CONTENT_GUARD_FILTER='.identity.org_id'
+CONTENT_GUARD_HEADER_NAME = "x-rh-identity"
+CONTENT_GUARD_HEADER_VALUE = "eyJpZGVudGl0eSI6IHsib3JnX2lkIjogIjE5Nzk3MTAifX0="
+CONTENT_GUARD_FEATURES = ["OPENSHIFT-OCP-x86_64", "RHEL-HA-x86_64"]
+CONTENT_GUARD_FEATURES_NOT_SUBSCRIBED = ["rhods"]
+CONTENT_GUARD_FILTER = ".identity.org_id"
 
 # VULNERABILITY REPORT CONSTANTS
 # NPM
@@ -70,9 +70,7 @@ GEM_VULNERABILITY_PACKAGE = "rails-7.0.1"
 GEM_VULNERABILITY_IDS = ["GHSA-9822-6m93-xqf4"]
 
 # RPM
-RPM_SAMPLE_PACKAGE_URL = (
-    "https://vault.centos.org/7.0.1406/os/x86_64/Packages/kernel-3.10.0-123.el7.x86_64.rpm"
-)
+RPM_SAMPLE_PACKAGE_URL = "https://vault.centos.org/7.0.1406/os/x86_64/Packages/kernel-3.10.0-123.el7.x86_64.rpm"
 RPM_SAMPLE_RH_CPE = '["cpe:/o:redhat:enterprise_linux:7::workstation"]'
 RPM_VULNERABILITY_PACKAGE = "kernel-3.10.0"
 RPM_VULNERABILITY_IDS = [
@@ -186,18 +184,8 @@ OSV_SCHEMA = {
                                 },
                                 {
                                     "title": "last_affected and fixed events are mutually exclusive",
-                                    "if": {
-                                        "properties": {
-                                            "events": {"contains": {"required": ["last_affected"]}}
-                                        }
-                                    },
-                                    "then": {
-                                        "not": {
-                                            "properties": {
-                                                "events": {"contains": {"required": ["fixed"]}}
-                                            }
-                                        }
-                                    },
+                                    "if": {"properties": {"events": {"contains": {"required": ["last_affected"]}}}},
+                                    "then": {"not": {"properties": {"events": {"contains": {"required": ["fixed"]}}}}},
                                 },
                             ],
                             "required": ["type", "events"],
@@ -267,11 +255,7 @@ OSV_SCHEMA = {
     "allOf": [
         {
             "if": {"required": ["severity"]},
-            "then": {
-                "properties": {
-                    "affected": {"items": {"properties": {"severity": {"type": "null"}}}}
-                }
-            },
+            "then": {"properties": {"affected": {"items": {"properties": {"severity": {"type": "null"}}}}}},
         }
     ],
     "$defs": {
@@ -371,11 +355,7 @@ OSV_SCHEMA = {
                     {
                         "if": {"properties": {"type": {"const": "Ubuntu"}}},
                         "then": {
-                            "properties": {
-                                "score": {
-                                    "enum": ["negligible", "low", "medium", "high", "critical"]
-                                }
-                            }
+                            "properties": {"score": {"enum": ["negligible", "low", "medium", "high", "critical"]}}
                         },
                     },
                 ],

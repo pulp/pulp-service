@@ -25,13 +25,10 @@ def vuln_report_service_api(service_bindings):
     return service_bindings.VulnReportServiceApi
 
 
-
 @pytest.fixture(scope="session")
 def pypi_yank_monitor_api(service_bindings):
     """PyPI Yank Monitor API fixture."""
     return service_bindings.PypiYankMonitorApi
-
-
 
 
 @pytest.fixture(scope="session")
@@ -43,11 +40,11 @@ def service_content_guards_api_client(service_bindings):
 @pytest.fixture
 def gen_group(pulpcore_bindings, gen_object_with_cleanup):
     """A fixture to create a group."""
+
     def _gen_group(name=None):
         name = name or str(uuid.uuid4())
-        return gen_object_with_cleanup(
-            pulpcore_bindings.GroupsApi, {"name": name}
-        )
+        return gen_object_with_cleanup(pulpcore_bindings.GroupsApi, {"name": name})
+
     return _gen_group
 
 
@@ -73,10 +70,6 @@ def cleanup_auth_headers(request, pulpcore_bindings):
     if "python_bindings" in request.fixturenames:
         python_bindings = request.getfixturevalue("python_bindings")
         if hasattr(python_bindings, "RepositoriesPythonApi"):
-            python_bindings.RepositoriesPythonApi.api_client.default_headers.pop(
-                "x-rh-identity", None
-            )
+            python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
         if hasattr(python_bindings, "DistributionsPypiApi"):
-            python_bindings.DistributionsPypiApi.api_client.default_headers.pop(
-                "x-rh-identity", None
-            )
+            python_bindings.DistributionsPypiApi.api_client.default_headers.pop("x-rh-identity", None)
