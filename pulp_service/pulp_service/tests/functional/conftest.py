@@ -50,7 +50,7 @@ def gen_group(pulpcore_bindings, gen_object_with_cleanup):
 
 
 @pytest.fixture
-def domain_org_factory():
+def domain_org_factory(transactional_db):  # noqa: ARG001
     from pulp_service.app.models import DomainOrg
 
     created = []
