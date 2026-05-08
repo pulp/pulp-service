@@ -469,17 +469,9 @@ def test_org_based_visibility(pulpcore_bindings, anonymous_user, gen_object_with
 
 
 def test_group_based_domain_visibility(
-    pulpcore_bindings,
-    anonymous_user,
-    gen_object_with_cleanup,
-    gen_group,
-    domain_factory,
-    domain_org_factory,
+    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_group, domain_factory
 ):
-    """Test that user added to a group sees domains linked to that group via DomainOrg."""
-    from django.contrib.auth.models import Group
-    from pulpcore.plugin.models import Domain
-
+    """Test that user added to a group sees domains created by another group member."""
     user_a_name = f"user-a-group-{uuid4()}"
     user_a_combined = f"1|{user_a_name}"
     user_b_name = f"user-b-group-{uuid4()}"
@@ -502,7 +494,7 @@ def test_group_based_domain_visibility(
     )
 
     with anonymous_user:
-        # User A creates a domain
+        # User A creates a domain (signal auto-creates DomainOrg with the group)
         user_a_data = {
             "identity": {
                 "org_id": 1,
@@ -516,13 +508,7 @@ def test_group_based_domain_visibility(
 
         domain = domain_factory()
 
-        # Link domain to the group via DomainOrg
-        django_group = Group.objects.get(name=test_group.name)
-        domain_obj = Domain.objects.get(name=domain.name)
-        domain_org = domain_org_factory(group=django_group)
-        domain_org.domains.add(domain_obj)
-
-        # User B lists domains and sees the group-linked domain
+        # User B (different org, same group) lists domains and sees the group-linked domain
         user_b_data = {
             "identity": {
                 "org_id": 2,
@@ -621,18 +607,8 @@ def test_default_domain_invisible_to_regular_users(pulpcore_bindings, anonymous_
         assert "default" not in domain_names
 
 
-def test_domain_deduplication(
-    pulpcore_bindings,
-    anonymous_user,
-    gen_object_with_cleanup,
-    gen_group,
-    domain_factory,
-    domain_org_factory,
-):
-    """Test that a domain with multiple DomainOrg entries (user + group) appears only once."""
-    from django.contrib.auth.models import Group
-    from pulpcore.plugin.models import Domain
-
+def test_domain_deduplication(pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_group, domain_factory):
+    """Test that a domain matching via both group and org_id appears only once."""
     user_name = f"dedup-user-{uuid4()}"
     user_combined = f"1|{user_name}"
 
@@ -646,6 +622,8 @@ def test_domain_deduplication(
     )
 
     with anonymous_user:
+        # User in a group creates domain (signal creates DomainOrg with org_id + group).
+        # scope_queryset matches via both group_id and org_id — domain must appear once.
         user_data = {
             "identity": {
                 "org_id": 1,
@@ -659,13 +637,6 @@ def test_domain_deduplication(
 
         domain = domain_factory()
 
-        # Add group-based DomainOrg on top of the user-based one created by domain_factory
-        django_group = Group.objects.get(name=test_group.name)
-        domain_obj = Domain.objects.get(name=domain.name)
-        domain_org = domain_org_factory(group=django_group)
-        domain_org.domains.add(domain_obj)
-
-        # Domain should appear exactly once despite matching via both user and group
         response = pulpcore_bindings.DomainsApi.list()
         assert response.count == 1
         assert response.results[0].name == domain.name

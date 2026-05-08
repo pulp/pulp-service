@@ -49,23 +49,6 @@ def gen_group(pulpcore_bindings, gen_object_with_cleanup):
     return _gen_group
 
 
-@pytest.fixture
-def domain_org_factory(transactional_db):  # noqa: ARG001
-    from pulp_service.app.models import DomainOrg
-
-    created = []
-
-    def _domain_org_factory(**kwargs):
-        domain_org = DomainOrg.objects.create(**kwargs)
-        created.append(domain_org)
-        return domain_org
-
-    yield _domain_org_factory
-
-    for domain_org in reversed(created):
-        domain_org.delete()
-
-
 @pytest.fixture()
 def cleanup_auth_headers(request, pulpcore_bindings):
     """
