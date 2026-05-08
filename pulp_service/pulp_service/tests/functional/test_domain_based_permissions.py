@@ -702,6 +702,7 @@ def test_scope_queryset_model_guard():
     from types import SimpleNamespace
 
     from django.contrib.auth.models import Group
+
     from pulp_service.app.authorization import DomainBasedPermission
 
     group_qs = Group.objects.all()
