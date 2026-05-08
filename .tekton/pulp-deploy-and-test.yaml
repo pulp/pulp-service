@@ -687,7 +687,7 @@ spec:
               # INSTALL CLIENTS
               PULP_BINDINGS_COMPONENTS=`echo $PULP_BINDINGS_COMPONENTS|tr '_' '-'`
               for PACKAGE in $PULP_BINDINGS_COMPONENTS ; do
-                oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "HOME=/tmp/home pip3 install /data/${PACKAGE}"
+                oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "HOME=/tmp/home pip3 install --no-deps /data/${PACKAGE}"
               done
 
               cat<<EOF > __tmp_init__.py
