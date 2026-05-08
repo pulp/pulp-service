@@ -438,18 +438,14 @@ def test_group_based_domain_visibility(
 
     test_group = gen_group()
 
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_a_combined}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_a_combined})
     gen_object_with_cleanup(
         pulpcore_bindings.GroupsUsersApi,
         group_href=test_group.pulp_href,
         group_user={"username": user_a_combined},
     )
 
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_b_combined}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_b_combined})
     gen_object_with_cleanup(
         pulpcore_bindings.GroupsUsersApi,
         group_href=test_group.pulp_href,
@@ -593,9 +589,7 @@ def test_domain_deduplication(
 
     test_group = gen_group()
 
-    gen_object_with_cleanup(
-        pulpcore_bindings.UsersApi, {"username": user_combined}
-    )
+    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_combined})
     gen_object_with_cleanup(
         pulpcore_bindings.GroupsUsersApi,
         group_href=test_group.pulp_href,
@@ -656,8 +650,9 @@ def test_basic_auth_user_domain_visibility(pulpcore_bindings, gen_user, gen_obje
 
 def test_scope_queryset_model_guard():
     """Test that non-Domain queryset passes through unchanged."""
-    from django.contrib.auth.models import Group
     from types import SimpleNamespace
+
+    from django.contrib.auth.models import Group
 
     from pulp_service.app.authorization import DomainBasedPermission
 
