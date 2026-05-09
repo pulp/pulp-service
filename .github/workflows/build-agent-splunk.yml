@@ -18,7 +18,7 @@ jobs:
         working-directory: tools/agents/agent-splunk
         run: CGO_ENABLED=0 go build -o agent-splunk .
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: agent-splunk
           path: tools/agents/agent-splunk/agent-splunk
@@ -40,7 +40,7 @@ jobs:
           fi
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Download binary artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: agent-splunk
       - name: Create GitHub Release
