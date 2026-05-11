@@ -31,8 +31,8 @@ class DomainBasedPermission(BasePermission):
         """
         query = Q(domains__pk=domain_pk, user=user)
 
-        group_pks = user.groups.values_list("pk", flat=True)
-        if group_pks.exists():
+        group_pks = list(user.groups.values_list("pk", flat=True))
+        if group_pks:
             query |= Q(domains__pk=domain_pk, group_id__in=group_pks)
 
         if org_id is not None:
@@ -143,8 +143,8 @@ class DomainBasedPermission(BasePermission):
 
         query = Q(domain_orgs__user=user)
 
-        group_pks = user.groups.values_list("pk", flat=True)
-        if group_pks.exists():
+        group_pks = list(user.groups.values_list("pk", flat=True))
+        if group_pks:
             query |= Q(domain_orgs__group_id__in=group_pks)
 
         if org_id is not None:
