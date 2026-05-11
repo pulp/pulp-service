@@ -167,10 +167,12 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             lock_file_content_json = json.load(uploaded_file)
             validate(instance=lock_file_content_json, schema=NPM_PACKAGE_LOCK_SCHEMA)
             temp_file.save()
-        except ValidationError as e:
-            raise serializers.ValidationError(_(f"Invalid package-lock.json: {e.message}"))
-        except json.JSONDecodeError:
-            raise serializers.ValidationError(_("Invalid JSON format."))
+        except ValidationError as validation_err:
+            raise serializers.ValidationError(
+                _(f"Invalid package-lock.json: {validation_err.message}")
+            ) from validation_err
+        except json.JSONDecodeError as exc:
+            raise serializers.ValidationError(_("Invalid JSON format.")) from exc
 
         return temp_file.pk
 

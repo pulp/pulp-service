@@ -70,15 +70,15 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             _logger.info("[%s] Got a response from feature service API!", datetime.now())
         except aiohttp.ClientResponseError as err:
             if err.status == 400:
-                _logger.error("Failed to request information for a user. BadRequest. URL: %s", err.request_info.url)
+                _logger.exception("Failed to request information for a user. BadRequest. URL: %s", err.request_info.url)
 
             if err.status == 403:
-                _logger.error(
+                _logger.exception(
                     "Failed to request information for a user. Permission Denied. Verify if the certificate is still valid."
                 )
 
             _logger.warning(_("Failed to fetch the Subscription feature information for a user."))
-            raise PermissionError(_("Access denied."))
+            raise PermissionError(_("Access denied.")) from err
 
         features_available = {feature["name"] for feature in response["features"]}
         return features_available == set(self.features)
@@ -87,14 +87,14 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         try:
             header_content = request.headers[self.header_name]
         except KeyError:
-            _logger.error("Access not allowed. Header %s not found.", self.header_name)
-            raise PermissionError(_("Access denied."))
+            _logger.exception("Access not allowed. Header %s not found.", self.header_name)
+            raise PermissionError(_("Access denied.")) from None
 
         try:
             header_decoded_content = b64decode(header_content)
-        except Base64DecodeError:
-            _logger.error("Access not allowed - Header content is not Base64 encoded.")
-            raise PermissionError(_("Access denied."))
+        except Base64DecodeError as exc:
+            _logger.exception("Access not allowed - Header content is not Base64 encoded.")
+            raise PermissionError(_("Access denied.")) from exc
 
         try:
             header_value = json.loads(header_decoded_content)
@@ -105,9 +105,9 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
 
             header_value = json_path.input_value(header_value).first()
 
-        except json.JSONDecodeError:
-            _logger.error("Access not allowed - Invalid JSON or Path not found.")
-            raise PermissionError(_("Access denied."))
+        except json.JSONDecodeError as exc:
+            _logger.exception("Access not allowed - Invalid JSON or Path not found.")
+            raise PermissionError(_("Access denied.")) from exc
 
         try:
             cache_key = f"{header_value}-{','.join(self.features)}"
@@ -131,9 +131,9 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                 _logger.warning("Access not allowed - Features not available for the user.")
                 raise PermissionError(_("Access denied."))
 
-        except aiohttp.ClientResponseError:
+        except aiohttp.ClientResponseError as exc:
             _logger.warning("Access not allowed - Failed to check for features.")
-            raise PermissionError(_("Access denied."))
+            raise PermissionError(_("Access denied.")) from exc
 
         return
 
