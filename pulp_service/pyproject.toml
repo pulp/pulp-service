@@ -108,6 +108,7 @@ ignore = [
     "UP007",    # non-pep604-annotation — Django models don't always support X | Y union syntax
     "RET504",   # unnecessary-assign — readability assignments before return are common in Django viewsets
     "TRY003",   # raise-vanilla-args — enforcing exception classes for every raise is too strict initially
+    "TRY300",   # try-consider-else — try/return/except pattern is clear enough without else
     "FIX002",   # line-contains-TODO — demoted to warning; TODOs are flagged but not blocking
     "ARG002",   # unused-method-argument — Django views/DRF methods receive request, *args, **kwargs by convention
     "RUF012",   # mutable-class-variables — Django model fields are class-level mutables by design

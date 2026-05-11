@@ -138,14 +138,14 @@ class DebugAuthenticationHeadersView(APIView):
         try:
             header_content = request.headers["x-rh-identity"]
         except KeyError:
-            _logger.error("Access not allowed. Header %s not found.", settings.AUTHENTICATION_JSON_HEADER)
-            raise PermissionError("Access denied.")
+            _logger.exception("Access not allowed. Header %s not found.", settings.AUTHENTICATION_JSON_HEADER)
+            raise PermissionError("Access denied.") from None
 
         try:
             header_decoded_content = b64decode(header_content)
-        except Base64DecodeError:
-            _logger.error("Access not allowed - Header content is not Base64 encoded.")
-            raise PermissionError("Access denied.")
+        except Base64DecodeError as exc:
+            _logger.exception("Access not allowed - Header content is not Base64 encoded.")
+            raise PermissionError("Access denied.") from exc
 
         response_data["x_rh_identity"] = json.loads(header_decoded_content)
 
@@ -265,7 +265,7 @@ class PyPIYankMonitorViewSet(
         try:
             latest_report = monitor.reports.latest("pulp_created")
         except YankedPackageReport.DoesNotExist:
-            raise Http404
+            raise Http404 from None
         serializer = YankedPackageReportSerializer(latest_report, context={"request": request})
         return Response(serializer.data)
 
@@ -1891,7 +1891,7 @@ class CreateDomainView(APIView):
                 group = user.groups.first()
                 _logger.info("User %s already belongs to group '%s'.", user.username, group.name)
         except Exception as e:
-            _logger.error("Failed to resolve group for domain '%s': %s", domain_name, e)
+            _logger.exception("Failed to resolve group for domain '%s'", domain_name)
             return Response(
                 {"error": f"Failed to resolve group for domain: {e!s}"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1909,7 +1909,7 @@ class CreateDomainView(APIView):
             data["storage_class"] = model_domain.storage_class
             data["pulp_labels"] = model_domain.pulp_labels
         except Domain.DoesNotExist:
-            _logger.error("Model domain 'template-domain-s3' not found")
+            _logger.exception("Model domain 'template-domain-s3' not found")
             return Response(
                 {
                     "error": "Model domain 'template-domain-s3' not found. Please create it first with correct storage settings."

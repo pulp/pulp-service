@@ -85,10 +85,10 @@ async def _scan_packages(background_thread):
                             next_page_token,
                         )
                         content_queue.put(next_page_request)
-        except Empty:
+        except Empty as empty_err:
             if not background_thread.is_alive():
-                raise RuntimeError("Vuln report task thread died unexpectedly.")
-            raise RuntimeError("Background vuln report thread took too long.")
+                raise RuntimeError("Vuln report task thread died unexpectedly.") from empty_err
+            raise RuntimeError("Background vuln report thread took too long.") from empty_err
 
     vuln_report, created = await sync_to_async(VulnerabilityReport.objects.get_or_create)(
         vulns=scanned_packages, pulp_domain=get_domain()
