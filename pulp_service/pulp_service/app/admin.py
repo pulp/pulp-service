@@ -240,7 +240,7 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
 class DomainOrgForm(forms.ModelForm):
     class Meta:
         model = DomainOrg
-        fields = "__all__"
+        fields = ["org_id", "domains", "user", "group"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -372,7 +372,15 @@ class DomainOrgAdmin(admin.ModelAdmin):
 class DomainAdminForm(forms.ModelForm):
     class Meta:
         model = Domain
-        fields = "__all__"
+        fields = [
+            "name",
+            "description",
+            "storage_class",
+            "storage_settings",
+            "redirect_to_object_storage",
+            "hide_guarded_distributions",
+            "pulp_labels",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

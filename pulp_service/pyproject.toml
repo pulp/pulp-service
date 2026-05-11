@@ -144,6 +144,7 @@ max-statements = 40
 "pulp_service/app/storage.py" = ["S108"]
 "pulp_service/app/viewsets.py" = ["C901", "PLR0912", "PLR0913", "PLR0915"]
 "pulp_service/app/tasks/rds_connection_tests.py" = ["C901", "PLR0912", "PLR0915"]
+"pulp_service/tests/functional/constants.py" = ["E501"]
 
 
 
