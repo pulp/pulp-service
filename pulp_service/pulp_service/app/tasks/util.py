@@ -5,7 +5,6 @@ from functools import wraps
 from django.db import connections
 
 from pulpcore.app.models import TaskSchedule
-from pulpcore.plugin.models import Distribution
 
 
 def content_sources_periodic_telemetry():

@@ -1,9 +1,8 @@
 import json
-import pytest
-import requests
-
-from uuid import uuid4
 from base64 import b64encode
+from uuid import uuid4
+
+import requests
 
 
 def test_authentication_with_username_and_org_id(

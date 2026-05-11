@@ -1,9 +1,9 @@
 """Tests for the task debug and task queue API endpoints."""
 
+from urllib.parse import urljoin
+
 import pytest
 import requests
-
-from urllib.parse import urljoin
 
 
 @pytest.fixture
@@ -53,7 +53,6 @@ class TestTaskDebugView:
 
     def test_completed_task(self, debug_api_url, admin_auth, pulpcore_bindings, monitor_task):
         """Returns debug info for a completed task with all expected fields."""
-        from pulpcore.client.pulpcore import ApiException
 
         tasks = pulpcore_bindings.TasksApi.list(limit=1, state="completed")
         assert tasks.count >= 1

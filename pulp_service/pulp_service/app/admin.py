@@ -1,23 +1,23 @@
-from django.contrib.auth.admin import UserAdmin, GroupAdmin
-from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
-from django.contrib.auth.models import User
-from django.contrib import admin
-from django.db.models import Q
-from django.core.exceptions import ValidationError
-from django.urls import reverse
-from django.utils.html import format_html
-
-from django import forms
-from django.core.validators import RegexValidator
-
-from hijack.contrib.admin import HijackUserAdminMixin
-
-from .models import DomainOrg
 import re
 
-from pulpcore.plugin.models import Domain, Group
+from django import forms
+from django.contrib import admin
+from django.contrib.auth.admin import GroupAdmin, UserAdmin
+from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
+from django.db.models import Q
+from django.urls import reverse
+from django.utils.html import format_html
+from hijack.contrib.admin import HijackUserAdminMixin
+
 from pulpcore.app.models import Task
+from pulpcore.plugin.models import Domain, Group
+
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
+
+from .models import DomainOrg
 
 USERNAME_PATTERN = r"^[\w.@+=/\-|]+$"
 USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these special characters: @, ., +, -, =, /, _, |"

@@ -1,14 +1,13 @@
-from aiohttp.web_exceptions import HTTPFailedDependency
+import base64
+import tempfile
+
+import oras.client
+import oras.defaults
+import oras.oci
+import requests
+from django.core.files import File
 from storages.base import BaseStorage
 from storages.utils import setting
-import oras.client
-import oras.oci
-import oras.defaults
-from django.core.files import File
-import tempfile
-import os
-import requests
-import base64
 
 
 class OCIStorage(BaseStorage):

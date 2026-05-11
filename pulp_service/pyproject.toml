@@ -99,6 +99,8 @@ select = [
     "PLR0912",  # too-many-branches
     "PLR0913",  # too-many-arguments
     "PLR0915",  # too-many-statements
+    # --- Logging ---
+    "G",      # flake8-logging-format — enforce %-style in logging calls for lazy evaluation
     # --- Ruff-specific ---
     "RUF",    # ruff-native rules — unused noqa, mutable class defaults, ambiguous unicode
 ]
@@ -111,6 +113,22 @@ ignore = [
     "RUF012",   # mutable-class-variables — Django model fields are class-level mutables by design
     "S101",     # assert-used — Django and tests use assert extensively
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pulp_service"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "pulpcore",
+    "content-plugins",
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.lint.isort.sections]
+"pulpcore" = ["pulpcore"]
+"content-plugins" = ["pulp_rpm", "pulp_npm", "pulp_python", "pulp_container", "pulp_gem", "pulp_maven", "pulp_hugging_face"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

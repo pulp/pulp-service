@@ -1,7 +1,8 @@
 import json
 from base64 import b64encode
-import pytest
 from uuid import uuid4
+
+import pytest
 
 
 def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, gen_object_with_cleanup, anonymous_user):

@@ -1,9 +1,9 @@
 import ipaddress
 import json
-from aiohttp import web
 from base64 import b64decode
+
+from aiohttp import web
 from frozenlist import FrozenList
-from multidict import CIMultiDictProxy
 
 from pulpcore.plugin.content import app
 

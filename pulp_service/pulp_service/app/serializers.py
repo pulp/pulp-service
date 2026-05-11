@@ -1,21 +1,28 @@
 import json
 import logging
-
 from gettext import gettext as _
-from jsonschema import validate, ValidationError
+
+from jsonschema import ValidationError, validate
 from rest_framework import serializers
 
+from pulpcore.app.models import Repository
+from pulpcore.plugin.models import PulpTemporaryFile
 from pulpcore.plugin.serializers import (
     ContentGuardSerializer,
     DetailRelatedField,
     GetOrCreateSerializerMixin,
+    IdentityField,
     ModelSerializer,
+    RepositoryVersionRelatedField,
     ValidateFieldsMixin,
 )
-from pulpcore.plugin.models import PulpTemporaryFile
-from pulpcore.plugin.serializers import IdentityField, RepositoryVersionRelatedField
-from pulpcore.app.models import Repository
 
+from pulp_service.app.constants import (
+    NPM_PACKAGE_LOCK_SCHEMA,
+    OSV_RH_ECOSYSTEM_CPES_LABEL,
+    OSV_RH_ECOSYSTEM_LABEL,
+    PYTHON_REPOSITORY_PULP_TYPE,
+)
 from pulp_service.app.models import (
     AgentScanReport,
     FeatureContentGuard,
@@ -23,13 +30,6 @@ from pulp_service.app.models import (
     VulnerabilityReport,
     YankedPackageReport,
 )
-from pulp_service.app.constants import (
-    NPM_PACKAGE_LOCK_SCHEMA,
-    OSV_RH_ECOSYSTEM_CPES_LABEL,
-    OSV_RH_ECOSYSTEM_LABEL,
-    PYTHON_REPOSITORY_PULP_TYPE,
-)
-
 
 _logger = logging.getLogger(__name__)
 

@@ -2,13 +2,14 @@ import asyncio
 import logging
 
 import aiohttp
-
 from asgiref.sync import sync_to_async
-from pulpcore.plugin.tasking import dispatch
-from pulp_python.app.models import PythonPackageContent
-from pulp_service.app.constants import PYPI_JSON_URL, PYPI_CHECK_CONCURRENCY
-from pulp_service.app.models import YankedPackageReport
 
+from pulpcore.plugin.tasking import dispatch
+
+from pulp_python.app.models import PythonPackageContent
+
+from pulp_service.app.constants import PYPI_CHECK_CONCURRENCY, PYPI_JSON_URL
+from pulp_service.app.models import YankedPackageReport
 
 _logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ def dispatch_pypi_yank_checks():
 async def check_packages_for_monitor(monitor_pk):
     """Run a PyPI yank check scoped to a single PyPIYankMonitor's repository/version."""
     from django.utils import timezone
+
     from pulp_service.app.models import PyPIYankMonitor
 
     monitor = await sync_to_async(
