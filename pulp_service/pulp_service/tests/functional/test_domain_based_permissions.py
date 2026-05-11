@@ -1,8 +1,8 @@
 import json
-import pytest
-
-from uuid import uuid4
 from base64 import b64encode
+from uuid import uuid4
+
+import pytest
 
 
 def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup):

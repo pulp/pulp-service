@@ -1,6 +1,5 @@
 import json
 
-import pytest
 import requests
 
 from pulp_npm.tests.functional.constants import NPM_FIXTURE_URL

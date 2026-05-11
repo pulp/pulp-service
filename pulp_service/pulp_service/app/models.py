@@ -2,28 +2,22 @@ import asyncio
 import json
 import logging
 import ssl
-
-import aiohttp
-import jq
-
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from datetime import datetime
-from hashlib import sha256
 from gettext import gettext as _
+from hashlib import sha256
 
+import aiohttp
+import jq
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField, HStoreField
 from django.db import models
 
-from django.contrib.postgres.fields import ArrayField, HStoreField
-
-from pulpcore.plugin.models import BaseModel, Content, Domain, Group, RepositoryVersion
-from pulpcore.plugin.models import AutoAddObjPermsMixin
-from pulpcore.plugin.util import get_domain_pk
-
 from pulpcore.app.models import HeaderContentGuard
-
 from pulpcore.cache import Cache
+from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel, Content, Domain, Group, RepositoryVersion
+from pulpcore.plugin.util import get_domain_pk
 
 _logger = logging.getLogger(__name__)
 
@@ -71,21 +65,19 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                     return await response.json()
 
         try:
-            _logger.info(f"[{datetime.now()}] Making a request to feature service API ...")
+            _logger.info("[%s] Making a request to feature service API ...", datetime.now())
             response = asyncio.run(fetch_feature())
-            _logger.info(f"[{datetime.now()}] Got a response from feature service API!")
+            _logger.info("[%s] Got a response from feature service API!", datetime.now())
         except aiohttp.ClientResponseError as err:
             if err.status == 400:
-                _logger.error(
-                    "Failed to request information for a user. BadRequest. URL: {}".format(err.request_info.url)
-                )
+                _logger.error("Failed to request information for a user. BadRequest. URL: %s", err.request_info.url)
 
             if err.status == 403:
                 _logger.error(
                     "Failed to request information for a user. Permission Denied. Verify if the certificate is still valid."
                 )
 
-            _logger.warn(_("Failed to fetch the Subscription feature information for a user."))
+            _logger.warning(_("Failed to fetch the Subscription feature information for a user."))
             raise PermissionError(_("Access denied."))
 
         features_available = {feature["name"] for feature in response["features"]}
@@ -95,7 +87,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         try:
             header_content = request.headers[self.header_name]
         except KeyError:
-            _logger.error("Access not allowed. Header {header_name} not found.".format(header_name=self.header_name))
+            _logger.error("Access not allowed. Header %s not found.", self.header_name)
             raise PermissionError(_("Access denied."))
 
         try:
@@ -109,7 +101,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             json_path = jq.compile(self.jq_filter)
 
             if settings.AUTHENTICATION_HEADER_DEBUG:
-                _logger.info("Authentication Header Debug enabled: {header_value}".format(header_value=header_value))
+                _logger.info("Authentication Header Debug enabled: %s", header_value)
 
             header_value = json_path.input_value(header_value).first()
 
@@ -136,11 +128,11 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                 account_allowed = json.loads(account_allowed)
 
             if not account_allowed:
-                _logger.warn("Access not allowed - Features not available for the user.")
+                _logger.warning("Access not allowed - Features not available for the user.")
                 raise PermissionError(_("Access denied."))
 
-        except aiohttp.ClientResponseError as err:
-            _logger.warn("Access not allowed - Failed to check for features.")
+        except aiohttp.ClientResponseError:
+            _logger.warning("Access not allowed - Failed to check for features.")
             raise PermissionError(_("Access denied."))
 
         return

@@ -1,7 +1,6 @@
 import json
 import logging
 import random
-
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from datetime import datetime, timedelta
@@ -12,38 +11,36 @@ from django.db import transaction
 from django.db.models.query import QuerySet
 from django.http import Http404
 from django.shortcuts import redirect
-
 from drf_spectacular.utils import extend_schema, extend_schema_view
-
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.exceptions import APIException
+from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.decorators import action
-from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 
-from pulpcore.plugin.viewsets import OperationPostponedResponse
-from pulpcore.plugin.viewsets import ContentGuardViewSet, NamedModelViewSet, RolesMixin, TaskViewSet
-from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
-from pulpcore.plugin.tasking import dispatch
 from pulpcore.app.models import Domain, Group, Task
 from pulpcore.app.serializers import DomainSerializer
-from pulpcore.filters import BaseFilterSet, HyperlinkRelatedFilter
 from pulpcore.app.viewsets.base import NAME_FILTER_OPTIONS
 from pulpcore.app.viewsets.custom_filters import LabelFilter
-
-
-from pulp_service.app.authentication import (
-    RHServiceAccountCertAuthentication,
-    RHTermsBasedRegistryAuthentication,
+from pulpcore.filters import BaseFilterSet, HyperlinkRelatedFilter
+from pulpcore.plugin.serializers import AsyncOperationResponseSerializer
+from pulpcore.plugin.tasking import dispatch
+from pulpcore.plugin.viewsets import (
+    ContentGuardViewSet,
+    NamedModelViewSet,
+    OperationPostponedResponse,
+    RolesMixin,
+    TaskViewSet,
 )
 
+from pulp_service.app.authentication import (
+    RHTermsBasedRegistryAuthentication,
+)
 from pulp_service.app.authorization import DomainBasedPermission, group_var
-from pulp_service.app.models import AgentScanReport, FeatureContentGuard
-from pulp_service.app.models import PyPIYankMonitor
+from pulp_service.app.models import AgentScanReport, FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
 from pulp_service.app.models import VulnerabilityReport as VulnReport
-from pulp_service.app.models import YankedPackageReport
 from pulp_service.app.serializers import (
     AgentScanReportSerializer,
     ContentScanSerializer,
@@ -52,14 +49,12 @@ from pulp_service.app.serializers import (
     VulnerabilityReportSerializer,
     YankedPackageReportSerializer,
 )
-from pulp_service.app.tasks.package_scan import check_npm_package, check_content_from_repo_version
+from pulp_service.app.tasks.package_scan import check_content_from_repo_version, check_npm_package
 from pulp_service.app.tasks.redis_lock_utils import (
     check_lock_holder_liveness,
     scan_resource_locks,
     scan_task_locks,
 )
-from pulp_rpm.app.models import Package
-
 
 _logger = logging.getLogger(__name__)
 
@@ -143,11 +138,7 @@ class DebugAuthenticationHeadersView(APIView):
         try:
             header_content = request.headers["x-rh-identity"]
         except KeyError:
-            _logger.error(
-                "Access not allowed. Header {header_name} not found.".format(
-                    header_name=settings.AUTHENTICATION_JSON_HEADER
-                )
-            )
+            _logger.error("Access not allowed. Header %s not found.", settings.AUTHENTICATION_JSON_HEADER)
             raise PermissionError("Access denied.")
 
         try:
@@ -368,7 +359,7 @@ class RDSConnectionTestDispatcherView(APIView):
         """
         # Check if RDS tests are enabled (similar to TEST_TASK_INGESTION check)
         if not settings.DEBUG and not settings.RDS_CONNECTION_TESTS_ENABLED:
-            _logger.warning(f"Unauthorized RDS test access attempt from {request.META.get('REMOTE_ADDR', 'unknown')}")
+            _logger.warning("Unauthorized RDS test access attempt from %s", request.META.get("REMOTE_ADDR", "unknown"))
             return Response(
                 {
                     "error": "RDS connection tests are not enabled.",
@@ -635,7 +626,7 @@ class ReleaseTaskLocksView(APIView):
                 lock_key = resource_to_lock_key(resource)
                 if redis_conn.delete(lock_key):
                     exclusive_locks_deleted += 1
-                    _logger.info(f"Deleted exclusive lock for resource: {resource}")
+                    _logger.info("Deleted exclusive lock for resource: %s", resource)
 
             # Delete shared resource locks directly (delete the entire set)
             shared_locks_deleted = 0
@@ -643,7 +634,7 @@ class ReleaseTaskLocksView(APIView):
                 lock_key = resource_to_lock_key(resource)
                 if redis_conn.delete(lock_key):
                     shared_locks_deleted += 1
-                    _logger.info(f"Deleted shared lock set for resource: {resource}")
+                    _logger.info("Deleted shared lock set for resource: %s", resource)
 
             # Delete the task lock
             task_lock_deleted = redis_conn.delete(task_lock_key)
@@ -665,7 +656,7 @@ class ReleaseTaskLocksView(APIView):
             )
 
         except Exception as e:
-            _logger.exception(f"Error releasing locks for task {task_id}")
+            _logger.exception("Error releasing locks for task %s", task_id)
             return Response(
                 {"error": "Failed to release locks", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1369,7 +1360,7 @@ class TaskDebugView(APIView):
             )
 
         except Exception as e:
-            _logger.exception(f"Error getting debug info for task {task_id}")
+            _logger.exception("Error getting debug info for task %s", task_id)
             return Response(
                 {"error": "Failed to get task debug info", "detail": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1549,7 +1540,6 @@ def _correlate_orphaned_locks_to_tasks(orphaned_resource_locks):
 
     Returns a dict mapping resource name to a list of correlated task summaries.
     """
-    from pulpcore.constants import TASK_INCOMPLETE_STATES
 
     correlations = {}
 
@@ -1873,33 +1863,37 @@ class CreateDomainView(APIView):
             if custom_group_name:
                 group, created = Group.objects.get_or_create(name=custom_group_name)
                 if created:
-                    _logger.info(f"Created new group '{custom_group_name}' for user {user.username}.")
+                    _logger.info("Created new group '%s' for user %s.", custom_group_name, user.username)
                     user.groups.add(group)
-                    _logger.info(f"Added user {user.username} to new group '{custom_group_name}'.")
+                    _logger.info("Added user %s to new group '%s'.", user.username, custom_group_name)
                 else:
                     _logger.info(
-                        f"Using existing group '{custom_group_name}' for domain '{domain_name}'. "
-                        f"User {user.username} is NOT being added to the existing group."
+                        "Using existing group '%s' for domain '%s'. User %s is NOT being added to the existing group.",
+                        custom_group_name,
+                        domain_name,
+                        user.username,
                     )
             elif not user.groups.exists():
                 group_name = f"domain-{domain_name}"
                 _logger.info(
-                    f"User {user.username} has no groups. Creating or finding group '{group_name}' for domain creation."
+                    "User %s has no groups. Creating or finding group '%s' for domain creation.",
+                    user.username,
+                    group_name,
                 )
                 group, created = Group.objects.get_or_create(name=group_name)
                 if created:
-                    _logger.info(f"Created new group '{group_name}'.")
+                    _logger.info("Created new group '%s'.", group_name)
                 else:
-                    _logger.info(f"Reusing existing group '{group_name}'.")
+                    _logger.info("Reusing existing group '%s'.", group_name)
                 user.groups.add(group)
-                _logger.info(f"Added user {user.username} to group '{group_name}'.")
+                _logger.info("Added user %s to group '%s'.", user.username, group_name)
             else:
                 group = user.groups.first()
-                _logger.info(f"User {user.username} already belongs to group '{group.name}'.")
+                _logger.info("User %s already belongs to group '%s'.", user.username, group.name)
         except Exception as e:
-            _logger.error(f"Failed to resolve group for domain '{domain_name}': {e}")
+            _logger.error("Failed to resolve group for domain '%s': %s", domain_name, e)
             return Response(
-                {"error": f"Failed to resolve group for domain: {str(e)}"},
+                {"error": f"Failed to resolve group for domain: {e!s}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

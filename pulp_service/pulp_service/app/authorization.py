@@ -1,17 +1,16 @@
-from contextvars import ContextVar
+import json
+import logging
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from django.db.models import Q
+from contextvars import ContextVar
 
-
-import json
 import jq
-from pulpcore.plugin.models import Domain
-from pulpcore.plugin.util import extract_pk, get_domain_pk
-from pulp_service.app.models import DomainOrg
-from rest_framework.permissions import BasePermission, SAFE_METHODS
-import logging
+from django.db.models import Q
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 
+from pulpcore.plugin.util import extract_pk, get_domain_pk
+
+from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
 org_id_var = ContextVar("org_id")
@@ -73,13 +72,9 @@ class DomainBasedPermission(BasePermission):
             user_id_var.set(request.user.pk)
             return True
         # Anyone can list domains
-        elif action == "domain_list":
+        if action == "domain_list":
             return True
-        elif action == "domain_update":
-            # The PK is part of the URL
-            domain_pk = extract_pk(request.META["PATH_INFO"])
-            return self._has_domain_access(domain_pk, org_id, user)
-        elif action == "domain_delete":
+        if action == "domain_update" or action == "domain_delete":
             # The PK is part of the URL
             domain_pk = extract_pk(request.META["PATH_INFO"])
             return self._has_domain_access(domain_pk, org_id, user)
@@ -116,7 +111,7 @@ class DomainBasedPermission(BasePermission):
                 header_decoded_content = b64decode(header_content)
                 return header_decoded_content
         except Base64DecodeError:
-            return
+            return None
 
     def get_org_id(self, decoded_header_content):
         if decoded_header_content:
@@ -124,7 +119,7 @@ class DomainBasedPermission(BasePermission):
                 header_value = json.loads(decoded_header_content)
                 return org_id_json_path.input_value(header_value).first()
             except json.JSONDecodeError:
-                return
+                return None
 
 
 class AllowUnauthPull(BasePermission):

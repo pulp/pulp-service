@@ -1,4 +1,4 @@
-from django.urls import path, include
+from django.urls import include, path
 
 from .admin import admin_site
 from .viewsets import (
@@ -13,12 +13,11 @@ from .viewsets import (
     StaleLockCleanupDispatcherView,
     StaleLockScanView,
     TaskDebugView,
-    TaskQueueView,
-    TaskViewSet,
     TaskIngestionDispatcherView,
     TaskIngestionRandomResourceLockDispatcherView,
+    TaskQueueView,
+    TaskViewSet,
 )
-
 
 urlpatterns = [
     path("api/pulp-mgmt/", admin_site.urls),

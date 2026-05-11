@@ -6,14 +6,12 @@ a live Pulp stack.  They focus on the group-resolution branch logic
 introduced by the custom group_name feature.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from rest_framework.test import APIRequestFactory
 
-from pulp_service.app.viewsets import CreateDomainView
 from pulp_service.app.authorization import group_var
-
+from pulp_service.app.viewsets import CreateDomainView
 
 factory = APIRequestFactory()
 

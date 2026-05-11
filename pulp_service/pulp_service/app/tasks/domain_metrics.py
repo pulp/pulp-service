@@ -5,6 +5,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 
 from pulpcore.plugin.models import Domain, Repository
+
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME, RHEL_AI_DOMAIN_NAME
 
 

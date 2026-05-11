@@ -3,6 +3,7 @@ import requests
 
 from pulpcore.client.pulp_rpm import RpmRepositorySyncURL
 from pulpcore.client.pulp_service import ServiceFeatureContentGuard
+
 from pulp_service.tests.functional.constants import (
     CONTENT_GUARD_FEATURES,
     CONTENT_GUARD_FEATURES_NOT_SUBSCRIBED,

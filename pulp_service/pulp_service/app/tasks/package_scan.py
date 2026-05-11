@@ -1,18 +1,20 @@
-import aiohttp
 import json
 import re
 import threading
-
-from asgiref.sync import sync_to_async
 from queue import Empty, Queue
 
+import aiohttp
+from asgiref.sync import sync_to_async
+
+from pulpcore.plugin.models import CreatedResource, PulpTemporaryFile, RepositoryVersion
 from pulpcore.plugin.util import get_domain
-from pulpcore.plugin.models import CreatedResource, RepositoryVersion, PulpTemporaryFile
+
 from pulp_npm.app.models import Package as NPMPackage
+
 from pulp_service.app.constants import (
+    OSV_QUERY_URL,
     OSV_RH_ECOSYSTEM_CPES_LABEL,
     OSV_RH_ECOSYSTEM_LABEL,
-    OSV_QUERY_URL,
     PKG_ECOSYSTEM,
     VULNERABILITY_TASK_THREAD_TIMEOUT,
 )
@@ -72,10 +74,7 @@ async def _scan_packages(background_thread):
                     json_body = json.loads(response_body)
                     osv_package_name = osv_data["package"]["name"]
                     osv_package_version = osv_data["version"]
-                    package_name = "{package}-{version}".format(
-                        package=osv_package_name,
-                        version=osv_package_version,
-                    )
+                    package_name = f"{osv_package_name}-{osv_package_version}"
                     if json_body.get("vulns"):
                         scanned_packages[package_name] = json_body["vulns"]
                     if next_page_token := json_body.get("next_page_token"):
@@ -89,8 +88,7 @@ async def _scan_packages(background_thread):
         except Empty:
             if not background_thread.is_alive():
                 raise RuntimeError("Vuln report task thread died unexpectedly.")
-            else:
-                raise RuntimeError("Background vuln report thread took too long.")
+            raise RuntimeError("Background vuln report thread took too long.")
 
     vuln_report, created = await sync_to_async(VulnerabilityReport.objects.get_or_create)(
         vulns=scanned_packages, pulp_domain=get_domain()
@@ -157,16 +155,14 @@ def _identify_package_ecosystem(content: any, repository=None) -> str:
     """
     if isinstance(content, NPMPackage):
         return [getattr(PKG_ECOSYSTEM, "npm", None)]
-    elif content.TYPE in ["python", "gem"]:
+    if content.TYPE in ["python", "gem"]:
         return [getattr(PKG_ECOSYSTEM, content.TYPE, None)]
-    elif repository and repository.pulp_type == "rpm.rpm":
+    if repository and repository.pulp_type == "rpm.rpm":
         if content.pulp_type == "rpm.package":
             return _convert_rhel_repo_cpe(repository)
-        else:
-            # ignore non rpm packages (advisory, packagecategory, packagelangpacks)
-            return []
-    else:
-        raise RuntimeError("Package type not supported!")
+        # ignore non rpm packages (advisory, packagecategory, packagelangpacks)
+        return []
+    raise RuntimeError("Package type not supported!")
 
 
 def _convert_rhel_repo_cpe(repo):

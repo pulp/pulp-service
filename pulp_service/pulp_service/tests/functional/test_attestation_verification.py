@@ -12,7 +12,6 @@ signature verification is fully exercised end-to-end.
 import base64
 import json
 import os
-import struct
 
 import pytest
 from cryptography.hazmat.primitives import hashes, serialization

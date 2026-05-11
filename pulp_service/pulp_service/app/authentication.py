@@ -1,14 +1,8 @@
-import jq
-import json
 import logging
 
-from base64 import b64decode
-from binascii import Error as Base64DecodeError
 from django.contrib.auth import get_user_model
-from gettext import gettext as _
-from pulpcore.app.authentication import JSONHeaderRemoteAuthentication
-from rest_framework.exceptions import AuthenticationFailed
 
+from pulpcore.app.authentication import JSONHeaderRemoteAuthentication
 
 _logger = logging.getLogger(__name__)
 
@@ -24,7 +18,7 @@ class RHServiceAccountCertAuthentication(JSONHeaderRemoteAuthentication):
 class RHTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
     header = "HTTP_X_RH_IDENTITY"
     # Combines org_id with username - falls back to "|username" if org_id is missing
-    jq_filter = '.identity | if .user.username then "\(.org_id // "")|\(.user.username)" else null end'
+    jq_filter = r'.identity | if .user.username then "\(.org_id // "")|\(.user.username)" else null end'
 
     def authenticate_header(self, request):
         return "Bearer"
@@ -47,7 +41,7 @@ class TurnpikeTermsBasedRegistryAuthentication(JSONHeaderRemoteAuthentication):
     header = "HTTP_X_RH_IDENTITY"
     jq_filter = (
         'if .identity.auth_type == "registry-auth" and .identity.registry.username '
-        'then "\(.identity.registry.org_id // "")|\(.identity.registry.username)" '
+        r'then "\(.identity.registry.org_id // "")|\(.identity.registry.username)" '
         "else null end"
     )
 
@@ -73,5 +67,5 @@ class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
         try:
             return User.objects.get(pk=user_id)
         except User.DoesNotExist:
-            _logger.warning(f"User with id {user_id} not found in get_user()")
+            _logger.warning("User with id %s not found in get_user()", user_id)
             return None

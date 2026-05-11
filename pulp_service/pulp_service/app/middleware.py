@@ -3,22 +3,19 @@ import ipaddress
 import logging
 import marshal
 import tempfile
-
 from contextlib import suppress
 from contextvars import ContextVar
-from os import getenv
 
 from django.contrib.auth import login
 from django.db import IntegrityError
 from django.utils.deprecation import MiddlewareMixin
 
-
-from pulpcore.metrics import init_otel_meter
 from pulpcore.app.util import get_worker_name
-from pulpcore.plugin.models import Artifact, Repository
-from pulpcore.plugin.util import extract_pk, get_artifact_url, resolve_prn
-from pulp_service.app.authentication import RHSamlAuthentication
+from pulpcore.metrics import init_otel_meter
+from pulpcore.plugin.models import Artifact
+from pulpcore.plugin.util import get_artifact_url
 
+from pulp_service.app.authentication import RHSamlAuthentication
 
 _logger = logging.getLogger(__name__)
 repository_name_var = ContextVar("repository_name")
@@ -66,7 +63,7 @@ class ProfilerMiddleware(MiddlewareMixin):
             except Exception:
                 # we want the process_exception middleware to fire
                 # https://code.djangoproject.com/ticket/12250
-                return
+                return None
 
     def process_response(self, request, response):
         if hasattr(request, self.PROFILER_REQUEST_ATTR_NAME):
@@ -81,7 +78,7 @@ class ProfilerMiddleware(MiddlewareMixin):
                 artifact = Artifact.init_and_validate(temp_file.name)
                 with suppress(IntegrityError):
                     artifact.save()
-                _logger.info(f"Profile data URL: {get_artifact_url(artifact)}")
+                _logger.info("Profile data URL: %s", get_artifact_url(artifact))
 
         return response
 
@@ -119,7 +116,7 @@ class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
         if "/pulp-mgmt/" in request.path:
             if "HTTP_X_RH_IDENTITY" in request.META:
-                _logger.debug(f"{request.META['HTTP_X_RH_IDENTITY']}")
+                _logger.debug("%s", request.META["HTTP_X_RH_IDENTITY"])
 
                 # Authenticate user using RHSamlAuthentication backend
                 if not request.user.is_authenticated:
@@ -131,7 +128,7 @@ class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
                         request.session.modified = True
                         # Update request.user for the current request
                         request.user = user
-                        _logger.info(f"User {user.username} authenticated for pulp-mgmt")
+                        _logger.info("User %s authenticated for pulp-mgmt", user.username)
                     else:
                         _logger.warning("Failed to authenticate user from RH Identity header")
 

@@ -19,14 +19,13 @@ from django.db import connection, transaction
 from pulpcore.app.models import AppStatus
 from pulpcore.plugin.models import Task
 
-
 logger = logging.getLogger(__name__)
 
 
 def log(message):
     """Log with timestamp"""
     timestamp = datetime.now().isoformat()
-    logger.info(f"[{timestamp}] {message}")
+    logger.info("[%s] %s", timestamp, message)
 
 
 def rds_test_wrapper(test_name, connection_pinned=False):
@@ -389,13 +388,14 @@ def _notification_sender_worker(channel_name, interval_seconds, duration_minutes
     import logging
     import time
     from datetime import datetime
+
     import psycopg
 
     logger = logging.getLogger(__name__)
 
     def worker_log(message):
         timestamp = datetime.now().isoformat()
-        logger.info(f"[NOTIFY-WORKER][{timestamp}] {message}")
+        logger.info("[NOTIFY-WORKER][%s] %s", timestamp, message)
 
     try:
         # Create a new database connection (can't share with parent process)
