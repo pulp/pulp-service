@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+
 def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup):
 
     user1_orgid1 = {
@@ -525,16 +526,8 @@ def test_group_based_domain_visibility(
         assert response_b.results[0].name == domain.name
 
 
-def test_superuser_sees_all_domains(pulpcore_bindings, bindings_cfg, anonymous_user, gen_object_with_cleanup):
+def test_superuser_sees_all_domains(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
     """Test that superuser sees all domains including default."""
-    admin_user_data = {
-        "identity": {
-            "org_id": 1,
-            "internal": {"org_id": 1},
-            "user": {"username": bindings_cfg.username},
-        }
-    }
-
     regular_user_data = {
         "identity": {
             "org_id": 2,
@@ -559,17 +552,13 @@ def test_superuser_sees_all_domains(pulpcore_bindings, bindings_cfg, anonymous_u
             },
         )
 
-        # Superuser lists domains and sees all domains including default
-        header_admin = json.dumps(admin_user_data)
-        auth_admin = b64encode(bytes(header_admin, "ascii"))
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_admin
-
-        response = pulpcore_bindings.DomainsApi.list()
-        # Superuser should see at least 2 domains: default + the created domain
-        assert response.count >= 2
-        domain_names = {domain.name for domain in response.results}
-        assert "default" in domain_names
-        assert domain_regular_name in domain_names
+    # Superuser lists domains via basic auth (is_superuser=True)
+    pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+    response = pulpcore_bindings.DomainsApi.list()
+    assert response.count >= 2
+    domain_names = {domain.name for domain in response.results}
+    assert "default" in domain_names
+    assert domain_regular_name in domain_names
 
 
 def test_default_domain_invisible_to_regular_users(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
