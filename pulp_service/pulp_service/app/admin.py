@@ -93,12 +93,16 @@ class PulpGroupForm(forms.ModelForm):
         users = self.cleaned_data.get("users")
 
         # For new groups, ensure the creating user is included (unless they're a superuser)
-        if not self.instance.pk and hasattr(self, "_current_user"):
-            if not self._current_user.is_superuser and self._current_user not in users:
-                raise ValidationError(
-                    f"You must include yourself ({self._current_user.username}) in the group members. "
-                    "This ensures you maintain access to the group after creation."
-                )
+        if (
+            not self.instance.pk
+            and hasattr(self, "_current_user")
+            and not self._current_user.is_superuser
+            and self._current_user not in users
+        ):
+            raise ValidationError(
+                f"You must include yourself ({self._current_user.username}) in the group members. "
+                "This ensures you maintain access to the group after creation."
+            )
 
         return users
 
@@ -333,10 +337,7 @@ class DomainOrgAdmin(admin.ModelAdmin):
         # Check if user has access to this DomainOrg entry
         user_groups = request.user.groups.all()
 
-        if user_groups.exists() and obj.group in user_groups:
-            return True
-
-        return False
+        return user_groups.exists() and obj.group in user_groups
 
     def has_delete_permission(self, request, obj=None):
         """

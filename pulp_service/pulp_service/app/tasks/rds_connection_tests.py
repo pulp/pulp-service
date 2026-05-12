@@ -11,7 +11,7 @@ import logging
 import multiprocessing
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from functools import wraps
 
 from django.db import connection, transaction
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def log(message):
     """Log with timestamp"""
-    timestamp = datetime.now(tz=timezone.utc).isoformat()
+    timestamp = datetime.now(tz=UTC).isoformat()
     logger.info("[%s] %s", timestamp, message)
 
 
@@ -50,7 +50,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
         @wraps(test_func)
         def wrapper(*args, **kwargs):
             # Initialize all variables at the start to prevent UnboundLocalError
-            started_at = datetime.now(tz=timezone.utc)
+            started_at = datetime.now(tz=UTC)
             finished_at = None
             duration = 0
             alive = True
@@ -95,7 +95,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                         "traceback": traceback.format_exc(),
                     }
 
-                finished_at = datetime.now(tz=timezone.utc)
+                finished_at = datetime.now(tz=UTC)
                 duration = (finished_at - started_at).total_seconds() / 60
 
                 log(f"Test finished at: {finished_at.isoformat()}")
@@ -107,7 +107,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
                 log(f"FATAL ERROR in test wrapper: {type(fatal_error).__name__}: {fatal_error}")
                 log(f"Traceback: {traceback.format_exc()}")
                 alive = False
-                finished_at = datetime.now(tz=timezone.utc)
+                finished_at = datetime.now(tz=UTC)
                 duration = (finished_at - started_at).total_seconds() / 60
                 extra_data["error"] = {
                     "type": type(fatal_error).__name__,
@@ -119,7 +119,7 @@ def rds_test_wrapper(test_name, connection_pinned=False):
             result = {
                 "test": test_name,
                 "started_at": started_at.isoformat(),
-                "finished_at": finished_at.isoformat() if finished_at else datetime.now(tz=timezone.utc).isoformat(),
+                "finished_at": finished_at.isoformat() if finished_at else datetime.now(tz=UTC).isoformat(),
                 "duration_minutes": round(duration, 2),
                 "connection_alive": alive,
                 "success": alive,
@@ -394,7 +394,7 @@ def _notification_sender_worker(channel_name, interval_seconds, duration_minutes
     logger = logging.getLogger(__name__)
 
     def worker_log(message):
-        timestamp = datetime.now(tz=timezone.utc).isoformat()
+        timestamp = datetime.now(tz=UTC).isoformat()
         logger.info("[NOTIFY-WORKER][%s] %s", timestamp, message)
 
     try:

@@ -49,21 +49,20 @@ class ProfilerMiddleware(MiddlewareMixin):
     PROFILER_REQUEST_ATTR_NAME = "_django_cprofile_middleware_profiler"
 
     def can(self, request):
-        if "HTTP_X_PROFILE_REQUEST" in request.META:
-            return True
-        return False
+        return "HTTP_X_PROFILE_REQUEST" in request.META
 
     def process_view(self, request, callback, callback_args, callback_kwargs):
         if self.can(request):
             profiler = cProfile.Profile()
             setattr(request, self.PROFILER_REQUEST_ATTR_NAME, profiler)
-            args = (request,) + callback_args
+            args = (request, *callback_args)
             try:
                 return profiler.runcall(callback, *args, **callback_kwargs)
             except Exception:
                 # we want the process_exception middleware to fire
                 # https://code.djangoproject.com/ticket/12250
                 return None
+        return None
 
     def process_response(self, request, response):
         if hasattr(request, self.PROFILER_REQUEST_ATTR_NAME):
@@ -114,23 +113,22 @@ class RhEdgeHostMiddleware(MiddlewareMixin):
 
 class RHSamlAuthHeaderMiddleware(MiddlewareMixin):
     def process_view(self, request, *args, **kwargs):
-        if "/pulp-mgmt/" in request.path:
-            if "HTTP_X_RH_IDENTITY" in request.META:
-                _logger.debug("%s", request.META["HTTP_X_RH_IDENTITY"])
+        if "/pulp-mgmt/" in request.path and "HTTP_X_RH_IDENTITY" in request.META:
+            _logger.debug("%s", request.META["HTTP_X_RH_IDENTITY"])
 
-                # Authenticate user using RHSamlAuthentication backend
-                if not request.user.is_authenticated:
-                    backend = RHSamlAuthentication()
-                    user, _ = backend.authenticate(request)
+            # Authenticate user using RHSamlAuthentication backend
+            if not request.user.is_authenticated:
+                backend = RHSamlAuthentication()
+                user, _ = backend.authenticate(request)
 
-                    if user:
-                        login(request, user, backend="pulp_service.app.authentication.RHSamlAuthentication")
-                        request.session.modified = True
-                        # Update request.user for the current request
-                        request.user = user
-                        _logger.info("User %s authenticated for pulp-mgmt", user.username)
-                    else:
-                        _logger.warning("Failed to authenticate user from RH Identity header")
+                if user:
+                    login(request, user, backend="pulp_service.app.authentication.RHSamlAuthentication")
+                    request.session.modified = True
+                    # Update request.user for the current request
+                    request.user = user
+                    _logger.info("User %s authenticated for pulp-mgmt", user.username)
+                else:
+                    _logger.warning("Failed to authenticate user from RH Identity header")
 
 
 class RequestPathMiddleware(MiddlewareMixin):
