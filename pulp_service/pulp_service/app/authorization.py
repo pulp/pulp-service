@@ -8,6 +8,7 @@ import jq
 from django.db.models import Q
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
+from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 
 from pulp_service.app.models import DomainOrg
