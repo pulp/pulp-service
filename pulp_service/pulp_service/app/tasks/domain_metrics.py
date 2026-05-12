@@ -27,7 +27,7 @@ def content_sources_domains_count():
     metric_reader.collect()
 
 
-def _get_content_sources_domains_count(options):
+def _get_content_sources_domains_count(_options):
     content_sources_domains = Domain.objects.filter(
         pulp_labels__contains={CONTENT_SOURCES_LABEL_NAME: "true"},
     )
@@ -45,7 +45,7 @@ def rhel_ai_repos_count():
     metric_reader.collect()
 
 
-def _get_rhel_ai_repos_count(options):
+def _get_rhel_ai_repos_count(_options):
     rhel_ai_repos = Repository.objects.select_related("pulp_domain").filter(pulp_domain__name=RHEL_AI_DOMAIN_NAME)
     rhel_ai_repos_count = rhel_ai_repos.count()
     yield Observation(rhel_ai_repos_count)

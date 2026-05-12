@@ -3,7 +3,7 @@ import logging
 import random
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from django.conf import settings

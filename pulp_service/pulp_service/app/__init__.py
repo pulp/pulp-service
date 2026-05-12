@@ -12,4 +12,4 @@ class PulpServicePluginAppConfig(PulpPluginAppConfig):
 
     def ready(self):
         super().ready()
-        from . import signals
+        from . import signals  # noqa: F401

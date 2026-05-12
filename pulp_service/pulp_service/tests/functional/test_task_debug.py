@@ -467,7 +467,7 @@ class TestStaleLockScanView:
         assert resp.status_code == 200
         data = resp.json()
 
-        for holder_name, info in data["lock_holder_liveness"].items():
+        for info in data["lock_holder_liveness"].values():
             assert "exists_in_db" in info
             assert "online" in info
             assert "app_type" in info
