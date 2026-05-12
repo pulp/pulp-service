@@ -4,7 +4,7 @@ import logging
 import ssl
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from gettext import gettext as _
 from hashlib import sha256
 
@@ -68,9 +68,9 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                     return await response.json()
 
         try:
-            _logger.info("[%s] Making a request to feature service API ...", datetime.now(tz=timezone.utc))
+            _logger.info("[%s] Making a request to feature service API ...", datetime.now(tz=UTC))
             response = asyncio.run(fetch_feature())
-            _logger.info("[%s] Got a response from feature service API!", datetime.now(tz=timezone.utc))
+            _logger.info("[%s] Got a response from feature service API!", datetime.now(tz=UTC))
         except aiohttp.ClientResponseError as err:
             if err.status == 400:
                 _logger.exception("Failed to request information for a user. BadRequest. URL: %s", err.request_info.url)

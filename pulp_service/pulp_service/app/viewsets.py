@@ -3,7 +3,7 @@ import logging
 import random
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from uuid import uuid4
 
 from django.conf import settings
@@ -279,10 +279,10 @@ class TaskIngestionDispatcherView(APIView):
             raise PermissionError("Access denied.")
 
         task_count = 0
-        start_time = datetime.now(tz=timezone.utc)
+        start_time = datetime.now(tz=UTC)
         timeout = timedelta(seconds=timeout)
 
-        while datetime.now(tz=timezone.utc) < start_time + timeout:
+        while datetime.now(tz=UTC) < start_time + timeout:
             dispatch("pulp_service.app.tasks.util.no_op_task", exclusive_resources=[str(uuid4())])
 
             task_count = task_count + 1
@@ -301,10 +301,10 @@ class TaskIngestionRandomResourceLockDispatcherView(APIView):
         exclusive_resources_list = [str(uuid4()) for _ in range(3)]
 
         task_count = 0
-        start_time = datetime.now(tz=timezone.utc)
+        start_time = datetime.now(tz=UTC)
         timeout = timedelta(seconds=timeout)
 
-        while datetime.now(tz=timezone.utc) < start_time + timeout:
+        while datetime.now(tz=UTC) < start_time + timeout:
             dispatch(
                 "pulp_service.app.tasks.util.no_op_task",
                 exclusive_resources=[random.choice(exclusive_resources_list)],  # noqa: S311
@@ -1078,8 +1078,8 @@ def _simulate_fifo_blocking(task, redis_conn):
 
     # Get the task's own resources
     task_reserved = task.reserved_resources_record or []
-    task_exclusive = set(r for r in task_reserved if not r.startswith("shared:"))
-    task_shared = set(r[7:] for r in task_reserved if r.startswith("shared:"))
+    task_exclusive = {r for r in task_reserved if not r.startswith("shared:")}
+    task_shared = {r[7:] for r in task_reserved if r.startswith("shared:")}
 
     if not task_exclusive and not task_shared:
         return {"is_fifo_blocked": False, "reason": "task has no resource requirements"}
@@ -1149,13 +1149,10 @@ def _simulate_fifo_blocking(task, redis_conn):
                     blocked_shared.add(resource)
 
     # Now check if our target task would be skipped
-    blocked_resources = []
-    for resource in task_exclusive:
-        if resource in blocked_exclusive or resource in blocked_shared:
-            blocked_resources.append(resource)
-    for resource in task_shared:
-        if resource in blocked_shared:
-            blocked_resources.append(f"shared:{resource}")
+    blocked_resources = [
+        resource for resource in task_exclusive if resource in blocked_exclusive or resource in blocked_shared
+    ]
+    blocked_resources.extend(f"shared:{resource}" for resource in task_shared if resource in blocked_shared)
 
     is_blocked = len(blocked_resources) > 0
 
@@ -1163,7 +1160,7 @@ def _simulate_fifo_blocking(task, redis_conn):
         # Find which older tasks caused the blocking
         for older_task in older_tasks:
             older_reserved = older_task.reserved_resources_record or []
-            older_exclusive = set(r for r in older_reserved if not r.startswith("shared:"))
+            older_exclusive = {r for r in older_reserved if not r.startswith("shared:")}
             if older_exclusive & blocked_exclusive:
                 blocking_task_ids.append(str(older_task.pk))
 
@@ -1560,17 +1557,16 @@ def _correlate_orphaned_locks_to_tasks(orphaned_resource_locks):
             .order_by("-pulp_created")[:10]
         )
 
-        task_summaries = []
-        for task in matching_tasks:
-            task_summaries.append(
-                {
-                    "task_id": str(task.pk),
-                    "state": task.state,
-                    "name": task.name,
-                    "pulp_created": task.pulp_created.isoformat(),
-                    "app_lock": task.app_lock.name if task.app_lock else None,
-                }
-            )
+        task_summaries = [
+            {
+                "task_id": str(task.pk),
+                "state": task.state,
+                "name": task.name,
+                "pulp_created": task.pulp_created.isoformat(),
+                "app_lock": task.app_lock.name if task.app_lock else None,
+            }
+            for task in matching_tasks
+        ]
 
         if task_summaries:
             correlations[resource] = task_summaries

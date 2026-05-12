@@ -84,7 +84,7 @@ class DomainBasedPermission(BasePermission):
         domain_pk = get_domain_pk()
         return self._has_domain_access(domain_pk, org_id, user)
 
-    def get_user_action(self, request):
+    def get_user_action(self, request):  # noqa: PLR0911
         view_name = request.resolver_match.view_name
         method = request.META["REQUEST_METHOD"]
 
@@ -103,6 +103,7 @@ class DomainBasedPermission(BasePermission):
             return "domain_create"
         else:
             return "domain_operation"
+        return None
 
     def get_decoded_identity_header(self, request):
         try:
@@ -120,6 +121,7 @@ class DomainBasedPermission(BasePermission):
                 return org_id_json_path.input_value(header_value).first()
             except json.JSONDecodeError:
                 return None
+        return None
 
 
 class AllowUnauthPull(BasePermission):
@@ -130,3 +132,4 @@ class AllowUnauthPull(BasePermission):
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
             return True
+        return None

@@ -169,7 +169,7 @@ def _convert_rhel_repo_cpe(repo):
     """
     Convert the CPE into osv.dev expected format
     """
-    ecosystem = []
-    for cpe in json.loads(repo.pulp_labels[OSV_RH_ECOSYSTEM_CPES_LABEL]):
-        ecosystem.append(cpe_prefix.sub(repo.pulp_labels[OSV_RH_ECOSYSTEM_LABEL], cpe))
-    return ecosystem
+    return [
+        cpe_prefix.sub(repo.pulp_labels[OSV_RH_ECOSYSTEM_LABEL], cpe)
+        for cpe in json.loads(repo.pulp_labels[OSV_RH_ECOSYSTEM_CPES_LABEL])
+    ]

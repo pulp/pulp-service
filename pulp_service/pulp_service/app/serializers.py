@@ -46,7 +46,7 @@ class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerialize
 
     class Meta(ContentGuardSerializer.Meta):
         model = FeatureContentGuard
-        fields = ContentGuardSerializer.Meta.fields + ("header_name", "jq_filter", "features")
+        fields = (*ContentGuardSerializer.Meta.fields, "header_name", "jq_filter", "features")
 
 
 class VulnerabilityReportSerializer(ModelSerializer):
@@ -59,7 +59,7 @@ class VulnerabilityReportSerializer(ModelSerializer):
 
     class Meta:
         model = VulnerabilityReport
-        fields = ModelSerializer.Meta.fields + ("vulns",)
+        fields = (*ModelSerializer.Meta.fields, "vulns")
 
 
 class YankedPackageReportSerializer(ModelSerializer):
@@ -104,7 +104,8 @@ class PyPIYankMonitorSerializer(ModelSerializer):
 
     class Meta:
         model = PyPIYankMonitor
-        fields = ModelSerializer.Meta.fields + (
+        fields = (
+            *ModelSerializer.Meta.fields,
             "name",
             "description",
             "pulp_labels",
@@ -140,11 +141,12 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             return data
 
         # for rpm repositories we need to verify the repository labels
-        if repo_ver.repository.pulp_type == "rpm.rpm":
-            if not self._validate_rpm_repo_expected_fields(repo_ver.repository):
-                raise serializers.ValidationError(
-                    _("Repository ecosystem not supported or does not contain the expected labels.")
-                )
+        if repo_ver.repository.pulp_type == "rpm.rpm" and not self._validate_rpm_repo_expected_fields(
+            repo_ver.repository
+        ):
+            raise serializers.ValidationError(
+                _("Repository ecosystem not supported or does not contain the expected labels.")
+            )
 
         return data
 
@@ -154,10 +156,11 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
         verify if len(label['osv.dev cpe']) > 0
         """
         # for now, we are only supporting 'Red Hat' for rpms
-        if repo.pulp_labels.get(OSV_RH_ECOSYSTEM_LABEL) == "Red Hat":
+        if repo.pulp_labels.get(OSV_RH_ECOSYSTEM_LABEL) == "Red Hat" and (
+            cpes := repo.pulp_labels.get(OSV_RH_ECOSYSTEM_CPES_LABEL)
+        ):
             # 'osv.dev cpe' must be provided for Red Hat ecosystem
-            if cpes := repo.pulp_labels.get(OSV_RH_ECOSYSTEM_CPES_LABEL):
-                return len(cpes) > 0
+            return len(cpes) > 0
         return False
 
     def verify_file(self):
@@ -188,4 +191,4 @@ class AgentScanReportSerializer(ModelSerializer):
 
     class Meta:
         model = AgentScanReport
-        fields = ModelSerializer.Meta.fields + ("reports", "repo_versions", "content")
+        fields = (*ModelSerializer.Meta.fields, "reports", "repo_versions", "content")
