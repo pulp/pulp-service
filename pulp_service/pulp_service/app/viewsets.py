@@ -3,7 +3,7 @@ import logging
 import random
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from django.conf import settings
@@ -279,10 +279,10 @@ class TaskIngestionDispatcherView(APIView):
             raise PermissionError("Access denied.")
 
         task_count = 0
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         timeout = timedelta(seconds=timeout)
 
-        while datetime.now() < start_time + timeout:
+        while datetime.now(tz=timezone.utc) < start_time + timeout:
             dispatch("pulp_service.app.tasks.util.no_op_task", exclusive_resources=[str(uuid4())])
 
             task_count = task_count + 1
@@ -301,13 +301,13 @@ class TaskIngestionRandomResourceLockDispatcherView(APIView):
         exclusive_resources_list = [str(uuid4()) for _ in range(3)]
 
         task_count = 0
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         timeout = timedelta(seconds=timeout)
 
-        while datetime.now() < start_time + timeout:
+        while datetime.now(tz=timezone.utc) < start_time + timeout:
             dispatch(
                 "pulp_service.app.tasks.util.no_op_task",
-                exclusive_resources=[random.choice(exclusive_resources_list)],
+                exclusive_resources=[random.choice(exclusive_resources_list)],  # noqa: S311
             )
 
             task_count = task_count + 1
@@ -447,7 +447,9 @@ class RDSConnectionTestDispatcherView(APIView):
                 "tasks": dispatched_tasks,
                 "run_sequentially": run_sequentially,
                 "duration_minutes": duration_minutes,
-                "note": f"Each test runs for approximately {duration_minutes} minutes. Monitor task status via task_href.",
+                "note": (
+                    f"Each test runs for approximately {duration_minutes} minutes. Monitor task status via task_href."
+                ),
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -1912,7 +1914,10 @@ class CreateDomainView(APIView):
             _logger.exception("Model domain 'template-domain-s3' not found")
             return Response(
                 {
-                    "error": "Model domain 'template-domain-s3' not found. Please create it first with correct storage settings."
+                    "error": (
+                        "Model domain 'template-domain-s3' not found. "
+                        "Please create it first with correct storage settings."
+                    )
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

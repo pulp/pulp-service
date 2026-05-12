@@ -4,7 +4,7 @@ import logging
 import ssl
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from datetime import datetime
+from datetime import datetime, timezone
 from gettext import gettext as _
 from hashlib import sha256
 
@@ -27,7 +27,7 @@ class DomainOrg(models.Model):
     One-to-many relationship between org ids and Domains.
     """
 
-    org_id = models.CharField(null=True, db_index=True)
+    org_id = models.CharField(null=True, db_index=True)  # noqa: DJ001 — NULL semantics needed for org lookup
     domains = models.ManyToManyField(Domain, related_name="domain_orgs")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -41,6 +41,9 @@ class DomainOrg(models.Model):
         on_delete=models.SET_NULL,
         null=True,
     )
+
+    def __str__(self):
+        return f"DomainOrg(org_id={self.org_id})"
 
 
 class FeatureContentGuardCache(Cache):
@@ -65,16 +68,17 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
                     return await response.json()
 
         try:
-            _logger.info("[%s] Making a request to feature service API ...", datetime.now())
+            _logger.info("[%s] Making a request to feature service API ...", datetime.now(tz=timezone.utc))
             response = asyncio.run(fetch_feature())
-            _logger.info("[%s] Got a response from feature service API!", datetime.now())
+            _logger.info("[%s] Got a response from feature service API!", datetime.now(tz=timezone.utc))
         except aiohttp.ClientResponseError as err:
             if err.status == 400:
                 _logger.exception("Failed to request information for a user. BadRequest. URL: %s", err.request_info.url)
 
             if err.status == 403:
                 _logger.exception(
-                    "Failed to request information for a user. Permission Denied. Verify if the certificate is still valid."
+                    "Failed to request information for a user. "
+                    "Permission Denied. Verify if the certificate is still valid."
                 )
 
             _logger.warning(_("Failed to fetch the Subscription feature information for a user."))
@@ -160,7 +164,7 @@ class YankedPackageReport(BaseModel):
         blank=True,
         related_name="reports",
     )
-    repository_name = models.TextField(null=True, blank=True)
+    repository_name = models.TextField(null=True, blank=True)  # noqa: DJ001
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
@@ -173,7 +177,7 @@ class PyPIYankMonitor(BaseModel):
     """
 
     name = models.TextField(db_index=True, unique=True)
-    description = models.TextField(null=True, blank=True)
+    description = models.TextField(null=True, blank=True)  # noqa: DJ001
     pulp_labels = HStoreField(default=dict)
     repository = models.ForeignKey("core.Repository", on_delete=models.CASCADE, null=True, blank=True)
     repository_version = models.ForeignKey("core.RepositoryVersion", on_delete=models.CASCADE, null=True, blank=True)
