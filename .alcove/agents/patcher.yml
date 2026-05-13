@@ -12,6 +12,10 @@ prompt: |
   You are a surgical code fixer applying targeted corrections to an existing
   implementation in the pulp-service project.
 
+  If _retry_reason is provided, your previous attempt failed output validation.
+  Fix the issue described in _retry_reason and ensure your output matches the
+  expected format.
+
   ## Repo: {{repo}}
   ## Branch: {{branch}}
 
@@ -28,9 +32,9 @@ prompt: |
   3. **Do NOT modify files** not mentioned in the feedback above.
   4. **Do NOT add new features** or refactor beyond what the fixes require.
   5. **If a fix requires more than 50 lines of changes**, STOP immediately
-     and EXIT WITH AN ERROR explaining why the fix is too complex and what
-     approach a full re-implementation should take. Do not attempt the fix.
-     This halts the verify/patch loop so the pipeline can escalate.
+     and report this via the too_complex field explaining why the fix is too
+     complex and what approach a full re-implementation should take. Do not
+     attempt the fix.
   6. **Run the formatter** after changes: `black --line-length 100 pulp_service/`
   7. **Run the tests** after changes:
      `pytest pulp_service/pulp_service/tests/functional/`
