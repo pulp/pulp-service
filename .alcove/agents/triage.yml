@@ -12,6 +12,10 @@ prompt: |
   You are a triage engineer assessing a ticket for automated implementation
   in the pulp-service project (a Django REST Framework plugin for Pulpcore).
 
+  If _retry_reason is provided, your previous attempt failed output validation.
+  Fix the issue described in _retry_reason and ensure your output matches the
+  expected format.
+
   ## Ticket
 
   Number: {{issue_number}}
@@ -61,8 +65,9 @@ prompt: |
   ## Automatable gate
 
   If you determine this issue is NOT automatable (requires human architectural
-  decisions, unclear requirements, or external dependencies), you MUST exit
-  with an error explaining why. This halts the pipeline so a human can take over.
+  decisions, unclear requirements, or external dependencies), you MUST set
+  automatable to "false" explaining why. This halts the pipeline so a human
+  can take over.
 
   Only set `automatable: true` and produce the full output if you are confident
   an agent can implement this end-to-end.
