@@ -154,6 +154,7 @@ workflow:
     inputs:
       repo: pulp/pulp-service
       pr: "{{steps.create-pr.outputs.pr_number}}"
+      timeout: 3600
 
   - id: ci-fix
     type: agent
