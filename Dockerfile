@@ -171,8 +171,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0044-Move-content-app-heartbeat-to-a-thread.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
 
-COPY images/assets/patches/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0045-Include-DRF-default-auth-classes-when-token-auth-is-disabled.patch
 
 
 COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-redhat-release3

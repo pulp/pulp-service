@@ -42,7 +42,7 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 
 - **Package:** pulp_container
 - **Files:** `pulp_container/app/content.py`, `pulp_container/app/redirects.py`, `pulp_container/app/registry_api.py`, `pulp_container/app/token_verification.py`, `pulp_container/app/urls.py`
-- **Description:** Moves all container registry URL routes from `/v2/` to `/api/pulp/v2/` and the content app prefix from `/pulp/container/` to `/api/pulp-container/`. Replaces `RegistryPermission` with `DomainBasedPermission` and imports `RHServiceAccountCertAuthentication` for service-account auth.
+- **Description:** Moves all container registry URL routes from `/v2/` to `/api/pulp/v2/` and the content app prefix from `/pulp/container/` to `/api/pulp-container/`. Replaces `RegistryPermission` with `DomainBasedPermission`. When `TOKEN_AUTH_DISABLED` is true, includes both `RegistryAuthentication` and all `DEFAULT_AUTHENTICATION_CLASSES` instead of a single auth class, allowing custom authentication backends (e.g. remote header-based auth) alongside standard Basic auth.
 
 ### 0022 — Adds authentication to the mvn deploy api
 
@@ -103,13 +103,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/__init__.py`
 - **Description:** Converts the content app heartbeat from an async coroutine to a synchronous thread with a shutdown event. Replaces `asyncio.sleep` with `threading.Event.wait` and async ORM calls with synchronous ones.
-
-### 0045 — Include DRF default auth classes when token auth is disabled
-
-- **Package:** pulp_container
-- **Files:** `pulp_container/app/registry_api.py`
-- **Note:** Depends on patch 0018 (modifies the same authentication block). These two patches are automatically combined when upgrading pulp_container.
-- **Description:** When `TOKEN_AUTH_DISABLED` is true, includes both `RegistryAuthentication` and all `DEFAULT_AUTHENTICATION_CLASSES` instead of a single auth class, allowing custom authentication backends (e.g., remote header-based auth) to work alongside basic auth for registry operations.
 
 ### 0047 — Improve repair_metadata log with repo and package names
 
