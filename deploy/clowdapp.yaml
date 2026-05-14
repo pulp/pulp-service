@@ -458,6 +458,8 @@ objects:
             value: ${PULP_RDS_CONNECTION_TESTS_ENABLED}
           - name: PULP_WORKER_TYPE
             value: ${PULP_WORKER_TYPE}
+          - name: PULP_DATA_UPLOAD_MAX_NUMBER_FIELDS
+            value: ${PULP_DATA_UPLOAD_MAX_NUMBER_FIELDS}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -1506,3 +1508,6 @@ parameters:
   - name: PULP_OTEL_METRICS_DISPATCH_INTERVAL_MINUTES
     description: Configure the interval to get disk usage metrics.
     value: "60"
+  - name: PULP_DATA_UPLOAD_MAX_NUMBER_FIELDS
+    description: Maximum number of fields allowed in a multipart form data upload.
+    value: "10000"
