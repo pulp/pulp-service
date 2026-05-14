@@ -3,13 +3,23 @@ From: Dennis Kliban <dkliban@redhat.com>
 Date: Tue, 4 Mar 2025 11:19:30 -0500
 Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
 
+Moves all container registry URL routes from /v2/ to /api/pulp/v2/ and
+the content app prefix from /pulp/container/ to /api/pulp-container/.
+Replaces RegistryPermission with DomainBasedPermission.
+
+When TOKEN_AUTH_DISABLED is true, includes both RegistryAuthentication
+and all DEFAULT_AUTHENTICATION_CLASSES instead of a single auth class,
+allowing custom authentication backends (e.g. remote header-based auth)
+to work alongside standard Basic auth for container registry operations.
+
+Co-Authored-By: Andre "decko" de Brito <decko@redhat.com>
 ---
  pulp_container/app/content.py            |  2 +-
  pulp_container/app/redirects.py          |  4 ++--
- pulp_container/app/registry_api.py       |  4 +++-
+ pulp_container/app/registry_api.py       |  8 +++++++-
  pulp_container/app/token_verification.py | 16 +---------------
  pulp_container/app/urls.py               | 14 +++++++-------
- 5 files changed, 15 insertions(+), 27 deletions(-)
+ 5 files changed, 18 insertions(+), 28 deletions(-)
 
 diff --git a/pulp_container/app/content.py b/pulp_container/app/content.py
 index dbe6418d..006e8afb 100644
@@ -38,24 +48,21 @@ index 0c7a5898..fa4808cb 100644
              else "pulp/container"
          )
 diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
-index e3b0766c..4e9114be 100644
 --- a/pulp_container/app/registry_api.py
 +++ b/pulp_container/app/registry_api.py
-@@ -98,6 +98,8 @@ from pulp_container.constants import (
-     V2_ACCEPT_HEADERS,
- )
- 
-+from pulp_service.app.authentication import RHServiceAccountCertAuthentication
-+
- log = logging.getLogger(__name__)
- 
- IGNORED_PULL_THROUGH_REMOTE_ATTRIBUTES = [
-@@ -232,7 +234,7 @@ class ContainerRegistryApiMixin:
+@@ -232,9 +232,14 @@ class ContainerRegistryApiMixin:
+     def authentication_classes(self):
+         """
          List of authentication classes to check for this view.
++
++        When token auth is disabled, includes both RegistryAuthentication (Basic auth)
++        and any authentication classes configured in DEFAULT_AUTHENTICATION_CLASSES.
++        This allows deployments to use custom authentication backends (e.g. remote
++        header-based auth) alongside standard Basic auth for container registry operations.
          """
          if settings.get("TOKEN_AUTH_DISABLED", False):
 -            return [RegistryAuthentication]
-+            return [RHServiceAccountCertAuthentication]
++            return [RegistryAuthentication, *api_settings.DEFAULT_AUTHENTICATION_CLASSES]
          return [TokenAuthentication]
  
      @property
@@ -124,6 +131,5 @@ index 47c4342a..6c93b927 100644
      path("", include(router.urls)),
  ]
  # print(router.urls)
--- 
+--
 2.49.0
-

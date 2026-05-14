@@ -7,8 +7,8 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.108.0             |
-| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.108.0             |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.111.0             |
+| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.111.0             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.6              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.29.0              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
@@ -42,7 +42,7 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 
 - **Package:** pulp_container
 - **Files:** `pulp_container/app/content.py`, `pulp_container/app/redirects.py`, `pulp_container/app/registry_api.py`, `pulp_container/app/token_verification.py`, `pulp_container/app/urls.py`
-- **Description:** Moves all container registry URL routes from `/v2/` to `/api/pulp/v2/` and the content app prefix from `/pulp/container/` to `/api/pulp-container/`. Replaces `RegistryPermission` with `DomainBasedPermission` and imports `RHServiceAccountCertAuthentication` for service-account auth.
+- **Description:** Moves all container registry URL routes from `/v2/` to `/api/pulp/v2/` and the content app prefix from `/pulp/container/` to `/api/pulp-container/`. Replaces `RegistryPermission` with `DomainBasedPermission`. When `TOKEN_AUTH_DISABLED` is true, includes both `RegistryAuthentication` and all `DEFAULT_AUTHENTICATION_CLASSES` instead of a single auth class, allowing custom authentication backends (e.g. remote header-based auth) alongside standard Basic auth.
 
 ### 0022 — Adds authentication to the mvn deploy api
 
@@ -86,12 +86,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Files:** `pulpcore/tasking/_util.py`
 - **Description:** Wraps diagnostic profile artifact creation in `with_domain(task.pulp_domain)` so the artifact is stored in the task's domain instead of the default domain.
 
-### 0035 — Revert "Mitigate a disk consumption issue during sync"
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/settings.py`, `pulpcore/plugin/stages/artifact_stages.py`
-- **Description:** Reverts the upstream concurrency limit reduction by restoring `MAX_CONCURRENT_CONTENT` from 25 back to 200 and removing the `minsize` argument from the artifact stage batch iterator.
-
 ### 0038 — Readonly PyPI endpoints
 
 - **Package:** pulp_python
@@ -103,13 +97,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/__init__.py`
 - **Description:** Converts the content app heartbeat from an async coroutine to a synchronous thread with a shutdown event. Replaces `asyncio.sleep` with `threading.Event.wait` and async ORM calls with synchronous ones.
-
-### 0045 — Include DRF default auth classes when token auth is disabled
-
-- **Package:** pulp_container
-- **Files:** `pulp_container/app/registry_api.py`
-- **Note:** Depends on patch 0018 (modifies the same authentication block). These two patches are automatically combined when upgrading pulp_container.
-- **Description:** When `TOKEN_AUTH_DISABLED` is true, includes both `RegistryAuthentication` and all `DEFAULT_AUTHENTICATION_CLASSES` instead of a single auth class, allowing custom authentication backends (e.g., remote header-based auth) to work alongside basic auth for registry operations.
 
 ### 0047 — Improve repair_metadata log with repo and package names
 
@@ -140,12 +127,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulp_python
 - **Files:** `pulp_python/app/models.py`, `pulp_python/app/tasks/__init__.py`, `pulp_python/app/tasks/scan_package.py`
 - **Description:** Adds an automatic package scanning task that dispatches on repository version creation. Downloads Python package artifacts to a temp directory, runs an external scanner, and collects results.
-
-### 0054 — Defer content ID cleanup for old versions
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/tasks/repository.py`
-- **Description:** Optimizes the `protected_versions()` query to avoid expensive JOINs by deferring content ID cleanup for old repository versions, reducing database load during version management.
 
 ### 0055 — Decouple /livez endpoint from the database
 
