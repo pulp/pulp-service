@@ -16,8 +16,14 @@ _logger = logging.getLogger(__name__)
 @receiver(post_migrate)
 def register_scheduled_tasks(sender, **kwargs):
     if sender.name == "pulp_service.app":
-        from pulp_service.app.tasks.util import register_pypi_yank_monitor_schedule
+        from pulp_service.app.tasks.util import (
+            content_sources_periodic_telemetry,
+            register_pypi_yank_monitor_schedule,
+            rhel_ai_repos_periodic_telemetry,
+        )
 
+        content_sources_periodic_telemetry()
+        rhel_ai_repos_periodic_telemetry()
         register_pypi_yank_monitor_schedule()
 
 
