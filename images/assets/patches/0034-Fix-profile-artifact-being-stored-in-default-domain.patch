@@ -17,9 +17,9 @@ index 7274d7cb8..37968200a 100644
  from django_guid import set_guid
  from django_guid.utils import generate_guid
 +from pulpcore.app.contexts import with_domain
- from pulpcore.app.models import Artifact, Content, Task, TaskSchedule, ProfileArtifact
+ 
+ from pulpcore.app.models import Artifact, Content, ProfileArtifact, Task, TaskSchedule
  from pulpcore.app.util import (
-     configure_analytics,
 @@ -167,18 +168,21 @@ def _pyinstrument_diagnostic_decorator(temp_dir, func):
                  f.write(profiler.output_html())
                  f.flush()

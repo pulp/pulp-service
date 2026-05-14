@@ -39,14 +39,11 @@ index d00a53cba..51fffdc4d 100644
      HTTPRequestRangeNotSatisfiable,
  )
  from yarl import URL
-@@ -60,8 +61,9 @@ from pulpcore.app.util import (  # noqa: E402: module level not at top of file
- )
- 
+@@ -62,6 +63,7 @@ from pulpcore.cache import AsyncContentCache  # noqa: E402
  from pulpcore.exceptions import (  # noqa: E402
--    UnsupportedDigestValidationError,
      DigestValidationError,
-+    UnsupportedDigestValidationError,
 +    MalwareError,
+     UnsupportedDigestValidationError,
  )
  from pulpcore.metrics import artifacts_size_counter  # noqa: E402
  
@@ -94,17 +91,16 @@ diff --git a/pulpcore/download/base.py b/pulpcore/download/base.py
 index b093ad9e4..ab8acff4b 100644
 --- a/pulpcore/download/base.py
 +++ b/pulpcore/download/base.py
-@@ -1,6 +1,7 @@
- from gettext import gettext as _
- 
+@@ -1,10 +1,12 @@
  import asyncio
 +from clamav_client import clamd
- from collections import namedtuple
  import concurrent.futures
- from concurrent.futures import ThreadPoolExecutor, ALL_COMPLETED
-@@ -8,6 +9,7 @@ import logging
+ import logging
  import os
  import tempfile
+ from collections import namedtuple
+ from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor
+ from gettext import gettext as _
  from pathlib import Path
 +import struct
  from urllib.parse import urlsplit
@@ -243,14 +239,14 @@ index 0406964ec..d1ffedd6a 100644
 +++ b/pulpcore/plugin/exceptions.py
 @@ -1,6 +1,7 @@
  from pulpcore.exceptions import (
-     ValidationError,
+     ContentOverwriteError,
      DigestValidationError,
 +    MalwareError,
+     ExternalServiceError,
+     HttpResponseError,
      InvalidSignatureError,
-     PulpException,
-     SizeValidationError,
-@@ -17,6 +18,7 @@ from pulpcore.exceptions import (
- __all__ = [
+@@ -21,6 +22,7 @@ __all__ = [
+     "ContentOverwriteError",
      "ValidationError",
      "DigestValidationError",
 +    "MalwareError",

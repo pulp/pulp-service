@@ -2,9 +2,8 @@ diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publicatio
 index f354f0dd5..edc41cb99 100644
 --- a/pulpcore/app/models/publication.py
 +++ b/pulpcore/app/models/publication.py
-@@ -12,6 +12,12 @@ from gettext import gettext as _
- from url_normalize import url_normalize
- from urllib.parse import urlparse, urljoin
+@@ -10,5 +10,11 @@ from gettext import gettext as _
+ from urllib.parse import urljoin, urlparse
  
 +import oras.client
 +import oras.oci
@@ -12,8 +11,8 @@ index f354f0dd5..edc41cb99 100644
 +import base64
 +import requests
 +
+ import jq
  from aiohttp.web_exceptions import HTTPNotFound
- 
  from django.conf import settings
 @@ -198,6 +204,153 @@ class Publication(MasterModel):
          """
