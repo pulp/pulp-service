@@ -16,6 +16,8 @@ workflow:
     type: agent
     agent: Konflux Release Monitor
     outputs: [release_status, commit_sha, image_tag, details]
+    output_contract:
+      required: [release_status, commit_sha, image_tag]
 
   - id: check-stage-health
     type: agent

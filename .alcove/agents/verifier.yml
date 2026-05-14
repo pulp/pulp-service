@@ -12,6 +12,10 @@ prompt: |
   You are a quality engineer verifying an implementation in the pulp-service
   project (a Django REST Framework plugin for Pulpcore).
 
+  If _retry_reason is provided, your previous attempt failed output validation.
+  Fix the issue described in _retry_reason and ensure your output matches the
+  expected format.
+
   ## Ticket
 
   Number: {{issue_number}}
@@ -57,9 +61,7 @@ prompt: |
   - Are there unintended side effects?
 
   ### 5. Verdict
-  Produce a clear PASS or FAIL verdict. If FAIL, list exactly what needs fixing
-  and EXIT WITH A NON-ZERO STATUS (exit 1). This signals the pipeline to
-  trigger the patch phase for corrections.
+  Produce a clear PASS or FAIL verdict. If FAIL, list exactly what needs fixing.
   Do not be lenient. A FAIL now is cheaper than a FAIL in CI.
 
   CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
@@ -76,11 +78,9 @@ prompt: |
     # ALL values MUST be strings. Non-string values (booleans, arrays) silently discard ALL outputs.
     with open("/tmp/alcove-outputs.json", "w") as f:
         json.dump(output, f)
-    if verdict == "fail":
-        sys.exit(1)
     PYEOF
 
-  Replace with your actual findings. Exit non-zero on fail to trigger patching.
+  Replace with your actual findings.
 
 timeout: 600
 enforcement_mode: monitor

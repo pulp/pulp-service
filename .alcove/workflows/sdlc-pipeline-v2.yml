@@ -35,6 +35,11 @@ workflow:
       issue_url: "{{trigger.issue_url}}"
       repo: "pulp/pulp-service"
     outputs: [complexity, target_area, candidate_files, approach, risks, automatable, reviewers_needed]
+    output_contract:
+      required: [automatable, complexity, target_area, candidate_files, approach]
+      allowed_values:
+        automatable: ["true", "false"]
+        complexity: ["small", "medium", "large"]
 
   # Phase 2: Plan — create implementation plan from triage output.
   # Condition ensures triage explicitly flagged the issue as automatable.
@@ -82,6 +87,12 @@ workflow:
       implement_summary: "{{steps.implement.outputs.summary}}"
       verification_commands: "{{steps.plan.outputs.verification_commands}}"
     outputs: [verdict, fixes_required, code_issues]
+    output_contract:
+      required: [verdict, fixes_required, code_issues]
+      allowed_values:
+        verdict: ["pass", "fail"]
+      routing_field: verdict
+      success_value: "pass"
 
   # Phase 4b: Patch — surgical fixes for verify failures (< 50 lines each).
   # Exits with failure if fix is too complex, halting the verify/patch loop.
@@ -96,6 +107,10 @@ workflow:
       fixes_required: "{{steps.verify.outputs.fixes_required}}"
       code_issues: "{{steps.verify.outputs.code_issues}}"
     outputs: [fixes_applied, too_complex, too_complex_reason]
+    output_contract:
+      required: [fixes_applied]
+      allowed_values:
+        too_complex: ["true", "false"]
 
   # Phase 5: Review — parallel specialist reviewers.
   # Reviewers exit non-zero when rejecting, mapping to Failed status.
@@ -110,6 +125,12 @@ workflow:
       plan: "{{steps.plan.outputs.plan}}"
       implement_summary: "{{steps.implement.outputs.summary}}"
     outputs: [approved, comments, issues]
+    output_contract:
+      required: [approved, comments]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
 
   - id: review-security
     type: agent
@@ -122,6 +143,12 @@ workflow:
       plan: "{{steps.plan.outputs.plan}}"
       implement_summary: "{{steps.implement.outputs.summary}}"
     outputs: [approved, comments, issues]
+    output_contract:
+      required: [approved, comments]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
 
   # Phase 5b: Revision — address review feedback, then re-verify and re-review.
   # All cycle participants (verify, review-*, revision) have max_iterations for bounded cycles.
