@@ -9,7 +9,7 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
 | `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.111.0             |
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.111.0             |
-| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.6              |
+| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.8              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.0              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
 | `oras/`          | [oras-project/oras-py](https://github.com/oras-project/oras-py) | oras        | 0.2.38              |
@@ -85,12 +85,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulpcore
 - **Files:** `pulpcore/tasking/_util.py`
 - **Description:** Wraps diagnostic profile artifact creation in `with_domain(task.pulp_domain)` so the artifact is stored in the task's domain instead of the default domain.
-
-### 0038 — Readonly PyPI endpoints
-
-- **Package:** pulp_python
-- **Files:** `pulp_python/app/pypi/views.py`
-- **Description:** Adds `AllowUnauthPull` and `DomainBasedPermission` from pulp-service to the PyPI views, allowing unauthenticated read access to PyPI endpoints while requiring domain-based authorization for writes.
 
 ### 0044 — Move content app heartbeat to a thread
 
