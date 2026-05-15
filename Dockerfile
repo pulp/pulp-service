@@ -155,9 +155,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0034-Fix-profile-artifact-being-stored-in-default-domain.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0034-Fix-profile-artifact-being-stored-in-default-domain.patch
 
-COPY images/assets/patches/0038-readonly-pypi-endpoints.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0038-readonly-pypi-endpoints.patch
-
 COPY images/assets/patches/0047-Improve-repair_metadata-log-with-repo-and-package-na.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0047-Improve-repair_metadata-log-with-repo-and-package-na.patch
 

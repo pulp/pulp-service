@@ -86,12 +86,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Files:** `pulpcore/tasking/_util.py`
 - **Description:** Wraps diagnostic profile artifact creation in `with_domain(task.pulp_domain)` so the artifact is stored in the task's domain instead of the default domain.
 
-### 0038 — Readonly PyPI endpoints
-
-- **Package:** pulp_python
-- **Files:** `pulp_python/app/pypi/views.py`
-- **Description:** Adds `AllowUnauthPull` and `DomainBasedPermission` from pulp-service to the PyPI views, allowing unauthenticated read access to PyPI endpoints while requiring domain-based authorization for writes.
-
 ### 0044 — Move content app heartbeat to a thread
 
 - **Package:** pulpcore
