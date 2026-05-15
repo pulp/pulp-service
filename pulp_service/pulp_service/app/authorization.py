@@ -48,9 +48,13 @@ class DomainBasedPermission(BasePermission):
 
         user = request.user
 
-        # Anonymous users can make safe requests on public domains
+        # Anonymous users can make safe requests on public domains and PyPI views
         if not user.is_authenticated:
             if request.method in SAFE_METHODS:
+                from pulp_python.app.pypi.views import PyPIMixin
+
+                if isinstance(view, PyPIMixin):
+                    return True
                 domain = getattr(request, "pulp_domain", None)
                 if domain and "public-" in domain.name:
                     return True
