@@ -63,7 +63,7 @@ class RHSamlAuthentication(JSONHeaderRemoteAuthentication):
         Required method for Django authentication backends.
         Returns a user instance given a user_id (primary key).
         """
-        User = get_user_model()
+        User = get_user_model()  # noqa: N806
         try:
             return User.objects.get(pk=user_id)
         except User.DoesNotExist:
