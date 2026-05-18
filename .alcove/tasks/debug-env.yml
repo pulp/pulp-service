@@ -1,0 +1,9 @@
+name: Debug Environment Inspector
+description: Prints all Skiff environment variables with dummy token detection and secret masking. Manually trigger to diagnose credential or networking issues.
+executable:
+  url: file:///usr/local/bin/debug-env
+timeout: 60
+credentials:
+  SPLUNK_TOKEN: splunk
+  JIRA_TOKEN: jira
+  VERTEX_SA_JSON: google-vertex
