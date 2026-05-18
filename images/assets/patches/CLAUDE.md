@@ -7,12 +7,12 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.111.0             |
-| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.111.0             |
-| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.8              |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.111.1             |
+| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.111.1             |
+| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.9              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.0              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
-| `oras/`          | [oras-project/oras-py](https://github.com/oras-project/oras-py) | oras        | 0.2.38              |
+| `oras/`          | [oras-project/oras-py](https://github.com/oras-project/oras-py) | oras        | 0.2.42              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
 
 Versions are pinned in `pulp_service/requirements.txt`. Django-storages is a
