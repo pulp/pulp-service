@@ -1,12 +1,12 @@
 # agent-alertmanager
 
-An AI agent that queries Prometheus AlertManager for firing Pulp alerts, analyzes them using an LLM (Claude or Gemini via Vertex AI), and automatically creates or updates Jira issues based on the findings.
+An AI agent that queries Prometheus Alertmanager for firing Pulp alerts, analyzes them using an LLM (Claude or Gemini via Vertex AI), and automatically creates or updates Jira issues based on the findings.
 
 ## Prerequisites
 
 - Go 1.25+
 - Google Cloud credentials configured (for Vertex AI access)
-- Access to a Prometheus AlertManager instance
+- Access to a Prometheus Alertmanager instance
 - A running MCP Atlassian server (for Jira integration)
 
 ## Environment Variables
