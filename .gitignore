@@ -1,1 +1,7 @@
 *.pyc
+
+# PAL / opencode
+.env
+.opencode/node_modules/
+.opencode/package-lock.json
+.opencode/role.md
