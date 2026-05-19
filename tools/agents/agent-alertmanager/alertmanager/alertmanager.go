@@ -160,26 +160,30 @@ func (client *Client) fetchAlerts(ctx context.Context, filter string, active, si
 	return alerts, nil
 }
 
-// toolArgs holds the JSON arguments for the alertmanager_get_alerts tool.
-type toolArgs struct {
-	Filter    string `json:"filter,omitempty"`
-	Active    *bool  `json:"active,omitempty"`
-	Silenced  *bool  `json:"silenced,omitempty"`
-	Inhibited *bool  `json:"inhibited,omitempty"`
-}
-
 // RegisterTool registers alertmanager_get_alerts as a native tool on the
-// given MCP manager. The tool fetches alerts, filters out latency alerts,
-// groups burn-rate alerts, and returns the result as JSON.
-func (client *Client) RegisterTool(manager *mcpClient.MCPManager) llms.Tool {
+// given MCP manager. The tool fetches alerts from all provided clients,
+// filters out latency alerts, groups burn-rate alerts, and returns the
+// result as JSON grouped by cluster.
+func RegisterTool(clients []*Client, manager *mcpClient.MCPManager) llms.Tool {
+	clusterNames := make([]string, len(clients))
+	clientMap := make(map[string]*Client, len(clients))
+	for idx, client := range clients {
+		clusterNames[idx] = client.Name()
+		clientMap[client.Name()] = client
+	}
+
 	tool := llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "alertmanager_get_alerts",
-			Description: "Fetch active alerts from AlertManager, filtered and grouped for triage.",
+			Description: "Fetch active alerts from Alertmanager clusters, filtered and grouped for triage.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
+					"cluster": map[string]any{
+						"type":        "string",
+						"description": fmt.Sprintf("Query a specific cluster only. Valid names: %s", strings.Join(clusterNames, ", ")),
+					},
 					"filter": map[string]any{
 						"type":        "string",
 						"description": "PromQL-style filter (default: {service=\"pulp\"})",
@@ -202,8 +206,12 @@ func (client *Client) RegisterTool(manager *mcpClient.MCPManager) llms.Tool {
 	}
 
 	handler := func(ctx context.Context, argsJSON string) (string, error) {
-		args := toolArgs{
-			Filter: DefaultFilter,
+		var args struct {
+			Cluster   string `json:"cluster,omitempty"`
+			Filter    string `json:"filter,omitempty"`
+			Active    *bool  `json:"active,omitempty"`
+			Silenced  *bool  `json:"silenced,omitempty"`
+			Inhibited *bool  `json:"inhibited,omitempty"`
 		}
 		if argsJSON != "" {
 			if parseErr := json.Unmarshal([]byte(argsJSON), &args); parseErr != nil {
@@ -211,7 +219,15 @@ func (client *Client) RegisterTool(manager *mcpClient.MCPManager) llms.Tool {
 			}
 		}
 
-		// Apply defaults for boolean flags.
+		targetClients := clients
+		if args.Cluster != "" {
+			target, found := clientMap[args.Cluster]
+			if !found {
+				return "", fmt.Errorf("unknown cluster %q, valid clusters: %s", args.Cluster, strings.Join(clusterNames, ", "))
+			}
+			targetClients = []*Client{target}
+		}
+
 		activeFlag := true
 		if args.Active != nil {
 			activeFlag = *args.Active
@@ -224,21 +240,41 @@ func (client *Client) RegisterTool(manager *mcpClient.MCPManager) llms.Tool {
 		if args.Inhibited != nil {
 			inhibitedFlag = *args.Inhibited
 		}
-
 		filter := DefaultFilter
 		if args.Filter != "" {
 			filter = args.Filter
 		}
 
-		alerts, fetchErr := client.fetchAlerts(ctx, filter, activeFlag, silencedFlag, inhibitedFlag)
-		if fetchErr != nil {
-			return "", fetchErr
+		type clusterResult struct {
+			Cluster string       `json:"cluster"`
+			Groups  []AlertGroup `json:"groups"`
+			Error   string       `json:"error,omitempty"`
 		}
 
-		filtered := FilterLatencyAlerts(alerts)
-		groups := GroupAlerts(filtered)
+		var results []clusterResult
+		for _, client := range targetClients {
+			fetchCtx, fetchCancel := context.WithTimeout(ctx, 2*time.Minute)
+			alerts, fetchErr := client.fetchAlerts(fetchCtx, filter, activeFlag, silencedFlag, inhibitedFlag)
+			fetchCancel()
 
-		resultBytes, marshalErr := json.Marshal(groups)
+			if fetchErr != nil {
+				results = append(results, clusterResult{
+					Cluster: client.Name(),
+					Error:   fetchErr.Error(),
+				})
+				continue
+			}
+
+			filtered := FilterLatencyAlerts(alerts)
+			client.stampCluster(filtered)
+			groups := GroupAlerts(filtered)
+			results = append(results, clusterResult{
+				Cluster: client.Name(),
+				Groups:  groups,
+			})
+		}
+
+		resultBytes, marshalErr := json.Marshal(results)
 		if marshalErr != nil {
 			return "", fmt.Errorf("marshal result: %w", marshalErr)
 		}
@@ -247,8 +283,8 @@ func (client *Client) RegisterTool(manager *mcpClient.MCPManager) llms.Tool {
 		const maxResponseChars = 25000
 		if len(resultStr) > maxResponseChars {
 			resultStr = fmt.Sprintf(
-				"NOTE: Response truncated. Showing partial results out of %d alert groups total.\n\n%s",
-				len(groups), resultStr[:maxResponseChars],
+				"NOTE: Response truncated. Showing partial results out of %d cluster results total.\n\n%s",
+				len(results), resultStr[:maxResponseChars],
 			)
 		}
 		return resultStr, nil
