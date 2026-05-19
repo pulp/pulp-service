@@ -15,9 +15,10 @@ An AI agent that queries Prometheus Alertmanager for firing Pulp alerts, analyze
 |---|---|---|
 | `ANTHROPIC_VERTEX_PROJECT_ID` | yes | Google Cloud project ID for Vertex AI |
 | `CLOUD_ML_REGION` | no | Vertex AI region (default: `us-east5`) |
-| `ALERTMANAGER_URL` | yes | AlertManager API base URL |
-| `ALERTMANAGER_TOKEN` | yes | Bearer token for AlertManager auth |
-| `ALERTMANAGER_INSECURE_SKIP_VERIFY` | no | Skip TLS verification (default: `false`) |
+| `ALERTMANAGER_CLUSTERS` | no* | JSON array of cluster configs (see Multi-Cluster below). *Required if `ALERTMANAGER_URL` not set |
+| `ALERTMANAGER_URL` | no* | Alertmanager API base URL (single-cluster fallback). *Required if `ALERTMANAGER_CLUSTERS` not set |
+| `ALERTMANAGER_TOKEN` | no* | Bearer token for Alertmanager auth (single-cluster fallback) |
+| `ALERTMANAGER_INSECURE_SKIP_VERIFY` | no | Skip TLS verification in single-cluster mode (default: `false`) |
 | `JIRA_MCP_URL` | no | Jira MCP server URL |
 | `DEDUP_COOLDOWN` | no | Alert dedup cache TTL (default: `30m`) |
 | `DEDUP_CACHE_PATH` | no | Dedup cache file path (default: `/tmp/agent-alertmanager-cache.json`) |
@@ -51,6 +52,38 @@ cd tools/agents
 podman build -f agent-alertmanager/Containerfile -t agent-alertmanager .
 podman run --env-file .env agent-alertmanager
 ```
+
+## Multi-Cluster Configuration
+
+Configure multiple Alertmanager instances via the `ALERTMANAGER_CLUSTERS` env var:
+
+```bash
+export ALERTMANAGER_CLUSTERS='[
+  {"name": "prod", "url": "https://am-prod.example.com", "token": "bearer-token-1"},
+  {"name": "stage", "url": "https://am-stage.example.com", "token": "bearer-token-2", "insecure_skip_verify": true}
+]'
+```
+
+### Cluster config fields
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Identifier for this cluster (lowercase alphanumeric + hyphens) |
+| `url` | yes | Alertmanager API base URL |
+| `token` | yes | Bearer token for authentication |
+| `insecure_skip_verify` | no | Skip TLS verification (default: `false`) |
+
+### Backwards compatibility
+
+If `ALERTMANAGER_CLUSTERS` is not set, the agent falls back to `ALERTMANAGER_URL` + `ALERTMANAGER_TOKEN` as a single cluster named "default". In single-cluster mode, the global `ALERTMANAGER_INSECURE_SKIP_VERIFY` env var controls TLS.
+
+In multi-cluster mode, `ALERTMANAGER_INSECURE_SKIP_VERIFY` is ignored — configure TLS per cluster.
+
+### Cluster name rules
+
+- Must match `^[a-z0-9][a-z0-9-]*$`
+- Must be unique
+- Names are identifiers — renaming a cluster causes re-filing of active alerts
 
 ## Alerts Covered
 
