@@ -23,18 +23,18 @@ import (
 )
 
 const (
-	defaultModel        = "claude-sonnet-4-6"
-	defaultQuestion     = "analyze all firing Pulp alerts and assess their severity and impact"
-	defaultRegion       = "us-east5"
-	defaultCooldown     = "30m"
-	defaultCachePath    = "/tmp/agent-alertmanager-cache.json"
-	defaultLockPath     = "/tmp/agent-alertmanager.lock"
-	defaultMaxIter      = 20
-	defaultTimeout      = 25 * time.Minute
-	checkOnlyTimeout    = 10 * time.Second
+	defaultModel     = "claude-sonnet-4-6"
+	defaultQuestion  = "analyze all firing Pulp alerts and assess their severity and impact"
+	defaultRegion    = "us-east5"
+	defaultCooldown  = "30m"
+	defaultCachePath = "/tmp/agent-alertmanager-cache.json"
+	defaultLockPath  = "/tmp/agent-alertmanager.lock"
+	defaultMaxIter   = 20
+	defaultTimeout   = 25 * time.Minute
+	perClusterCheckTimeout = 10 * time.Second
+	perClusterFetchTimeout = 2 * time.Minute
 )
 
-// supportedModels lists the model identifiers this agent can use.
 var supportedModels = map[string]bool{
 	"claude-sonnet-4-6": true,
 	"claude-opus-4-6":   true,
@@ -54,22 +54,28 @@ func run() error {
 	dryRunFlag := flag.Bool("dry-run", false, "analysis only: skip Jira mutations")
 	flag.Parse()
 
-	// --- Validate required env vars ---
-	alertmanagerURL := os.Getenv("ALERTMANAGER_URL")
-	if alertmanagerURL == "" {
-		return fmt.Errorf("ALERTMANAGER_URL environment variable is required")
+	// --- Parse cluster configuration ---
+	clusterConfigs, configErr := parseClusterConfigs()
+	if configErr != nil {
+		return configErr
 	}
-
-	alertmanagerToken := os.Getenv("ALERTMANAGER_TOKEN")
-	if alertmanagerToken == "" {
-		return fmt.Errorf("ALERTMANAGER_TOKEN environment variable is required")
+	fmt.Fprintf(os.Stderr, "[main] configured %d cluster(s): ", len(clusterConfigs))
+	for idx, cfg := range clusterConfigs {
+		if idx > 0 {
+			fmt.Fprint(os.Stderr, ", ")
+		}
+		fmt.Fprint(os.Stderr, cfg.Name)
 	}
+	fmt.Fprintln(os.Stderr)
 
-	amClient := alertmanager.NewClient(alertmanagerURL, alertmanagerToken)
+	var clients []*alertmanager.Client
+	for _, cfg := range clusterConfigs {
+		clients = append(clients, alertmanager.NewClient(cfg.Name, cfg.URL, cfg.Token, cfg.InsecureSkipVerify))
+	}
 
 	// --- Check-only mode ---
 	if *checkOnlyFlag {
-		return runCheckOnly(amClient)
+		return runCheckOnly(clients)
 	}
 
 	// --- Full mode: validate additional requirements ---
@@ -89,7 +95,6 @@ func run() error {
 	// --- Acquire exclusive file lock ---
 	unlock, lockErr := dedup.AcquireLock(defaultLockPath)
 	if lockErr != nil {
-		// Another instance is running; output structured JSON and exit cleanly.
 		fmt.Fprintf(os.Stderr, "[lock] another instance is running, skipping this run\n")
 		skipOutput, _ := json.Marshal(map[string]any{"skipped": true, "reason": "lock_held"})
 		fmt.Println(string(skipOutput))
@@ -163,42 +168,75 @@ func run() error {
 		}
 	}
 
-	// --- Register AlertManager native tool ---
-	alertTool := amClient.RegisterTool(mcpManager)
+	// --- Register Alertmanager native tool (multi-client) ---
+	alertTool := alertmanager.RegisterTool(clients, mcpManager)
 	allTools = append(allTools, alertTool)
 
-	// --- Pre-flight dedup: skip if all alerts already processed ---
-	alertsFound := 0
-	alertsProcessed := 0
-	prefetchedAlerts, prefetchErr := amClient.FetchAlerts(timeoutCtx)
-	if prefetchErr != nil {
-		fmt.Fprintf(os.Stderr, "[main] warning: pre-flight alert fetch failed, proceeding anyway: %v\n", prefetchErr)
-	} else {
-		alertsFound = len(prefetchedAlerts)
-		allSeen := alertsFound > 0
-		for _, alert := range prefetchedAlerts {
-			if !dedupCache.Seen(alert.Fingerprint, alert.StartsAt) {
-				allSeen = false
-				alertsProcessed++
-				dedupCache.Record(alert.Fingerprint, alert.StartsAt)
+	// --- Multi-cluster pre-flight fetch + dedup (Seen only, no Record) ---
+	type clusterFetchResult struct {
+		clusterName string
+		status      string
+		alerts      []alertmanager.Alert
+		fetchErr    string
+	}
+
+	var fetchResults []clusterFetchResult
+	var allNewAlerts []alertmanager.Alert
+	alertsFoundPerCluster := make(map[string]int)
+	alertsProcessedPerCluster := make(map[string]int)
+	clustersHealthy := 0
+	clustersErrored := 0
+
+	for _, client := range clients {
+		fetchCtx, fetchCancel := context.WithTimeout(timeoutCtx, perClusterFetchTimeout)
+		alerts, fetchErr := client.FetchAlerts(fetchCtx)
+		fetchCancel()
+
+		if fetchErr != nil {
+			fmt.Fprintf(os.Stderr, "[main] cluster %s: fetch failed: %v\n", client.Name(), fetchErr)
+			fetchResults = append(fetchResults, clusterFetchResult{
+				clusterName: client.Name(),
+				status:      "error",
+				fetchErr:    fetchErr.Error(),
+			})
+			clustersErrored++
+			continue
+		}
+
+		alertsFoundPerCluster[client.Name()] = len(alerts)
+		clustersHealthy++
+
+		var newAlerts []alertmanager.Alert
+		for _, alert := range alerts {
+			if !dedupCache.Seen(client.Name(), alert.Fingerprint, alert.StartsAt) {
+				newAlerts = append(newAlerts, alert)
 			}
 		}
-		if alertsFound > 0 && allSeen {
-			fmt.Fprintf(os.Stderr, "[main] all %d alerts already processed within cooldown, skipping run\n", alertsFound)
-			return nil
-		}
-		if alertsFound == 0 {
-			fmt.Fprintf(os.Stderr, "[main] no active alerts found, skipping run\n")
-			return nil
-		}
-		fmt.Fprintf(os.Stderr, "[main] %d alerts to process after dedup check\n", alertsProcessed)
+		alertsProcessedPerCluster[client.Name()] = len(newAlerts)
+		allNewAlerts = append(allNewAlerts, newAlerts...)
+
+		fetchResults = append(fetchResults, clusterFetchResult{
+			clusterName: client.Name(),
+			status:      "ok",
+			alerts:      newAlerts,
+		})
 	}
+
+	if clustersHealthy == 0 {
+		return fmt.Errorf("all %d clusters failed to fetch alerts", len(clients))
+	}
+
+	if len(allNewAlerts) == 0 {
+		fmt.Fprintf(os.Stderr, "[main] no new alerts across %d clusters, skipping run\n", clustersHealthy)
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "[main] %d new alerts to process across %d clusters\n", len(allNewAlerts), clustersHealthy)
 
 	// --- Load skills ---
 	jiraSkill := skills.LoadSkill()
 	analysisSkills := localSkills.LoadAnalysisSkills()
 
-	// Build system messages for Phase 1: jira skill + analysis skills
 	var phaseOneSystem []llms.MessageContent
 	phaseOneSystem = append(phaseOneSystem, jiraSkill)
 	phaseOneSystem = append(phaseOneSystem, analysisSkills...)
@@ -235,6 +273,11 @@ func run() error {
 
 	fmt.Fprintf(os.Stderr, "\n[main] analysis complete (%d bytes)\n", len(analysisResult))
 
+	// Record all processed alerts in dedup cache after successful analysis
+	for _, alert := range allNewAlerts {
+		dedupCache.Record(alert.Cluster, alert.Fingerprint, alert.StartsAt)
+	}
+
 	// --- Dry-run: stop after analysis ---
 	if *dryRunFlag {
 		fmt.Fprintf(os.Stderr, "[main] dry-run mode: skipping Jira triage\n")
@@ -256,9 +299,8 @@ func run() error {
 	// --- Phase 2: Jira Triage ---
 	fmt.Fprintf(os.Stderr, "\n[main] === Phase 2: Jira Triage ===\n")
 
-	triagePrompt := skills.OpenJiraIssue(analysisResult, *questionFlag, "AlertManager")
+	triagePrompt := skills.OpenJiraIssue(analysisResult, *questionFlag, "Alertmanager")
 
-	// Phase 2 only gets Jira skill as system message
 	phaseTwoSystem := []llms.MessageContent{jiraSkill}
 
 	triageResult, triageErr := model.ModelRun(timeoutCtx, models.RunConfig{
@@ -274,17 +316,44 @@ func run() error {
 
 	fmt.Fprintf(os.Stderr, "\n[main] triage complete (%d bytes)\n", len(triageResult))
 
-	// Record a conservative issue creation estimate. The LLM controls
-	// actual creation via MCP tool calls, so we count once per run.
 	dedupCache.RecordIssueCreation()
 	issuesChecked := 1
 
-	// --- Structured run summary for observability ---
+	// --- Structured run summary with per-cluster status ---
+	type clusterSummary struct {
+		Status          string `json:"status"`
+		Count           int    `json:"count,omitempty"`
+		AlertsProcessed int    `json:"alerts_processed,omitempty"`
+		Error           string `json:"error,omitempty"`
+	}
+
+	clusterSummaries := make(map[string]clusterSummary)
+	for _, result := range fetchResults {
+		if result.status == "error" {
+			clusterSummaries[result.clusterName] = clusterSummary{Status: "error", Error: result.fetchErr}
+		} else {
+			clusterSummaries[result.clusterName] = clusterSummary{
+				Status:          "ok",
+				Count:           alertsFoundPerCluster[result.clusterName],
+				AlertsProcessed: alertsProcessedPerCluster[result.clusterName],
+			}
+		}
+	}
+
+	totalFound := 0
+	for _, count := range alertsFoundPerCluster {
+		totalFound += count
+	}
+
 	runSummary := map[string]any{
-		"alerts_found":     alertsFound,
-		"alerts_processed": alertsProcessed,
+		"alerts_found":     totalFound > 0,
+		"count":            totalFound,
+		"alerts_processed": len(allNewAlerts),
 		"issues_checked":   issuesChecked,
-		"run_duration_sec":  time.Since(runStart).Seconds(),
+		"run_duration_sec": time.Since(runStart).Seconds(),
+		"clusters":         clusterSummaries,
+		"clusters_healthy": clustersHealthy,
+		"clusters_errored": clustersErrored,
 	}
 	summaryJSON, _ := json.Marshal(runSummary)
 	fmt.Fprintf(os.Stderr, "[summary] %s\n", string(summaryJSON))
@@ -292,19 +361,54 @@ func run() error {
 	return nil
 }
 
-// runCheckOnly performs a lightweight alert check without invoking the LLM.
-// It prints a JSON object with alerts_found and count, then exits.
-func runCheckOnly(amClient *alertmanager.Client) error {
-	checkCtx, checkCancel := context.WithTimeout(context.Background(), checkOnlyTimeout)
-	defer checkCancel()
-
-	found, count, checkErr := amClient.CheckAlerts(checkCtx)
-	if checkErr != nil {
-		return fmt.Errorf("check-only: %w", checkErr)
+func runCheckOnly(clients []*alertmanager.Client) error {
+	type clusterStatus struct {
+		Status string `json:"status"`
+		Count  int    `json:"count,omitempty"`
+		Error  string `json:"error,omitempty"`
 	}
 
-	output := map[string]any{"alerts_found": found, "count": count}
+	overallTimeout := time.Duration(len(clients))*perClusterCheckTimeout + 5*time.Second
+	overallCtx, overallCancel := context.WithTimeout(context.Background(), overallTimeout)
+	defer overallCancel()
+
+	clusters := make(map[string]clusterStatus)
+	totalCount := 0
+	anyFound := false
+	clustersHealthy := 0
+	clustersErrored := 0
+
+	for _, client := range clients {
+		clusterCtx, clusterCancel := context.WithTimeout(overallCtx, perClusterCheckTimeout)
+		found, count, checkErr := client.CheckAlerts(clusterCtx)
+		clusterCancel()
+
+		if checkErr != nil {
+			clusters[client.Name()] = clusterStatus{Status: "error", Error: checkErr.Error()}
+			clustersErrored++
+			continue
+		}
+
+		clusters[client.Name()] = clusterStatus{Status: "ok", Count: count}
+		clustersHealthy++
+		totalCount += count
+		if found {
+			anyFound = true
+		}
+	}
+
+	output := map[string]any{
+		"alerts_found":     anyFound,
+		"count":            totalCount,
+		"clusters":         clusters,
+		"clusters_healthy": clustersHealthy,
+		"clusters_errored": clustersErrored,
+	}
 	encoded, _ := json.Marshal(output)
 	fmt.Println(string(encoded))
+
+	if clustersHealthy == 0 {
+		return fmt.Errorf("all %d clusters failed health check", len(clients))
+	}
 	return nil
 }
