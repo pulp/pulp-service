@@ -25,8 +25,9 @@ type entry struct {
 
 // cacheData is the on-disk JSON structure.
 type cacheData struct {
-	Entries           map[string]entry `json:"entries"`
-	IssueCreationTimes []time.Time     `json:"issue_creation_times"`
+	Version            int              `json:"version"`
+	Entries            map[string]entry `json:"entries"`
+	IssueCreationTimes []time.Time      `json:"issue_creation_times"`
 }
 
 // Cache is a thread-safe deduplication cache backed by a JSON file.
@@ -60,22 +61,23 @@ func NewCache(path string, cooldown time.Duration) (*Cache, error) {
 		}
 	}
 
+	cache.migrateIfNeeded()
 	cache.pruneExpired()
 	return cache, nil
 }
 
-// cacheKey builds the lookup key from fingerprint + startsAt.
-func cacheKey(fingerprint, startsAt string) string {
-	return fingerprint + "|" + startsAt
+// cacheKey builds the lookup key from cluster name, fingerprint, and startsAt.
+func cacheKey(clusterName, fingerprint, startsAt string) string {
+	return clusterName + "|" + fingerprint + "|" + startsAt
 }
 
-// Seen returns true if the alert identified by fingerprint+startsAt
+// Seen returns true if the alert identified by cluster+fingerprint+startsAt
 // has already been processed within the cooldown window.
-func (cache *Cache) Seen(fingerprint, startsAt string) bool {
+func (cache *Cache) Seen(clusterName, fingerprint, startsAt string) bool {
 	cache.mutex.Lock()
 	defer cache.mutex.Unlock()
 
-	existing, found := cache.data.Entries[cacheKey(fingerprint, startsAt)]
+	existing, found := cache.data.Entries[cacheKey(clusterName, fingerprint, startsAt)]
 	if !found {
 		return false
 	}
@@ -83,11 +85,11 @@ func (cache *Cache) Seen(fingerprint, startsAt string) bool {
 }
 
 // Record marks an alert as processed right now.
-func (cache *Cache) Record(fingerprint, startsAt string) {
+func (cache *Cache) Record(clusterName, fingerprint, startsAt string) {
 	cache.mutex.Lock()
 	defer cache.mutex.Unlock()
 
-	cache.data.Entries[cacheKey(fingerprint, startsAt)] = entry{
+	cache.data.Entries[cacheKey(clusterName, fingerprint, startsAt)] = entry{
 		RecordedAt: time.Now(),
 	}
 }
@@ -101,7 +103,7 @@ func (cache *Cache) Save() error {
 	if marshalErr != nil {
 		return fmt.Errorf("dedup: marshal cache: %w", marshalErr)
 	}
-	if writeErr := os.WriteFile(cache.path, jsonBytes, 0644); writeErr != nil {
+	if writeErr := os.WriteFile(cache.path, jsonBytes, 0600); writeErr != nil {
 		return fmt.Errorf("dedup: write cache %s: %w", cache.path, writeErr)
 	}
 	return nil
@@ -147,6 +149,21 @@ func (cache *Cache) RecordIssueCreation() {
 
 	cache.runCount++
 	cache.data.IssueCreationTimes = append(cache.data.IssueCreationTimes, time.Now())
+}
+
+// migrateIfNeeded upgrades old-format cache entries (v0/v1) to v2.
+// v0/v1 keys: "fingerprint|startsAt" → v2 keys: "default|fingerprint|startsAt"
+func (cache *Cache) migrateIfNeeded() {
+	if cache.data.Version >= 2 {
+		return
+	}
+
+	migrated := make(map[string]entry, len(cache.data.Entries))
+	for key, value := range cache.data.Entries {
+		migrated["default|"+key] = value
+	}
+	cache.data.Entries = migrated
+	cache.data.Version = 2
 }
 
 // pruneExpired removes entries older than the cooldown window and
