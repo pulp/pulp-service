@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/tmc/langchaingo/llms"
@@ -31,6 +32,7 @@ type Alert struct {
 	EndsAt       string            `json:"endsAt"`
 	GeneratorURL string            `json:"generatorURL"`
 	Fingerprint  string            `json:"fingerprint"`
+	Cluster      string            `json:"cluster"`
 	Status       struct {
 		State string `json:"state"`
 	} `json:"status"`
@@ -38,31 +40,42 @@ type Alert struct {
 
 // Client is an HTTP client for the AlertManager API v2.
 type Client struct {
+	name       string
 	BaseURL    string
-	Token      string
+	token      string
 	HTTPClient *http.Client
 }
 
-// NewClient creates an AlertManager client with a 30-second timeout.
-// When the ALERTMANAGER_INSECURE_SKIP_VERIFY environment variable is set to
-// any non-empty value, TLS certificate verification is skipped.
-func NewClient(baseURL, token string) *Client {
+func (client *Client) Name() string {
+	return client.name
+}
+
+// NewClient creates an Alertmanager client with a 30-second timeout.
+// TLS configuration is caller-provided; NewClient does not read env vars.
+func NewClient(name, baseURL, token string, insecureSkipVerify bool) *Client {
 	transport := &http.Transport{}
 
-	if os.Getenv("ALERTMANAGER_INSECURE_SKIP_VERIFY") != "" {
+	if insecureSkipVerify {
 		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: true, //nolint:gosec // opt-in via env var for dev/staging
+			InsecureSkipVerify: true, //nolint:gosec // opt-in per cluster config
 		}
-		fmt.Fprintf(os.Stderr, "[alertmanager-debug] TLS certificate verification disabled\n")
+		fmt.Fprintf(os.Stderr, "[alertmanager-debug] TLS certificate verification disabled for cluster %s\n", name)
 	}
 
 	return &Client{
+		name:    name,
 		BaseURL: baseURL,
-		Token:   token,
+		token:   token,
 		HTTPClient: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
 		},
+	}
+}
+
+func (client *Client) stampCluster(alerts []Alert) {
+	for idx := range alerts {
+		alerts[idx].Cluster = client.name
 	}
 }
 
@@ -76,6 +89,7 @@ func (client *Client) CheckAlerts(ctx context.Context) (bool, int, error) {
 	}
 
 	filtered := FilterLatencyAlerts(alerts)
+	client.stampCluster(filtered)
 	found := len(filtered) > 0
 	return found, len(filtered), nil
 }
@@ -88,7 +102,9 @@ func (client *Client) FetchAlerts(ctx context.Context) ([]Alert, error) {
 	if fetchErr != nil {
 		return nil, fmt.Errorf("fetch alerts: %w", fetchErr)
 	}
-	return FilterLatencyAlerts(alerts), nil
+	filtered := FilterLatencyAlerts(alerts)
+	client.stampCluster(filtered)
+	return filtered, nil
 }
 
 // fetchAlerts retrieves alerts from the AlertManager API v2.
@@ -112,7 +128,7 @@ func (client *Client) fetchAlerts(ctx context.Context, filter string, active, si
 	if reqErr != nil {
 		return nil, fmt.Errorf("create request: %w", reqErr)
 	}
-	request.Header.Set("Authorization", "Bearer "+client.Token)
+	request.Header.Set("Authorization", "Bearer "+client.token)
 
 	response, doErr := client.HTTPClient.Do(request)
 	if doErr != nil {
@@ -127,7 +143,12 @@ func (client *Client) fetchAlerts(ctx context.Context, filter string, active, si
 	}
 
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("alertmanager returned status %d: %s", response.StatusCode, string(bodyBytes))
+		bodyStr := string(bodyBytes)
+		bodyStr = strings.ReplaceAll(bodyStr, client.token, "[REDACTED]")
+		if len(bodyStr) > 500 {
+			bodyStr = bodyStr[:500] + "...(truncated)"
+		}
+		return nil, fmt.Errorf("alertmanager returned status %d: %s", response.StatusCode, bodyStr)
 	}
 
 	var alerts []Alert
