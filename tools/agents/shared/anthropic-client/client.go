@@ -70,10 +70,18 @@ func (vertex *VertexClient) Do(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("marshal modified body: %w", err)
 	}
 
-	vertexURL := fmt.Sprintf(
-		"https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict",
-		vertex.Region, vertex.ProjectID, vertex.Region, vertex.Model,
-	)
+	var vertexURL string
+	if vertex.Region == "global" {
+		vertexURL = fmt.Sprintf(
+			"https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/anthropic/models/%s:rawPredict",
+			vertex.ProjectID, vertex.Model,
+		)
+	} else {
+		vertexURL = fmt.Sprintf(
+			"https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict",
+			vertex.Region, vertex.ProjectID, vertex.Region, vertex.Model,
+		)
+	}
 
 	newReq, err := http.NewRequestWithContext(ctx, http.MethodPost, vertexURL, bytes.NewReader(modifiedBody))
 	if err != nil {
