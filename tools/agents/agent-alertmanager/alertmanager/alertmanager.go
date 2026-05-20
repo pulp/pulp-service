@@ -17,12 +17,8 @@ import (
 	mcpClient "github.com/pulp/pulp-service/tools/agents/shared/mcp-client"
 )
 
-// DefaultFilter is the AlertManager API v2 filter for pulp service alerts.
-// Uses PromQL-style matcher syntax with curly braces.
-// NOTE: This {key="value"} syntax works with most AlertManager versions.
-// Some versions require repeated filter[] query params instead. The format
-// should be tested against the target AlertManager instance.
-const DefaultFilter = `{service="pulp"}`
+// DefaultFilter is the Alertmanager API v2 filter for pulp service alerts.
+const DefaultFilter = `service="pulp"`
 
 // Alert represents a single alert from the AlertManager API v2.
 type Alert struct {
