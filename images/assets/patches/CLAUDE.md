@@ -121,3 +121,9 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulpcore
 - **Files:** `pulpcore/app/models/repository.py`
 - **Description:** Optimizes repository deletion by materializing publication PKs before deleting published artifacts and switching to batched deletes (500 per batch) to limit WAL size in PostgreSQL.
+
+### 0057 — Optimize Simple API upload_time and provenance
+
+- **Package:** pulp_python
+- **Files:** `pulp_python/app/pypi/views.py`
+- **Description:** Replaces a correlated Subquery with a FilteredRelation JOIN when annotating `repo_added_time` and replaces a separate `PackageProvenance` query with an `Exists` annotation (`has_provenance`) in the SimpleView package detail endpoint, reducing the number of queries and improving performance for repositories with many content units.
