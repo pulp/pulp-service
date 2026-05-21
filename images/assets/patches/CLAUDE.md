@@ -50,12 +50,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Files:** `pulp_maven/app/maven_deploy_api.py`, `pulp_maven/app/urls.py`
 - **Description:** Removes the disabled authentication classes from the Maven deploy API view and re-roots the Maven API URL from `/pulp/maven/` to `/api/pulp/maven/`.
 
-### 0025 — ClamAV integration
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/settings.py`, `pulpcore/content/handler.py`, `pulpcore/download/base.py`, `pulpcore/exceptions/__init__.py`, `pulpcore/exceptions/validation.py`, `pulpcore/plugin/exceptions.py`
-- **Description:** Adds ClamAV malware scanning support. Introduces `CLAMAV_HOST`/`CLAMAV_PORT` settings, a `MalwareError` exception, and scanning logic in the content handler and download pipeline that checks artifacts for viruses when repository-level scanning is enabled.
-
 ### 0028 — OCI Storage create manifest
 
 - **Package:** pulpcore
