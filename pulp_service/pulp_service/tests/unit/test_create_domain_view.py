@@ -96,7 +96,7 @@ class TestCreateDomainViewValidation:
 
 
 class TestGroupNameResolution:
-    """Verify the three group-resolution paths in CreateDomainView.post()."""
+    """Verify the group-resolution paths in CreateDomainView.post()."""
 
     def _call_view(self, request):
         """Call the view with permissions and downstream deps stubbed out."""
@@ -175,16 +175,19 @@ class TestGroupNameResolution:
     # -- Path 4: no group_name, user already has a group ----------------
 
     @patch("pulp_service.app.viewsets.Group.objects")
-    def test_existing_user_group_reused(self, mock_group_objects):
+    def test_auto_group_created_even_when_user_has_groups(self, mock_group_objects):
         existing = _make_group("preexisting-group")
+        auto_group = _make_group("domain-test-domain")
+        mock_group_objects.get_or_create.return_value = (auto_group, True)
+
         user = _make_user(groups=[existing])
         request = _make_request({"name": "test-domain"}, user=user)
 
         response = self._call_view(request)
 
         assert response.status_code == 201
-        # get_or_create should NOT be called -- we reuse the user's group
-        mock_group_objects.get_or_create.assert_not_called()
+        mock_group_objects.get_or_create.assert_called_once_with(name="domain-test-domain")
+        user.groups.add.assert_called_once_with(auto_group)
 
     # -- Path 5: group resolution raises -> 400 -------------------------
 

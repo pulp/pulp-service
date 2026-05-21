@@ -1871,12 +1871,12 @@ class CreateDomainView(APIView):
                         domain_name,
                         user.username,
                     )
-            elif not user.groups.exists():
+            else:
                 group_name = f"domain-{domain_name}"
                 _logger.info(
-                    "User %s has no groups. Creating or finding group '%s' for domain creation.",
-                    user.username,
+                    "No group_name provided. Creating or finding group '%s' for domain '%s'.",
                     group_name,
+                    domain_name,
                 )
                 group, created = Group.objects.get_or_create(name=group_name)
                 if created:
@@ -1885,9 +1885,6 @@ class CreateDomainView(APIView):
                     _logger.info("Reusing existing group '%s'.", group_name)
                 user.groups.add(group)
                 _logger.info("Added user %s to group '%s'.", user.username, group_name)
-            else:
-                group = user.groups.first()
-                _logger.info("User %s already belongs to group '%s'.", user.username, group.name)
         except Exception as e:
             _logger.exception("Failed to resolve group for domain '%s'", domain_name)
             return Response(
