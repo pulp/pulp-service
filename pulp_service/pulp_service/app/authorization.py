@@ -11,6 +11,8 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 
+from pulp_python.app.pypi.views import PyPIMixin
+
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -50,8 +52,6 @@ class DomainBasedPermission(BasePermission):
 
         # Allow safe requests on PyPI views and public domains for all users
         if request.method in SAFE_METHODS:
-            from pulp_python.app.pypi.views import PyPIMixin
-
             if isinstance(view, PyPIMixin):
                 return True
             domain = getattr(request, "pulp_domain", None)
