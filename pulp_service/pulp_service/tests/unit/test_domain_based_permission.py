@@ -147,9 +147,7 @@ class TestUnsafeMethodsDenied:
 
     @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
     @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_authenticated_post_pypi_view_checks_domain_access(
-        self, mock_domain_org, mock_get_domain_pk
-    ):
+    def test_authenticated_post_pypi_view_checks_domain_access(self, mock_domain_org, mock_get_domain_pk):
         permission = DomainBasedPermission()
         request = _make_request(
             method="POST",
