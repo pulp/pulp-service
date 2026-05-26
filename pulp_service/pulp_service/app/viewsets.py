@@ -110,6 +110,23 @@ class InternalServerErrorCheckWithException(APIView):
         raise APIException()
 
 
+class OOMKillTriggerView(APIView):
+    """Allocates memory until the container is OOMKilled.
+    Requires superuser authentication.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request=None, path=None, pk=None):
+        chunk_size_mb = int(request.query_params.get("chunk_mb", 10))
+        chunks = []
+        allocated_mb = 0
+        while True:
+            chunks.append(b"x" * (chunk_size_mb * 1024 * 1024))
+            allocated_mb += chunk_size_mb
+            _logger.warning("OOM test: allocated %d MB", allocated_mb)
+
+
 class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
     """
     Content guard to protect the content guarded by Subscription Features.

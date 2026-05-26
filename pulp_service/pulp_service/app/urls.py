@@ -7,6 +7,7 @@ from .viewsets import (
     DebugAuthenticationHeadersView,
     InternalServerErrorCheck,
     InternalServerErrorCheckWithException,
+    OOMKillTriggerView,
     RDSConnectionTestDispatcherView,
     RedirectCheck,
     ReleaseTaskLocksView,
@@ -37,4 +38,5 @@ urlpatterns = [
     path("api/pulp/test/random_lock_tasks/", TaskIngestionRandomResourceLockDispatcherView.as_view()),
     path("api/pulp/rds-connection-tests/", RDSConnectionTestDispatcherView.as_view()),
     path("api/pulp/create-domain/", CreateDomainView.as_view()),
+    path("api/pulp/test/trigger-oom/", OOMKillTriggerView.as_view()),
 ]
