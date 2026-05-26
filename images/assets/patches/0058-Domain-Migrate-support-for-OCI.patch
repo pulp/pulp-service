@@ -1,0 +1,47 @@
+From 9a6ab1023835520c48de1dcb49ef05f7393414d8 Mon Sep 17 00:00:00 2001
+From: Yasen <yasen@trahnov.eu>
+Date: Tue, 26 May 2026 13:18:58 +0200
+Subject: [PATCH] fix migrate
+
+---
+ pulpcore/app/tasks/migrate.py | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/pulpcore/app/tasks/migrate.py b/pulpcore/app/tasks/migrate.py
+index dd15adc1e..eb692942f 100644
+--- a/pulpcore/app/tasks/migrate.py
++++ b/pulpcore/app/tasks/migrate.py
+@@ -29,20 +29,24 @@ def migrate_backend(data):
+         message=_("Migrating Artifacts"), code="migrate", total=artifacts.count()
+     ) as pb:
+         while True:
+-            for digest in pb.iter(artifacts.values_list("sha256", flat=True)):
+-                filename = storage.get_artifact_path(digest)
+-                if not new_storage.exists(filename):
++            for artifact in pb.iter(artifacts.iterator()):
++                old_name = artifact.file.name
++                new_name = storage.get_artifact_path(artifact.sha256)
++                if not new_storage.exists(new_name):
+                     try:
+-                        file = old_storage.open(filename)
++                        file = old_storage.open(old_name)
+                     except FileNotFoundError:
+                         raise ValidationError(
+                             _(
+                                 "Found missing file for artifact(sha256={}). Please run the repair "
+                                 "task or delete the offending artifact."
+-                            ).format(digest)
++                            ).format(artifact.sha256)
+                         )
+-                    new_storage.save(filename, file)
++                    new_storage.save(new_name, file)
+                     file.close()
++                if old_name != new_name:
++                    artifact.file.name = new_name
++                    artifact.save(update_fields=["file"])
+             # Handle new artifacts saved by the content app
+             artifacts = Artifact.objects.filter(pulp_domain=domain, pulp_created__gte=date)
+             if count := artifacts.count():
+-- 
+2.53.0
+
