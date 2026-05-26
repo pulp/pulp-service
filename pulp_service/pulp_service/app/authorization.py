@@ -11,6 +11,8 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 
+from pulp_python.app.pypi.views import PyPIMixin
+
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -48,16 +50,15 @@ class DomainBasedPermission(BasePermission):
 
         user = request.user
 
-        # Anonymous users can make safe requests on public domains and PyPI views
-        if not user.is_authenticated:
-            if request.method in SAFE_METHODS:
-                from pulp_python.app.pypi.views import PyPIMixin
+        # Allow safe requests on PyPI views and public domains for all users
+        if request.method in SAFE_METHODS:
+            if isinstance(view, PyPIMixin):
+                return True
+            domain = getattr(request, "pulp_domain", None)
+            if domain and "public-" in domain.name:
+                return True
 
-                if isinstance(view, PyPIMixin):
-                    return True
-                domain = getattr(request, "pulp_domain", None)
-                if domain and "public-" in domain.name:
-                    return True
+        if not user.is_authenticated:
             return False
 
         # Check if user is creating a domain or creating a resource within a domain
@@ -156,14 +157,3 @@ class DomainBasedPermission(BasePermission):
             query |= Q(domain_orgs__org_id=org_id)
 
         return qs.filter(query).distinct()
-
-
-class AllowUnauthPull(BasePermission):
-    """
-    A Permission Class that grants permission to make GET/HEAD/OPTIONS requests without authN/authZ
-    """
-
-    def has_permission(self, request, view):
-        if request.method in SAFE_METHODS:
-            return True
-        return None
