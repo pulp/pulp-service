@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import random
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
@@ -112,13 +113,23 @@ class InternalServerErrorCheckWithException(APIView):
 
 class OOMKillTriggerView(APIView):
     """Allocates memory until the container is OOMKilled.
-    Requires superuser authentication.
+    Requires superuser authentication. Only available on stage (ENV_NAME=stage).
     """
 
     permission_classes = [IsAdminUser]
 
     def post(self, request=None, path=None, pk=None):
-        chunk_size_mb = int(request.query_params.get("chunk_mb", 10))
+        if os.environ.get("ENV_NAME") != "stage":
+            return Response(
+                {"error": "OOM test endpoint is only available on stage"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            chunk_size_mb = max(1, min(100, int(request.query_params.get("chunk_mb", 10))))
+        except (ValueError, TypeError):
+            chunk_size_mb = 10
+
         chunks = []
         allocated_mb = 0
         while True:
