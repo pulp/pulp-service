@@ -7,10 +7,10 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.111.0             |
-| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.111.0             |
-| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.8              |
-| `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.0              |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.112.0             |
+| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
+| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.9              |
+| `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.2              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
 | `oras/`          | [oras-project/oras-py](https://github.com/oras-project/oras-py) | oras        | 0.2.38              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
@@ -49,18 +49,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulp_maven
 - **Files:** `pulp_maven/app/maven_deploy_api.py`, `pulp_maven/app/urls.py`
 - **Description:** Removes the disabled authentication classes from the Maven deploy API view and re-roots the Maven API URL from `/pulp/maven/` to `/api/pulp/maven/`.
-
-### 0024 — Update FileContent filter with NAME_FILTER_OPTIONS
-
-- **Package:** pulp_file (bundled in pulpcore)
-- **Files:** `pulp_file/app/viewsets.py`
-- **Description:** Replaces the simple list-based filter fields on `FileContentViewSet` with a dict that uses `NAME_FILTER_OPTIONS` for `relative_path`, enabling contains/startswith/regex filtering.
-
-### 0025 — ClamAV integration
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/settings.py`, `pulpcore/content/handler.py`, `pulpcore/download/base.py`, `pulpcore/exceptions/__init__.py`, `pulpcore/exceptions/validation.py`, `pulpcore/plugin/exceptions.py`
-- **Description:** Adds ClamAV malware scanning support. Introduces `CLAMAV_HOST`/`CLAMAV_PORT` settings, a `MalwareError` exception, and scanning logic in the content handler and download pipeline that checks artifacts for viruses when repository-level scanning is enabled.
 
 ### 0028 — OCI Storage create manifest
 
@@ -122,14 +110,14 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Files:** `pulp_python/app/models.py`, `pulp_python/app/tasks/__init__.py`, `pulp_python/app/tasks/scan_package.py`
 - **Description:** Adds an automatic package scanning task that dispatches on repository version creation. Downloads Python package artifacts to a temp directory, runs an external scanner, and collects results.
 
-### 0055 — Decouple /livez endpoint from the database
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/views/status.py`, `pulpcore/middleware.py`
-- **Description:** Adds a `skip_domain_middleware` flag to the liveness probe view and teaches the domain middleware to skip the database lookup when the flag is set, so `/livez` returns 200 even when the database is unavailable.
-
 ### 0056 — Repository publication delete
 
 - **Package:** pulpcore
 - **Files:** `pulpcore/app/models/repository.py`
 - **Description:** Optimizes repository deletion by materializing publication PKs before deleting published artifacts and switching to batched deletes (500 per batch) to limit WAL size in PostgreSQL.
+
+### 0057 — Optimize Simple API upload_time and provenance
+
+- **Package:** pulp_python
+- **Files:** `pulp_python/app/pypi/views.py`
+- **Description:** Replaces a correlated Subquery with a FilteredRelation JOIN when annotating `repo_added_time` and replaces a separate `PackageProvenance` query with an `Exists` annotation (`has_provenance`) in the SimpleView package detail endpoint, reducing the number of queries and improving performance for repositories with many content units.

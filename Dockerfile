@@ -135,13 +135,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
-COPY images/assets/patches/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0024-Update-FileContent-filter-with-NAME_FILTER_OPTIONS.patch
-
-COPY images/assets/patches/0025-clamAV.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0025-clamAV.patch
-
-
 COPY images/assets/patches/0028-OCIStorage-create-manifest.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-OCIStorage-create-manifest.patch
 
@@ -168,20 +161,20 @@ COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-
 COPY images/assets/patches/0048-Re-enable-attestation-verification-with-vendored-key.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0048-Re-enable-attestation-verification-with-vendored-key.patch
 
-COPY images/assets/patches/0049-Skip-content-units-validation.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
-
 COPY images/assets/patches/0052-pulpcore-agent-scan-report.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0052-pulpcore-agent-scan-report.patch
+
+COPY images/assets/patches/0049-Skip-content-units-validation.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
 
 COPY images/assets/patches/0053-python-agent-scan-task.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0053-python-agent-scan-task.patch
 
-COPY images/assets/patches/0055-decouple-livez-from-db.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0055-decouple-livez-from-db.patch
-
 COPY images/assets/patches/0056-repo-publication-delete.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0056-repo-publication-delete.patch
+
+COPY images/assets/patches/0057-Optimize-Simple-API-upload_time-and-provenance.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0057-Optimize-Simple-API-upload_time-and-provenance.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
