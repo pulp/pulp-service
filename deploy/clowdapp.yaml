@@ -440,6 +440,8 @@ objects:
             value: ${PULP_WORKER_TYPE}
           - name: PULP_DATA_UPLOAD_MAX_NUMBER_FIELDS
             value: ${PULP_DATA_UPLOAD_MAX_NUMBER_FIELDS}
+          - name: ENV_NAME
+            value: ${{ENV_NAME}}
 
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
@@ -572,6 +574,8 @@ objects:
                 fieldPath: metadata.namespace
           - name: PULP_WORKER_TYPE
             value: ${PULP_WORKER_TYPE}
+          - name: ENV_NAME
+            value: ${{ENV_NAME}}
 
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
@@ -682,6 +686,8 @@ objects:
             value: ${PULP_WORKER_TYPE}
           - name: ANTHROPIC_VERTEX_PROJECT_ID
             value: ${ANTHROPIC_VERTEX_PROJECT_ID}
+          - name: ENV_NAME
+            value: ${{ENV_NAME}}
       autoScaler:
         minReplicaCount: ${{PULP_WORKER_MIN_REPLICA_COUNT}}
         maxReplicaCount: ${{PULP_WORKER_MAX_REPLICA_COUNT}}
