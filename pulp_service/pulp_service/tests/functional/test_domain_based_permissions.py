@@ -678,7 +678,7 @@ def test_scope_queryset_model_guard():
 
 
 def test_authenticated_user_can_read_public_domain(
-    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, bindings_cfg
+    pulpcore_bindings, python_bindings, anonymous_user, gen_object_with_cleanup, bindings_cfg
 ):
     """Test that an authenticated user from a different org can GET a public- domain's PyPI view.
 
@@ -719,7 +719,20 @@ def test_authenticated_user_can_read_public_domain(
                 },
             )
 
-            pypi_url = urljoin(bindings_cfg.host, f"/api/pypi/{domain_name}/main/simple/")
+            python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_owner
+            repo = gen_object_with_cleanup(
+                python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
+            )
+
+            python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = auth_owner
+            base_path = str(uuid4())
+            gen_object_with_cleanup(
+                python_bindings.DistributionsPypiApi,
+                {"name": str(uuid4()), "base_path": base_path, "repository": repo.pulp_href},
+                pulp_domain=domain_name,
+            )
+
+            pypi_url = urljoin(bindings_cfg.host, f"/api/pypi/{domain_name}/{base_path}/simple/")
 
             # Anonymous GET should succeed
             anon_response = requests.get(pypi_url, timeout=30)
@@ -732,3 +745,5 @@ def test_authenticated_user_can_read_public_domain(
             assert auth_response.status_code == 200
         finally:
             pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+            python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
+            python_bindings.DistributionsPypiApi.api_client.default_headers.pop("x-rh-identity", None)
