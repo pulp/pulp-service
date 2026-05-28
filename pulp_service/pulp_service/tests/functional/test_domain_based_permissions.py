@@ -709,23 +709,26 @@ def test_authenticated_user_can_read_public_domain(
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_owner
 
         domain_name = f"public-test-{uuid4()}"
-        gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+        try:
+            gen_object_with_cleanup(
+                pulpcore_bindings.DomainsApi,
+                {
+                    "name": domain_name,
+                    "storage_class": "pulpcore.app.models.storage.FileSystem",
+                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+                },
+            )
 
-        pypi_url = urljoin(bindings_cfg.host, f"/api/pypi/{domain_name}/main/simple/")
+            pypi_url = urljoin(bindings_cfg.host, f"/api/pypi/{domain_name}/main/simple/")
 
-        # Anonymous GET should succeed
-        anon_response = requests.get(pypi_url, timeout=30)
-        assert anon_response.status_code == 200
+            # Anonymous GET should succeed
+            anon_response = requests.get(pypi_url, timeout=30)
+            assert anon_response.status_code == 200
 
-        # Authenticated GET from a different org (no DomainOrg entry) should also succeed
-        header_other = json.dumps(other_org_identity)
-        auth_other = b64encode(bytes(header_other, "ascii")).decode("ascii")
-        auth_response = requests.get(pypi_url, headers={"x-rh-identity": auth_other}, timeout=30)
-        assert auth_response.status_code == 200
+            # Authenticated GET from a different org (no DomainOrg entry) should also succeed
+            header_other = json.dumps(other_org_identity)
+            auth_other = b64encode(bytes(header_other, "ascii")).decode("ascii")
+            auth_response = requests.get(pypi_url, headers={"x-rh-identity": auth_other}, timeout=30)
+            assert auth_response.status_code == 200
+        finally:
+            pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
