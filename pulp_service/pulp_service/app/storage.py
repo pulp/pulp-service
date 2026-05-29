@@ -253,8 +253,5 @@ class OCIStorage(BaseStorage):
         # The actual blob URL is in the Location header.
         blob_url = response.headers.get("Location")
         if not blob_url:
-            raise ValueError(
-                f"No redirect URL returned for blob {digest} "
-                f"(status={response.status_code})"
-            )
+            raise ValueError(f"No redirect URL returned for blob {digest} (status={response.status_code})")
         return blob_url
