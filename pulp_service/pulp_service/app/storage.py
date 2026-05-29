@@ -241,12 +241,17 @@ class OCIStorage(BaseStorage):
         # Load auth configs
         client.auth.load_configs(container, configs=["/tmp/.docker/config.json"])
 
-        # Use download_blob with return_blob_url=True to get the URL
-        blob_url = client.download_blob(
+        # Use download_blob with return_blob_url=True to get the redirect response
+        response = client.download_blob(
             container=container,
             digest=digest,
             outfile="",  # Not used when return_blob_url=True
             return_blob_url=True,
         )
 
+        # response is a requests.Response with a 302 redirect (allow_redirects=False).
+        # The actual blob URL is in the Location header.
+        blob_url = response.headers.get("Location")
+        if not blob_url:
+            raise ValueError(f"No redirect URL returned for blob {digest} (status={response.status_code})")
         return blob_url
