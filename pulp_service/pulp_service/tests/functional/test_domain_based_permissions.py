@@ -1,8 +1,10 @@
 import json
 from base64 import b64encode
+from urllib.parse import urljoin
 from uuid import uuid4
 
 import pytest
+import requests
 
 
 def test_user_domain_repo_creation(pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup):
@@ -673,3 +675,75 @@ def test_scope_queryset_model_guard():
     result_qs = permission.scope_queryset(view, group_qs)
 
     assert result_qs is group_qs
+
+
+def test_authenticated_user_can_read_public_domain(
+    pulpcore_bindings, python_bindings, anonymous_user, gen_object_with_cleanup, bindings_cfg
+):
+    """Test that an authenticated user from a different org can GET a public- domain's PyPI view.
+
+    Regression test for https://github.com/pulp/pulp-service/pull/1231
+    Before the fix, authenticated users got 403 on public domains because
+    DomainBasedPermission only allowed anonymous safe requests to bypass
+    the domain access check.
+    """
+    owner_identity = {
+        "identity": {
+            "org_id": 1,
+            "internal": {"org_id": 1},
+            "user": {"username": "public_domain_owner"},
+        }
+    }
+
+    other_org_identity = {
+        "identity": {
+            "org_id": 9999,
+            "internal": {"org_id": 9999},
+            "user": {"username": "other_org_user"},
+        }
+    }
+
+    with anonymous_user:
+        header_owner = json.dumps(owner_identity)
+        auth_owner = b64encode(bytes(header_owner, "ascii"))
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_owner
+
+        domain_name = f"public-test-{uuid4()}"
+        try:
+            gen_object_with_cleanup(
+                pulpcore_bindings.DomainsApi,
+                {
+                    "name": domain_name,
+                    "storage_class": "pulpcore.app.models.storage.FileSystem",
+                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+                },
+            )
+
+            python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_owner
+            repo = gen_object_with_cleanup(
+                python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
+            )
+
+            python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = auth_owner
+            base_path = str(uuid4())
+            gen_object_with_cleanup(
+                python_bindings.DistributionsPypiApi,
+                {"name": str(uuid4()), "base_path": base_path, "repository": repo.pulp_href},
+                pulp_domain=domain_name,
+            )
+
+            pypi_url = urljoin(bindings_cfg.host, f"/api/pypi/{domain_name}/{base_path}/simple/")
+
+            # Anonymous GET should succeed
+            anon_response = requests.get(pypi_url, timeout=30)
+            assert anon_response.status_code == 200
+
+            # Authenticated GET from a different org (no DomainOrg entry) should also succeed
+            header_other = json.dumps(other_org_identity)
+            auth_other = b64encode(bytes(header_other, "ascii")).decode("ascii")
+            auth_response = requests.get(pypi_url, headers={"x-rh-identity": auth_other}, timeout=30)
+            assert auth_response.status_code == 200
+        finally:
+            pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+            python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
+            python_bindings.DistributionsPypiApi.api_client.default_headers.pop("x-rh-identity", None)
