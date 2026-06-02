@@ -18,7 +18,7 @@ workflow:
   - id: review
     type: agent
     agent: Plan Reviewer
-    depends: "plan.Succeeded || revise.Succeeded"
+    depends: "plan.Succeeded"
     max_iterations: 3
     inputs:
       issue_key: "{{trigger.issue_key}}"
@@ -47,6 +47,25 @@ workflow:
       review_feedback: "{{steps.review.outputs.feedback}}"
     outputs: [plan]
 
+  - id: review-revised
+    type: agent
+    agent: Plan Reviewer
+    depends: "revise.Succeeded"
+    max_iterations: 2
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      plan: "{{steps.revise.outputs.plan}}"
+    outputs: [approved, feedback]
+    output_contract:
+      required: [approved, feedback]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
+
   - id: post-plan
     type: bridge
     action: jira-add-comment
@@ -54,3 +73,11 @@ workflow:
     inputs:
       issue_key: "{{trigger.issue_key}}"
       comment: "{{steps.plan.outputs.plan}}"
+
+  - id: post-revised-plan
+    type: bridge
+    action: jira-add-comment
+    depends: "review-revised.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      comment: "{{steps.revise.outputs.plan}}"
