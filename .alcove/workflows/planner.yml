@@ -81,3 +81,11 @@ workflow:
     inputs:
       issue_key: "{{trigger.issue_key}}"
       comment: "{{steps.revise.outputs.plan}}"
+
+  - id: post-failure
+    type: bridge
+    action: jira-add-comment
+    depends: "plan.Failed || review-revised.Failed"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      comment: "⚠️ Automated planning could not converge after multiple review rounds. Manual planning needed. Remove the `needs-planning` label to prevent re-triggering."
