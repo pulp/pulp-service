@@ -73,7 +73,7 @@ When the workflow finishes, `/workspace/pulp-service` has all changes applied in
 
 ```bash
 export PATH="$HOME/.swamp/bin:$PATH"
-for pkg in pulpcore pulp-container pulp-python pulp-rpm pulp-maven pulp-file pulp-npm pulp-gem oras django-storages; do
+for pkg in pulpcore pulp-container pulp-python pulp-rpm pulp-maven pulp-file pulp-npm oras django-storages; do
   swamp data get --workflow "pulp-upgrade-check" "result-${pkg}" 2>/dev/null | grep -E '"status":\s*"(conflicts|regen_verify_failed|failed)"' && echo "^^^ $pkg has unresolved patches"
 done
 ```
@@ -94,7 +94,7 @@ First, uninstall all packages that have patches applied to them:
 curl -s -X POST http://$DEV_CONTAINER_HOST/exec \
   -H "Authorization: Bearer $DEV_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cmd": "pip uninstall -y pulpcore pulp-python pulp-container pulp-rpm pulp-maven pulp-file pulp-npm pulp-gem django-storages oras", "timeout": 120}'
+  -d '{"cmd": "pip uninstall -y pulpcore pulp-python pulp-container pulp-rpm pulp-maven pulp-file pulp-npm django-storages oras", "timeout": 120}'
 ```
 
 IMPORTANT: `pip uninstall` only removes files that pip installed. Files CREATED by patches (new files, not modifications) survive the uninstall. You MUST delete these manually before reinstalling.

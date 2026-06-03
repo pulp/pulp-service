@@ -13,8 +13,6 @@ repos:
     name: pulp_python
   - url: https://github.com/pulp/pulp_container
     name: pulp_container
-  - url: https://github.com/pulp/pulp_gem
-    name: pulp_gem
   - url: https://github.com/pulp/pulp_npm
     name: pulp_npm
   - url: https://github.com/pulp/pulp_maven
