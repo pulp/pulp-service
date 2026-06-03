@@ -7,19 +7,13 @@ Moves all container registry URL routes from /v2/ to /api/pulp/v2/ and
 the content app prefix from /pulp/container/ to /api/pulp-container/.
 Replaces RegistryPermission with DomainBasedPermission.
 
-When TOKEN_AUTH_DISABLED is true, includes both RegistryAuthentication
-and all DEFAULT_AUTHENTICATION_CLASSES instead of a single auth class,
-allowing custom authentication backends (e.g. remote header-based auth)
-to work alongside standard Basic auth for container registry operations.
-
 Co-Authored-By: Andre "decko" de Brito <decko@redhat.com>
 ---
  pulp_container/app/content.py            |  2 +-
  pulp_container/app/redirects.py          |  4 ++--
- pulp_container/app/registry_api.py       |  8 +++++++-
  pulp_container/app/token_verification.py | 16 +---------------
  pulp_container/app/urls.py               | 14 +++++++-------
- 5 files changed, 18 insertions(+), 28 deletions(-)
+ 4 files changed, 12 insertions(+), 26 deletions(-)
 
 diff --git a/pulp_container/app/content.py b/pulp_container/app/content.py
 index dbe6418d..006e8afb 100644
@@ -47,25 +41,6 @@ index 0c7a5898..fa4808cb 100644
              if settings.DOMAIN_ENABLED
              else "pulp/container"
          )
-diff --git a/pulp_container/app/registry_api.py b/pulp_container/app/registry_api.py
---- a/pulp_container/app/registry_api.py
-+++ b/pulp_container/app/registry_api.py
-@@ -232,9 +232,14 @@ class ContainerRegistryApiMixin:
-     def authentication_classes(self):
-         """
-         List of authentication classes to check for this view.
-+
-+        When token auth is disabled, includes both RegistryAuthentication (Basic auth)
-+        and any authentication classes configured in DEFAULT_AUTHENTICATION_CLASSES.
-+        This allows deployments to use custom authentication backends (e.g. remote
-+        header-based auth) alongside standard Basic auth for container registry operations.
-         """
-         if settings.get("TOKEN_AUTH_DISABLED", False):
--            return [RegistryAuthentication]
-+            return [RegistryAuthentication, *api_settings.DEFAULT_AUTHENTICATION_CLASSES]
-         return [TokenAuthentication]
- 
-     @property
 diff --git a/pulp_container/app/token_verification.py b/pulp_container/app/token_verification.py
 index d78738a4..faf05cd6 100644
 --- a/pulp_container/app/token_verification.py

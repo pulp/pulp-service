@@ -9,7 +9,7 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
 | `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.112.0             |
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
-| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.27.9              |
+| `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.2              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
 | `oras/`          | [oras-project/oras-py](https://github.com/oras-project/oras-py) | oras        | 0.2.38              |
@@ -41,8 +41,8 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 ### 0018 — Re-root the registry API at /api/pulp/v2/
 
 - **Package:** pulp_container
-- **Files:** `pulp_container/app/content.py`, `pulp_container/app/redirects.py`, `pulp_container/app/registry_api.py`, `pulp_container/app/token_verification.py`, `pulp_container/app/urls.py`
-- **Description:** Moves all container registry URL routes from `/v2/` to `/api/pulp/v2/` and the content app prefix from `/pulp/container/` to `/api/pulp-container/`. Replaces `RegistryPermission` with `DomainBasedPermission`. When `TOKEN_AUTH_DISABLED` is true, includes both `RegistryAuthentication` and all `DEFAULT_AUTHENTICATION_CLASSES` instead of a single auth class, allowing custom authentication backends (e.g. remote header-based auth) alongside standard Basic auth.
+- **Files:** `pulp_container/app/content.py`, `pulp_container/app/redirects.py`, `pulp_container/app/token_verification.py`, `pulp_container/app/urls.py`
+- **Description:** Moves all container registry URL routes from `/v2/` to `/api/pulp/v2/` and the content app prefix from `/pulp/container/` to `/api/pulp-container/`. Replaces `RegistryPermission` with `DomainBasedPermission`.
 
 ### 0022 — Adds authentication to the mvn deploy api
 

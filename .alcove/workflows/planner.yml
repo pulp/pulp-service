@@ -1,0 +1,91 @@
+name: Jira Planner
+trigger:
+  jira:
+    projects: [PULP]
+    labels: [needs-planning]
+
+workflow:
+  - id: plan
+    type: agent
+    agent: Planner
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+    outputs: [plan]
+
+  - id: review
+    type: agent
+    agent: Plan Reviewer
+    depends: "plan.Succeeded"
+    max_iterations: 3
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      plan: "{{steps.plan.outputs.plan}}"
+    outputs: [approved, feedback]
+    output_contract:
+      required: [approved, feedback]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
+
+  - id: revise
+    type: agent
+    agent: Planner
+    depends: "review.Failed"
+    max_iterations: 2
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      review_feedback: "{{steps.review.outputs.feedback}}"
+    outputs: [plan]
+
+  - id: review-revised
+    type: agent
+    agent: Plan Reviewer
+    depends: "revise.Succeeded"
+    max_iterations: 2
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      plan: "{{steps.revise.outputs.plan}}"
+    outputs: [approved, feedback]
+    output_contract:
+      required: [approved, feedback]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
+
+  - id: post-plan
+    type: bridge
+    action: jira-add-comment
+    depends: "review.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      comment: "{{steps.plan.outputs.plan}}"
+
+  - id: post-revised-plan
+    type: bridge
+    action: jira-add-comment
+    depends: "review-revised.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      comment: "{{steps.revise.outputs.plan}}"
+
+  - id: post-failure
+    type: bridge
+    action: jira-add-comment
+    depends: "plan.Failed || review-revised.Failed"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      comment: "⚠️ Automated planning could not converge after multiple review rounds. Manual planning needed. Remove the `needs-planning` label to prevent re-triggering."
