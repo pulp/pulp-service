@@ -120,8 +120,7 @@ jobs:
             pytest -v -r sx --color=yes \
               --pyargs pulp_service.tests.functional \
               -m 'not parallel' \
-              --deselect pulp_service/tests/functional/test_feature_service.py::test_forbidden_feature_service \
-              --deselect pulp_service/tests/functional/test_feature_service.py::test_entitled_feature_service \
+              -k 'not test_forbidden_feature_service and not test_entitled_feature_service' \
               --junitxml=/tmp/junit-service.xml"
 
       - name: Collect test results
