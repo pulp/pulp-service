@@ -106,6 +106,8 @@ class DomainBasedPermission(BasePermission):
                 return "domain_update" if method == "PATCH" else "domain_delete"
         elif view_name in ["create-domain", "pulp_service.app.viewsets.CreateDomainView"]:
             return "domain_create"
+        elif view_name in ["migrate-domain", "pulp_service.app.viewsets.MigrateDomainView"]:
+            return "domain_update"
         else:
             return "domain_operation"
         return None

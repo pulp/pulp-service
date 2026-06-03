@@ -21,8 +21,10 @@ from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pulpcore.app.contexts import with_domain
 from pulpcore.app.models import Domain, Group, Task
 from pulpcore.app.serializers import DomainSerializer
+from pulpcore.app.tasks import migrate_backend
 from pulpcore.app.viewsets.base import NAME_FILTER_OPTIONS
 from pulpcore.app.viewsets.custom_filters import LabelFilter
 from pulpcore.filters import BaseFilterSet, HyperlinkRelatedFilter
@@ -1953,6 +1955,89 @@ class CreateDomainView(APIView):
         response_data = DomainSerializer(domain, context={"request": request}).data
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class MigrateDomainView(APIView):
+    """
+    Migrate a domain's storage backend to S3 using settings from template-domain-s3.
+
+    This avoids exposing S3 credentials to callers — the storage configuration is
+    pulled server-side from the template domain, just like CreateDomainView does
+    for domain creation.
+    """
+
+    permission_classes = [DomainBasedPermission]
+
+    @extend_schema(
+        description=(
+            "Trigger a storage backend migration for the specified domain. "
+            "Storage settings are sourced from the template-domain-s3 domain — "
+            "callers do not need to provide any storage credentials."
+        ),
+        summary="Migrate domain storage to S3",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the domain to migrate.",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        domain_name = request.data.get("name")
+        if not domain_name:
+            return Response(
+                {"error": "Domain name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            domain = Domain.objects.get(name=domain_name)
+        except Domain.DoesNotExist:
+            return Response(
+                {"error": f"Domain '{domain_name}' not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if domain.name == "default":
+            return Response(
+                {"error": "Default domain cannot be migrated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            template = Domain.objects.get(name="template-domain-s3")
+        except Domain.DoesNotExist:
+            _logger.exception("Model domain 'template-domain-s3' not found")
+            return Response(
+                {
+                    "error": (
+                        "Model domain 'template-domain-s3' not found. "
+                        "Please create it first with correct storage settings."
+                    )
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        data = {
+            "storage_class": template.storage_class,
+            "storage_settings": template.storage_settings,
+        }
+
+        with with_domain(domain):
+            task = dispatch(
+                migrate_backend,
+                args=(data,),
+                exclusive_resources=[domain],
+            )
+
+        return OperationPostponedResponse(task, request)
 
 
 class AgentScanReportView(NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
