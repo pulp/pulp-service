@@ -1,0 +1,146 @@
+name: Functional Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  functional-tests:
+    name: "Pulp Functional Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build dev container
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: dev-container/Dockerfile
+          load: true
+          tags: pulp-dev:test
+          cache-from: type=gha,scope=dev-container
+          cache-to: type=gha,mode=max,scope=dev-container
+
+      - name: Start dev container
+        run: |
+          docker run -d \
+            --name pulp-dev \
+            -e PULP_API_WORKERS=1 \
+            -e PULP_CONTENT_WORKERS=1 \
+            -e PULP_WORKERS=2 \
+            pulp-dev:test
+
+      - name: Wait for Pulp API
+        run: |
+          echo "Waiting for Pulp API to become ready..."
+          for i in $(seq 1 120); do
+            if docker exec pulp-dev curl -sf http://localhost:24817/api/pulp/api/v3/status/ > /dev/null 2>&1; then
+              echo "API ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: API not ready after 120s"
+          docker logs pulp-dev
+          exit 1
+
+      - name: Install test dependencies and generate bindings
+        run: |
+          docker exec pulp-dev bash -c "pip install 'pytest<8' pytest-django gnupg 2>&1 | tail -1"
+          docker exec pulp-dev bash -c "\
+            curl -sf -o /tmp/functest_requirements.txt \
+              https://raw.githubusercontent.com/pulp/pulp_rpm/main/functest_requirements.txt && \
+            curl -sf -o /tmp/unittest_requirements.txt \
+              https://raw.githubusercontent.com/pulp/pulp_rpm/main/unittest_requirements.txt && \
+            pip install -r /tmp/functest_requirements.txt -r /tmp/unittest_requirements.txt 2>&1 | tail -1"
+          docker exec pulp-dev pulp-test --bindings-only
+
+      - name: "Test 1/6: pulp_rpm parallel (test_download_content)"
+        run: |
+          docker exec pulp-dev bash -c "\
+            API_PROTOCOL=http API_HOST=localhost API_PORT=24817 \
+            ADMIN_USERNAME=admin ADMIN_PASSWORD=password \
+            pytest -v -r sx --color=yes \
+              --suppress-no-test-exit-code \
+              --pyargs pulp_rpm.tests.functional \
+              -m parallel -n 4 -k 'test_download_content' \
+              --junitxml=/tmp/junit-rpm-parallel.xml"
+
+      - name: "Test 2/6: pulp_rpm serial (test_download_policies)"
+        run: |
+          docker exec pulp-dev bash -c "\
+            API_PROTOCOL=http API_HOST=localhost API_PORT=24817 \
+            ADMIN_USERNAME=admin ADMIN_PASSWORD=password \
+            pytest -v -r sx --color=yes \
+              --pyargs pulp_rpm.tests.functional \
+              -m 'not parallel' -k 'test_download_policies' \
+              --junitxml=/tmp/junit-rpm-serial.xml"
+
+      - name: "Test 3/6: pulpcore (test_jq_header_remote_auth)"
+        run: |
+          docker exec pulp-dev bash -c "\
+            API_PROTOCOL=http API_HOST=localhost API_PORT=24817 \
+            ADMIN_USERNAME=admin ADMIN_PASSWORD=password \
+            pytest -v -r sx --color=yes \
+              --pyargs pulpcore.tests.functional \
+              -m parallel -n 4 -k 'test_jq_header_remote_auth' \
+              --junitxml=/tmp/junit-core.xml"
+
+      - name: "Test 4/6: pulp_maven (test_download_content)"
+        run: |
+          docker exec pulp-dev bash -c "\
+            API_PROTOCOL=http API_HOST=localhost API_PORT=24817 \
+            ADMIN_USERNAME=admin ADMIN_PASSWORD=password \
+            pytest -v -r sx --color=yes \
+              --pyargs pulp_maven.tests.functional.api.test_download_content \
+              --junitxml=/tmp/junit-maven.xml"
+
+      - name: "Test 5/6: pulp_npm (test_pull_through_install)"
+        run: |
+          docker exec pulp-dev bash -c "\
+            API_PROTOCOL=http API_HOST=localhost API_PORT=24817 \
+            ADMIN_USERNAME=admin ADMIN_PASSWORD=password \
+            pytest -v -r sx --color=yes \
+              --pyargs pulp_npm.tests.functional \
+              -k 'test_pull_through_install' \
+              --junitxml=/tmp/junit-npm.xml"
+
+      - name: "Test 6/6: pulp_service functional"
+        run: |
+          docker exec pulp-dev bash -c "\
+            API_PROTOCOL=http API_HOST=localhost API_PORT=24817 \
+            ADMIN_USERNAME=admin ADMIN_PASSWORD=password \
+            pytest -v -r sx --color=yes \
+              --pyargs pulp_service.tests.functional \
+              -m 'not parallel' \
+              --junitxml=/tmp/junit-service.xml"
+
+      - name: Collect test results
+        if: always()
+        run: |
+          mkdir -p test-results
+          docker cp pulp-dev:/tmp/junit-rpm-parallel.xml test-results/ 2>/dev/null || true
+          docker cp pulp-dev:/tmp/junit-rpm-serial.xml test-results/ 2>/dev/null || true
+          docker cp pulp-dev:/tmp/junit-core.xml test-results/ 2>/dev/null || true
+          docker cp pulp-dev:/tmp/junit-maven.xml test-results/ 2>/dev/null || true
+          docker cp pulp-dev:/tmp/junit-npm.xml test-results/ 2>/dev/null || true
+          docker cp pulp-dev:/tmp/junit-service.xml test-results/ 2>/dev/null || true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: test-results/
+          retention-days: 14
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker logs pulp-dev
