@@ -3,7 +3,7 @@
 Pulp Domain Deletion Script
 
 You need to install the client bindings:
-pip3 install crc-{pulpcore,pulp-python,pulp-npm,pulp-gem,pulp-rpm,pulp-maven,pulp-file,pulp-service}-client
+pip3 install crc-{pulpcore,pulp-python,pulp-npm,pulp-rpm,pulp-maven,pulp-file,pulp-service}-client
 
 This script cleans up all resources in a Pulp domain and then deletes the domain itself.
 It uses the Pulp client bindings to:

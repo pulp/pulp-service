@@ -90,7 +90,7 @@ spec:
     - name: PULP_BINDINGS_COMPONENTS
       type: string
       description: space-separated list of Pulp components to generate the bindings
-      default: "pulpcore pulp_python pulp_npm pulp_gem pulp_rpm pulp_maven pulp_file pulp_service"
+      default: "pulpcore pulp_python pulp_npm pulp_rpm pulp_maven pulp_file pulp_service"
     - name: BINDINGS_TEMPLATES
       type: string
       description: space-separated list of openapi-generator mustache template files
