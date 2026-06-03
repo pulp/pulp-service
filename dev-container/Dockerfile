@@ -120,7 +120,8 @@ from cryptography.hazmat.primitives import serialization; \
 key = rsa.generate_private_key(65537, 4096); \
 open('/etc/pki/attestation/test-key-private.pem','wb').write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())); \
 open('/etc/pki/attestation/test-key.pem','wb').write(key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))" && \
-    chmod 600 /etc/pki/attestation/test-key-private.pem && \
+    chmod 640 /etc/pki/attestation/test-key-private.pem && \
+    chown root:0 /etc/pki/attestation/test-key-private.pem && \
     chmod 644 /etc/pki/attestation/test-key.pem
 
 RUN dnf -y install java-17-openjdk-headless && dnf clean all
