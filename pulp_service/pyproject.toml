@@ -129,7 +129,7 @@ section-order = [
 
 [tool.ruff.lint.isort.sections]
 "pulpcore" = ["pulpcore"]
-"content-plugins" = ["pulp_rpm", "pulp_npm", "pulp_python", "pulp_container", "pulp_gem", "pulp_maven", "pulp_hugging_face"]
+"content-plugins" = ["pulp_rpm", "pulp_npm", "pulp_python", "pulp_container", "pulp_maven", "pulp_hugging_face"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

@@ -69,7 +69,7 @@ WSGI middleware (`images/assets/log_middleware.py`) → Django middleware stack 
 - **Storage backends**: `AIPCCStorageBackend` (S3) and `OCIStorageBackend` (OCI/ORAS) in `app/storage.py`
 - **Tasks**: Background work in `app/tasks/` (package scanning, domain metrics, RDS testing)
 
-**Upstream plugins this extends**: pulpcore, pulp-python, pulp-container, pulp-rpm, pulp-gem, pulp-npm, pulp-maven, pulp-hugging-face.
+**Upstream plugins this extends**: pulpcore, pulp-python, pulp-container, pulp-rpm, pulp-npm, pulp-maven, pulp-hugging-face.
 
 ## Changelog Process
 

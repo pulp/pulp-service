@@ -63,12 +63,6 @@ PYTHON_VULNERABILITY_IDS = [
     "PYSEC-2025-1",
 ]
 
-# GEM
-GEM_REMOTE_REGISTRY = "https://index.rubygems.org/"
-GEM_REMOTE_INCLUDE = {"rails": "= 7.0.1"}
-GEM_VULNERABILITY_PACKAGE = "rails-7.0.1"
-GEM_VULNERABILITY_IDS = ["GHSA-9822-6m93-xqf4"]
-
 # RPM
 RPM_SAMPLE_PACKAGE_URL = "https://vault.centos.org/7.0.1406/os/x86_64/Packages/kernel-3.10.0-123.el7.x86_64.rpm"
 RPM_SAMPLE_RH_CPE = '["cpe:/o:redhat:enterprise_linux:7::workstation"]'

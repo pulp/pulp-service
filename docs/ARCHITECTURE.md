@@ -739,10 +739,6 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Additional Pulp Plugins
 
-**Pulp Gem** (0.7.5, see requirements.txt):
-- RubyGems repository support
-- Documentation: https://docs.pulpproject.org/pulp_gem/
-
 **Pulp NPM** (0.5.0, see requirements.txt):
 - NPM registry support
 - Documentation: https://docs.pulpproject.org/pulp_npm/
