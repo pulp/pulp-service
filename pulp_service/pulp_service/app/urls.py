@@ -3,6 +3,7 @@ from django.urls import include, path
 from .admin import admin_site
 from .viewsets import (
     CreateDomainView,
+    MigrateDomainView,
     DatabaseTriggersView,
     DebugAuthenticationHeadersView,
     InternalServerErrorCheck,
@@ -38,5 +39,6 @@ urlpatterns = [
     path("api/pulp/test/random_lock_tasks/", TaskIngestionRandomResourceLockDispatcherView.as_view()),
     path("api/pulp/rds-connection-tests/", RDSConnectionTestDispatcherView.as_view()),
     path("api/pulp/create-domain/", CreateDomainView.as_view()),
+    path("api/pulp/migrate-domain/", MigrateDomainView.as_view()),
     path("api/pulp/test/trigger-oom/", OOMKillTriggerView.as_view()),
 ]
