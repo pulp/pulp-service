@@ -337,6 +337,10 @@ objects:
             cpu: ${{PULP_API_CPU_LIMIT}}
             memory: ${{PULP_API_MEMORY_LIMIT}}
         env:
+          - name: MALLOC_MMAP_THRESHOLD_
+            value: "65536"
+          - name: MALLOC_TRIM_THRESHOLD_
+            value: "65536"
           - name: GUNICORN_CMD_ARGS
             value: "--config /usr/bin/log_middleware.py"
           - name: PULP_OTEL_ENABLED
