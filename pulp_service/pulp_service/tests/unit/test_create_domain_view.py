@@ -100,7 +100,7 @@ class TestGroupNameResolution:
 
     def _call_view(self, request):
         """Call the view with permissions and downstream deps stubbed out."""
-        template, serializer_inst, domain_inst = _patch_domain_and_serializer()
+        template, serializer_inst, _ = _patch_domain_and_serializer()
 
         with (
             patch.object(CreateDomainView, "permission_classes", []),
@@ -219,7 +219,7 @@ class TestGroupVarContextVariable:
         custom_group = _make_group("custom-team")
         mock_group_objects.get_or_create.return_value = (custom_group, True)
 
-        template, serializer_inst, domain_inst = _patch_domain_and_serializer()
+        template, serializer_inst, _ = _patch_domain_and_serializer()
 
         user = _make_user()
         request = _make_request({"name": "test-domain", "group_name": "custom-team"}, user=user)
@@ -257,7 +257,7 @@ class TestGroupVarContextVariable:
         auto_group = _make_group("domain-test-domain")
         mock_group_objects.get_or_create.return_value = (auto_group, True)
 
-        template, serializer_inst, domain_inst = _patch_domain_and_serializer()
+        template, serializer_inst, _ = _patch_domain_and_serializer()
 
         user = _make_user()  # no groups
         request = _make_request({"name": "test-domain"}, user=user)

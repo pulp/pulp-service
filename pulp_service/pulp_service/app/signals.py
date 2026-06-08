@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 @receiver(post_migrate)
-def register_scheduled_tasks(sender, **kwargs):
+def register_scheduled_tasks(sender, **kwargs):  # noqa: ARG001
     if sender.name == "pulp_service.app":
         from pulp_service.app.tasks.util import (
             content_sources_periodic_telemetry,
@@ -28,7 +28,7 @@ def register_scheduled_tasks(sender, **kwargs):
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def log_new_user(sender, instance, created, **kwargs):
+def log_new_user(sender, instance, created, **kwargs):  # noqa: ARG001
     """Log when a new user is created, including the route they first accessed."""
     if created:
         from pulp_service.app.middleware import request_path_var
@@ -38,7 +38,7 @@ def log_new_user(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Domain)
-def post_create_domain(sender, **kwargs):
+def post_create_domain(sender, **kwargs):  # noqa: ARG001
     if kwargs["created"]:
         from pulp_service.app.authorization import org_id_var, user_id_var
 

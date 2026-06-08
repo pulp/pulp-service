@@ -4,7 +4,7 @@ import logging
 import ssl
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from gettext import gettext as _
 from hashlib import sha256
 

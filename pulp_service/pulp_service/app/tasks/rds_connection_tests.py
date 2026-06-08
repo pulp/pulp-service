@@ -11,7 +11,7 @@ import logging
 import multiprocessing
 import time
 import traceback
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from functools import wraps
 
 from django.db import connection, transaction
@@ -249,7 +249,7 @@ def test_3_long_transaction(duration_minutes=50):
         # Execute a query within transaction
         with connection.cursor() as cursor:
             cursor.execute("SELECT * FROM core_task LIMIT 1 FOR UPDATE")
-            result = cursor.fetchone()
+            cursor.fetchone()
             log("Query executed: selected 1 task for update")
 
         # Hold transaction for specified duration
@@ -283,7 +283,7 @@ def test_4_transaction_with_work(duration_minutes=50):
             waiting_count = Task.objects.filter(state="waiting").count()
 
             # Query 2: Get a task
-            task = Task.objects.first()
+            Task.objects.first()
 
             # Query 3: Count online workers
             worker_count = AppStatus.objects.filter(app_type="worker").count()
@@ -387,7 +387,7 @@ def _notification_sender_worker(channel_name, interval_seconds, duration_minutes
     """
     import logging
     import time
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     import psycopg
 
