@@ -1,7 +1,7 @@
 pulpcore==3.113.0
 pulp-rpm==3.37.1
 solv>=0.7.21,<0.7.38
-pulp-python==3.30.2
+pulp-python==3.30.3
 pulp-npm==0.8.0
 pulp-container==2.28.0
 pulp-maven==0.12.0
@@ -9,7 +9,7 @@ pulp-hugging-face==0.3.0
 pulp-cli
 sentry-sdk
 app-common-python
-oras==0.2.38
+oras==0.2.42
 uvloop==0.21.0
 jsonschema
 memray
