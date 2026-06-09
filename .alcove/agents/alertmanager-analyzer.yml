@@ -4,10 +4,13 @@ description: |
   Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
-  url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-YYYYMMDD-XXXXXXX/agent-alertmanager
+  url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-20260604-fc65a31/agent-alertmanager
   args: ["--model", "claude-sonnet-4-6"]
 
 timeout: 1800
+enforcement_mode: monitor
+
+direct_outbound: true
 
 credentials:
   ALERTMANAGER_TOKEN: alertmanager
@@ -15,5 +18,5 @@ credentials:
   VERTEX_SA_JSON: google-vertex
 
 schedule:
-  cron: "* * * * *"
+  cron: "*/5 * * * *"
   enabled: true
