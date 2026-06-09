@@ -13,7 +13,8 @@ enforcement_mode: monitor
 direct_outbound: true
 
 credentials:
-  ALERTMANAGER_TOKEN: alertmanager
+  ALERTMANAGER_CLUSTERS: ALERTMANAGER_CLUSTERS
+  ANTHROPIC_VERTEX_PROJECT_ID: ANTHROPIC_VERTEX_PROJECT_ID
   JIRA_TOKEN: jira
   VERTEX_SA_JSON: google-vertex
 
