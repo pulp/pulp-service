@@ -208,6 +208,41 @@ class TestContentToParquetPython:
         assert rows["cache_hit"][1] is False
 
 
+    def test_skips_invalid_and_non_matching_records(self, sample_content_cloudwatch_results):
+        extra_records = [
+            {"message": "not a valid log line"},
+            {
+                "@timestamp": "2026-06-09 14:30:05.000",
+                "message": '10.0.0.1 [09/Jun/2026:14:30:05 +0000] "GET /api/pypi/default/simple/pkg/ HTTP/1.1" 200 100 "-" "pip/24.0" cache:"HIT" artifact_size:"100" rh_org_id:"-" x_forwarded_for:"1.2.3.4"',
+            },
+        ]
+        mixed_results = sample_content_cloudwatch_results + extra_records
+        table = convert_content_to_arrow_table(mixed_results, "python")
+        assert table.num_rows == 2
+
+    def test_skips_malformed_filename_and_warns(self, capsys):
+        results = [
+            {
+                "@timestamp": "2026-06-09 14:30:00.000",
+                "message": '10.0.0.1 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/default/dist/badfile.whl HTTP/1.1" 200 100 "-" "pip/24.0" cache:"HIT" artifact_size:"100" rh_org_id:"-" x_forwarded_for:"1.2.3.4"',
+            },
+        ]
+        table = convert_content_to_arrow_table(results, "python")
+        assert table.num_rows == 0
+        captured = capsys.readouterr()
+        assert "malformed" in captured.err.lower()
+
+    def test_skips_bad_timestamp(self):
+        results = [
+            {
+                "@timestamp": "",
+                "message": '10.0.0.1 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/public-rhai/rhoai/3.5/requests-2.31.0-py3-none-any.whl HTTP/1.1" 200 100 "-" "pip/24.0" cache:"HIT" artifact_size:"100" rh_org_id:"-" x_forwarded_for:"1.2.3.4"',
+            },
+        ]
+        table = convert_content_to_arrow_table(results, "python")
+        assert table.num_rows == 0
+
+
 class TestContentToParquetRpm:
     def test_converts_rpm_downloads(self, sample_content_cloudwatch_results, sample_content_parquet_path):
         table = convert_content_to_arrow_table(
