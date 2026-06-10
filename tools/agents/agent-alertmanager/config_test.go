@@ -134,6 +134,53 @@ func TestParseClusterConfigs_ValidationErrors(t *testing.T) {
 	}
 }
 
+func TestParseClusterConfigs_NewFields(t *testing.T) {
+	t.Setenv("ALERTMANAGER_CLUSTERS", `[{
+		"name": "crcp",
+		"url": "https://alertmanager.crcp01ue1.devshift.net",
+		"token": "token1",
+		"api_server_url": "https://api.crcp01ue1.example.com:6443",
+		"prometheus_url": "https://prometheus.crcp01ue1.devshift.net",
+		"namespace": "pulp-prod"
+	}]`)
+
+	configs, err := parseClusterConfigs()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if configs[0].APIServerURL != "https://api.crcp01ue1.example.com:6443" {
+		t.Errorf("APIServerURL = %q", configs[0].APIServerURL)
+	}
+	if configs[0].PrometheusURL != "https://prometheus.crcp01ue1.devshift.net" {
+		t.Errorf("PrometheusURL = %q", configs[0].PrometheusURL)
+	}
+	if configs[0].Namespace != "pulp-prod" {
+		t.Errorf("Namespace = %q", configs[0].Namespace)
+	}
+}
+
+func TestParseClusterConfigs_NewFieldsOptional(t *testing.T) {
+	t.Setenv("ALERTMANAGER_CLUSTERS", `[{
+		"name": "crcp",
+		"url": "https://alertmanager.crcp01ue1.devshift.net",
+		"token": "token1"
+	}]`)
+
+	configs, err := parseClusterConfigs()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if configs[0].APIServerURL != "" {
+		t.Errorf("APIServerURL should be empty, got %q", configs[0].APIServerURL)
+	}
+	if configs[0].PrometheusURL != "" {
+		t.Errorf("PrometheusURL should be empty, got %q", configs[0].PrometheusURL)
+	}
+	if configs[0].Namespace != "" {
+		t.Errorf("Namespace should be empty, got %q", configs[0].Namespace)
+	}
+}
+
 func TestParseClusterConfigs_GlobalInsecureInSingleCluster(t *testing.T) {
 	t.Setenv("ALERTMANAGER_URL", "https://am.example.com")
 	t.Setenv("ALERTMANAGER_TOKEN", "my-token")

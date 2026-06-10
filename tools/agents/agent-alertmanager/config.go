@@ -16,6 +16,9 @@ type ClusterConfig struct {
 	URL                string `json:"url"`
 	Token              string `json:"-"`
 	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
+	APIServerURL       string `json:"api_server_url,omitempty"`
+	PrometheusURL      string `json:"prometheus_url,omitempty"`
+	Namespace          string `json:"namespace,omitempty"`
 }
 
 func (cfg ClusterConfig) String() string {
@@ -34,6 +37,9 @@ type clusterConfigJSON struct {
 	URL                string `json:"url"`
 	Token              string `json:"token"`
 	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
+	APIServerURL       string `json:"api_server_url,omitempty"`
+	PrometheusURL      string `json:"prometheus_url,omitempty"`
+	Namespace          string `json:"namespace,omitempty"`
 }
 
 func parseClusterConfigs() ([]ClusterConfig, error) {
@@ -101,6 +107,9 @@ func parseMultiCluster(clustersJSON string) ([]ClusterConfig, error) {
 			URL:                raw.URL,
 			Token:              raw.Token,
 			InsecureSkipVerify: raw.InsecureSkipVerify,
+			APIServerURL:       raw.APIServerURL,
+			PrometheusURL:      raw.PrometheusURL,
+			Namespace:          raw.Namespace,
 		})
 	}
 

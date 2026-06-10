@@ -16,6 +16,7 @@ import (
 
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/alertmanager"
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/dedup"
+	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/jira"
 	localSkills "github.com/pulp/pulp-service/tools/agents/agent-alertmanager/skills"
 	mcpClient "github.com/pulp/pulp-service/tools/agents/shared/mcp-client"
 	"github.com/pulp/pulp-service/tools/agents/shared/models"
@@ -142,35 +143,39 @@ func run() error {
 		}
 	}()
 
-	// --- Connect MCP (graceful degradation) ---
-	mcpAvailable := false
-	mcpManager, connectErr := mcpClient.ConnectMCP(timeoutCtx, "agent-alertmanager")
-	if connectErr != nil {
-		fmt.Fprintf(os.Stderr, "[main] warning: MCP connection failed, continuing without Jira: %v\n", connectErr)
-		mcpManager = mcpClient.NewMCPManager()
-	} else if mcpManager == nil {
-		fmt.Fprintf(os.Stderr, "[main] warning: no MCP servers configured, continuing without Jira\n")
-		mcpManager = mcpClient.NewMCPManager()
-	} else {
-		mcpAvailable = true
-		defer mcpManager.Close()
-	}
+	// --- Tool manager (native tools, no external MCP server needed) ---
+	mcpManager := mcpClient.NewMCPManager()
 
-	// --- Discover MCP tools ---
-	var allTools []llms.Tool
-	if mcpAvailable {
-		discoveredTools, discoverErr := mcpManager.DiscoverTools(timeoutCtx)
-		if discoverErr != nil {
-			fmt.Fprintf(os.Stderr, "[main] warning: MCP tool discovery failed: %v\n", discoverErr)
+	// --- Jira (native REST client, same pattern as agent-splunk) ---
+	// TODO: refactor jira package into tools/agents/shared/jira so both
+	// agent-alertmanager and agent-splunk share a single Jira client.
+	jiraAvailable := false
+	var jiraTools []llms.Tool
+	if jiraURL := os.Getenv("JIRA_URL"); jiraURL != "" {
+		jiraCredential := os.Getenv("JIRA_API_TOKEN")
+		if jiraCredential == "" {
+			fmt.Fprintf(os.Stderr, "[main] warning: JIRA_URL set but JIRA_API_TOKEN missing\n")
 		} else {
-			allTools = append(allTools, discoveredTools...)
-			fmt.Fprintf(os.Stderr, "[main] discovered %d MCP tools\n", len(discoveredTools))
+			jiraUsername, jiraToken, found := strings.Cut(jiraCredential, ":")
+			if !found || jiraUsername == "" || jiraToken == "" {
+				fmt.Fprintf(os.Stderr, "[main] warning: JIRA_API_TOKEN must be username:token\n")
+			} else {
+				jiraClient := jira.NewClient(jiraURL, jiraUsername, jiraToken)
+				jiraTools = jiraClient.RegisterTools(mcpManager)
+				fmt.Fprintf(os.Stderr, "[jira] registered %d jira tools (%s)\n", len(jiraTools), jiraURL)
+				jiraAvailable = true
+			}
 		}
+	} else {
+		fmt.Fprintf(os.Stderr, "[main] warning: JIRA_URL not set, continuing without Jira\n")
 	}
 
-	// --- Register Alertmanager native tool (multi-client) ---
+	var allTools []llms.Tool
+
+	// --- Register native tools ---
 	alertTool := alertmanager.RegisterTool(clients, mcpManager)
 	allTools = append(allTools, alertTool)
+	allTools = append(allTools, jiraTools...)
 
 	// --- Multi-cluster pre-flight fetch + dedup (Seen only, no Record) ---
 	type clusterFetchResult struct {
@@ -280,14 +285,15 @@ func run() error {
 
 	// --- Dry-run: stop after analysis ---
 	if *dryRunFlag {
+		fmt.Println(analysisResult)
 		fmt.Fprintf(os.Stderr, "[main] dry-run mode: skipping Jira triage\n")
 		return nil
 	}
 
-	// --- Check MCP availability for Phase 2 ---
-	if !mcpAvailable {
-		fmt.Fprintf(os.Stderr, "[main] MCP unavailable: cannot run Jira triage\n")
-		return fmt.Errorf("MCP unavailable: cannot create Jira issues")
+	// --- Check Jira availability for Phase 2 ---
+	if !jiraAvailable {
+		fmt.Fprintf(os.Stderr, "[main] Jira not configured: cannot run triage\n")
+		return fmt.Errorf("Jira not configured: set JIRA_URL and JIRA_API_TOKEN")
 	}
 
 	// --- Check creation cap ---
