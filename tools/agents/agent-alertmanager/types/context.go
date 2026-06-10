@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type AlertContext struct {
@@ -48,6 +49,9 @@ func ParseAlertContext(argsJSON string) AlertContext {
 func Truncate(text string, maxBytes int) (string, bool) {
 	if len(text) <= maxBytes {
 		return text, false
+	}
+	for maxBytes > 0 && !utf8.RuneStart(text[maxBytes]) {
+		maxBytes--
 	}
 	return text[:maxBytes] + "\n...(truncated)", true
 }

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestAlertContext_FieldsExist(t *testing.T) {
@@ -68,6 +69,17 @@ func TestTruncate_LongText(t *testing.T) {
 	}
 	if !strings.Contains(text, "truncated") {
 		t.Errorf("truncated text should contain truncation marker: %q", text)
+	}
+}
+
+func TestTruncate_UTF8SafeBoundary(t *testing.T) {
+	text := "hello 世界 test"
+	result, wasTruncated := Truncate(text, 8)
+	if !wasTruncated {
+		t.Error("should be truncated")
+	}
+	if !utf8.ValidString(result) {
+		t.Errorf("truncated result is not valid UTF-8: %q", result)
 	}
 }
 
