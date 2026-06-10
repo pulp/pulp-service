@@ -264,8 +264,6 @@ objects:
     name: pulp
   spec:
     envName: "${ENV_NAME}"
-    testing:
-      iqePlugin: content-sources
     deployments:
     - name: api
       replicas: ${{PULP_API_REPLICAS}}
