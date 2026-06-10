@@ -23,3 +23,4 @@ test = [
 [project.scripts]
 export-access-logs = "pulp_access_logs_exporter.cli:main"
 upload-parquet = "pulp_access_logs_exporter.cli:upload_main"
+export-content-logs = "pulp_access_logs_exporter.cli:content_main"
