@@ -13,13 +13,14 @@ first, Secondary only if Primary doesn't provide enough context.
 ## OOMKill / Crash alerts (PulpOOMKilled, PulpCrashing)
 
 Primary: k8s_get_pod_info (pod status, OOMKilled reason, restart count,
-container last state, resource limits vs requests, Warning events)
-
-Secondary: prometheus_query (shortcut: "connections" for connection
-pressure context, or "request-rate" for traffic spikes),
+container last state, resource limits vs requests, Warning events),
 cloudwatch_query_logs (shortcut: "errors" — shows what the process was
 doing before the kernel killed it: sync tasks, large queries, memory
-allocation patterns)
+allocation patterns. The kernel kills without warning, so logs are the
+only record of what led to the OOM.)
+
+Secondary: prometheus_query (shortcut: "connections" for connection
+pressure context, or "request-rate" for traffic spikes)
 
 Usually unnecessary: glitchtip_get_errors (OOMKill doesn't give the
 app a chance to report exceptions)
