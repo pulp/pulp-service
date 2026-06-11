@@ -72,7 +72,7 @@ workflow:
     depends: "review.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      comment: "{{steps.plan.outputs.plan}}"
+      body: "{{steps.plan.outputs.plan}}"
 
   - id: post-revised-plan
     type: bridge
@@ -80,7 +80,7 @@ workflow:
     depends: "review-revised.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      comment: "{{steps.revise.outputs.plan}}"
+      body: "{{steps.revise.outputs.plan}}"
 
   - id: post-failure
     type: bridge
@@ -88,4 +88,4 @@ workflow:
     depends: "plan.Failed || review-revised.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      comment: "⚠️ Automated planning could not converge after multiple review rounds. Manual planning needed. Remove the `needs-planning` label to prevent re-triggering."
+      body: "⚠️ Automated planning could not converge after multiple review rounds. Manual planning needed. Remove the `needs-planning` label to prevent re-triggering."
