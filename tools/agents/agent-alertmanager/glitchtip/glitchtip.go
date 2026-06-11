@@ -71,8 +71,13 @@ func (client *Client) apiGet(ctx context.Context, path string) ([]byte, error) {
 	return body, nil
 }
 
-func (client *Client) fetchIssues(ctx context.Context, project ProjectConfig) (string, error) {
+func (client *Client) fetchIssues(ctx context.Context, project ProjectConfig, start, end time.Time) (string, error) {
 	path := fmt.Sprintf("/api/0/projects/%s/%s/issues/", client.orgSlug, project.Slug)
+	if !start.IsZero() && !end.IsZero() {
+		path += fmt.Sprintf("?start=%s&end=%s",
+			start.UTC().Format(time.RFC3339),
+			end.UTC().Format(time.RFC3339))
+	}
 	body, err := client.apiGet(ctx, path)
 	if err != nil {
 		return "", err
@@ -119,6 +124,8 @@ func RegisterTool(client *Client, manager *mcpClient.MCPManager) llms.Tool {
 				"properties": map[string]any{
 					"environment": map[string]any{"type": "string", "description": fmt.Sprintf("Environment: %s", strings.Join(envNames, ", "))},
 					"action":      map[string]any{"type": "string", "description": "Action: issues (default), latest, issue <id>, events <id>"},
+					"starts_at":   map[string]any{"type": "string", "description": "Alert start time (RFC3339). Filters issues to this time window."},
+					"alert_name":  map[string]any{"type": "string", "description": "Alert name (e.g. PulpOOMKilled). Used to determine time window size."},
 					"detail":      map[string]any{"type": "boolean", "description": "Return full stack traces (default: false)"},
 				},
 				"required": []string{"environment"},
@@ -130,6 +137,8 @@ func RegisterTool(client *Client, manager *mcpClient.MCPManager) llms.Tool {
 		var args struct {
 			Environment string `json:"environment"`
 			Action      string `json:"action,omitempty"`
+			StartsAt    string `json:"starts_at,omitempty"`
+			AlertName   string `json:"alert_name,omitempty"`
 			Detail      bool   `json:"detail,omitempty"`
 		}
 		if argsJSON != "" {
@@ -146,13 +155,27 @@ func RegisterTool(client *Client, manager *mcpClient.MCPManager) llms.Tool {
 			action = "issues"
 		}
 
+		var start, end time.Time
+		window := types.DefaultTimeWindow(args.AlertName)
+		if args.StartsAt != "" {
+			if parsed, parseErr := time.Parse(time.RFC3339, args.StartsAt); parseErr == nil {
+				end = parsed.Add(window)
+				start = parsed.Add(-window)
+			}
+		}
+
 		resolvedParams := map[string]string{
 			"environment": args.Environment,
 			"project":     project.Slug,
 			"action":      action,
 		}
+		if !start.IsZero() {
+			resolvedParams["time_window"] = window.String()
+			resolvedParams["start"] = start.UTC().Format(time.RFC3339)
+			resolvedParams["end"] = end.UTC().Format(time.RFC3339)
+		}
 
-		resultText, queryErr := client.fetchIssues(ctx, project)
+		resultText, queryErr := client.fetchIssues(ctx, project, start, end)
 		if queryErr != nil {
 			return "", queryErr
 		}
