@@ -16,9 +16,13 @@ Primary: k8s_get_pod_info (pod status, OOMKilled reason, restart count,
 container last state, resource limits vs requests, Warning events)
 
 Secondary: prometheus_query (shortcut: "connections" for connection
-pressure context, or "request-rate" for traffic spikes)
+pressure context, or "request-rate" for traffic spikes),
+cloudwatch_query_logs (shortcut: "errors" — shows what the process was
+doing before the kernel killed it: sync tasks, large queries, memory
+allocation patterns)
 
-Usually unnecessary: cloudwatch_query_logs, glitchtip_get_errors
+Usually unnecessary: glitchtip_get_errors (OOMKill doesn't give the
+app a chance to report exceptions)
 
 ## High error rate (PulpApiError*BudgetBurn, PulpContentError*BudgetBurn)
 
@@ -36,7 +40,8 @@ Primary: k8s_get_pod_info (pod phase, scheduling events, container
 status, node assignment)
 
 Secondary: prometheus_query (shortcut: "health" to confirm which pods
-are down)
+are down), cloudwatch_query_logs (shortcut: "errors" — startup failures,
+crash logs before the pod went down)
 
 Usually unnecessary: glitchtip_get_errors
 
