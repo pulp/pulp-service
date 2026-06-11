@@ -146,6 +146,37 @@ func (client *Client) fetchEvents(ctx context.Context, namespace, podName string
 	return eventList.Items, nil
 }
 
+func (client *Client) listPods(ctx context.Context, namespace string) ([]map[string]any, error) {
+	path := fmt.Sprintf("/api/v1/namespaces/%s/pods", namespace)
+	body, err := client.apiGet(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	var podList struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(body, &podList); err != nil {
+		return nil, fmt.Errorf("parse pod list: %w", err)
+	}
+	return podList.Items, nil
+}
+
+func summarizePodList(pods []map[string]any) string {
+	if len(pods) == 0 {
+		return "No pods found in namespace."
+	}
+	var summary strings.Builder
+	summary.WriteString(fmt.Sprintf("Pods: %d\n\n", len(pods)))
+	for _, pod := range pods {
+		metadata, _ := pod["metadata"].(map[string]any)
+		podName, _ := metadata["name"].(string)
+		summary.WriteString(fmt.Sprintf("--- %s ---\n", podName))
+		summary.WriteString(summarizePod(pod))
+		summary.WriteString("\n")
+	}
+	return summary.String()
+}
+
 // TODO: RegisterTool takes MCPManager for consistency with alertmanager/jira packages,
 // but MCPManager is just a native tool registry here — no MCP protocol involved.
 // Refactor into a simpler ToolRegistry interface when consolidating shared packages.
@@ -161,7 +192,7 @@ func RegisterTool(clients []*Client, manager *mcpClient.MCPManager) llms.Tool {
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "k8s_get_pod_info",
-			Description: "Fetch pod status and Kubernetes events. Fast (< 1s). Call first for crash/OOM alerts.",
+			Description: "Fetch pod status and Kubernetes events. Fast (< 1s). Call first for crash/OOM alerts. Without a pod name, lists all pods in the namespace with their status. With a pod name (from alert labels), returns detailed status + events.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -227,7 +258,14 @@ func RegisterTool(clients []*Client, manager *mcpClient.MCPManager) llms.Tool {
 				resultParts = append(resultParts, "=== Events ===\n"+summarizeEvents(events))
 			}
 		} else {
-			resultParts = append(resultParts, "No pod specified. Provide a pod name to inspect.")
+			fetchCtx, fetchCancel := context.WithTimeout(ctx, 10*time.Second)
+			pods, listErr := client.listPods(fetchCtx, namespace)
+			fetchCancel()
+			if listErr != nil {
+				resultParts = append(resultParts, fmt.Sprintf("Pod listing error: %v", listErr))
+			} else {
+				resultParts = append(resultParts, "=== Pod Listing ===\n"+summarizePodList(pods))
+			}
 		}
 
 		combined := strings.Join(resultParts, "\n\n")

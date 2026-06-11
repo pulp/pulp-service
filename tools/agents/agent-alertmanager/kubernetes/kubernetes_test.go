@@ -179,8 +179,53 @@ func TestRegisterTool_UnknownCluster(t *testing.T) {
 	}
 }
 
-func TestRegisterTool_NoPod(t *testing.T) {
-	client := NewClient("crcp", "https://api.example.com:6443", "token", "pulp-prod")
+func TestRegisterTool_NoPod_ListsAllPods(t *testing.T) {
+	podListResponse := map[string]any{
+		"items": []any{
+			map[string]any{
+				"metadata": map[string]any{"name": "pulp-api-abc123"},
+				"status": map[string]any{
+					"phase": "Running",
+					"containerStatuses": []any{
+						map[string]any{
+							"name":         "pulp-api",
+							"ready":        true,
+							"restartCount": float64(3),
+							"lastState": map[string]any{
+								"terminated": map[string]any{
+									"reason":   "OOMKilled",
+									"exitCode": float64(137),
+								},
+							},
+						},
+					},
+				},
+			},
+			map[string]any{
+				"metadata": map[string]any{"name": "pulp-worker-def456"},
+				"status": map[string]any{
+					"phase": "Running",
+					"containerStatuses": []any{
+						map[string]any{
+							"name":         "pulp-worker",
+							"ready":        true,
+							"restartCount": float64(0),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(writer).Encode(podListResponse)
+	}))
+	defer server.Close()
+
+	client := NewClient("crcp", server.URL, "test-token", "pulp-prod")
+	client.HTTPClient = server.Client()
+
 	manager := mcpClient.NewMCPManager()
 	RegisterTool([]*Client{client}, manager)
 
@@ -189,7 +234,16 @@ func TestRegisterTool_NoPod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(result, "No pod specified") {
-		t.Errorf("result should indicate no pod: %s", result)
+	if !strings.Contains(result, "pulp-api-abc123") {
+		t.Errorf("should list first pod: %s", result)
+	}
+	if !strings.Contains(result, "pulp-worker-def456") {
+		t.Errorf("should list second pod: %s", result)
+	}
+	if !strings.Contains(result, "OOMKilled") {
+		t.Errorf("should show OOMKilled reason for first pod: %s", result)
+	}
+	if !strings.Contains(result, "restarts=3") {
+		t.Errorf("should show restart count: %s", result)
 	}
 }
