@@ -797,31 +797,110 @@ spec:
               cmd_prefix bash -c "HOME=/tmp/home pip3 install -r /tmp/unittest_requirements.txt -r /tmp/functest_requirements.txt"
               # Because we pass the path to pytest -o cache_dir=/tmp/home/.cache/pytest_cache, pulpcore-manager must be in the same dir
               cmd_prefix bash -c "ln -s /usr/local/lib/pulp/bin/pulpcore-manager /tmp/home/.local/bin/pulpcore-manager || /bin/true"
+
+              # === triage test impact analysis ===
+              TRIAGE_OK=true
+
+              # Check for [full-test] override in SNAPSHOT
+              if echo '$(params.SNAPSHOT)' | grep -qi 'full-test'; then
+                  echo "triage: [full-test] marker found, running all tests"
+                  TRIAGE_OK=false
+              fi
+
+              if [ "$TRIAGE_OK" = "true" ]; then
+                  cmd_prefix bash -c "mkdir -p /tmp/home/.triage && curl -fsS -o /tmp/home/.triage/openapi.json http://localhost:8000/api/pulp/api/v3/docs/api.json" || TRIAGE_OK=false
+              fi
+
+              if [ "$TRIAGE_OK" = "true" ]; then
+                  cmd_prefix bash -c "HOME=/tmp/home django-admin triage_urls --output /tmp/home/.triage/urls.json" || TRIAGE_OK=false
+              fi
+
+              if [ "$TRIAGE_OK" = "true" ]; then
+                  cmd_prefix bash -c "HOME=/tmp/home /src/tools/triage/triage discover --project-root /src --python python3" || TRIAGE_OK=false
+              fi
+
+              if [ "$TRIAGE_OK" = "true" ]; then
+                  cmd_prefix bash -c "HOME=/tmp/home /src/tools/triage/triage map --project-root /src --force" || TRIAGE_OK=false
+              fi
+
+              if [ "$TRIAGE_OK" = "true" ]; then
+                  cmd_prefix bash -c "HOME=/tmp/home /src/tools/triage/triage select --diff /src/.triage/pr.diff --json --pyargs" > /tmp/select.json || TRIAGE_OK=false
+              fi
+
+              if [ "$TRIAGE_OK" = "true" ]; then
+                  if ! python3 -c "import json; json.load(open('/tmp/select.json'))" 2>/dev/null; then
+                      echo "triage: invalid select.json, falling back"
+                      TRIAGE_OK=false
+                  fi
+              fi
+
+              if [ "$TRIAGE_OK" = "false" ]; then
+                  echo "triage: running full test suite"
+              else
+                  echo "triage: $(python3 -c "import json; d=json.load(open('/tmp/select.json')); print(f'selected {d[\"tests_selected\"]}/{d[\"tests_total\"]} tests, plugins: {d[\"plugins_affected\"]}')")"
+              fi
+              # === end triage ===
+
               echo "CURL OUTPUT"
               curl https://env-${NS}.apps.crc-eph.r9lp.p1.openshiftapps.com/api/pulp-content/default/
               echo "ROUTES"
               oc_wrapper get route
               set +e
               # Only testing test_download_content because it is a very thorough test that tests that all the components of pulp can work
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_rpm.tests.functional -m parallel -n 8 -k 'test_download_content' --junitxml=/tmp/home/junit-pulp-parallel.xml" || debug_and_fail
+              if [ "$TRIAGE_OK" = "false" ] || python3 -c "import json,sys; sys.exit(0 if 'pulp_rpm' in json.load(open('/tmp/select.json')).get('plugins_affected',[]) else 1)" 2>/dev/null; then
+                  cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --suppress-no-test-exit-code --pyargs pulp_rpm.tests.functional -m parallel -n 8 -k 'test_download_content' --junitxml=/tmp/home/junit-pulp-parallel.xml" || debug_and_fail
+              else
+                  echo "triage: skipping pulp_rpm tests (plugin not affected)"
+              fi
               # Never test test_package_manager_consume because they require sudo
               # Do not test test_domain_create because it requires more than 2GB of RAM
               # Only testing test_download_policies because they are very thorough tests that test that all the components of pulp can work
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              if [ "$TRIAGE_OK" = "false" ] || python3 -c "import json,sys; sys.exit(0 if 'pulp_rpm' in json.load(open('/tmp/select.json')).get('plugins_affected',[]) else 1)" 2>/dev/null; then
+                  cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_rpm.tests.functional -m 'not parallel' -k 'test_download_policies' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              else
+                  echo "triage: skipping pulp_rpm tests (plugin not affected)"
+              fi
 
               # Run the jq header auth test
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulpcore.tests.functional -m 'parallel' -n 8 -k 'test_jq_header_remote_auth' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              if [ "$TRIAGE_OK" = "false" ] || python3 -c "import json,sys; sys.exit(0 if 'pulpcore' in json.load(open('/tmp/select.json')).get('plugins_affected',[]) else 1)" 2>/dev/null; then
+                  cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulpcore.tests.functional -m 'parallel' -n 8 -k 'test_jq_header_remote_auth' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              else
+                  echo "triage: skipping pulpcore tests (plugin not affected)"
+              fi
 
               ### END Adapted from ./.github/workflows/scripts/script.sh
 
               # Run pulp_maven functional tests
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_maven.tests.functional.api.test_download_content --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              if [ "$TRIAGE_OK" = "false" ] || python3 -c "import json,sys; sys.exit(0 if 'pulp_maven' in json.load(open('/tmp/select.json')).get('plugins_affected',[]) else 1)" 2>/dev/null; then
+                  cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_maven.tests.functional.api.test_download_content --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              else
+                  echo "triage: skipping pulp_maven tests (plugin not affected)"
+              fi
 
               # Run pulp_npm functional tests
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_npm.tests.functional -k 'test_pull_through_install' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              if [ "$TRIAGE_OK" = "false" ] || python3 -c "import json,sys; sys.exit(0 if 'pulp_npm' in json.load(open('/tmp/select.json')).get('plugins_affected',[]) else 1)" 2>/dev/null; then
+                  cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_npm.tests.functional -k 'test_pull_through_install' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              else
+                  echo "triage: skipping pulp_npm tests (plugin not affected)"
+              fi
 
               # Run pulp_service functional tests
-              cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_service.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+              if [ "$TRIAGE_OK" = "false" ] || python3 -c "import json,sys; sys.exit(0 if 'pulp_service' in json.load(open('/tmp/select.json')).get('plugins_affected',[]) else 1)" 2>/dev/null; then
+                  if [ "$TRIAGE_OK" = "true" ]; then
+                      NODEIDS=$(python3 -c "import json; d=json.load(open('/tmp/select.json')); [print(t) for t in d['tests_to_run'] if 'pulp_service' in t]" 2>/dev/null | tr '\n' ' ')
+                      NEW_TESTS=$(python3 -c "import json; d=json.load(open('/tmp/select.json')); [print(t) for t in d.get('new_test_files',[])]" 2>/dev/null | tr '\n' ' ')
+                      ALL_TESTS="$NODEIDS $NEW_TESTS"
+                      if [ -n "$(echo $ALL_TESTS | tr -d ' ')" ]; then
+                          cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs $ALL_TESTS --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+                      else
+                          echo "triage: no pulp_service tests to run"
+                      fi
+                  else
+                      cmd_prefix bash -c "HOME=/tmp/home PYTHONPATH=/tmp/home/.local/lib/python3.11/site-packages/ XDG_CONFIG_HOME=/tmp/home/.config API_PROTOCOL=http API_HOST=pulp-api API_PORT=8000 ADMIN_USERNAME=admin ADMIN_PASSWORD=$PASSWORD /tmp/home/.local/bin/pytest -o cache_dir=/tmp/home/.cache/pytest_cache -v -r sx --color=yes --pyargs pulp_service.tests.functional -m 'not parallel' --junitxml=/tmp/home/junit-pulp-serial.xml" || debug_and_fail
+                  fi
+              else
+                  echo "triage: skipping pulp_service tests (plugin not affected)"
+              fi
 
     - name: push-api-json-files-to-pulp
       when:

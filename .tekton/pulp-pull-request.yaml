@@ -180,6 +180,27 @@ spec:
         workspace: workspace
       - name: basic-auth
         workspace: git-auth
+    - name: triage-diff
+      runAfter:
+        - clone-repository
+      taskSpec:
+        steps:
+          - name: generate-diff
+            image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+            script: |
+              #!/bin/bash
+              set -ex
+              cd $(workspaces.source.path)/source
+              git fetch origin main --depth=1 || true
+              mkdir -p .triage
+              git diff origin/main...HEAD -- . > .triage/pr.diff 2>/dev/null || echo "" > .triage/pr.diff
+              echo "triage: diff is $(wc -l < .triage/pr.diff) lines"
+        workspaces:
+          - name: source
+            workspace: workspace
+      workspaces:
+        - name: source
+          workspace: workspace
     - name: prefetch-dependencies
       params:
       - name: input
@@ -235,6 +256,7 @@ spec:
       - name: NO_PROXY
         value: $(tasks.init.results.no-proxy)
       runAfter:
+      - triage-diff
       - prefetch-dependencies
       taskRef:
         params:
