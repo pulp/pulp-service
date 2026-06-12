@@ -3,7 +3,7 @@
 import argparse
 import sys
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -95,7 +95,7 @@ def parse_time(time_str: str) -> datetime:
     """
     # Handle "now"
     if time_str.lower() == "now":
-        return datetime.utcnow()
+        return datetime.now(timezone.utc)
 
     # Handle relative times like "1 hour ago", "15 minutes ago"
     relative_match = re.match(r'(\d+)\s+(minute|hour|day)s?\s+ago', time_str.lower())
@@ -110,7 +110,7 @@ def parse_time(time_str: str) -> datetime:
         elif unit == 'day':
             delta = timedelta(days=value)
 
-        return datetime.utcnow() - delta
+        return datetime.now(timezone.utc) - delta
 
     # Try to parse as ISO format
     try:
@@ -198,6 +198,109 @@ def main():
     write_parquet(table, args.output_path, s3_credentials=s3_credentials)
 
     # 6. Print statistics
+    elapsed = time_module.time() - start_time
+    print("\n" + "=" * 60)
+    print("Export completed successfully!")
+    print("=" * 60)
+    print(f"  Records exported: {len(table)}")
+    print(f"  Time elapsed: {elapsed:.2f} seconds")
+    print("=" * 60)
+
+    return 0
+
+
+def parse_content_args(args=None):
+    """Parse command-line arguments for content logs exporter."""
+    parser = argparse.ArgumentParser(
+        description="Export Pulp content download logs from CloudWatch to Parquet format"
+    )
+
+    parser.add_argument("--cloudwatch-group", required=True, help="CloudWatch log group name")
+    parser.add_argument("--start-time", required=True, help='Start timestamp - ISO format or relative ("1 hour ago")')
+    parser.add_argument("--end-time", required=True, help='End timestamp - ISO format or relative ("now")')
+    parser.add_argument("--output-path", required=True, help="Local file path or S3 URI (s3://bucket/key)")
+    parser.add_argument("--content-type", required=True, choices=["python", "rpm"], help="Content type to export")
+    parser.add_argument("--aws-region", default="us-east-1", help="AWS region (default: us-east-1)")
+    parser.add_argument("--s3-access-key-id", help="AWS access key ID for S3")
+    parser.add_argument("--s3-secret-access-key", help="AWS secret access key for S3")
+    parser.add_argument("--s3-session-token", help="AWS session token for S3")
+    parser.add_argument("--s3-endpoint-url", help="Custom S3 endpoint URL")
+    parser.add_argument("--s3-region", help="AWS region for S3 (if different from --aws-region)")
+
+    return parser.parse_args(args)
+
+
+def content_main():
+    """Main entry point for content logs exporter CLI."""
+    import time as time_module
+    from pulp_access_logs_exporter.cloudwatch import fetch_cloudwatch_logs
+    from pulp_access_logs_exporter.content_cloudwatch import (
+        build_content_query,
+        convert_content_to_arrow_table,
+    )
+    from pulp_access_logs_exporter.writer import write_parquet
+
+    start_time = time_module.time()
+    args = parse_content_args()
+
+    print("=" * 60)
+    print(f"Pulp Content Logs Exporter ({args.content_type})")
+    print("=" * 60)
+
+    print("\nParsing time range...")
+    start_dt = parse_time(args.start_time)
+    end_dt = parse_time(args.end_time)
+
+    print(f"  Start: {start_dt.isoformat()}")
+    print(f"  End:   {end_dt.isoformat()}")
+    print(f"  Duration: {end_dt - start_dt}")
+
+    print("\nBuilding CloudWatch Logs Insights query...")
+    query = build_content_query()
+
+    print(f"\nQuerying CloudWatch Logs...")
+    print(f"  Log group: {args.cloudwatch_group}")
+    print(f"  Region: {args.aws_region}")
+    print(f"  Content type: {args.content_type}")
+
+    results = fetch_cloudwatch_logs(
+        log_group=args.cloudwatch_group,
+        query=query,
+        start_time=int(start_dt.timestamp()),
+        end_time=int(end_dt.timestamp()),
+        region=args.aws_region,
+    )
+
+    if not results:
+        print("\nNo logs found in the specified time range.")
+        return 0
+
+    print("\nConverting to PyArrow Table...")
+    table = convert_content_to_arrow_table(results, args.content_type)
+    print(f"  Schema: {table.schema}")
+
+    if len(table) == 0:
+        print(f"\nNo {args.content_type} downloads found in the logs.")
+        return 0
+
+    print("\nWriting Parquet file...")
+    print(f"  Output: {args.output_path}")
+
+    s3_credentials = None
+    if args.s3_access_key_id and args.s3_secret_access_key:
+        s3_credentials = {
+            'access_key': args.s3_access_key_id,
+            'secret_key': args.s3_secret_access_key,
+        }
+        if args.s3_session_token:
+            s3_credentials['session_token'] = args.s3_session_token
+        if args.s3_endpoint_url:
+            s3_credentials['endpoint_url'] = args.s3_endpoint_url
+        if args.s3_region:
+            s3_credentials['region'] = args.s3_region
+
+    write_parquet(table, args.output_path, s3_credentials=s3_credentials)
+
     elapsed = time_module.time() - start_time
     print("\n" + "=" * 60)
     print("Export completed successfully!")
