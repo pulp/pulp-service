@@ -29,10 +29,6 @@ type Client struct {
 }
 
 func NewClientFromEnv(ctx context.Context) (*Client, error) {
-	if os.Getenv("AWS_ACCESS_KEY_ID") == "" {
-		return nil, fmt.Errorf("AWS_ACCESS_KEY_ID required for CloudWatch")
-	}
-
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
 	if err != nil {
 		return nil, fmt.Errorf("load AWS config: %w", err)

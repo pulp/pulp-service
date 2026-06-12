@@ -123,7 +123,7 @@ func RegisterTool(client *Client, manager *mcpClient.MCPManager) llms.Tool {
 				"type": "object",
 				"properties": map[string]any{
 					"environment": map[string]any{"type": "string", "description": fmt.Sprintf("Environment: %s", strings.Join(envNames, ", "))},
-					"action":      map[string]any{"type": "string", "description": "Action: issues (default), latest, issue <id>, events <id>"},
+					"action":      map[string]any{"type": "string", "description": "Action: issues (default)"},
 					"starts_at":   map[string]any{"type": "string", "description": "Alert start time (RFC3339). Filters issues to this time window."},
 					"alert_name":  map[string]any{"type": "string", "description": "Alert name (e.g. PulpOOMKilled). Used to determine time window size."},
 					"detail":      map[string]any{"type": "boolean", "description": "Return full stack traces (default: false)"},

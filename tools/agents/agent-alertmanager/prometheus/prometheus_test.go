@@ -97,7 +97,7 @@ func TestRegisterTool_Query(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("crcp", server.URL, "test-token", "pulp-prod")
+	client := NewClient("crcp", server.URL, "test-token", "pulp-prod", false)
 
 	manager := mcpClient.NewMCPManager()
 	tool := RegisterTool([]*Client{client}, manager)

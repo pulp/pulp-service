@@ -185,7 +185,7 @@ func run() error {
 	var k8sClients []*kubernetes.Client
 	for _, cfg := range clusterConfigs {
 		if cfg.APIServerURL != "" {
-			k8sClients = append(k8sClients, kubernetes.NewClient(cfg.Name, cfg.APIServerURL, cfg.Token, cfg.Namespace))
+			k8sClients = append(k8sClients, kubernetes.NewClient(cfg.Name, cfg.APIServerURL, cfg.Token, cfg.Namespace, cfg.InsecureSkipVerify))
 		}
 	}
 	if len(k8sClients) > 0 {
@@ -195,7 +195,7 @@ func run() error {
 	var promClients []*prometheus.Client
 	for _, cfg := range clusterConfigs {
 		if cfg.PrometheusURL != "" {
-			promClients = append(promClients, prometheus.NewClient(cfg.Name, cfg.PrometheusURL, cfg.Token, cfg.Namespace))
+			promClients = append(promClients, prometheus.NewClient(cfg.Name, cfg.PrometheusURL, cfg.Token, cfg.Namespace, cfg.InsecureSkipVerify))
 		}
 	}
 	if len(promClients) > 0 {

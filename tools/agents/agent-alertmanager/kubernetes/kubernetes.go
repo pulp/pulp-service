@@ -25,17 +25,19 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
-func NewClient(name, baseURL, token, namespace string) *Client {
+func NewClient(name, baseURL, token, namespace string, insecureSkipVerify bool) *Client {
+	transport := &http.Transport{}
+	if insecureSkipVerify {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // opt-in per cluster config
+	}
 	return &Client{
 		name:      name,
 		baseURL:   baseURL,
 		token:     token,
 		namespace: namespace,
 		HTTPClient: &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 	}
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	client := NewClient("crcp", "https://api.example.com:6443", "test-token", "pulp-prod")
+	client := NewClient("crcp", "https://api.example.com:6443", "test-token", "pulp-prod", false)
 	if client.Name() != "crcp" {
 		t.Errorf("Name() = %q, want %q", client.Name(), "crcp")
 	}
@@ -141,7 +141,7 @@ func TestRegisterTool_PodInfo(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("crcp", server.URL, "test-token", "pulp-prod")
+	client := NewClient("crcp", server.URL, "test-token", "pulp-prod", true)
 	client.HTTPClient = server.Client()
 
 	manager := mcpClient.NewMCPManager()
@@ -165,7 +165,7 @@ func TestRegisterTool_PodInfo(t *testing.T) {
 }
 
 func TestRegisterTool_UnknownCluster(t *testing.T) {
-	client := NewClient("crcp", "https://api.example.com:6443", "token", "pulp-prod")
+	client := NewClient("crcp", "https://api.example.com:6443", "token", "pulp-prod", false)
 	manager := mcpClient.NewMCPManager()
 	RegisterTool([]*Client{client}, manager)
 
@@ -223,7 +223,7 @@ func TestRegisterTool_NoPod_ListsAllPods(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("crcp", server.URL, "test-token", "pulp-prod")
+	client := NewClient("crcp", server.URL, "test-token", "pulp-prod", true)
 	client.HTTPClient = server.Client()
 
 	manager := mcpClient.NewMCPManager()
