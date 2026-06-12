@@ -15,8 +15,12 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/alertmanager"
+	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/cloudwatch"
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/dedup"
+	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/glitchtip"
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/jira"
+	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/kubernetes"
+	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/prometheus"
 	localSkills "github.com/pulp/pulp-service/tools/agents/agent-alertmanager/skills"
 	mcpClient "github.com/pulp/pulp-service/tools/agents/shared/mcp-client"
 	"github.com/pulp/pulp-service/tools/agents/shared/models"
@@ -177,6 +181,41 @@ func run() error {
 	allTools = append(allTools, alertTool)
 	allTools = append(allTools, jiraTools...)
 
+	// --- Register diagnostic tools (conditional on config/credentials) ---
+	var k8sClients []*kubernetes.Client
+	for _, cfg := range clusterConfigs {
+		if cfg.APIServerURL != "" {
+			k8sClients = append(k8sClients, kubernetes.NewClient(cfg.Name, cfg.APIServerURL, cfg.Token, cfg.Namespace, cfg.InsecureSkipVerify))
+		}
+	}
+	if len(k8sClients) > 0 {
+		allTools = append(allTools, kubernetes.RegisterTool(k8sClients, mcpManager))
+	}
+
+	var promClients []*prometheus.Client
+	for _, cfg := range clusterConfigs {
+		if cfg.PrometheusURL != "" {
+			promClients = append(promClients, prometheus.NewClient(cfg.Name, cfg.PrometheusURL, cfg.Token, cfg.Namespace, cfg.InsecureSkipVerify))
+		}
+	}
+	if len(promClients) > 0 {
+		allTools = append(allTools, prometheus.RegisterTool(promClients, mcpManager))
+	}
+
+	glitchtipClient, glitchtipErr := glitchtip.NewClientFromEnv()
+	if glitchtipErr != nil {
+		fmt.Fprintf(os.Stderr, "[main] GlitchTip not configured: %v\n", glitchtipErr)
+	} else {
+		allTools = append(allTools, glitchtip.RegisterTool(glitchtipClient, mcpManager))
+	}
+
+	cloudwatchClient, cwErr := cloudwatch.NewClientFromEnv(timeoutCtx)
+	if cwErr != nil {
+		fmt.Fprintf(os.Stderr, "[main] CloudWatch not configured: %v\n", cwErr)
+	} else {
+		allTools = append(allTools, cloudwatch.RegisterTool(cloudwatchClient, mcpManager))
+	}
+
 	// --- Multi-cluster pre-flight fetch + dedup (Seen only, no Record) ---
 	type clusterFetchResult struct {
 		clusterName string
@@ -309,9 +348,23 @@ func run() error {
 
 	phaseTwoSystem := []llms.MessageContent{jiraSkill}
 
+	diagnosticToolNames := map[string]bool{
+		"alertmanager_get_alerts": true,
+		"k8s_get_pod_info":       true,
+		"prometheus_query":       true,
+		"glitchtip_get_errors":   true,
+		"cloudwatch_query_logs":  true,
+	}
+	var jiraOnlyTools []llms.Tool
+	for _, tool := range allTools {
+		if !diagnosticToolNames[tool.Function.Name] {
+			jiraOnlyTools = append(jiraOnlyTools, tool)
+		}
+	}
+
 	triageResult, triageErr := model.ModelRun(timeoutCtx, models.RunConfig{
 		Prompt:         triagePrompt,
-		Tools:          allTools,
+		Tools:          jiraOnlyTools,
 		MCP:            mcpManager,
 		SystemMessages: phaseTwoSystem,
 		MaxIterations:  defaultMaxIter,
