@@ -191,7 +191,7 @@ objects:
       EOF
       
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
-      kubectl apply -f-<<EOF
+      oc apply -f-<<EOF
       ---
       apiVersion: route.openshift.io/v1
       kind: Route
