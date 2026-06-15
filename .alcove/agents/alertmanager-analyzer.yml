@@ -1,11 +1,14 @@
 name: AlertManager Analyzer
 description: |
-  Analyzes Prometheus Alertmanager alerts for Pulp services and drafts Jira issues.
-  Runs as a pre-compiled agent binary from GitHub Releases.
+  Analyzes Prometheus Alertmanager alerts for Pulp services, gathers diagnostic
+  context from K8s, Prometheus, GlitchTip, and CloudWatch, and creates/updates
+  Jira issues. Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
   url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-20260604-fc65a31/agent-alertmanager
   args: ["--model", "claude-sonnet-4-6"]
+  env:
+    JIRA_URL: "https://redhat.atlassian.net/"
 
 timeout: 1800
 enforcement_mode: monitor
@@ -15,7 +18,10 @@ direct_outbound: true
 credentials:
   ALERTMANAGER_CLUSTERS: ALERTMANAGER_CLUSTERS
   ANTHROPIC_VERTEX_PROJECT_ID: ANTHROPIC_VERTEX_PROJECT_ID
-  JIRA_TOKEN: jira
+  JIRA_API_TOKEN: Jira-pulp-sre-agent
+  GLITCHTIP_TOKEN: glitchtip-decko-sa-token
+  AWS_ACCESS_KEY_ID: aws-access-key-id-log-readonly
+  AWS_SECRET_ACCESS_KEY: aws-secret-access-key-log-readonly
   VERTEX_SA_JSON: google-vertex
 
 schedule:
