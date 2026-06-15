@@ -10,7 +10,7 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 | `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.112.0             |
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
-| `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.2              |
+| `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.3              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
 | `oras/`          | [oras-project/oras-py](https://github.com/oras-project/oras-py) | oras        | 0.2.38              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
@@ -115,9 +115,3 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulpcore
 - **Files:** `pulpcore/app/models/repository.py`
 - **Description:** Optimizes repository deletion by materializing publication PKs before deleting published artifacts and switching to batched deletes (500 per batch) to limit WAL size in PostgreSQL.
-
-### 0057 — Optimize Simple API upload_time and provenance
-
-- **Package:** pulp_python
-- **Files:** `pulp_python/app/pypi/views.py`
-- **Description:** Replaces a correlated Subquery with a FilteredRelation JOIN when annotating `repo_added_time` and replaces a separate `PackageProvenance` query with an `Exists` annotation (`has_provenance`) in the SimpleView package detail endpoint, reducing the number of queries and improving performance for repositories with many content units.
