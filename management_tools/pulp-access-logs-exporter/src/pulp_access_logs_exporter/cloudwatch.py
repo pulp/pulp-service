@@ -102,7 +102,7 @@ def fetch_cloudwatch_logs(
 
         # Start async query
         response = logs_client.start_query(
-            logGroupName=log_group,
+            logGroupNames=[log_group],
             startTime=int(current.timestamp()),
             endTime=int(chunk_end.timestamp()),
             queryString=query,
