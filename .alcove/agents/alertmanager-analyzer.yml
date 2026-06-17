@@ -5,7 +5,7 @@ description: |
   Jira issues. Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
-  url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-20260604-fc65a31/agent-alertmanager
+  url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-20260617-3b2ac5e/agent-alertmanager
   args: ["--model", "claude-sonnet-4-6"]
   env:
     JIRA_URL: "https://redhat.atlassian.net/"
