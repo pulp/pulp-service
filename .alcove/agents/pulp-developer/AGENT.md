@@ -101,7 +101,6 @@ Additional ContextVars in middleware.py:
 - `FeatureContentGuardViewSet` — subscription-feature content guards
 - `VulnerabilityReport` — RPM/Python/Gem/npm scanning via osv.dev
 - `PyPIYankMonitorViewSet` — daily PyPI yank monitoring
-- `AgentScanReportView` — AI agent scan reports
 - `CreateDomainView` — self-service domain creation from template
 - `TaskDebugView`, `TaskQueueView`, `StaleLockScanView` — admin/debug endpoints
 - Health check endpoints at `/api/pulp/` prefix

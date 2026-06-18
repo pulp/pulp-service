@@ -42,10 +42,9 @@ from pulp_service.app.authentication import (
     RHTermsBasedRegistryAuthentication,
 )
 from pulp_service.app.authorization import DomainBasedPermission, group_var
-from pulp_service.app.models import AgentScanReport, FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
+from pulp_service.app.models import FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
-    AgentScanReportSerializer,
     ContentScanSerializer,
     FeatureContentGuardSerializer,
     PyPIYankMonitorSerializer,
@@ -2038,13 +2037,3 @@ class MigrateDomainView(APIView):
             )
 
         return OperationPostponedResponse(task, request)
-
-
-class AgentScanReportView(NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
-    endpoint_name = "agent_scan_report"
-    queryset = AgentScanReport.objects.prefetch_related("repo_versions").select_related("content")
-    serializer_class = AgentScanReportSerializer
-
-    @classmethod
-    def routable(cls):
-        return True

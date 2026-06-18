@@ -98,18 +98,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Files:** `pulpcore/app/serializers/repository.py`
 - **Description:** Skips the content unit existence check and timestamp-of-interest update when adding more than 10,000 content units to a repository version, avoiding client request timeouts on large batch operations.
 
-### 0052 — Pulpcore agent scan report
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/serializers/content.py`, `pulpcore/app/serializers/repository.py`
-- **Description:** Adds an `agent_scan_report` field to content and repository version serializers that links to the agent scan report endpoint, enabling the UI to display scan results.
-
-### 0053 — Python agent scan task
-
-- **Package:** pulp_python
-- **Files:** `pulp_python/app/models.py`, `pulp_python/app/tasks/__init__.py`, `pulp_python/app/tasks/scan_package.py`
-- **Description:** Adds an automatic package scanning task that dispatches on repository version creation. Downloads Python package artifacts to a temp directory, runs an external scanner, and collects results.
-
 ### 0056 — Repository publication delete
 
 - **Package:** pulpcore
