@@ -24,7 +24,9 @@ class TestParseContentLogLine:
         assert result is not None
         assert result["src_ip"] == "10.128.4.123"
         assert result["method"] == "GET"
-        assert result["path"] == "/api/pulp-content/default/dist/pkg-1.0-py3-none-any.whl"
+        assert (
+            result["path"] == "/api/pulp-content/default/dist/pkg-1.0-py3-none-any.whl"
+        )
         assert result["status"] == "200"
         assert result["user_agent"] == "pip/24.0"
         assert result["cache"] == "HIT"
@@ -139,7 +141,9 @@ class TestContentTypeFiltering:
         assert matches_content_type("pkg-1.0-py3-none-any.whl", "python") is True
 
     def test_python_metadata_matches(self):
-        assert matches_content_type("pkg-1.0-py3-none-any.whl.metadata", "python") is True
+        assert (
+            matches_content_type("pkg-1.0-py3-none-any.whl.metadata", "python") is True
+        )
 
     def test_rpm_matches(self):
         assert matches_content_type("bash-5.2-1.fc43.x86_64.rpm", "rpm") is True
@@ -165,14 +169,35 @@ class TestParseContentPath:
         assert result["distribution"] == "rhoai/3.5-EA2/cpu-ubi9"
         assert result["filename"] == "requests-2.34.2-2-py3-none-any.whl"
 
-    def test_rpm_path(self):
+    def test_rpm_path_strips_packages_dir(self):
         result = parse_content_path(
             "/api/pulp-content/public-copr/packit/tmt/fedora-43-x86_64/Packages/b/bash-5.2.26-4.fc43.x86_64.rpm"
         )
         assert result is not None
         assert result["domain"] == "public-copr"
-        assert result["distribution"] == "packit/tmt/fedora-43-x86_64/Packages/b"
+        assert result["distribution"] == "packit/tmt/fedora-43-x86_64"
         assert result["filename"] == "bash-5.2.26-4.fc43.x86_64.rpm"
+
+    def test_rpm_path_strips_repodata(self):
+        result = parse_content_path(
+            "/api/pulp-content/public-copr/packit/tmt/fedora-43-x86_64/repodata/repomd.xml"
+        )
+        assert result is not None
+        assert result["distribution"] == "packit/tmt/fedora-43-x86_64"
+        assert result["filename"] == "repomd.xml"
+
+    def test_rpm_path_without_packages_dir(self):
+        result = parse_content_path(
+            "/api/pulp-content/ccac33ac/templates/kernel-core-6.8.0-300.fc40.x86_64.rpm"
+        )
+        assert result is not None
+        assert result["domain"] == "ccac33ac"
+        assert result["distribution"] == "templates"
+        assert result["filename"] == "kernel-core-6.8.0-300.fc40.x86_64.rpm"
+
+    def test_empty_distribution_after_stripping_returns_none(self):
+        result = parse_content_path("/api/pulp-content/domain/repodata/repomd.xml")
+        assert result is None
 
     def test_non_content_path_returns_none(self):
         result = parse_content_path("/api/pypi/default/dist/simple/pkg/")
@@ -184,7 +209,9 @@ class TestParseContentPath:
 
 
 class TestContentToParquetPython:
-    def test_converts_python_downloads(self, sample_content_cloudwatch_results, sample_content_parquet_path):
+    def test_converts_python_downloads(
+        self, sample_content_cloudwatch_results, sample_content_parquet_path
+    ):
         table = convert_content_to_arrow_table(
             sample_content_cloudwatch_results, "python"
         )
@@ -202,13 +229,16 @@ class TestContentToParquetPython:
         assert rows["cache_hit"][0] is True
         assert rows["artifact_size"][0] == 19456789
         assert rows["org_id"][0] == "123456"
+        assert rows["distribution"][0] == "rhoai/3.5-EA2/cpu-ubi9"
 
         assert rows["package_name"][1] == "numpy"
         assert rows["package_version"][1] == "1.26.4"
         assert rows["cache_hit"][1] is False
+        assert rows["distribution"][1] == "rhoai/3.5-EA2/cpu-ubi9"
 
-
-    def test_skips_invalid_and_non_matching_records(self, sample_content_cloudwatch_results):
+    def test_skips_invalid_and_non_matching_records(
+        self, sample_content_cloudwatch_results
+    ):
         extra_records = [
             {"message": "not a valid log line"},
             {
@@ -244,10 +274,10 @@ class TestContentToParquetPython:
 
 
 class TestContentToParquetRpm:
-    def test_converts_rpm_downloads(self, sample_content_cloudwatch_results, sample_content_parquet_path):
-        table = convert_content_to_arrow_table(
-            sample_content_cloudwatch_results, "rpm"
-        )
+    def test_converts_rpm_downloads(
+        self, sample_content_cloudwatch_results, sample_content_parquet_path
+    ):
+        table = convert_content_to_arrow_table(sample_content_cloudwatch_results, "rpm")
         assert table.num_rows == 2
         assert table.schema == RPM_SCHEMA
 
@@ -263,11 +293,13 @@ class TestContentToParquetRpm:
         assert rows["epoch"][0] == 0
         assert rows["org_id"][0] is None
         assert rows["cache_hit"][0] is False
+        assert rows["distribution"][0] == "packit/teemtee-tmt-4901/fedora-43-x86_64"
 
         assert rows["package_name"][1] == "kernel-core"
         assert rows["package_version"][1] == "6.8.0"
         assert rows["cache_hit"][1] is True
         assert rows["org_id"][1] == "555666"
+        assert rows["distribution"][1] == "templates"
 
 
 class TestEmptyContentResults:
