@@ -29,6 +29,8 @@ CONTENT_TYPE_EXTENSIONS = {
 
 CONTENT_PATH_PREFIX = "/api/pulp-content/"
 
+RPM_PACKAGES_DIR_RE = re.compile(r"^[a-zA-Z0-9]$")
+
 
 def parse_content_log_line(message):
     match = CONTENT_LOG_REGEX.search(message)
@@ -37,16 +39,31 @@ def parse_content_log_line(message):
     return match.groupdict()
 
 
+def _strip_repo_structure(segments):
+    if (
+        len(segments) >= 2
+        and segments[-2] == "Packages"
+        and RPM_PACKAGES_DIR_RE.match(segments[-1])
+    ):
+        return segments[:-2]
+    if segments and segments[-1] == "repodata":
+        return segments[:-1]
+    return segments
+
+
 def parse_content_path(path):
     if not path.startswith(CONTENT_PATH_PREFIX):
         return None
-    remainder = path[len(CONTENT_PATH_PREFIX):]
+    remainder = path[len(CONTENT_PATH_PREFIX) :]
     segments = remainder.split("/")
     if len(segments) < 2:
         return None
     domain = segments[0]
     filename = segments[-1]
-    distribution = "/".join(segments[1:-1])
+    dist_segments = _strip_repo_structure(segments[1:-1])
+    if not dist_segments:
+        return None
+    distribution = "/".join(dist_segments)
     return {
         "domain": domain,
         "distribution": distribution,
@@ -63,7 +80,7 @@ def matches_content_type(filename, content_type):
 def parse_wheel_filename(filename):
     base_filename = filename
     if filename.endswith(".whl.metadata"):
-        base_filename = filename[:-len(".metadata")]
+        base_filename = filename[: -len(".metadata")]
 
     match = WHEEL_REGEX.match(base_filename)
     if match is None:
@@ -84,11 +101,11 @@ def _parse_nevr(name):
     if name.count("-") < 2:
         raise ValueError("failed to parse nevr '%s' not a valid nevr" % name)
     release_dash_pos = name.rfind("-")
-    release = name[release_dash_pos + 1:]
+    release = name[release_dash_pos + 1 :]
     name_epoch_version = name[:release_dash_pos]
     name_dash_pos = name_epoch_version.rfind("-")
     package_name = name_epoch_version[:name_dash_pos]
-    epoch_version = name_epoch_version[name_dash_pos + 1:].split(":")
+    epoch_version = name_epoch_version[name_dash_pos + 1 :].split(":")
     if len(epoch_version) == 1:
         epoch = 0
         version = epoch_version[0]
@@ -105,14 +122,14 @@ def _parse_nevra(name):
     if name.count(".") < 1:
         raise ValueError("failed to parse nevra '%s' not a valid nevra" % name)
     arch_dot_pos = name.rfind(".")
-    arch = name[arch_dot_pos + 1:]
+    arch = name[arch_dot_pos + 1 :]
     return _parse_nevr(name[:arch_dot_pos]) + (arch,)
 
 
 def parse_rpm_filename(filename):
     if not filename.endswith(".rpm"):
         return None
-    nevra_string = filename[:-len(".rpm")]
+    nevra_string = filename[: -len(".rpm")]
     try:
         package_name, epoch, version, release, arch = _parse_nevra(nevra_string)
     except ValueError:
