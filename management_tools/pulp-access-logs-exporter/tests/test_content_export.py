@@ -250,6 +250,16 @@ class TestContentToParquetPython:
         table = convert_content_to_arrow_table(mixed_results, "python")
         assert table.num_rows == 2
 
+    def test_skips_empty_distribution_after_stripping(self):
+        results = [
+            {
+                "@timestamp": "2026-06-09 14:30:00.000",
+                "message": '10.0.0.1 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/domain/repodata/repomd.xml HTTP/1.1" 200 3456 "-" "dnf/4.18.0" cache:"HIT" artifact_size:"3456" rh_org_id:"-" x_forwarded_for:"1.2.3.4"',
+            },
+        ]
+        table = convert_content_to_arrow_table(results, "rpm")
+        assert table.num_rows == 0
+
     def test_skips_malformed_filename_and_warns(self, capsys):
         results = [
             {
