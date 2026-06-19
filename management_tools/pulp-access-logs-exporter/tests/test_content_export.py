@@ -284,12 +284,29 @@ class TestEmptyContentResults:
 
 class TestContentQueryBuilding:
     def test_query_contains_content_path_filter(self):
-        query = build_content_query()
+        query = build_content_query("python")
         assert "pulp-content" in query
         assert "livez" in query
         assert "status" in query
 
     def test_query_fetches_timestamp_and_message(self):
-        query = build_content_query()
+        query = build_content_query("python")
         assert "@timestamp" in query
         assert "message" in query
+
+    def test_python_query_filters_by_whl_extensions(self):
+        query = build_content_query("python")
+        assert '.whl"' in query
+        assert '.whl.metadata"' in query
+        assert ".rpm" not in query
+
+    def test_rpm_query_filters_by_rpm_extension(self):
+        query = build_content_query("rpm")
+        assert '.rpm"' in query
+        assert ".whl" not in query
+
+    def test_unknown_content_type_raises(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="Unknown content type"):
+            build_content_query("unknown")

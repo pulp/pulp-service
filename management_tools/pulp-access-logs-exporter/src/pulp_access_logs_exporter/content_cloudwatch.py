@@ -4,6 +4,7 @@ from datetime import datetime
 import pyarrow as pa
 
 from pulp_access_logs_exporter.content_parser import (
+    CONTENT_TYPE_EXTENSIONS,
     matches_content_type,
     parse_content_log_line,
     parse_content_path,
@@ -13,12 +14,19 @@ from pulp_access_logs_exporter.content_parser import (
 from pulp_access_logs_exporter.content_schemas import SCHEMAS
 
 
-def build_content_query():
+def build_content_query(content_type):
+    extensions = CONTENT_TYPE_EXTENSIONS.get(content_type)
+    if not extensions:
+        raise ValueError(f"Unknown content type: {content_type!r}")
+
+    extension_clauses = " or ".join(f'@message like "{ext}"' for ext in extensions)
+
     return "\n".join(
         [
             "filter @message like /pulp-content/",
             "| filter @message not like /livez/",
             "| filter @message not like /status\\/$/",
+            f"| filter {extension_clauses}",
             "| fields @timestamp, message",
         ]
     )
