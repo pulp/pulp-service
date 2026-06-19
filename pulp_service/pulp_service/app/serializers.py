@@ -24,7 +24,6 @@ from pulp_service.app.constants import (
     PYTHON_REPOSITORY_PULP_TYPE,
 )
 from pulp_service.app.models import (
-    AgentScanReport,
     FeatureContentGuard,
     PyPIYankMonitor,
     VulnerabilityReport,
@@ -178,17 +177,3 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             raise serializers.ValidationError(_("Invalid JSON format.")) from exc
 
         return temp_file.pk
-
-
-class AgentScanReportSerializer(ModelSerializer):
-    reports = serializers.CharField()
-    pulp_href = IdentityField(view_name="agent_scan_report-detail")
-    content = DetailRelatedField(
-        read_only=True,
-        view_name_pattern=r"content(-.*/.*)-detail",
-    )
-    repo_versions = RepositoryVersionRelatedField(many=True, required=False)
-
-    class Meta:
-        model = AgentScanReport
-        fields = (*ModelSerializer.Meta.fields, "reports", "repo_versions", "content")

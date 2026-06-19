@@ -1,11 +1,3 @@
-# build agent
-FROM registry.access.redhat.com/ubi9/go-toolset:9.7 AS builder
-
-COPY images/assets/agent-scan .
-RUN go mod download
-RUN CGO_ENABLED=0 go build -o agent-scan .
-
-# build pulp image
 FROM registry.access.redhat.com/ubi9/ubi
 ARG PYTHON_VERSION=3.11
 ENV PYTHONUNBUFFERED=0
@@ -115,8 +107,6 @@ RUN PULP_STATIC_ROOT=/var/lib/operator/static/ PULP_CONTENT_ORIGIN=localhost \
        pulpcore-manager collectstatic --clear --noinput --link
 USER root:root
 
-COPY --from=builder /opt/app-root/src/agent-scan /usr/bin/agent-scan
-
 # This path seems to be hardcoded in tests
 RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manager
 
@@ -161,14 +151,8 @@ COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-
 COPY images/assets/patches/0048-Re-enable-attestation-verification-with-vendored-key.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0048-Re-enable-attestation-verification-with-vendored-key.patch
 
-COPY images/assets/patches/0052-pulpcore-agent-scan-report.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0052-pulpcore-agent-scan-report.patch
-
 COPY images/assets/patches/0049-Skip-content-units-validation.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
-
-COPY images/assets/patches/0053-python-agent-scan-task.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0053-python-agent-scan-task.patch
 
 COPY images/assets/patches/0056-repo-publication-delete.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0056-repo-publication-delete.patch
