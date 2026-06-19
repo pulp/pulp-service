@@ -256,7 +256,7 @@ def content_main():
     print(f"  Duration: {end_dt - start_dt}")
 
     print("\nBuilding CloudWatch Logs Insights query...")
-    query = build_content_query()
+    query = build_content_query(args.content_type)
 
     print(f"\nQuerying CloudWatch Logs...")
     print(f"  Log group: {args.cloudwatch_group}")
