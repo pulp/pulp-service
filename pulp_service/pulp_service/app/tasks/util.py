@@ -59,3 +59,12 @@ def no_op_task():
     with connections["default"].cursor() as cursor:
         cursor.execute("SELECT 1")
     time.sleep(0.3)  # This task will not take less than 300ms to execute
+
+
+def lightwell_sync_schedule():
+    task_name = "pulp_service.app.tasks.lightwell_period_sync.python_repository_sync"
+    dispatch_interval = timedelta(days=1)
+    name = "Sync Lightwell repository with Trusted Libraries content"
+    TaskSchedule.objects.update_or_create(
+        name=name, defaults={"task_name": task_name, "dispatch_interval": dispatch_interval}
+    )
