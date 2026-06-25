@@ -1,4 +1,4 @@
-pulpcore==3.113.0
+pulpcore==3.114.0
 pulp-rpm==3.37.1
 solv>=0.7.21,<0.7.38
 pulp-python==3.30.3
