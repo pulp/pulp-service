@@ -18,6 +18,7 @@ def register_scheduled_tasks(sender, **kwargs):  # noqa: ARG001
     if sender.name == "pulp_service.app":
         from pulp_service.app.tasks.util import (
             content_sources_periodic_telemetry,
+            lightwell_sync_schedule,
             register_pypi_yank_monitor_schedule,
             rhel_ai_repos_periodic_telemetry,
         )
@@ -25,6 +26,7 @@ def register_scheduled_tasks(sender, **kwargs):  # noqa: ARG001
         content_sources_periodic_telemetry()
         rhel_ai_repos_periodic_telemetry()
         register_pypi_yank_monitor_schedule()
+        lightwell_sync_schedule()
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
