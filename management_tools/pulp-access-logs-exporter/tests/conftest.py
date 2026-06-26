@@ -68,6 +68,25 @@ def sample_content_cloudwatch_results():
 
 
 @pytest.fixture
+def sample_maven_cloudwatch_results():
+    """Sample CloudWatch results wrapping Maven content-app log lines."""
+    return [
+        {
+            "@timestamp": "2026-06-20 13:47:49.000",
+            "message": '10.131.32.14 [20/Jun/2026:13:47:49 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/cloud/spring-cloud-config-server/4.3.0-redhat-1/spring-cloud-config-server-4.3.0-redhat-1.jar HTTP/1.1" 302 727 "-" "curl/8.15.0" cache:"MISS" artifact_size:"18432000" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140, 66.187.232.140, 23.220.105.201"',
+        },
+        {
+            "@timestamp": "2026-06-20 13:47:50.000",
+            "message": '10.128.2.5 [20/Jun/2026:13:47:50 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/spring-expression/5.3.18-redhat-1/spring-expression-5.3.18-redhat-1.pom HTTP/1.1" 302 729 "-" "Apache-Maven/3.9.11 (Java 25.0.3; Linux 7.0.12-201.fc44.x86_64)" cache:"MISS" artifact_size:"2048" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140"',
+        },
+        {
+            "@timestamp": "2026-06-20 13:47:51.000",
+            "message": '10.129.8.16 [20/Jun/2026:13:47:51 +0000] "GET /api/pulp-content/balor-stage/maven-releases/net/minidev/json-smart/2.5.0/json-smart-2.5.0-sources.jar HTTP/1.1" 302 733 "-" "curl/8.15.0" cache:"HIT" artifact_size:"45056" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140"',
+        },
+    ]
+
+
+@pytest.fixture
 def sample_content_parquet_path(tmp_path):
     """Temporary path for content Parquet file testing."""
     return str(tmp_path / "test_content_logs.parquet")

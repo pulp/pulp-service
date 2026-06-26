@@ -23,6 +23,7 @@ WHEEL_REGEX = re.compile(
 )
 
 CONTENT_TYPE_EXTENSIONS = {
+    "maven": (".jar", ".pom"),
     "python": (".whl", ".whl.metadata"),
     "rpm": (".rpm",),
 }
@@ -140,4 +141,61 @@ def parse_rpm_filename(filename):
         "architecture": arch,
         "epoch": epoch,
         "release": release,
+    }
+
+
+def parse_maven_distribution(distribution, filename):
+    """Extract Maven coordinates from the distribution path and filename.
+
+    parse_content_path returns the full Maven coordinate path as distribution:
+    maven-releases/org/springframework/cloud/spring-cloud-config-server/4.3.0-redhat-1
+
+    This function splits that into the actual distribution (repo name), group_id,
+    artifact_id (package_name), version, and parses classifier/packaging from
+    the filename using the known artifact_id and version.
+
+    Reference: https://maven.apache.org/repository/layout.html
+    """
+    segments = distribution.split("/")
+    if len(segments) < 4:
+        return None
+
+    repo_name = segments[0]
+    group_segments = segments[1:-2]
+    artifact_id = segments[-2]
+    version = segments[-1]
+
+    if not group_segments:
+        return None
+
+    group_id = ".".join(group_segments)
+
+    prefix = f"{artifact_id}-{version}"
+    if not filename.startswith(prefix):
+        return None
+
+    rest = filename[len(prefix) :]
+    classifier = None
+    packaging = None
+
+    if rest.startswith("-"):
+        rest = rest[1:]
+        dot_pos = rest.find(".")
+        if dot_pos == -1:
+            return None
+        classifier = rest[:dot_pos]
+        packaging = rest[dot_pos + 1 :]
+    elif rest.startswith("."):
+        packaging = rest[1:]
+    else:
+        return None
+
+    return {
+        "distribution": repo_name,
+        "group_id": group_id,
+        "package_name": artifact_id,
+        "package_version": version,
+        "architecture": None,
+        "classifier": classifier,
+        "packaging": packaging,
     }

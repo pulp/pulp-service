@@ -8,6 +8,7 @@ from pulp_access_logs_exporter.content_parser import (
     matches_content_type,
     parse_content_log_line,
     parse_content_path,
+    parse_maven_distribution,
     parse_rpm_filename,
     parse_wheel_filename,
 )
@@ -71,10 +72,15 @@ FILENAME_PARSERS = {
     "rpm": parse_rpm_filename,
 }
 
+DISTRIBUTION_PARSERS = {
+    "maven": parse_maven_distribution,
+}
+
 
 def convert_content_to_arrow_table(results, content_type):
     schema = SCHEMAS[content_type]
-    filename_parser = FILENAME_PARSERS[content_type]
+    filename_parser = FILENAME_PARSERS.get(content_type)
+    distribution_parser = DISTRIBUTION_PARSERS.get(content_type)
     records = []
     skipped_log_parse = 0
     skipped_path_parse = 0
@@ -101,7 +107,10 @@ def convert_content_to_arrow_table(results, content_type):
             skipped_extension += 1
             continue
 
-        parsed_filename = filename_parser(filename)
+        if distribution_parser:
+            parsed_filename = distribution_parser(parsed_path["distribution"], filename)
+        else:
+            parsed_filename = filename_parser(filename)
         if parsed_filename is None:
             print(
                 f"WARNING: Skipping malformed filename: {filename}",
@@ -115,10 +124,14 @@ def convert_content_to_arrow_table(results, content_type):
             skipped_timestamp += 1
             continue
 
+        # Maven's distribution_parser returns its own "distribution" (repo name only),
+        # overriding the full coordinate path from parse_content_path.
+        distribution = parsed_filename.pop("distribution", parsed_path["distribution"])
+
         record = {
             "timestamp": timestamp,
             "domain": parsed_path["domain"],
-            "distribution": parsed_path["distribution"],
+            "distribution": distribution,
             "artifact_path": parsed_path["artifact_path"],
             "artifact_size": _parse_artifact_size(parsed_line["artifact_size"]),
             "status_code": int(parsed_line["status"]),
