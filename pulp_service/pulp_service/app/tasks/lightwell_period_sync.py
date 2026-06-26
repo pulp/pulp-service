@@ -24,5 +24,6 @@ def python_repository_sync():
         kwargs={
             "remote_pk": str(remote_pk),
             "repository_pk": str(repository.pk),
+            "mirror": False,
         },
     )
