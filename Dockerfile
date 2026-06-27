@@ -160,9 +160,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0058-fix-migrate.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0058-fix-migrate.patch
 
-COPY images/assets/patches/0059-Handle-duplicate-Maven-artifact-uploads.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0059-Handle-duplicate-Maven-artifact-uploads.patch
-
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
