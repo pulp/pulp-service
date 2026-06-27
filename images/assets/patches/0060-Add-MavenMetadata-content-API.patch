@@ -1,0 +1,238 @@
+From 42033999d26564e034323986517cf1524a1ed688 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Sat, 27 Jun 2026 10:00:01 -0400
+Subject: [PATCH] Add MavenMetadata content API with upload endpoint
+
+Adds a separate API at content/maven/metadata/ for uploading Maven
+metadata files (maven-metadata.xml and checksums). These files have
+nullable versions and require a sha256 field, which the MavenArtifact
+model does not support.
+
+Fixes #364
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+---
+ pulp_maven/app/serializers.py                 | 83 +++++++++++++++++++
+ pulp_maven/app/viewsets.py                    | 48 ++++++++++-
+ .../functional/api/test_create_content.py     | 19 +++++
+ pulp_maven/tests/functional/conftest.py       |  6 ++
+ 4 files changed, 155 insertions(+), 1 deletion(-)
+
+diff --git a/pulp_maven/app/serializers.py b/pulp_maven/app/serializers.py
+index 86287f7..c06f675 100644
+--- a/pulp_maven/app/serializers.py
++++ b/pulp_maven/app/serializers.py
+@@ -95,6 +95,89 @@ class MavenArtifactUploadSerializer(MavenArtifactSerializer):
+         ref_name = "MavenArtifactUploadSerializer"
+ 
+ 
++class MavenMetadataSerializer(platform.SingleArtifactContentUploadSerializer):
++    """
++    A Serializer for MavenMetadata.
++    """
++
++    group_id = serializers.CharField(
++        help_text=_("Group Id of the metadata's package."), read_only=True
++    )
++    artifact_id = serializers.CharField(
++        help_text=_("Artifact Id of the metadata's package."), read_only=True
++    )
++    version = serializers.CharField(
++        help_text=_("Version of the metadata's package."), read_only=True, allow_null=True
++    )
++    filename = serializers.CharField(help_text=_("Filename of the metadata."), read_only=True)
++    sha256 = serializers.CharField(help_text=_("SHA256 digest of the metadata."), read_only=True)
++
++    def retrieve(self, validated_data):
++        return models.MavenMetadata.objects.filter(
++            sha256=validated_data["sha256"],
++            pulp_domain=get_domain_pk(),
++        ).first()
++
++    def create(self, validated_data):
++        group_id, artifact_id, version, filename = (
++            models.MavenMetadata.group_artifact_version_filename(validated_data["relative_path"])
++        )
++        validated_data["group_id"] = group_id
++        validated_data["artifact_id"] = artifact_id
++        validated_data["version"] = version
++        validated_data["filename"] = filename
++        validated_data["sha256"] = validated_data["artifact"].sha256
++        return super().create(validated_data)
++
++    class Meta:
++        fields = platform.SingleArtifactContentUploadSerializer.Meta.fields + (
++            "group_id",
++            "artifact_id",
++            "version",
++            "filename",
++            "sha256",
++        )
++        model = models.MavenMetadata
++
++
++class MavenMetadataUploadSerializer(MavenMetadataSerializer):
++    """
++    Serializer for synchronous Maven Metadata uploads.
++    """
++
++    def __init__(self, *args, **kwargs):
++        if (
++            "data" in kwargs
++            and "pulp_labels" in kwargs["data"]
++            and isinstance(kwargs["data"]["pulp_labels"], str)
++        ):
++            try:
++                kwargs["data"]._mutable = True
++                kwargs["data"]["pulp_labels"] = json.loads(kwargs["data"]["pulp_labels"])
++                kwargs["data"]._mutable = False
++            except (json.JSONDecodeError, AttributeError):
++                pass
++        super().__init__(*args, **kwargs)
++
++    def validate(self, data):
++        data = super().validate(data)
++        if "file" in data:
++            file = data.pop("file")
++            try:
++                artifact = Artifact.objects.get(
++                    sha256=file.hashers["sha256"].hexdigest(), pulp_domain=get_domain_pk()
++                )
++                artifact.touch()
++            except (Artifact.DoesNotExist, DatabaseError):
++                artifact = Artifact.init_and_validate(file)
++                artifact.save()
++            data["artifact"] = artifact
++        return data
++
++    class Meta(MavenMetadataSerializer.Meta):
++        ref_name = "MavenMetadataUploadSerializer"
++
++
+ class MavenRemoteSerializer(platform.RemoteSerializer):
+     """
+     A Serializer for MavenRemote.
+diff --git a/pulp_maven/app/viewsets.py b/pulp_maven/app/viewsets.py
+index d7d3cf6..796bc16 100644
+--- a/pulp_maven/app/viewsets.py
++++ b/pulp_maven/app/viewsets.py
+@@ -17,11 +17,19 @@ from pulpcore.plugin.viewsets import (
+     SingleArtifactContentUploadViewSet,
+ )
+ 
+-from pulp_maven.app.models import MavenArtifact, MavenDistribution, MavenRemote, MavenRepository
++from pulp_maven.app.models import (
++    MavenArtifact,
++    MavenDistribution,
++    MavenMetadata,
++    MavenRemote,
++    MavenRepository,
++)
+ from pulp_maven.app.serializers import (
+     MavenArtifactSerializer,
+     MavenArtifactUploadSerializer,
+     MavenDistributionSerializer,
++    MavenMetadataSerializer,
++    MavenMetadataUploadSerializer,
+     MavenRemoteSerializer,
+     MavenRepositorySerializer,
+     RepositoryAddCachedContentSerializer,
+@@ -67,6 +75,44 @@ class MavenArtifactViewSet(SingleArtifactContentUploadViewSet):
+         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+ 
+ 
++class MavenMetadataFilter(ContentFilter):
++    """
++    FilterSet for MavenMetadata.
++    """
++
++    class Meta:
++        model = MavenMetadata
++        fields = ["group_id", "artifact_id", "version", "filename"]
++
++
++class MavenMetadataViewSet(SingleArtifactContentUploadViewSet):
++    """
++    A ViewSet for MavenMetadata.
++    """
++
++    endpoint_name = "metadata"
++    queryset = MavenMetadata.objects.all()
++    serializer_class = MavenMetadataSerializer
++    filterset_class = MavenMetadataFilter
++
++    @extend_schema(
++        description="Synchronously upload a Maven metadata file.",
++        request=MavenMetadataUploadSerializer,
++        responses={201: MavenMetadataSerializer},
++        summary="Upload a Maven metadata file synchronously.",
++    )
++    @action(detail=False, methods=["post"], serializer_class=MavenMetadataUploadSerializer)
++    def upload(self, request):
++        """Create a Maven metadata content unit synchronously."""
++        serializer = self.get_serializer(data=request.data)
++        with transaction.atomic():
++            serializer.is_valid(raise_exception=True)
++            serializer.save()
++
++        headers = self.get_success_headers(serializer.data)
++        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
++
++
+ class MavenRemoteViewSet(RemoteViewSet):
+     """
+     A ViewSet for MavenRemote.
+diff --git a/pulp_maven/tests/functional/api/test_create_content.py b/pulp_maven/tests/functional/api/test_create_content.py
+index be4f8b4..b527577 100644
+--- a/pulp_maven/tests/functional/api/test_create_content.py
++++ b/pulp_maven/tests/functional/api/test_create_content.py
+@@ -244,3 +244,22 @@ def test_async_create_maven_artifact(
+     downloaded = download_file(unit_url)
+     assert downloaded.response_obj.status == 200
+     assert hashlib.sha256(downloaded.body).hexdigest() == artifact.sha256
++
++
++@pytest.mark.parallel
++def test_upload_maven_metadata(
++    maven_metadata_api_client,
++    random_artifact_factory,
++):
++    """Test uploading maven-metadata.xml via the metadata endpoint."""
++    artifact = random_artifact_factory(size=64)
++    relative_path = "com/fasterxml/jackson/module/jackson-module-parameter-names/maven-metadata.xml"
++    content = maven_metadata_api_client.upload(
++        artifact=artifact.pulp_href,
++        relative_path=relative_path,
++    )
++    assert content.group_id == "com.fasterxml.jackson.module"
++    assert content.artifact_id == "jackson-module-parameter-names"
++    assert content.version is None
++    assert content.filename == "maven-metadata.xml"
++    assert content.sha256 == artifact.sha256
+diff --git a/pulp_maven/tests/functional/conftest.py b/pulp_maven/tests/functional/conftest.py
+index f52afe0..587d0db 100644
+--- a/pulp_maven/tests/functional/conftest.py
++++ b/pulp_maven/tests/functional/conftest.py
+@@ -5,6 +5,7 @@ import pytest
+ from pulpcore.client.pulp_maven import (
+     ApiClient,
+     ContentArtifactApi,
++    ContentMetadataApi,
+     DistributionsMavenApi,
+     RemotesMavenApi,
+     RepositoriesMavenApi,
+@@ -24,6 +25,11 @@ def maven_artifact_api_client(maven_client):
+     return ContentArtifactApi(maven_client)
+ 
+ 
++@pytest.fixture(scope="session")
++def maven_metadata_api_client(maven_client):
++    return ContentMetadataApi(maven_client)
++
++
+ @pytest.fixture(scope="session")
+ def maven_distro_api_client(maven_client):
+     return DistributionsMavenApi(maven_client)
+-- 
+2.54.0
+

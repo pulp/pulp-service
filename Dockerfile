@@ -163,6 +163,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0059-Handle-duplicate-Maven-artifact-uploads.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0059-Handle-duplicate-Maven-artifact-uploads.patch
 
+COPY images/assets/patches/0060-Add-MavenMetadata-content-API.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0060-Add-MavenMetadata-content-API.patch
+
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
