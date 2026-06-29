@@ -1,0 +1,1 @@
+Fixed org_id not being logged for content app responses that raise HTTPException (404, 301, 302 on cache miss). The middleware now injects X-RH-ORG-ID on both normal returns and raised exceptions.

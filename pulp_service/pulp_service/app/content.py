@@ -99,24 +99,31 @@ async def add_true_client_ip_to_forwarded_for(request, handler):
     return await handler(request)
 
 
+def _set_org_id_header(request, response):
+    """Extract org_id from x-rh-identity and set it on the response header."""
+    rh_identity_header = request.headers.get("x-rh-identity")
+    if not rh_identity_header:
+        return
+
+    try:
+        identity = json.loads(b64decode(rh_identity_header))
+    except Exception:
+        return
+
+    # non-entitlement certs (x509, SAML) have a different structure without identity.org_id
+    if "identity" in identity and "org_id" in identity["identity"]:
+        response.headers["X-RH-ORG-ID"] = identity["identity"]["org_id"]
+
+
 @web.middleware
 async def add_rh_org_id_resp_header(request, handler):
     try:
         response = await handler(request)
     except web.HTTPException as exc:
+        _set_org_id_header(request, exc)
         return exc
 
-    if not request.headers.get("x-rh-identity"):
-        return response
-
-    rh_identity_header = request.headers["x-rh-identity"]
-    rh_identity_header_decoded = b64decode(rh_identity_header)
-    rh_identity_header_json = json.loads(rh_identity_header_decoded)
-
-    # we need to check if the entire path exists because non-entitlement certs have a diff structure
-    if "identity" in rh_identity_header_json and "org_id" in rh_identity_header_json["identity"]:
-        response.headers["X-RH-ORG-ID"] = rh_identity_header_json["identity"]["org_id"]
-
+    _set_org_id_header(request, response)
     return response
 
 
