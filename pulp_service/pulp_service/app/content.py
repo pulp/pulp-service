@@ -105,7 +105,10 @@ def _set_org_id_header(request, response):
     if not rh_identity_header:
         return
 
-    identity = json.loads(b64decode(rh_identity_header))
+    try:
+        identity = json.loads(b64decode(rh_identity_header))
+    except Exception:
+        return
 
     # non-entitlement certs (x509, SAML) have a different structure without identity.org_id
     if "identity" in identity and "org_id" in identity["identity"]:

@@ -68,6 +68,24 @@ class TestSetOrgIdHeader:
 
         assert "X-RH-ORG-ID" not in response.headers
 
+    def test_skips_for_malformed_base64(self):
+        request = MagicMock()
+        request.headers = {"x-rh-identity": "not-valid-base64!!!"}
+        response = web.Response()
+
+        _set_org_id_header(request, response)
+
+        assert "X-RH-ORG-ID" not in response.headers
+
+    def test_skips_for_malformed_json(self):
+        request = MagicMock()
+        request.headers = {"x-rh-identity": b64encode(b"not json").decode()}
+        response = web.Response()
+
+        _set_org_id_header(request, response)
+
+        assert "X-RH-ORG-ID" not in response.headers
+
     def test_sets_header_on_http_exception(self):
         request = _make_request(STANDARD_IDENTITY)
         response = web.HTTPNotFound()
