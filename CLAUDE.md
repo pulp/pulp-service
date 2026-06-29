@@ -84,11 +84,22 @@ Uses **towncrier**. For any non-trivial change, create a file in `CHANGES/` name
 
 ## Code Gotchas
 
-- **jq `// empty` raises `StopIteration`** — never use `// empty` in jq filters passed to `.first()`. An empty stream raises `StopIteration`, not `None`. Use direct null comparisons: `if .foo == "bar" then ... else null end`.
-- **jq string interpolation produces `"null"` not null** — `"\(.foo)"` where `.foo` is null produces the string `"null"`. The parent `JSONHeaderRemoteAuthentication` accepts any non-null string as valid. Always add explicit null checks before interpolation.
+### jq filters
+
+- **`// empty` raises `StopIteration`** — never use `// empty` in jq filters passed to `.first()`. An empty stream raises `StopIteration`, not `None`. Use direct null comparisons: `if .foo == "bar" then ... else null end`.
+- **String interpolation produces `"null"` not null** — `"\(.foo)"` where `.foo` is null produces the string `"null"`. The parent `JSONHeaderRemoteAuthentication` accepts any non-null string as valid. Always add explicit null checks before interpolation.
+
+### Auth configuration
+
 - **`@merge` appends, doesn't prepend** — Pulp's `@merge` directive for `REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES` appends custom classes after pulpcore's defaults. Use an explicit full list when auth class order matters.
+
+### API behavior
+
 - **`pulp_label_select` negation causes 500s** — the `!label` and `label!=value` operators can cause server errors. Fall back to client-side filtering when excluding by labels.
 - **CloudWatch domain listing needs `fields` parameter** — domain objects include large `storage_settings` blobs. Use `?fields=name,pulp_href,pulp_labels&limit=50` to avoid 500 errors from oversized responses.
+
+### Python dependencies
+
 - **PyArrow `S3FileSystem` region issues** — passing `region=None` overrides auto-detection (different from omitting the parameter). Use `**kwargs` and only include `region` when explicitly set. `copy_files()` uses multipart upload which fails with PermanentRedirect; use `open_output_stream()` or boto3 instead.
 - **`UV_INDEX` vs `UV_DEFAULT_INDEX`** — `UV_DEFAULT_INDEX` replaces PyPI entirely (dependencies won't resolve). Use `UV_INDEX` to add a private repo alongside PyPI.
 
