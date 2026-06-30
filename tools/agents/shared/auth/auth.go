@@ -25,7 +25,8 @@ func ResolveFromEnv() (*Config, error) {
 		config.SACredential = []byte(saJSON)
 	}
 
-	if config.ProjectID == "" && len(config.SACredential) > 0 {
+	// Only parse SA JSON for project_id when not in proxy mode
+	if config.APIKey == "" && config.ProjectID == "" && len(config.SACredential) > 0 {
 		var serviceAccount struct {
 			ProjectID string `json:"project_id"`
 		}
