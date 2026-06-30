@@ -1344,6 +1344,153 @@ objects:
               cpu: 500m
               memory: 1Gi
 
+      - name: export-content-maven-v1
+        schedule: "45 * * * *"
+        restartPolicy: Never
+        concurrencyPolicy: Forbid
+        podSpec:
+          image: registry.access.redhat.com/ubi9/python-312:latest
+          command: ['/bin/bash', '-c']
+          args:
+            - |
+              if [[ "${CLUSTER_NAME}" != pulp* ]]; then
+                echo "Skipping: CLUSTER_NAME='${CLUSTER_NAME}' is not a pulp* cluster"
+                exit 0
+              fi
+
+              if [[ -z "${CLOUDWATCH_LOG_GROUP}" || -z "${S3_BUCKET_NAME}" || -z "${PULP_PYPI_HOST}" ]]; then
+                echo "Skipping: required parameters not configured (CLOUDWATCH_LOG_GROUP, S3_BUCKET_NAME, PULP_PYPI_HOST)"
+                exit 0
+              fi
+
+              TIMESTAMP=$(date -u -d '1 hour ago' '+%Y%m%dT%H0000Z')
+              LOCAL_FILE="/tmp/pulp_content_maven_${TIMESTAMP}.parquet"
+
+              pip install uv
+              export UV_INDEX="${PULP_PYPI_HOST/https:\/\//https://${PYPI_USERNAME}:${PYPI_PASSWORD}@}"
+              uv pip install pulp-access-logs-exporter
+
+              START_TIME=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:00:00Z')
+              END_TIME=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:59:59Z')
+              export-content-logs \
+                --cloudwatch-group "${CLOUDWATCH_LOG_GROUP}" \
+                --start-time "${START_TIME}" \
+                --end-time "${END_TIME}" \
+                --content-type maven \
+                --output-path "${LOCAL_FILE}" \
+                --aws-region "${AWS_REGION}"
+
+              if [ ! -f "${LOCAL_FILE}" ]; then
+                echo "No data exported — skipping uploads."
+                exit 0
+              fi
+
+              upload-parquet \
+                --source "${LOCAL_FILE}" \
+                --destination "s3://${S3_BUCKET_NAME%/}/${S3_BUCKET_PREFIX#/}/maven/pulp_content_maven_${TIMESTAMP}.parquet" \
+                --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
+                --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}"
+
+              if [ -n "${BACKUP_S3_ACCESS_KEY_ID:-}" ]; then
+                upload-parquet \
+                  --source "${LOCAL_FILE}" \
+                  --destination "s3://${BACKUP_S3_BUCKET_NAME}/pulp_content_maven_${TIMESTAMP}.parquet" \
+                  --s3-access-key-id "${BACKUP_S3_ACCESS_KEY_ID}" \
+                  --s3-secret-access-key "${BACKUP_S3_SECRET_ACCESS_KEY}"
+              fi
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_access_key_id
+                  optional: false
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_secret_access_key
+                  optional: false
+            - name: AWS_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: cloudwatch-pulp-log-access-read-only
+                  key: aws_region
+                  optional: false
+            - name: CLUSTER_NAME
+              value: ${{CLUSTER_NAME}}
+            - name: ENV_NAME
+              value: ${{ENV_NAME}}
+            - name: BACKUP_S3_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: bucket
+                  optional: false
+            - name: BACKUP_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: aws_access_key_id
+                  optional: false
+            - name: BACKUP_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-dataverse-s3
+                  key: aws_secret_access_key
+                  optional: false
+            - name: CLOUDWATCH_LOG_GROUP
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: cloudwatch_log_group
+                  optional: false
+            - name: S3_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: bucket
+                  optional: false
+            - name: S3_BUCKET_PREFIX
+              value: data
+            - name: S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: s3_access_key_id
+                  optional: false
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: s3_secret_access_key
+                  optional: false
+            - name: PULP_PYPI_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: pulp_pypi_url
+                  optional: false
+            - name: PYPI_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: pypi_username
+                  optional: false
+            - name: PYPI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dataverse
+                  key: pypi_password
+                  optional: false
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
