@@ -6,6 +6,7 @@ from pulp_access_logs_exporter.content_parser import (
     matches_content_type,
     parse_content_log_line,
     parse_content_path,
+    parse_maven_distribution,
     parse_rpm_filename,
     parse_wheel_filename,
 )
@@ -13,7 +14,7 @@ from pulp_access_logs_exporter.content_cloudwatch import (
     build_content_query,
     convert_content_to_arrow_table,
 )
-from pulp_access_logs_exporter.content_schemas import PYTHON_SCHEMA, RPM_SCHEMA
+from pulp_access_logs_exporter.content_schemas import MAVEN_SCHEMA, PYTHON_SCHEMA, RPM_SCHEMA
 from pulp_access_logs_exporter.writer import write_parquet
 
 
@@ -136,6 +137,128 @@ class TestParseRpmFilename:
         assert result is None
 
 
+class TestParseMavenDistribution:
+    def test_standard_jar(self):
+        result = parse_maven_distribution(
+            "maven-releases/org/springframework/cloud/spring-cloud-config-server/4.3.0-redhat-1",
+            "spring-cloud-config-server-4.3.0-redhat-1.jar",
+        )
+        assert result is not None
+        assert result["distribution"] == "maven-releases"
+        assert result["group_id"] == "org.springframework.cloud"
+        assert result["package_name"] == "spring-cloud-config-server"
+        assert result["package_version"] == "4.3.0-redhat-1"
+        assert result["classifier"] is None
+        assert result["packaging"] == "jar"
+        assert result["architecture"] is None
+
+    def test_pom_file(self):
+        result = parse_maven_distribution(
+            "maven-releases/org/springframework/spring-expression/5.3.18-redhat-1",
+            "spring-expression-5.3.18-redhat-1.pom",
+        )
+        assert result is not None
+        assert result["group_id"] == "org.springframework"
+        assert result["package_name"] == "spring-expression"
+        assert result["packaging"] == "pom"
+        assert result["classifier"] is None
+
+    def test_with_classifier(self):
+        result = parse_maven_distribution(
+            "maven-releases/net/minidev/json-smart/2.5.0",
+            "json-smart-2.5.0-sources.jar",
+        )
+        assert result is not None
+        assert result["group_id"] == "net.minidev"
+        assert result["package_name"] == "json-smart"
+        assert result["package_version"] == "2.5.0"
+        assert result["classifier"] == "sources"
+        assert result["packaging"] == "jar"
+
+    def test_javadoc_classifier(self):
+        result = parse_maven_distribution(
+            "maven-releases/com/google/guava/guava/33.0.0-jre",
+            "guava-33.0.0-jre-javadoc.jar",
+        )
+        assert result is not None
+        assert result["group_id"] == "com.google.guava"
+        assert result["package_name"] == "guava"
+        assert result["package_version"] == "33.0.0-jre"
+        assert result["classifier"] == "javadoc"
+        assert result["packaging"] == "jar"
+
+    def test_single_segment_group_id(self):
+        result = parse_maven_distribution(
+            "maven-releases/junit/junit/4.13.2",
+            "junit-4.13.2.jar",
+        )
+        assert result is not None
+        assert result["group_id"] == "junit"
+        assert result["package_name"] == "junit"
+        assert result["package_version"] == "4.13.2"
+
+    def test_snapshot_distribution(self):
+        result = parse_maven_distribution(
+            "maven-snapshots/com/mycompany/app/my-app/1.0-SNAPSHOT",
+            "my-app-1.0-SNAPSHOT.jar",
+        )
+        assert result is not None
+        assert result["distribution"] == "maven-snapshots"
+        assert result["group_id"] == "com.mycompany.app"
+        assert result["package_name"] == "my-app"
+        assert result["package_version"] == "1.0-SNAPSHOT"
+        assert result["packaging"] == "jar"
+
+    def test_deeply_nested_group_id(self):
+        result = parse_maven_distribution(
+            "maven-releases/io/opentelemetry/instrumentation/opentelemetry-instrumentation-api/2.10.0",
+            "opentelemetry-instrumentation-api-2.10.0.jar",
+        )
+        assert result is not None
+        assert result["group_id"] == "io.opentelemetry.instrumentation"
+        assert result["package_name"] == "opentelemetry-instrumentation-api"
+        assert result["package_version"] == "2.10.0"
+
+    def test_multi_hyphen_version(self):
+        result = parse_maven_distribution(
+            "maven-releases/org/jboss/resteasy/resteasy-core/6.2.0-alpha-1",
+            "resteasy-core-6.2.0-alpha-1.jar",
+        )
+        assert result is not None
+        assert result["group_id"] == "org.jboss.resteasy"
+        assert result["package_name"] == "resteasy-core"
+        assert result["package_version"] == "6.2.0-alpha-1"
+        assert result["classifier"] is None
+        assert result["packaging"] == "jar"
+
+    def test_redhat_milestone_version(self):
+        result = parse_maven_distribution(
+            "maven-releases/org/springframework/boot/spring-boot/3.0.0-M1-redhat-00001",
+            "spring-boot-3.0.0-M1-redhat-00001.jar",
+        )
+        assert result is not None
+        assert result["package_name"] == "spring-boot"
+        assert result["package_version"] == "3.0.0-M1-redhat-00001"
+
+    def test_too_few_segments_returns_none(self):
+        result = parse_maven_distribution("maven-releases/junit/4.13.2", "junit-4.13.2.jar")
+        assert result is None
+
+    def test_filename_mismatch_returns_none(self):
+        result = parse_maven_distribution(
+            "maven-releases/org/example/my-lib/1.0.0",
+            "wrong-name-1.0.0.jar",
+        )
+        assert result is None
+
+    def test_no_extension_returns_none(self):
+        result = parse_maven_distribution(
+            "maven-releases/org/example/my-lib/1.0.0",
+            "my-lib-1.0.0",
+        )
+        assert result is None
+
+
 class TestContentTypeFiltering:
     def test_python_whl_matches(self):
         assert matches_content_type("pkg-1.0-py3-none-any.whl", "python") is True
@@ -153,6 +276,21 @@ class TestContentTypeFiltering:
 
     def test_rpm_rejects_whl(self):
         assert matches_content_type("pkg-1.0-py3-none-any.whl", "rpm") is False
+
+    def test_maven_jar_matches(self):
+        assert matches_content_type("spring-core-6.2.0.jar", "maven") is True
+
+    def test_maven_pom_matches(self):
+        assert matches_content_type("spring-core-6.2.0.pom", "maven") is True
+
+    def test_maven_rejects_jar_checksum(self):
+        assert matches_content_type("spring-core-6.2.0.jar.sha1", "maven") is False
+
+    def test_maven_rejects_pom_checksum(self):
+        assert matches_content_type("spring-core-6.2.0.pom.sha1", "maven") is False
+
+    def test_maven_rejects_rpm(self):
+        assert matches_content_type("bash-5.2-1.fc43.x86_64.rpm", "maven") is False
 
     def test_rejects_repodata(self):
         assert matches_content_type("repomd.xml", "python") is False
@@ -312,6 +450,63 @@ class TestContentToParquetRpm:
         assert rows["distribution"][1] == "templates"
 
 
+class TestContentToParquetMaven:
+    def test_converts_maven_downloads(
+        self, sample_maven_cloudwatch_results, sample_content_parquet_path
+    ):
+        table = convert_content_to_arrow_table(
+            sample_maven_cloudwatch_results, "maven"
+        )
+        assert table.num_rows == 3
+        assert table.schema == MAVEN_SCHEMA
+
+        write_parquet(table, sample_content_parquet_path)
+        read_table = pq.read_table(sample_content_parquet_path)
+        assert read_table.num_rows == 3
+
+        rows = read_table.to_pydict()
+        assert rows["domain"][0] == "balor-stage"
+        assert rows["distribution"][0] == "maven-releases"
+        assert rows["group_id"][0] == "org.springframework.cloud"
+        assert rows["package_name"][0] == "spring-cloud-config-server"
+        assert rows["package_version"][0] == "4.3.0-redhat-1"
+        assert rows["classifier"][0] is None
+        assert rows["packaging"][0] == "jar"
+        assert rows["org_id"][0] == "5894300"
+        assert rows["cache_hit"][0] is False
+        assert rows["artifact_size"][0] == 18432000
+
+        assert rows["group_id"][1] == "org.springframework"
+        assert rows["package_name"][1] == "spring-expression"
+        assert rows["packaging"][1] == "pom"
+
+        assert rows["group_id"][2] == "net.minidev"
+        assert rows["package_name"][2] == "json-smart"
+        assert rows["classifier"][2] == "sources"
+        assert rows["packaging"][2] == "jar"
+        assert rows["cache_hit"][2] is True
+
+    def test_skips_checksum_files(self):
+        results = [
+            {
+                "@timestamp": "2026-06-20 13:47:49.000",
+                "message": '10.131.32.14 [20/Jun/2026:13:47:49 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/cloud/spring-cloud-config-server/4.3.0-redhat-1/spring-cloud-config-server-4.3.0-redhat-1-provenance.json.md5 HTTP/1.1" 302 727 "-" "curl/8.15.0" cache:"MISS" artifact_size:"32" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140"',
+            },
+        ]
+        table = convert_content_to_arrow_table(results, "maven")
+        assert table.num_rows == 0
+
+    def test_skips_metadata_xml(self):
+        results = [
+            {
+                "@timestamp": "2026-06-20 13:47:49.000",
+                "message": '10.131.32.14 [20/Jun/2026:13:47:49 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/cloud/spring-cloud-config-server/maven-metadata.xml HTTP/1.1" 200 500 "-" "curl/8.15.0" cache:"HIT" artifact_size:"500" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140"',
+            },
+        ]
+        table = convert_content_to_arrow_table(results, "maven")
+        assert table.num_rows == 0
+
+
 class TestEmptyContentResults:
     def test_empty_results_python(self):
         table = convert_content_to_arrow_table([], "python")
@@ -322,6 +517,11 @@ class TestEmptyContentResults:
         table = convert_content_to_arrow_table([], "rpm")
         assert table.num_rows == 0
         assert table.schema == RPM_SCHEMA
+
+    def test_empty_results_maven(self):
+        table = convert_content_to_arrow_table([], "maven")
+        assert table.num_rows == 0
+        assert table.schema == MAVEN_SCHEMA
 
 
 class TestContentQueryBuilding:
@@ -346,6 +546,13 @@ class TestContentQueryBuilding:
         query = build_content_query("rpm")
         assert '.rpm"' in query
         assert ".whl" not in query
+
+    def test_maven_query_filters_by_jar_and_pom_extensions(self):
+        query = build_content_query("maven")
+        assert '.jar"' in query
+        assert '.pom"' in query
+        assert ".whl" not in query
+        assert ".rpm" not in query
 
     def test_unknown_content_type_raises(self):
         import pytest

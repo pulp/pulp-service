@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from pulp_access_logs_exporter.content_parser import CONTENT_TYPE_EXTENSIONS
+
 
 def parse_args(args=None):
     """Parse command-line arguments."""
@@ -219,7 +221,7 @@ def parse_content_args(args=None):
     parser.add_argument("--start-time", required=True, help='Start timestamp - ISO format or relative ("1 hour ago")')
     parser.add_argument("--end-time", required=True, help='End timestamp - ISO format or relative ("now")')
     parser.add_argument("--output-path", required=True, help="Local file path or S3 URI (s3://bucket/key)")
-    parser.add_argument("--content-type", required=True, choices=["python", "rpm"], help="Content type to export")
+    parser.add_argument("--content-type", required=True, choices=sorted(CONTENT_TYPE_EXTENSIONS), help="Content type to export")
     parser.add_argument("--aws-region", default="us-east-1", help="AWS region (default: us-east-1)")
     parser.add_argument("--s3-access-key-id", help="AWS access key ID for S3")
     parser.add_argument("--s3-secret-access-key", help="AWS secret access key for S3")

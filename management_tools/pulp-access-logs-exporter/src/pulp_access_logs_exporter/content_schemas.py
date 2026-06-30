@@ -33,7 +33,17 @@ RPM_SCHEMA = pa.schema(
     ]
 )
 
+MAVEN_SCHEMA = pa.schema(
+    COMMON_FIELDS
+    + [
+        ("group_id", pa.string()),
+        ("classifier", pa.string()),
+        ("packaging", pa.string()),
+    ]
+)
+
 SCHEMAS = {
+    "maven": MAVEN_SCHEMA,
     "python": PYTHON_SCHEMA,
     "rpm": RPM_SCHEMA,
 }

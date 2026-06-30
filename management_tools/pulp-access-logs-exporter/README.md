@@ -131,6 +131,24 @@ Key features:
 - **PyArrow native**: No pandas dependency for core export (only for test validation)
 - **Efficient storage**: Snappy compression, columnar format
 
+## Adding a New Content Type
+
+Content type registrations are currently spread across multiple modules:
+
+| What | Module |
+|------|--------|
+| File extensions | `CONTENT_TYPE_EXTENSIONS` in `content_parser.py` |
+| Parquet schema | `SCHEMAS` in `content_schemas.py` |
+| Filename parser | `FILENAME_PARSERS` in `content_cloudwatch.py` |
+| Distribution parser | `DISTRIBUTION_PARSERS` in `content_cloudwatch.py` |
+| CLI choices | Derived from `CONTENT_TYPE_EXTENSIONS` in `cli.py` |
+
+When adding a new content type, all applicable registries must be updated. A missing
+entry in `SCHEMAS` or both parser dicts will raise a `ValueError` at runtime.
+
+Consider centralizing these into a single content type registry if the number of
+content types grows beyond the current three (Python, RPM, Maven).
+
 ## License
 
 See repository root for license information.
