@@ -88,6 +88,9 @@ def convert_content_to_arrow_table(results, content_type):
     skipped_filename = 0
     skipped_timestamp = 0
 
+    if not filename_parser and not distribution_parser:
+        raise ValueError(f"No parser registered for content type: {content_type!r}")
+
     for result in results:
         message = result.get("message", result.get("@message", ""))
         timestamp_str = result.get("@timestamp", "")

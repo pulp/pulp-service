@@ -283,8 +283,11 @@ class TestContentTypeFiltering:
     def test_maven_pom_matches(self):
         assert matches_content_type("spring-core-6.2.0.pom", "maven") is True
 
-    def test_maven_rejects_checksum(self):
+    def test_maven_rejects_jar_checksum(self):
         assert matches_content_type("spring-core-6.2.0.jar.sha1", "maven") is False
+
+    def test_maven_rejects_pom_checksum(self):
+        assert matches_content_type("spring-core-6.2.0.pom.sha1", "maven") is False
 
     def test_maven_rejects_rpm(self):
         assert matches_content_type("bash-5.2-1.fc43.x86_64.rpm", "maven") is False

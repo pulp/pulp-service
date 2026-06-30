@@ -180,7 +180,7 @@ def parse_maven_distribution(distribution, filename):
 
     if rest.startswith("-"):
         rest = rest[1:]
-        dot_pos = rest.find(".")
+        dot_pos = rest.rfind(".")
         if dot_pos == -1:
             return None
         classifier = rest[:dot_pos]
