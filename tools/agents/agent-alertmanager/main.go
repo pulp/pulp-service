@@ -14,6 +14,8 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
+	"github.com/pulp/pulp-service/tools/agents/shared/auth"
+
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/alertmanager"
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/cloudwatch"
 	"github.com/pulp/pulp-service/tools/agents/agent-alertmanager/dedup"
@@ -30,7 +32,6 @@ import (
 const (
 	defaultModel     = "claude-sonnet-4-6"
 	defaultQuestion  = "analyze all firing Pulp alerts and assess their severity and impact"
-	defaultRegion    = "us-east5"
 	defaultCooldown  = "30m"
 	defaultCachePath = "/tmp/agent-alertmanager-cache.json"
 	defaultLockPath  = "/tmp/agent-alertmanager.lock"
@@ -83,10 +84,13 @@ func run() error {
 		return runCheckOnly(clients)
 	}
 
-	// --- Full mode: validate additional requirements ---
-	vertexProjectID := os.Getenv("ANTHROPIC_VERTEX_PROJECT_ID")
-	if vertexProjectID == "" {
-		return fmt.Errorf("ANTHROPIC_VERTEX_PROJECT_ID environment variable is required in full mode")
+	// --- Full mode: resolve LLM auth ---
+	authConfig, authErr := auth.ResolveFromEnv()
+	if authErr != nil {
+		return fmt.Errorf("LLM auth: %w", authErr)
+	}
+	if authConfig.APIKey != "" {
+		fmt.Fprintf(os.Stderr, "[auth] using proxy mode (ANTHROPIC_BASE_URL=%s)\n", authConfig.BaseURL)
 	}
 
 	if !supportedModels[*modelFlag] {
@@ -117,11 +121,6 @@ func run() error {
 	defer timeoutCancel()
 
 	// --- Parse optional env vars ---
-	region := os.Getenv("CLOUD_ML_REGION")
-	if region == "" {
-		region = defaultRegion
-	}
-
 	cooldownStr := os.Getenv("DEDUP_COOLDOWN")
 	if cooldownStr == "" {
 		cooldownStr = defaultCooldown
@@ -290,14 +289,14 @@ func run() error {
 	if strings.HasPrefix(*modelFlag, "claude-") {
 		model = models.Claude{
 			Model:     *modelFlag,
-			ProjectID: vertexProjectID,
-			Region:    region,
+			ProjectID: authConfig.ProjectID,
+			Region:    authConfig.Region,
 		}
 	} else {
 		model = models.Gemini{
 			Model:     *modelFlag,
-			ProjectID: vertexProjectID,
-			Region:    region,
+			ProjectID: authConfig.ProjectID,
+			Region:    authConfig.Region,
 		}
 	}
 
