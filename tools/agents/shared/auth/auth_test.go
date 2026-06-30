@@ -73,6 +73,21 @@ func TestResolveFromEnv_InvalidSAJSON(t *testing.T) {
 	}
 }
 
+func TestResolveFromEnv_ProxyModeIgnoresBadSAJSON(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "sk-test-key")
+	t.Setenv("ANTHROPIC_BASE_URL", "http://localhost:8443/v1")
+	t.Setenv("ANTHROPIC_VERTEX_PROJECT_ID", "")
+	t.Setenv("VERTEX_SA_JSON", `{"type":"authorized_user"}`)
+
+	config, err := ResolveFromEnv()
+	if err != nil {
+		t.Fatalf("proxy mode should not fail on SA JSON without project_id: %v", err)
+	}
+	if config.APIKey != "sk-test-key" {
+		t.Errorf("APIKey = %q", config.APIKey)
+	}
+}
+
 func TestResolveFromEnv_DefaultRegion(t *testing.T) {
 	t.Setenv("ANTHROPIC_VERTEX_PROJECT_ID", "my-project")
 	t.Setenv("CLOUD_ML_REGION", "")
