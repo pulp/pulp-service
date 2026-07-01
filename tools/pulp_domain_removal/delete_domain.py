@@ -1,26 +1,35 @@
 #!/usr/bin/env python3
 """
-Pulp Domain Deletion Script
+Pulp Domain Cleanup Script
 
 You need to install the client bindings:
-pip3 install crc-{pulpcore,pulp-python,pulp-npm,pulp-rpm,pulp-maven,pulp-file,pulp-service}-client
+pip3 install crc-{pulpcore,pulp-python,pulp-npm,pulp-rpm,pulp-maven,pulp-file,pulp-service,pulp-container,pulp-gem}-client
 
-This script cleans up all resources in a Pulp domain and then deletes the domain itself.
-It uses the Pulp client bindings to:
+This script removes all Pulp resources from a domain. By default it also deletes the
+domain itself; use --cleanup-only to reset a test domain while keeping the domain record.
 
-1. Delete all repositories in the domain (python, file, rpm, maven)
-2. Delete all distributions in the domain
-3. Delete all remotes in the domain
-4. Delete all publications in the domain
-5. Clean up orphaned content
-6. Wait for pending tasks and retry domain deletion
-7. Delete the domain itself
+Resources are removed via the generic pulpcore APIs, so all installed content plugins
+(file, rpm, python, maven, npm, gem, container, etc.) are covered without per-plugin code.
+
+Cleanup order:
+1. Container namespaces (also removes their distributions and push repos)
+2. Publications
+3. Distributions
+4. Repositories (all pulp types)
+5. Remotes
+6. Content guards
+7. Orphan cleanup (prune orphaned content and artifacts)
+8. Optionally delete the domain itself
 
 Usage:
-    python delete_domain.py --domain <domain_name>
-    
+    # Reset a test domain but keep the domain (recommended for test domains)
+    python delete_domain.py --domain my-test-domain --cleanup-only
+
+    # Remove everything including the domain
+    python delete_domain.py --domain my-domain
+
     # With custom config file
-    python delete_domain.py --domain <domain_name> --config ~/.config/pulp/cli.toml
+    python delete_domain.py --domain my-domain --config ~/.config/pulp/cli.toml
 
 Configuration:
     Uses the standard pulp CLI configuration file (~/.config/pulp/cli.toml)
@@ -651,6 +660,10 @@ class PulpDomainCleanup:
         print(f"  ❌ Failed to delete domain '{self.domain}' after {self.DOMAIN_DELETE_RETRIES} attempts")
         return False
 
+    def verify_domain_exists(self) -> bool:
+        """Return True if the domain still exists."""
+        return self.get_domain_href() is not None
+
     def cleanup(self, delete_domain: bool = True) -> dict:
         """
         Perform the full cleanup of the domain.
@@ -662,8 +675,15 @@ class PulpDomainCleanup:
             Dictionary with cleanup statistics
         """
         print(f"\n{'='*60}")
-        print(f"🧹 Starting cleanup of Pulp domain: {self.domain}")
+        if delete_domain:
+            print(f"🧹 Starting full removal of Pulp domain: {self.domain}")
+        else:
+            print(f"🧹 Starting cleanup of Pulp domain (keeping domain): {self.domain}")
         print(f"{'='*60}")
+
+        if not self.verify_domain_exists():
+            print(f"  ❌ Domain '{self.domain}' not found")
+            return {"domain_not_found": True}
 
         stats = {
             "repositories_deleted": 0,
@@ -674,36 +694,50 @@ class PulpDomainCleanup:
             "container_namespaces_deleted": 0,
             "orphan_cleanup": False,
             "domain_deleted": False,
+            "domain_preserved": False,
         }
 
         # Order matters: delete in dependency order
-        # 1. Publications (depend on repos)
-        stats["publications_deleted"] = self.delete_publications()
-
-        # 2. Distributions (may reference publications/repos/content guards)
-        stats["distributions_deleted"] = self.delete_distributions()
-
-        # 3. Repositories
-        stats["repositories_deleted"] = self.delete_repositories()
-
-        # 4. Remotes (referenced by repos, so delete after repos)
-        stats["remotes_deleted"] = self.delete_remotes()
-
-        # 5. Content guards (may be referenced by distributions)
-        stats["contentguards_deleted"] = self.delete_contentguards()
-
-        # 6. Container namespaces
+        # 1. Container namespaces (also remove their distributions and push repos)
         stats["container_namespaces_deleted"] = self.delete_container_namespaces()
 
-        # 7. Clean up orphaned content
-        stats["orphan_cleanup"] = self.cleanup_orphans(protection_time=0)
+        # 2. Publications (depend on repos)
+        stats["publications_deleted"] = self.delete_publications()
 
-        # 8. Wait for all tasks to complete before domain deletion
+        # 3. Distributions (may reference publications/repos/content guards)
+        stats["distributions_deleted"] = self.delete_distributions()
+
+        # 4. Repositories (all pulp types via generic API)
+        stats["repositories_deleted"] = self.delete_repositories()
+
+        # 5. Remotes (referenced by repos, so delete after repos)
+        stats["remotes_deleted"] = self.delete_remotes()
+
+        # 6. Content guards (may be referenced by distributions)
+        stats["contentguards_deleted"] = self.delete_contentguards()
+
+        # 7. Wait for resource deletion tasks before pruning orphans
         self.wait_for_pending_tasks()
 
-        # 9. Finally, delete the domain (includes retry logic)
+        # 8. Prune orphaned content and artifacts
+        stats["orphan_cleanup"] = self.cleanup_orphans(protection_time=0)
+
+        # 9. Wait again and run a second orphan pass to catch stragglers
+        self.wait_for_pending_tasks()
+        if not stats["orphan_cleanup"]:
+            stats["orphan_cleanup"] = self.cleanup_orphans(protection_time=0)
+        else:
+            self.cleanup_orphans(protection_time=0)
+
         if delete_domain:
+            # delete_domain() runs its own orphan cleanup and task waits
             stats["domain_deleted"] = self.delete_domain()
+        else:
+            stats["domain_preserved"] = self.verify_domain_exists()
+            if stats["domain_preserved"]:
+                print(f"\n✅ Domain '{self.domain}' preserved and ready for reuse")
+            else:
+                print(f"\n❌ Domain '{self.domain}' is missing after cleanup")
 
         # Print summary
         print(f"\n{'='*60}")
@@ -715,9 +749,11 @@ class PulpDomainCleanup:
         print(f"  Publications deleted: {stats['publications_deleted']}")
         print(f"  Content guards deleted: {stats['contentguards_deleted']}")
         print(f"  Container namespaces deleted: {stats['container_namespaces_deleted']}")
-        print(f"  Orphan cleanup: {'✅' if stats['orphan_cleanup'] else '❌'}")
+        print(f"  Orphan prune: {'✅' if stats['orphan_cleanup'] else '❌'}")
         if delete_domain:
             print(f"  Domain deleted: {'✅' if stats['domain_deleted'] else '❌'}")
+        else:
+            print(f"  Domain preserved: {'✅' if stats['domain_preserved'] else '❌'}")
         print(f"{'='*60}\n")
 
         return stats
@@ -725,15 +761,15 @@ class PulpDomainCleanup:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Clean up a Pulp domain and optionally delete it",
+        description="Clean up all resources in a Pulp domain",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Clean up and delete a domain (uses domain from config)
-    python delete_domain.py --domain my-domain
+    # Reset a test domain but keep the domain record (recommended for test domains)
+    python delete_domain.py --domain my-test-domain --cleanup-only
 
-    # Clean up resources but keep the domain
-    python delete_domain.py --domain my-domain --keep-domain
+    # Remove all resources and delete the domain
+    python delete_domain.py --domain my-domain
 
     # Use custom config file and profile
     python delete_domain.py --domain my-domain --config ~/.config/pulp/cli.toml --profile cli-prod
@@ -762,20 +798,40 @@ Configuration:
         default="cli",
         help="Profile name in the config file (default: cli)",
     )
+
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--cleanup-only",
+        action="store_true",
+        help=(
+            "Remove all domain resources and prune orphans, but keep the domain "
+            "(useful for resetting test domains)"
+        ),
+    )
+    mode_group.add_argument(
+        "--delete-domain",
+        action="store_true",
+        help="Also delete the domain after cleaning up all resources (default behavior)",
+    )
     parser.add_argument(
         "--keep-domain",
         "-k",
         action="store_true",
-        help="Clean up resources but don't delete the domain itself",
+        help=argparse.SUPPRESS,
     )
 
     args = parser.parse_args()
 
+    cleanup_only = args.cleanup_only or args.keep_domain
+    delete_domain = not cleanup_only
 
     # Confirmation prompt - require user to retype domain name
     print(f"\n⚠️  WARNING: You are about to delete all resources in domain '{args.domain}'")
-    if not args.keep_domain:
-        print(f"   The domain itself will also be deleted!")
+    if cleanup_only:
+        print("   The domain itself will be kept so you can start fresh.")
+        print("   Orphan content and artifacts will be pruned.")
+    else:
+        print("   The domain itself will also be deleted!")
     print(f"\n   To confirm, please type the domain name: ", end="")
     confirmation = input().strip()
     if confirmation != args.domain:
@@ -797,10 +853,16 @@ Configuration:
             domain=args.domain,
         )
 
-        stats = cleanup.cleanup(delete_domain=not args.keep_domain)
+        stats = cleanup.cleanup(delete_domain=delete_domain)
 
-        # Exit with error if domain deletion failed (when requested)
-        if not args.keep_domain and not stats["domain_deleted"]:
+        if stats.get("domain_not_found"):
+            sys.exit(1)
+
+        # Exit with error if cleanup-only mode failed to preserve the domain
+        if cleanup_only:
+            if not stats["orphan_cleanup"] or not stats["domain_preserved"]:
+                sys.exit(1)
+        elif not stats["domain_deleted"]:
             sys.exit(1)
 
     except FileNotFoundError as e:
