@@ -31,7 +31,7 @@ prompt: |
     pulp-worker (Celery/Redis)
   - Auth: X-RH-IDENTITY header → custom auth classes in app/authentication.py
   - Multi-tenancy: DomainOrg model maps org_id → Pulp domain
-  - Storage: S3Boto3Storage (pulpcore built-in, with CloudFront patches), OCIStorage (OCI/ORAS)
+  - Storage: S3Boto3Storage (pulpcore built-in, with CloudFront patches)
   - Formatter: black --line-length 100
   - Test runner: pytest pulp_service/pulp_service/tests/functional/
 

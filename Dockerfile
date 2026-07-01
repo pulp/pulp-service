@@ -113,21 +113,11 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
-COPY images/assets/patches/0010-Added-ability-to-return-a-URL-for-a-blob.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0010-Added-ability-to-return-a-URL-for-a-blob.patch
-
-COPY images/assets/patches/0011-ocistorage-backend-changes.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0011-ocistorage-backend-changes.patch
-
 COPY images/assets/patches/0018-Re-root-the-registry-API-at-api-pulp-v2.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0018-Re-root-the-registry-API-at-api-pulp-v2.patch
 
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
-
-COPY images/assets/patches/0028-OCIStorage-create-manifest.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0028-OCIStorage-create-manifest.patch
-
 
 COPY images/assets/patches/0031-Replace-ResponseContentDisposition-in-cloudfront.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Replace-ResponseContentDisposition-in-cloudfront.patch

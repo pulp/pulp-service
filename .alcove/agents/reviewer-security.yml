@@ -33,7 +33,7 @@ prompt: |
   - **Multi-tenancy**: DomainOrg model maps org_id → Pulp domain. Each org's
     content is isolated via domain-based routing.
   - **Content guards**: Control access to content distribution endpoints.
-  - **Storage backends**: S3Boto3Storage (pulpcore built-in, with CloudFront patches) and OCIStorage (OCI/ORAS)
+  - **Storage backends**: S3Boto3Storage (pulpcore built-in, with CloudFront patches)
     handle artifact storage with pre-signed URLs.
   - **Workers**: Celery tasks run background operations (scanning, metrics).
   - **Middleware**: ContextVar carries org_id, user_id across request layers.

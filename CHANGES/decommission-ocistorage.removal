@@ -1,0 +1,1 @@
+Decommissioned the custom OCI storage backend (`OCIStorage`). Removed the `storage.py` module, `oras` dependency, and Docker build patches 0010, 0011, and 0028. Production deployments use S3 via pulpcore's built-in `S3Boto3Storage`.

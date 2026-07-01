@@ -9,7 +9,6 @@ pulp-hugging-face==0.3.0
 pulp-cli
 sentry-sdk
 app-common-python
-oras==0.2.38
 uvloop==0.21.0
 jsonschema
 memray

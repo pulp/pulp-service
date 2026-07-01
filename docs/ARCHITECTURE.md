@@ -31,7 +31,6 @@ This index helps you quickly locate code for common development tasks.
 | **Authentication** | `pulp_service/pulp_service/app/authentication.py` | Custom auth backends (X.509, SAML) |
 | **Authorization** | `pulp_service/pulp_service/app/authorization.py` | Permission and access control logic |
 | **Middleware** | `pulp_service/pulp_service/app/middleware.py` | Django middleware (profiling, headers, metrics) |
-| **Storage** | `pulp_service/pulp_service/app/storage.py` | Custom S3 storage backends |
 | **Signals** | `pulp_service/pulp_service/app/signals.py` | Django signal handlers |
 | **Tasks** | `pulp_service/pulp_service/app/tasks/` | Celery background tasks |
 | **Content Server** | `pulp_service/pulp_service/app/content.py` | aiohttp middleware for pulp-content |
@@ -235,12 +234,11 @@ The `X-RH-IDENTITY` header contains base64-encoded JSON:
 
 ## Storage Backend
 
-Custom S3 storage implementation in `pulp_service/pulp_service/app/storage.py`:
-*Plugin-specific - extends Django's S3Boto3Storage beyond upstream Pulpcore*
+Production deployments use pulpcore's built-in `S3Boto3Storage` with CloudFront patches applied at image build time (patch 0031). Domain creation and migration APIs clone storage settings from the `template-domain-s3` domain so callers never provide S3 credentials directly.
 
-- **AIPCCStorageBackend** - Extends Django's S3Boto3Storage
-- **OCIStorageBackend** - OCI-specific storage with manifest handling
-- Supports multipart uploads and custom metadata
+### Decommissioned: OCI Storage
+
+The custom `OCIStorage` backend (artifacts stored as OCI blobs in Quay.io via the ORAS client) has been **decommissioned**. It was previously implemented in `pulp_service/pulp_service/app/storage.py` with supporting Docker build patches (0010, 0011, 0028) and the `oras` Python dependency. All OCI storage support has been removed from pulp-service; existing domains must use S3 storage. The separate `oci-storage-backup-setup` repository is unaffected and remains available for backup-related workflows.
 
 ## Database Models
 
@@ -325,7 +323,7 @@ Background tasks using Celery (in `pulp_service/pulp_service/app/tasks/`):
 - ⬆️ `PULP_DB_ENCRYPTION_KEY=/etc/pulp/keys/database_fields.symmetric.key` - DB field encryption
 - ⬆️ `PULP_CACHE_ENABLED=true` - Enable Redis caching
 - ⬆️ `PULP_REDIS_PORT=6379` - Redis port
-- ⬆️ `PULP_STORAGES__default__BACKEND` - Storage backend class (🔧 set to plugin AIPCCStorageBackend)
+- ⬆️ `PULP_STORAGES__default__BACKEND` - Storage backend class (S3Boto3Storage)
 - ⬆️ `PULP_STORAGES__default__OPTIONS__default_acl` - S3 ACL setting
 - ⬆️ `PULP_STORAGES__default__OPTIONS__signature_version=s3v4` - S3 signature version
 - ⬆️ `PULP_STORAGES__default__OPTIONS__addressing_style=path` - S3 addressing style
@@ -678,7 +676,6 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 - Extends core models with plugin-specific models (RHCertGuardPermission, PushRepository, RHServiceAccount)
 - Overrides authentication backends (RHServiceAccountCertAuthentication, RHSamlAuthentication)
 - Adds custom middleware (ProfilerMiddleware, RhEdgeHostMiddleware, ActiveConnectionsMetricMiddleware)
-- Extends storage backends (AIPCCStorageBackend, OCIStorageBackend)
 - Adds custom viewsets for Red Hat-specific functionality
 - Implements multi-domain support for tenant isolation
 
@@ -714,7 +711,6 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 - Tag management
 
 **Plugin Integration:**
-- Custom storage backend (OCIStorageBackend) with manifest handling
 - Token authentication disabled (PULP_TOKEN_AUTH_DISABLED=true)
 - Certificate-based access control (RHCertGuardPermission)
 - Multi-tenant container registries with domain isolation

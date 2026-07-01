@@ -31,7 +31,7 @@ prompt: |
   pulp-service extends Pulpcore with Red Hat cloud-specific features:
   - Multi-tenant authentication via X-RH-IDENTITY header
   - Domain-based org isolation (DomainOrg model)
-  - Custom S3/OCI storage backends
+  - Custom S3 storage (via pulpcore's S3Boto3Storage with CloudFront patches)
   - Content guards, vulnerability reporting, OpenTelemetry observability
   - Three-service architecture: pulp-api, pulp-content, pulp-worker
 

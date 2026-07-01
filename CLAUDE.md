@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-pulp-service is a **Django REST Framework plugin for Pulpcore** that extends the Pulp content management platform with Red Hat cloud-specific features: multi-tenant authentication (X-RH-IDENTITY), custom S3/OCI storage backends, domain-based org isolation, content guards, vulnerability reporting, and OpenTelemetry observability.
+pulp-service is a **Django REST Framework plugin for Pulpcore** that extends the Pulp content management platform with Red Hat cloud-specific features: multi-tenant authentication (X-RH-IDENTITY), S3 storage (via pulpcore's built-in backend with CloudFront patches), domain-based org isolation, content guards, vulnerability reporting, and OpenTelemetry observability.
 
 The plugin is registered via the `pulpcore.plugin` entry point in `pulp_service/setup.py`.
 
 ## Repository Layout
 
 - `pulp_service/` — The Python package (all source code lives here)
-  - `pulp_service/app/` — Core Django app: models, viewsets, serializers, middleware, auth, storage, tasks
+  - `pulp_service/app/` — Core Django app: models, viewsets, serializers, middleware, auth, tasks
   - `pulp_service/tests/functional/` — Functional tests (pytest + pytest-django)
   - `setup.py`, `requirements.txt` — Package definition and dependencies
 - `images/` — Container build assets (startup scripts for pulp-api, pulp-content, pulp-worker; WSGI middleware)
@@ -66,7 +66,7 @@ WSGI middleware (`images/assets/log_middleware.py`) → Django middleware stack 
 - **Authentication**: `X-RH-IDENTITY` header (base64-encoded JSON) → custom auth classes in `app/authentication.py`
 - **Multi-tenancy**: `DomainOrg` model maps org_id → Pulp domain; domain-based routing for content APIs
 - **Context variables**: `ContextVar` instances in `app/middleware.py` carry request-scoped data (org_id, user_id, request_path) across layers
-- **Storage backends**: `AIPCCStorageBackend` (S3) and `OCIStorageBackend` (OCI/ORAS) in `app/storage.py`
+- **Storage**: S3 via pulpcore's built-in `S3Boto3Storage` with CloudFront patches; domain creation clones settings from `template-domain-s3`
 - **Tasks**: Background work in `app/tasks/` (package scanning, domain metrics, RDS testing)
 
 **Upstream plugins this extends**: pulpcore, pulp-python, pulp-container, pulp-rpm, pulp-npm, pulp-maven, pulp-hugging-face.
@@ -80,7 +80,7 @@ Uses **towncrier**. For any non-trivial change, create a file in `CHANGES/` name
 - **Ruff** formatter and linter, line length 120, targeting py311
 - 23 lint rule categories as "harness sensors" for agentic development (including security via flake8-bandit)
 - Complexity thresholds: max-complexity=10, max-branches=10, max-args=6, max-statements=40
-- Per-file exceptions: viewsets.py and rds_connection_tests.py (complexity rules), storage.py (hardcoded temp paths), tests (argument count, print, unused args, security), migrations (excluded entirely)
+- Per-file exceptions: viewsets.py and rds_connection_tests.py (complexity rules), tests (argument count, print, unused args, security), migrations (excluded entirely)
 
 ## Code Gotchas
 
