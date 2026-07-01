@@ -12,25 +12,24 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.30.3              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
-| `oras/`          | [oras-project/oras-py](https://github.com/oras-project/oras-py) | oras        | 0.2.38              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
 
 Versions are pinned in `pulp_service/requirements.txt`. Django-storages is a
 transitive dependency pinned in pulpcore's `pyproject.toml`.
 
+## Decommissioned: OCI Storage
+
+The custom OCI storage backend (`OCIStorage`, ORAS client, Quay.io blob storage) has been
+**decommissioned**. The following patches and dependencies were removed:
+
+- Patch 0010 — oras blob URL redirect support
+- Patch 0011 — OCIStorage backend registration in pulpcore
+- Patch 0028 — OCI manifest creation on publication
+- `oras` Python dependency and `pulp_service/app/storage.py`
+
+The separate `oci-storage-backup-setup` repository is unaffected.
+
 ## Patches
-
-### 0010 — Added ability to return a URL for a blob
-
-- **Package:** oras (oras-py)
-- **Files:** `oras/provider.py`
-- **Description:** Adds a `return_blob_url` parameter to the oras provider so callers can get the blob's redirect URL instead of downloading the blob content. Used by OCI storage to serve content via redirects.
-
-### 0011 — OCI storage backend changes
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/serializers/domain.py`, `pulpcore/constants.py`, `pulpcore/content/handler.py`
-- **Description:** Registers `OCIStorage` as a storage backend option, adds its domain settings serializer, and teaches the content app to redirect requests to OCI registries when a domain uses OCI storage.
 
 ### 0014 — Add Content Sources periodic telemetry task
 
@@ -49,12 +48,6 @@ transitive dependency pinned in pulpcore's `pyproject.toml`.
 - **Package:** pulp_maven
 - **Files:** `pulp_maven/app/maven_deploy_api.py`, `pulp_maven/app/urls.py`
 - **Description:** Removes the disabled authentication classes from the Maven deploy API view and re-roots the Maven API URL from `/pulp/maven/` to `/api/pulp/maven/`.
-
-### 0028 — OCI Storage create manifest
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/models/publication.py`
-- **Description:** Adds a `_create_oci_manifest` method to the Publication model that collects all artifacts from a repository version, retrieves their blob metadata from the OCI registry, builds an OCI image manifest, and uploads it.
 
 ### 0031 — Replace ResponseContentDisposition in CloudFront
 

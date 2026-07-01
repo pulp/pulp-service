@@ -92,10 +92,11 @@ Additional ContextVars in middleware.py:
 - `x_quay_auth_var` — for Quay authentication context
 - `x_task_diagnostics_var` — for task profiling diagnostics
 
-### Storage (app/storage.py)
-- `OCIStorage` (extends `BaseStorage`) — stores artifacts as OCI blobs in Quay.io via ORAS client
-- S3 via pulpcore's built-in `S3Boto3Storage` with CloudFront patches (no custom class in pulp-service)
+### Storage
+- S3 via pulpcore's built-in `S3Boto3Storage` with CloudFront patches
 - `CreateDomainView` clones storage settings from `template-domain-s3`
+
+> **Decommissioned:** The custom `OCIStorage` backend (ORAS/Quay.io) has been removed.
 
 ### Custom viewsets (app/viewsets.py)
 - `FeatureContentGuardViewSet` — subscription-feature content guards
@@ -126,6 +127,6 @@ Additional ContextVars in middleware.py:
 - Tests: `pulp_service/pulp_service/tests/functional/`
 
 ### Runtime patches (critical awareness)
-18 patches applied at Docker build time to modify pulpcore and upstream plugins.
+11 patches applied at Docker build time to modify pulpcore and upstream plugins.
 Any change touching patched areas must verify patch compatibility.
-Patches cover: OCI storage, CloudFront, registry API routing, ClamAV, attestation.
+Patches cover: CloudFront, registry API routing, ClamAV, attestation.
