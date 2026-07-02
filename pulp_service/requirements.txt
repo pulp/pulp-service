@@ -10,7 +10,7 @@ pulp-cli
 requests
 sentry-sdk
 app-common-python
-uvloop==0.21.0
+uvloop==0.22.1
 jsonschema
 memray
 pyinstrument
