@@ -1391,7 +1391,7 @@ objects:
                 --s3-access-key-id "${S3_ACCESS_KEY_ID}" \
                 --s3-secret-access-key "${S3_SECRET_ACCESS_KEY}"
 
-              if [ -n "${BACKUP_S3_ACCESS_KEY_ID:-}" ]; then
+              if [ -n "${BACKUP_S3_BUCKET_NAME:-}" ] && [ -n "${BACKUP_S3_ACCESS_KEY_ID:-}" ] && [ -n "${BACKUP_S3_SECRET_ACCESS_KEY:-}" ]; then
                 upload-parquet \
                   --source "${LOCAL_FILE}" \
                   --destination "s3://${BACKUP_S3_BUCKET_NAME}/pulp_content_maven_${TIMESTAMP}.parquet" \
