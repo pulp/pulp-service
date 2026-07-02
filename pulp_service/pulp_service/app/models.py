@@ -1,15 +1,15 @@
-import asyncio
 import json
 import logging
-import ssl
+import threading
+import time
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from datetime import UTC, datetime
 from gettext import gettext as _
 from hashlib import sha256
 
-import aiohttp
 import jq
+import requests
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField, HStoreField
 from django.db import models
@@ -54,28 +54,67 @@ class FeatureContentGuardCache(Cache):
 class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
     features = ArrayField(models.TextField())
 
+    _session_lock = threading.Lock()
+    _session = None
+
+    @classmethod
+    def _get_session(cls):
+        """
+        Returns a process-wide ``requests.Session`` configured with the client certificate.
+
+        The previous implementation built a brand new ``ssl.SSLContext`` (re-reading and
+        re-parsing the certificate off disk), a new ``aiohttp.ClientSession``, and a brand
+        new asyncio event loop (via ``asyncio.run``) on *every single content request* that
+        missed the cache. Reusing a session lets urllib3 keep a warm, pooled TLS connection
+        to the Features Service and avoids that repeated setup cost.
+        """
+        if cls._session is None:
+            with cls._session_lock:
+                if cls._session is None:
+                    session = requests.Session()
+                    session.cert = settings.FEATURE_SERVICE_API_CERT_PATH
+                    cls._session = session
+        return cls._session
+
     def _check_for_feature(self, account_id):
-        cert_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-        cert_context.load_cert_chain(certfile=settings.FEATURE_SERVICE_API_CERT_PATH)
-
-        account_id_query_param = f"accountId={account_id}"
-        features_query_param = "&".join(f"features={feature}" for feature in self.features)
-        feature_service_api_url = f"{settings.FEATURE_SERVICE_API_URL}?{account_id_query_param}&{features_query_param}"
-
-        async def fetch_feature():
-            async with aiohttp.ClientSession() as session:
-                async with session.get(feature_service_api_url, ssl=cert_context, raise_for_status=True) as response:
-                    return await response.json()
+        session = self._get_session()
+        params = [("accountId", account_id), *(("features", feature) for feature in self.features)]
+        # permit() runs synchronously on the content app's shared sync-to-async worker thread
+        # (pulpcore.content.handler.Handler._permit is invoked via sync_to_async). A slow or
+        # hanging call here doesn't just delay this request -- it can stall every other
+        # request being served through that same thread, so this must be bounded.
+        #
+        # This must be a real Python tuple built here, not a settings value passed through
+        # as-is: `requests` only splits a *tuple* into (connect, read) timeouts, and Pulp's
+        # settings pipeline can silently turn a tuple default into a list, which `requests`
+        # then treats as a single (invalid) timeout value and raises a ValueError.
+        timeout = (settings.FEATURE_SERVICE_API_CONNECT_TIMEOUT, settings.FEATURE_SERVICE_API_READ_TIMEOUT)
 
         try:
             _logger.info("[%s] Making a request to feature service API ...", datetime.now(tz=UTC))
-            response = asyncio.run(fetch_feature())
+            response = session.get(
+                settings.FEATURE_SERVICE_API_URL,
+                params=params,
+                timeout=timeout,
+            )
+            response.raise_for_status()
             _logger.info("[%s] Got a response from feature service API!", datetime.now(tz=UTC))
-        except aiohttp.ClientResponseError as err:
-            if err.status == 400:
-                _logger.exception("Failed to request information for a user. BadRequest. URL: %s", err.request_info.url)
 
-            if err.status == 403:
+            features_available = {feature["name"] for feature in response.json()["features"]}
+            return features_available == set(self.features)
+        except requests.Timeout as err:
+            _logger.warning(
+                "Failed to fetch the Subscription feature information for a user. "
+                "The Features Service API did not respond within %s seconds.",
+                timeout,
+            )
+            raise PermissionError(_("Access denied.")) from err
+        except requests.HTTPError as err:
+            status_code = err.response.status_code if err.response is not None else None
+            if status_code == 400:
+                _logger.exception("Failed to request information for a user. BadRequest. URL: %s", err.request.url)
+
+            if status_code == 403:
                 _logger.exception(
                     "Failed to request information for a user. "
                     "Permission Denied. Verify if the certificate is still valid."
@@ -83,9 +122,47 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
 
             _logger.warning(_("Failed to fetch the Subscription feature information for a user."))
             raise PermissionError(_("Access denied.")) from err
+        except requests.RequestException as err:
+            _logger.warning("Failed to reach the Features Service API: %s", err)
+            raise PermissionError(_("Access denied.")) from err
+        except Exception as err:
+            # `permit()` is only ever allowed to return normally or raise `PermissionError`
+            # (pulpcore.content.handler.Handler.auth_cached assumes exactly that contract).
+            # Anything else -- a bug here, a misconfigured setting, an unexpected response
+            # shape -- would otherwise escape as-is and crash with a confusing, unrelated
+            # `UnboundLocalError` in pulpcore's guard-caching `finally` block, masking the
+            # real error entirely. Fail closed and log loudly instead.
+            _logger.exception("Unexpected error while checking the Features Service.")
+            raise PermissionError(_("Access denied.")) from err
 
-        features_available = {feature["name"] for feature in response["features"]}
-        return features_available == set(self.features)
+    @staticmethod
+    def _get_cached_result(feature_cache, key):
+        """
+        Returns the cached True/False result for `key`, or None if there is no live entry.
+
+        `Cache.set`'s `expires` argument calls Redis' `EXPIRE` on the *entire* hash the
+        entry lives under, not on the individual field (Redis hash fields don't carry their
+        own TTL). Every account sharing `FeatureContentGuardCache`'s single base key would
+        therefore have its cached result's lifetime reset by any *other* account's write,
+        which can prematurely evict still-valid entries. Instead, the expiration is embedded
+        in the cached value itself and validated on read here, matching the pattern
+        `pulpcore.cache.AsyncContentCache` already uses for the same reason.
+        """
+        raw = feature_cache.get(key)
+        if not raw:
+            return None
+        try:
+            entry = json.loads(raw)
+            if entry["expires_at"] < time.time():
+                return None
+            return entry["allowed"]
+        except (TypeError, ValueError, KeyError):
+            return None
+
+    @staticmethod
+    def _set_cached_result(feature_cache, key, allowed):
+        entry = {"allowed": allowed, "expires_at": time.time() + feature_cache.default_expires_ttl}
+        feature_cache.set(key, json.dumps(entry), expires=feature_cache.default_expires_ttl)
 
     def permit(self, request):
         try:
@@ -113,31 +190,21 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             _logger.exception("Access not allowed - Invalid JSON or Path not found.")
             raise PermissionError(_("Access denied.")) from exc
 
-        try:
-            cache_key = f"{header_value}-{','.join(self.features)}"
-            cache_key_digest = sha256(bytes(cache_key, "utf8")).hexdigest()
-            feature_cache = FeatureContentGuardCache()
-            account_allowed = feature_cache.get(cache_key_digest)
+        cache_key = f"{header_value}-{','.join(self.features)}"
+        cache_key_digest = sha256(bytes(cache_key, "utf8")).hexdigest()
+        feature_cache = FeatureContentGuardCache()
+        account_allowed = self._get_cached_result(feature_cache, cache_key_digest)
 
-            if not account_allowed:
-                account_allowed = self._check_for_feature(header_value)
-                serialized_account_allowed = json.dumps(account_allowed)
-                feature_cache.set(
-                    cache_key_digest,
-                    serialized_account_allowed,
-                    expires=feature_cache.default_expires_ttl,
-                )
+        if account_allowed is None:
+            _logger.debug("Feature cache MISS for key %s", cache_key_digest)
+            account_allowed = self._check_for_feature(header_value)
+            self._set_cached_result(feature_cache, cache_key_digest, account_allowed)
+        else:
+            _logger.debug("Feature cache HIT for key %s", cache_key_digest)
 
-            if isinstance(account_allowed, bytes):
-                account_allowed = json.loads(account_allowed)
-
-            if not account_allowed:
-                _logger.warning("Access not allowed - Features not available for the user.")
-                raise PermissionError(_("Access denied."))
-
-        except aiohttp.ClientResponseError as exc:
-            _logger.warning("Access not allowed - Failed to check for features.")
-            raise PermissionError(_("Access denied.")) from exc
+        if not account_allowed:
+            _logger.warning("Access not allowed - Features not available for the user.")
+            raise PermissionError(_("Access denied."))
 
         return
 
