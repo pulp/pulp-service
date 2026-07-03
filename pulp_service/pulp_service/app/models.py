@@ -164,6 +164,30 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         entry = {"allowed": allowed, "expires_at": time.time() + feature_cache.default_expires_ttl}
         feature_cache.set(key, json.dumps(entry), expires=feature_cache.default_expires_ttl)
 
+    def check_feature(self, account_id):
+        """
+        Returns whether `account_id` has all of `self.features`, per the Features Service.
+
+        Reuses the same `FeatureContentGuardCache` cache key scheme as `permit()` so that
+        callers checking the same (account_id, features) pair -- e.g. `DomainBasedPermission`
+        checking the `lightwell-network` feature -- share cache entries with this guard and
+        avoid redundant Features Service calls. May raise `PermissionError` if the Features
+        Service call fails (see `_check_for_feature`).
+        """
+        cache_key = f"{account_id}-{','.join(self.features)}"
+        cache_key_digest = sha256(bytes(cache_key, "utf8")).hexdigest()
+        feature_cache = FeatureContentGuardCache()
+        account_allowed = self._get_cached_result(feature_cache, cache_key_digest)
+
+        if account_allowed is None:
+            _logger.debug("Feature cache MISS for key %s", cache_key_digest)
+            account_allowed = self._check_for_feature(account_id)
+            self._set_cached_result(feature_cache, cache_key_digest, account_allowed)
+        else:
+            _logger.debug("Feature cache HIT for key %s", cache_key_digest)
+
+        return account_allowed
+
     def permit(self, request):
         try:
             header_content = request.headers[self.header_name]
@@ -190,17 +214,7 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             _logger.exception("Access not allowed - Invalid JSON or Path not found.")
             raise PermissionError(_("Access denied.")) from exc
 
-        cache_key = f"{header_value}-{','.join(self.features)}"
-        cache_key_digest = sha256(bytes(cache_key, "utf8")).hexdigest()
-        feature_cache = FeatureContentGuardCache()
-        account_allowed = self._get_cached_result(feature_cache, cache_key_digest)
-
-        if account_allowed is None:
-            _logger.debug("Feature cache MISS for key %s", cache_key_digest)
-            account_allowed = self._check_for_feature(header_value)
-            self._set_cached_result(feature_cache, cache_key_digest, account_allowed)
-        else:
-            _logger.debug("Feature cache HIT for key %s", cache_key_digest)
+        account_allowed = self.check_feature(header_value)
 
         if not account_allowed:
             _logger.warning("Access not allowed - Features not available for the user.")

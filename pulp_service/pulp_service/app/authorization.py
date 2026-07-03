@@ -11,7 +11,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 
-from pulp_service.app.models import DomainOrg
+from pulp_service.app.models import DomainOrg, FeatureContentGuard
 
 _logger = logging.getLogger(__name__)
 org_id_var = ContextVar("org_id")
@@ -19,6 +19,14 @@ org_id_json_path = jq.compile(".identity.internal.org_id")
 
 user_id_var = ContextVar("user_id")
 group_var = ContextVar("group")
+
+# The domain whose PyPI views require the lightwell-network feature entitlement (see
+# has_permission()). Other domains' PyPI views keep the pre-existing "any SAFE_METHOD
+# request is allowed" behavior.
+LIGHTWELL_DOMAIN_NAME = "lightwell"
+# Feature entitlement required to read the lightwell domain's PyPI views (simple API, etc.)
+# for orgs that don't have a DomainOrg association with the domain. See has_permission().
+LIGHTWELL_NETWORK_FEATURE = "lightwell-network"
 
 
 class DomainBasedPermission(BasePermission):
@@ -41,22 +49,75 @@ class DomainBasedPermission(BasePermission):
 
         return DomainOrg.objects.filter(query).exists()
 
-    def has_permission(self, request, view):
+    def _has_pypi_read_access(self, request, domain):
+        """
+        Checks SAFE_METHOD access to the lightwell domain's PyPI views.
+
+        Users with a DomainOrg association bypass the feature check entirely (existing
+        permission model). Everyone else -- including unauthenticated users -- must belong
+        to an org that has the lightwell-network feature entitlement.
+        """
+        user = request.user
+        domain_pk = domain.pk if domain is not None else get_domain_pk()
+
+        decoded_header_content = self.get_decoded_identity_header(request)
+        org_id = self.get_org_id(decoded_header_content)
+
+        if user.is_authenticated and self._has_domain_access(domain_pk, org_id, user):
+            return True
+
+        if org_id is None:
+            return False
+
+        return self._has_lightwell_network_feature(org_id)
+
+    def _has_lightwell_network_feature(self, org_id):
+        """
+        Checks (with caching) whether `org_id` has the lightwell-network feature, via the
+        same cache/lookup mechanism as FeatureContentGuard.
+        """
+        guard = FeatureContentGuard(features=[LIGHTWELL_NETWORK_FEATURE], pulp_domain=None)
+        try:
+            return guard.check_feature(org_id)
+        except PermissionError:
+            return False
+
+    def _check_pypi_safe_method_access(self, request, view, domain):
+        """
+        Returns True/False for a SAFE_METHOD request to a PyPI `view`, or None if `view`
+        isn't a PyPI view (the caller should then fall through to the standard
+        DomainOrg-based checks below).
+
+        Only the lightwell domain's PyPI views require a DomainOrg association or the
+        lightwell-network feature entitlement. Other domains' PyPI views keep the
+        pre-existing "any SAFE_METHOD request is allowed" behavior; non-PyPI endpoints
+        (Maven, repository listing, Pulp REST API, ...) never hit this method.
+        """
+        from pulp_python.app.pypi.views import PyPIMixin
+
+        if not isinstance(view, PyPIMixin):
+            return None
+
+        if domain and domain.name == LIGHTWELL_DOMAIN_NAME:
+            return self._has_pypi_read_access(request, domain)
+        return True
+
+    def has_permission(self, request, view):  # noqa: PLR0911
         # Admins have all permissions
         if request.user.is_superuser:
             return True
 
         user = request.user
 
-        # Allow safe requests on PyPI views and public domains for all users
+        # Allow safe requests on public domains for all users, authenticated or not
         if request.method in SAFE_METHODS:
-            from pulp_python.app.pypi.views import PyPIMixin
-
-            if isinstance(view, PyPIMixin):
-                return True
             domain = getattr(request, "pulp_domain", None)
-            if domain and "public-" in domain.name:
+            if domain and domain.name.startswith("public-"):
                 return True
+
+            pypi_access = self._check_pypi_safe_method_access(request, view, domain)
+            if pypi_access is not None:
+                return pypi_access
 
         if not user.is_authenticated:
             return False
