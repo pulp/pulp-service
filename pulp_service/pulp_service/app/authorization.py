@@ -71,15 +71,12 @@ class DomainBasedPermission(BasePermission):
         org_id = self.get_org_id(decoded_header_content)
 
         if user.is_authenticated and self._has_domain_access(domain_pk, org_id, user):
-            _logger.info(
-                "lightwell PyPI access GRANTED via DomainOrg: user=%s org_id=%s", user, org_id
-            )
+            _logger.info("lightwell PyPI access GRANTED via DomainOrg: user=%s org_id=%s", user, org_id)
             return True
 
         if org_id is None:
             _logger.info(
-                "lightwell PyPI access DENIED: no org_id in identity header and no DomainOrg "
-                "match (user=%s)",
+                "lightwell PyPI access DENIED: no org_id in identity header and no DomainOrg match (user=%s)",
                 user,
             )
             return False

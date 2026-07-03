@@ -266,8 +266,7 @@ class TestLightwellPyPIAccessLogging:
             assert permission.has_permission(request, view) is True
 
         assert any(
-            "GRANTED via DomainOrg" in record.message and "1979710" in record.message
-            for record in caplog.records
+            "GRANTED via DomainOrg" in record.message and "1979710" in record.message for record in caplog.records
         )
 
     @patch("pulp_service.app.authorization.DomainOrg.objects")
