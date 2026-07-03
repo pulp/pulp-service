@@ -159,7 +159,7 @@ def test_write_operations_unaffected_by_feature_check(configure_lightwell_pypi_d
     _, pypi_url, _, _ = configure_lightwell_pypi_distribution()
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-write-user")}
 
-    response = requests.post(pypi_url, headers=headers, data={})
+    response = requests.post(pypi_url, headers=headers, data={}, timeout=30)
 
     assert response.status_code in (401, 403)
 
