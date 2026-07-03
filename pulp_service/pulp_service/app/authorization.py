@@ -27,6 +27,13 @@ LIGHTWELL_DOMAIN_NAME = "lightwell"
 # Feature entitlement required to read the lightwell domain's PyPI views (simple API, etc.)
 # for orgs that don't have a DomainOrg association with the domain. See has_permission().
 LIGHTWELL_NETWORK_FEATURE = "lightwell-network"
+# Hardcoded group whose members get read-only (SAFE_METHODS) access to the lightwell
+# domain's non-PyPI endpoints (repository/content/artifact listing, Pulp REST API, Maven
+# content API), independent of any DomainOrg association. This is a plain Group -- there is
+# no DomainOrg row backing this access, unlike the normal group-based access model. It does
+# NOT grant write access, and it does NOT apply to PyPI views, which are still gated
+# exclusively by the lightwell-network feature check (see _check_pypi_safe_method_access()).
+LIGHTWELL_READONLY_GROUP_NAME = "Lightwell-ReadOnly"
 
 
 class DomainBasedPermission(BasePermission):
@@ -64,12 +71,25 @@ class DomainBasedPermission(BasePermission):
         org_id = self.get_org_id(decoded_header_content)
 
         if user.is_authenticated and self._has_domain_access(domain_pk, org_id, user):
+            _logger.info("lightwell PyPI access GRANTED via DomainOrg: user=%s org_id=%s", user, org_id)
             return True
 
         if org_id is None:
+            _logger.info(
+                "lightwell PyPI access DENIED: no org_id in identity header and no DomainOrg match (user=%s)",
+                user,
+            )
             return False
 
-        return self._has_lightwell_network_feature(org_id)
+        allowed = self._has_lightwell_network_feature(org_id)
+        _logger.info(
+            "lightwell PyPI access %s via %s feature check: org_id=%s user=%s",
+            "GRANTED" if allowed else "DENIED",
+            LIGHTWELL_NETWORK_FEATURE,
+            org_id,
+            user,
+        )
+        return allowed
 
     def _has_lightwell_network_feature(self, org_id):
         """
@@ -81,6 +101,17 @@ class DomainBasedPermission(BasePermission):
             return guard.check_feature(org_id)
         except PermissionError:
             return False
+
+    def _has_lightwell_readonly_group_access(self, user):
+        """
+        Members of the hardcoded LIGHTWELL_READONLY_GROUP_NAME group get read-only
+        (SAFE_METHODS) access to the lightwell domain's non-PyPI endpoints, independent of
+        any DomainOrg association. Unlike normal groups (linked to a domain via DomainOrg,
+        which grant unrestricted read+write access), this is a standalone check based purely
+        on group membership + the hardcoded lightwell domain name -- see has_permission() and
+        scope_queryset() for where this is applied.
+        """
+        return user.is_authenticated and user.groups.filter(name=LIGHTWELL_READONLY_GROUP_NAME).exists()
 
     def _check_pypi_safe_method_access(self, request, view, domain):
         """
@@ -102,6 +133,24 @@ class DomainBasedPermission(BasePermission):
             return self._has_pypi_read_access(request, domain)
         return True
 
+    def _check_safe_method_access(self, request, view, domain, user):
+        """
+        Returns True/False for a SAFE_METHOD request, or None if none of the SAFE_METHOD
+        shortcuts (public domains, PyPI views, the lightwell read-only group) apply -- the
+        caller should then fall through to the standard DomainOrg-based checks below.
+        """
+        if domain and domain.name.startswith("public-"):
+            return True
+
+        pypi_access = self._check_pypi_safe_method_access(request, view, domain)
+        if pypi_access is not None:
+            return pypi_access
+
+        if domain and domain.name == LIGHTWELL_DOMAIN_NAME and self._has_lightwell_readonly_group_access(user):
+            return True
+
+        return None
+
     def has_permission(self, request, view):  # noqa: PLR0911
         # Admins have all permissions
         if request.user.is_superuser:
@@ -109,15 +158,11 @@ class DomainBasedPermission(BasePermission):
 
         user = request.user
 
-        # Allow safe requests on public domains for all users, authenticated or not
         if request.method in SAFE_METHODS:
             domain = getattr(request, "pulp_domain", None)
-            if domain and domain.name.startswith("public-"):
-                return True
-
-            pypi_access = self._check_pypi_safe_method_access(request, view, domain)
-            if pypi_access is not None:
-                return pypi_access
+            safe_method_access = self._check_safe_method_access(request, view, domain, user)
+            if safe_method_access is not None:
+                return safe_method_access
 
         if not user.is_authenticated:
             return False
@@ -218,5 +263,8 @@ class DomainBasedPermission(BasePermission):
 
         if org_id is not None:
             query |= Q(domain_orgs__org_id=org_id)
+
+        if self._has_lightwell_readonly_group_access(user):
+            query |= Q(name=LIGHTWELL_DOMAIN_NAME)
 
         return qs.filter(query).distinct()

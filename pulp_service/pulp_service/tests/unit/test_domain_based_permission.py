@@ -42,11 +42,12 @@ def _make_anonymous_user():
     return user
 
 
-def _make_authenticated_user():
+def _make_authenticated_user(in_readonly_group=False):
     user = MagicMock()
     user.is_authenticated = True
     user.is_superuser = False
     user.groups.values_list.return_value = []
+    user.groups.filter.return_value.exists.return_value = in_readonly_group
     return user
 
 
@@ -241,6 +242,151 @@ class TestLightwellDomainPyPIFeatureCheck:
         domain = _make_domain("lightwell")
         request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
         view = _make_pypi_view()
+
+        assert permission.has_permission(request, view) is False
+
+
+class TestLightwellPyPIAccessLogging:
+    """
+    Verify _has_pypi_read_access logs its allow/deny decision and the reason for it (DomainOrg
+    match, missing org_id, or feature check outcome), so incidents can be diagnosed from logs
+    alone -- see the discussion that prompted this in the "brand new user can read lightwell
+    pypi" investigation.
+    """
+
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_domain_org_grant_is_logged(self, mock_domain_org, caplog):
+        mock_domain_org.filter.return_value.exists.return_value = True
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
+        view = _make_pypi_view()
+
+        with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
+            assert permission.has_permission(request, view) is True
+
+        assert any(
+            "GRANTED via DomainOrg" in record.message and "1979710" in record.message for record in caplog.records
+        )
+
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_missing_org_id_denial_is_logged(self, mock_domain_org, caplog):
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain)
+        view = _make_pypi_view()
+
+        with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
+            assert permission.has_permission(request, view) is False
+
+        assert any("DENIED: no org_id" in record.message for record in caplog.records)
+
+    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_feature_check_outcome_is_logged(self, mock_domain_org, mock_feature_check, caplog):
+        mock_domain_org.filter.return_value.exists.return_value = False
+        mock_feature_check.return_value = True
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="20368420")
+        view = _make_pypi_view()
+
+        with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
+            assert permission.has_permission(request, view) is True
+
+        assert any(
+            "GRANTED via lightwell-network feature check" in record.message and "20368420" in record.message
+            for record in caplog.records
+        )
+
+    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_feature_check_denial_is_logged(self, mock_domain_org, mock_feature_check, caplog):
+        mock_domain_org.filter.return_value.exists.return_value = False
+        mock_feature_check.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
+        view = _make_pypi_view()
+
+        with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
+            assert permission.has_permission(request, view) is False
+
+        assert any(
+            "DENIED via lightwell-network feature check" in record.message and "1979710" in record.message
+            for record in caplog.records
+        )
+
+
+class TestLightwellReadOnlyGroupAccess:
+    """Verify the LIGHTWELL_READONLY_GROUP_NAME group grants read-only access to the
+    lightwell domain's non-PyPI endpoints, independent of any DomainOrg association, and
+    that it never grants write access or bypasses the PyPI feature check."""
+
+    def test_readonly_group_member_get_non_pypi_lightwell_allowed(self):
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(method="GET", user=_make_authenticated_user(in_readonly_group=True), domain=domain)
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is True
+
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_non_member_get_non_pypi_lightwell_denied(self, mock_domain_org, mock_get_domain_pk):
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(method="GET", user=_make_authenticated_user(in_readonly_group=False), domain=domain)
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_readonly_group_member_write_non_pypi_lightwell_denied(self, mock_domain_org, mock_get_domain_pk):
+        """Group membership only grants SAFE_METHOD access; write requests must still go
+        through the standard DomainOrg-based checks."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="POST",
+            user=_make_authenticated_user(in_readonly_group=True),
+            domain=domain,
+            view_name="repositories-list",
+        )
+
+        assert permission.has_permission(request, MagicMock()) is False
+
+    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature", return_value=False)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_readonly_group_member_pypi_view_still_requires_feature(self, mock_domain_org, mock_feature_check):
+        """Group membership must not bypass the lightwell-network feature check on PyPI
+        views -- a member with no feature entitlement and no DomainOrg association is
+        still denied."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET", user=_make_authenticated_user(in_readonly_group=True), domain=domain, org_id="1979710"
+        )
+        view = _make_pypi_view()
+
+        assert permission.has_permission(request, view) is False
+        mock_feature_check.assert_called_once_with("1979710")
+
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_readonly_group_membership_no_effect_on_other_domains(self, mock_domain_org, mock_get_domain_pk):
+        """Membership in the lightwell read-only group grants no access to any domain other
+        than lightwell."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("some-other-domain")
+        request = _make_request(method="GET", user=_make_authenticated_user(in_readonly_group=True), domain=domain)
+        view = _make_regular_view()
 
         assert permission.has_permission(request, view) is False
 
