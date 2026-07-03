@@ -5,6 +5,7 @@ from functools import wraps
 from django.db import connections
 
 from pulpcore.app.models import TaskSchedule
+from pulpcore.plugin.models import Domain
 
 
 def content_sources_periodic_telemetry():
@@ -65,6 +66,14 @@ def lightwell_sync_schedule():
     task_name = "pulp_service.app.tasks.lightwell_period_sync.python_repository_sync"
     dispatch_interval = timedelta(days=1)
     name = "Sync Lightwell repository with Trusted Libraries content"
+    try:
+        lightwell_domain = Domain.objects.get(name="lightwell")
+    except Domain.DoesNotExist:
+        return
+    # Remove any stale schedule created in the default domain before patch 0059 added domain support
+    TaskSchedule.objects.filter(name=name).exclude(pulp_domain=lightwell_domain).delete()
     TaskSchedule.objects.update_or_create(
-        name=name, defaults={"task_name": task_name, "dispatch_interval": dispatch_interval}
+        name=name,
+        pulp_domain=lightwell_domain,
+        defaults={"task_name": task_name, "dispatch_interval": dispatch_interval},
     )
