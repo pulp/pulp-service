@@ -38,6 +38,13 @@ CONTENT_GUARD_FEATURES = ["OPENSHIFT-OCP-x86_64", "RHEL-HA-x86_64"]
 CONTENT_GUARD_FEATURES_NOT_SUBSCRIBED = ["rhods"]
 CONTENT_GUARD_FILTER = ".identity.org_id"
 
+# LIGHTWELL-NETWORK FEATURE CONSTANTS
+# Used to test the lightwell-network feature check enforced by DomainBasedPermission on the
+# "lightwell" domain's PyPI views. These are real staging Features Service accounts.
+LIGHTWELL_NETWORK_FEATURE = "lightwell-network"
+LIGHTWELL_ENTITLED_ORG_ID = "20368420"  # has the lightwell-network feature
+LIGHTWELL_NOT_ENTITLED_ORG_ID = "1979710"  # does not have the lightwell-network feature
+
 # VULNERABILITY REPORT CONSTANTS
 # NPM
 NPM_REMOTE_REGISTRY = "https://registry.npmjs.org/"

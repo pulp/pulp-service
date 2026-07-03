@@ -120,7 +120,10 @@ def test_get_requests_without_auth_to_simple_api(
     python_bindings,
     gen_object_with_cleanup,
 ):
-    """Test that all domains allow GET requests without authentication but block other methods."""
+    """Test that all domains (other than "lightwell") allow GET requests without
+    authentication but block other methods. The "lightwell" domain is excluded from this
+    behavior -- see test_lightwell_feature_permission.py.
+    """
     # Create a user with credentials to set up the domain
     setup_user = {
         "identity": {"org_id": 33333, "internal": {"org_id": 33333}, "user": {"username": "publicdomainuser"}}

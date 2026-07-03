@@ -256,3 +256,81 @@ class TestFeatureContentGuardFeatureServiceCall:
 
         assert first is second
         mock_session_cls.assert_called_once()
+
+
+class TestFeatureContentGuardCheckFeature:
+    """Unit tests for `check_feature()`, the caching entry point reused by `permit()` and by
+    `DomainBasedPermission` (for the lightwell-network feature check on PyPI views)."""
+
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_cache_hit_skips_feature_service_call(self, mock_get, mock_set):
+        entry = json.dumps({"allowed": True, "expires_at": time.time() + 3600})
+        mock_get.return_value = entry.encode()
+        guard = _make_guard()
+        guard._get_session = MagicMock()
+
+        assert guard.check_feature(ACCOUNT_ID) is True
+
+        guard._get_session.assert_not_called()
+        mock_set.assert_not_called()
+
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_cache_miss_calls_feature_service_and_populates_cache(self, mock_get, mock_set):
+        mock_get.return_value = None
+        guard = _make_guard()
+        session = MagicMock()
+        session.get.return_value = _feature_response(FEATURES)
+        guard._get_session = MagicMock(return_value=session)
+
+        assert guard.check_feature(ACCOUNT_ID) is True
+
+        session.get.assert_called_once()
+        mock_set.assert_called_once()
+
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_account_without_feature_returns_false_without_raising(self, mock_get, mock_set):
+        mock_get.return_value = None
+        guard = _make_guard()
+        session = MagicMock()
+        session.get.return_value = _feature_response(["some-other-feature"])
+        guard._get_session = MagicMock(return_value=session)
+
+        assert guard.check_feature(ACCOUNT_ID) is False
+
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_feature_service_failure_raises_permission_error(self, mock_get, mock_set):
+        mock_get.return_value = None
+        guard = _make_guard()
+        session = MagicMock()
+        session.get.side_effect = requests.Timeout("Features Service did not respond")
+        guard._get_session = MagicMock(return_value=session)
+
+        with pytest.raises(PermissionError):
+            guard.check_feature(ACCOUNT_ID)
+
+        mock_set.assert_not_called()
+
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_permit_and_check_feature_share_the_same_cache_key(self, mock_get, mock_set):
+        """`permit()` and `check_feature()` must compute identical cache keys for the same
+        (account_id, features) pair, so a lookup made through one path is reused by the
+        other and the Features Service isn't hit twice for the same account/feature."""
+        mock_get.return_value = None
+        guard = _make_guard()
+        session = MagicMock()
+        session.get.return_value = _feature_response(FEATURES)
+        guard._get_session = MagicMock(return_value=session)
+
+        guard.permit(_make_request(account_id=ACCOUNT_ID))
+        permit_cache_key = mock_set.call_args.args[0]
+
+        mock_set.reset_mock()
+        assert guard.check_feature(ACCOUNT_ID) is True
+        check_feature_cache_key = mock_set.call_args.args[0]
+
+        assert permit_cache_key == check_feature_cache_key
