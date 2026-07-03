@@ -191,7 +191,7 @@ def test_readonly_group_member_pypi_still_requires_feature(configure_lightwell_d
 
 
 def test_readonly_group_member_denied_on_other_domains(
-    pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup, gen_readonly_group_member, bindings_cfg
+    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_readonly_group_member, bindings_cfg
 ):
     """Membership in the lightwell read-only group grants no access to domains other than
     lightwell."""
