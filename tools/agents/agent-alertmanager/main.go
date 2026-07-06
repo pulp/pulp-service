@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	defaultModel     = "claude-sonnet-4-6"
+	defaultModel     = "claude-sonnet-5"
 	defaultQuestion  = "analyze all firing Pulp alerts and assess their severity and impact"
 	defaultCooldown  = "30m"
 	defaultCachePath = "/tmp/agent-alertmanager-cache.json"
@@ -43,6 +43,7 @@ const (
 
 var supportedModels = map[string]bool{
 	"claude-sonnet-4-6": true,
+	"claude-sonnet-5":   true,
 	"claude-opus-4-6":   true,
 	"gemini-2.5-pro":    true,
 }
@@ -291,6 +292,8 @@ func run() error {
 			Model:     *modelFlag,
 			ProjectID: authConfig.ProjectID,
 			Region:    authConfig.Region,
+			APIKey:    authConfig.APIKey,
+			BaseURL:   authConfig.BaseURL,
 		}
 	} else {
 		model = models.Gemini{
