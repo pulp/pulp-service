@@ -6,7 +6,7 @@ description: |
 
 executable:
   url: https://github.com/pulp/pulp-service/releases/download/agent-alertmanager-20260706-0f236fc/agent-alertmanager
-  args: ["--model", "claude-sonnet-4-6"]
+  args: ["--model", "claude-sonnet-5"]
   env:
     JIRA_URL: "https://redhat.atlassian.net/"
 
