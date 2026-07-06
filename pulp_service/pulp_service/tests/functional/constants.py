@@ -43,7 +43,7 @@ CONTENT_GUARD_FILTER = ".identity.org_id"
 # "lightwell" domain's PyPI views. These are real staging Features Service accounts.
 LIGHTWELL_NETWORK_FEATURE = "lightwell-network"
 LIGHTWELL_ENTITLED_ORG_ID = "20368420"  # has the lightwell-network feature
-LIGHTWELL_NOT_ENTITLED_ORG_ID = "1979710"  # does not have the lightwell-network feature
+LIGHTWELL_NOT_ENTITLED_ORG_ID = "11111111"  # does not have the lightwell-network feature
 
 # VULNERABILITY REPORT CONSTANTS
 # NPM

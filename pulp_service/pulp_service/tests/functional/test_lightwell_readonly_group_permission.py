@@ -133,7 +133,12 @@ def gen_readonly_group_member(pulpcore_bindings, gen_object_with_cleanup, lightw
         combined_username = _combined_username(GROUP_MEMBER_ORG_ID, username)
         gen_object_with_cleanup(
             pulpcore_bindings.UsersApi,
-            {"username": combined_username, "groups": [lightwell_readonly_group.pulp_href]},
+            {"username": combined_username},
+        )
+        gen_object_with_cleanup(
+            pulpcore_bindings.GroupsUsersApi,
+            group_href=lightwell_readonly_group.pulp_href,
+            group_user={"username": combined_username},
         )
         return _identity_header(GROUP_MEMBER_ORG_ID, username)
 
@@ -219,16 +224,16 @@ def test_readonly_group_member_denied_on_other_domains(
 
 
 def test_readonly_group_member_sees_lightwell_domain_in_listing(
-    configure_lightwell_domain, gen_readonly_group_member, bindings_cfg
+    configure_lightwell_domain, gen_readonly_group_member, pulpcore_bindings, anonymous_user
 ):
     """The lightwell domain shows up in GET /domains/ for read-only group members, via
     DomainBasedPermission.scope_queryset()."""
     del configure_lightwell_domain  # ensure the "lightwell" domain exists
-    headers = {"x-rh-identity": gen_readonly_group_member("domain-list")}
-    domains_url = urljoin(bindings_cfg.host, "/api/pulp/api/v3/domains/")
+    member_header = gen_readonly_group_member("domain-list")
 
-    response = requests.get(domains_url, headers=headers, timeout=30)
+    with anonymous_user:
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = member_header
+        response = pulpcore_bindings.DomainsApi.list()
 
-    assert response.status_code == 200
-    domain_names = {domain["name"] for domain in response.json()["results"]}
+    domain_names = {domain.name for domain in response.results}
     assert LIGHTWELL_DOMAIN_NAME in domain_names
