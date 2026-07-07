@@ -15,4 +15,4 @@ jsonschema
 memray
 pyinstrument
 django-hijack==3.7.4
-pycares>=4.0.0,<5.0
+pycares>=5.0.1,<5.1
