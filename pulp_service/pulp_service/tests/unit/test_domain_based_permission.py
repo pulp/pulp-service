@@ -535,3 +535,32 @@ class TestContentGuardCastFailure:
 
         assert permission.has_permission(request, view) is True
         guard.cast.assert_not_called()
+
+
+class TestPermitUnexpectedError:
+    """Verify that unexpected errors from casted_guard.permit() fail closed instead of raising 500s."""
+
+    def test_permit_unexpected_error_fails_closed(self):
+        """If permit() raises something other than PermissionError, deny access."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        guard.cast.return_value.permit.side_effect = RuntimeError("unexpected guard failure")
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
+
+        assert permission.has_permission(request, view) is False
+
+    def test_permit_unexpected_error_is_logged(self, caplog):
+        """Unexpected permit() errors are logged with exception details."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        guard.cast.return_value.permit.side_effect = RuntimeError("unexpected guard failure")
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
+
+        with caplog.at_level("ERROR", logger="pulp_service.app.authorization"):
+            permission.has_permission(request, view)
+
+        assert any("Unexpected error" in r.message and "guard permit" in r.message for r in caplog.records)

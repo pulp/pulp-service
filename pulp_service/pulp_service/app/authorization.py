@@ -126,6 +126,9 @@ class DomainBasedPermission(BasePermission):
                 user,
             )
             return False
+        except Exception:
+            _logger.exception("Unexpected error evaluating content guard permit")
+            return False
 
     def _check_safe_method_access(self, request, view, domain, user):
         """
