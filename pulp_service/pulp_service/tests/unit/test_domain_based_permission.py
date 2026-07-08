@@ -218,8 +218,8 @@ class TestContentGuardPyPICheck:
         assert permission.has_permission(request, view) is False
 
     def test_anonymous_no_header_with_guard_denied(self):
-        """Anonymous requests with no identity header are denied by the content guard
-        (the guard's permit() raises PermissionError when the header is missing)."""
+        """Anonymous request with no identity header and no DomainOrg falls through
+        to the content guard, which denies access."""
         permission = DomainBasedPermission()
         domain = _make_domain("any-domain")
         guard = _make_content_guard(permits=False)
