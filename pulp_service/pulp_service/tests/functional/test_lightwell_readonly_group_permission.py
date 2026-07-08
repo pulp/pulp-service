@@ -8,14 +8,14 @@ domain via DomainOrg, which grant unrestricted read+write access), membership in
 hardcoded group grants read-only (SAFE_METHODS) access to the lightwell domain, independent
 of any DomainOrg association. It does not grant write access, and it does not apply to the
 lightwell domain's PyPI views, which remain gated exclusively by the lightwell-network
-feature check (see test_lightwell_feature_permission.py) -- group membership must not bypass
+feature check (see test_content_guard_permission.py) -- group membership must not bypass
 that check.
 
 These follow the pattern used in test_group_based_permissions.py (group setup via gen_group
-/ UsersApi / GroupsUsersApi) and test_lightwell_feature_permission.py (the "lightwell"
+/ UsersApi / GroupsUsersApi) and test_content_guard_permission.py (the "lightwell"
 domain/PyPI fixtures).
 
-NOTE: like test_lightwell_feature_permission.py, this is keyed off the literal domain name
+NOTE: like test_content_guard_permission.py, this is keyed off the literal domain name
 "lightwell" (see pulp_service.app.authorization.LIGHTWELL_DOMAIN_NAME), so the domain created
 here can't use a random per-test suffix. These tests assume they run against an ephemeral
 Pulp instance where no "lightwell" domain already exists, and are not run concurrently with
@@ -69,9 +69,11 @@ def lightwell_readonly_group(gen_group):
 def configure_lightwell_domain(
     anonymous_user,
     gen_object_with_cleanup,
+    add_to_cleanup,
     pulpcore_bindings,
     file_bindings,
     python_bindings,
+    service_content_guards_api_client,
     bindings_cfg,
 ):
     """
@@ -104,11 +106,30 @@ def configure_lightwell_domain(
             python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=LIGHTWELL_DOMAIN_NAME
         )
 
+        from pulpcore.client.pulp_service import ServiceFeatureContentGuard
+
+        service_content_guards_api_client.api_client.default_headers["x-rh-identity"] = owner_header
+        guard = service_content_guards_api_client.create(
+            service_feature_content_guard=ServiceFeatureContentGuard(
+                name=f"lightwell-guard-{uuid4()}",
+                header_name="x-rh-identity",
+                features=["lightwell-network"],
+                jq_filter=".identity.org_id",
+            ),
+            pulp_domain=LIGHTWELL_DOMAIN_NAME,
+        )
+        add_to_cleanup(service_content_guards_api_client, guard.pulp_href)
+
         python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = owner_header
         pypi_base_path = str(uuid4())
         gen_object_with_cleanup(
             python_bindings.DistributionsPypiApi,
-            {"name": str(uuid4()), "base_path": pypi_base_path, "repository": repo.pulp_href},
+            {
+                "name": str(uuid4()),
+                "base_path": pypi_base_path,
+                "repository": repo.pulp_href,
+                "content_guard": guard.pulp_href,
+            },
             pulp_domain=LIGHTWELL_DOMAIN_NAME,
         )
 
@@ -121,6 +142,7 @@ def configure_lightwell_domain(
     file_bindings.RepositoriesFileApi.api_client.default_headers.pop("x-rh-identity", None)
     python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
     python_bindings.DistributionsPypiApi.api_client.default_headers.pop("x-rh-identity", None)
+    service_content_guards_api_client.api_client.default_headers.pop("x-rh-identity", None)
 
 
 @pytest.fixture

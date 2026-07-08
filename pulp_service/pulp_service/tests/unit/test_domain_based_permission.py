@@ -56,7 +56,7 @@ def _make_domain(name):
     return domain
 
 
-def _make_pypi_view():
+def _make_pypi_view(content_guard=None):
     """Create a mock view that is an instance of PyPIMixin."""
     from pulp_python.app.pypi.views import PyPIMixin
 
@@ -64,7 +64,30 @@ def _make_pypi_view():
         pass
 
     view = FakePyPIView()
+    view._distro = SimpleNamespace(content_guard=content_guard)
     return view
+
+
+def _make_content_guard(permits=True):
+    """Create a mock content guard. If permits=False, cast().permit() raises PermissionError"""
+    guard = MagicMock()
+    casted = MagicMock()
+    guard.cast.return_value = casted
+    if not permits:
+        casted.permit.side_effect = PermissionError("Access denied.")
+    return guard
+
+
+def _make_pypi_view_with_error(error):
+    """Create a mock PyPI view whose distribution property raises the given error."""
+    from pulp_python.app.pypi.views import PyPIMixin
+
+    class FakePyPIView(PyPIMixin):
+        @property
+        def distribution(self):
+            raise error
+
+    return FakePyPIView()
 
 
 def _make_regular_view():
@@ -124,18 +147,15 @@ class TestSafeMethodBypass:
 
         assert permission.has_permission(request, view) is True
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    def test_public_domain_pypi_view_never_checks_feature(self, mock_feature_check):
+    def test_public_domain_pypi_view_never_checks_feature(self):
         permission = DomainBasedPermission()
         domain = _make_domain("public-something")
         request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain)
-        view = _make_pypi_view()
+        view = _make_pypi_view(content_guard=_make_content_guard())
 
         assert permission.has_permission(request, view) is True
-        mock_feature_check.assert_not_called()
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    def test_anonymous_get_pypi_view_non_lightwell_domain_allowed(self, mock_feature_check):
+    def test_anonymous_get_pypi_view_non_lightwell_domain_allowed(self):
         """Domains other than "lightwell" keep the pre-existing behavior: any SAFE_METHOD
         request to a PyPI view is allowed, without any feature check."""
         permission = DomainBasedPermission()
@@ -144,20 +164,16 @@ class TestSafeMethodBypass:
         view = _make_pypi_view()
 
         assert permission.has_permission(request, view) is True
-        mock_feature_check.assert_not_called()
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    def test_authenticated_get_pypi_view_non_lightwell_domain_allowed(self, mock_feature_check):
+    def test_authenticated_get_pypi_view_non_lightwell_domain_allowed(self):
         permission = DomainBasedPermission()
         domain = _make_domain("some-other-domain")
         request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain)
         view = _make_pypi_view()
 
         assert permission.has_permission(request, view) is True
-        mock_feature_check.assert_not_called()
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    def test_anonymous_get_pypi_view_no_domain_allowed(self, mock_feature_check):
+    def test_anonymous_get_pypi_view_no_domain_allowed(self):
         """No domain resolved on the request (shouldn't happen in practice for PyPI views,
         but matches the pre-existing default-allow behavior)."""
         permission = DomainBasedPermission()
@@ -165,157 +181,139 @@ class TestSafeMethodBypass:
         view = _make_pypi_view()
 
         assert permission.has_permission(request, view) is True
-        mock_feature_check.assert_not_called()
 
 
-class TestLightwellDomainPyPIFeatureCheck:
-    """Verify the lightwell-network feature check, scoped specifically to the "lightwell"
-    domain's PyPI views."""
+class TestContentGuardPyPICheck:
+    """Verify the content-guard driven access checks on PyPI views. The check is
+    domain-name agnostic: any distribution with content guard enforces it."""
 
-    def test_anonymous_no_org_id_denied(self):
-        """Anonymous requests carry no org_id, so there's nothing to check the feature for."""
+    def test_no_guard_allows_anonymous(self):
+        """Distributions without content guards allow anonymous SAFE_METHOD access."""
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
+        domain = _make_domain("any-domain")
         request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain)
         view = _make_pypi_view()
 
-        assert permission.has_permission(request, view) is False
+        assert permission.has_permission(request, view) is True
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_authenticated_with_feature_allowed(self, mock_domain_org, mock_feature_check):
-        mock_domain_org.filter.return_value.exists.return_value = False
-        mock_feature_check.return_value = True
+    def test_guard_permits_access(self):
+        """Content guard permits -> access granted."""
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="20368420")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
 
         assert permission.has_permission(request, view) is True
-        mock_feature_check.assert_called_once_with("20368420")
+        guard.cast.return_value.permit.assert_called_once_with(request)
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_authenticated_without_feature_denied(self, mock_domain_org, mock_feature_check):
-        mock_domain_org.filter.return_value.exists.return_value = False
-        mock_feature_check.return_value = False
+    def test_guard_denies_access(self):
+        """Content guard denies -> access denied."""
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=False)
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
 
         assert permission.has_permission(request, view) is False
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    def test_unauthenticated_with_org_id_and_feature_allowed(self, mock_feature_check):
-        """An org_id can be present even without a fully authenticated user; the feature
-        check still applies (and still gates access) in that case."""
-        mock_feature_check.return_value = True
+    def test_anonymous_no_header_with_guard_denied(self):
+        """Anonymous requests with no identity header are denied by the content guard
+        (the guard's permit() raises PermissionError when the header is missing)."""
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="20368420")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=False)
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain)
+        view = _make_pypi_view(content_guard=guard)
 
-        assert permission.has_permission(request, view) is True
+        assert permission.has_permission(request, view) is False
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
     @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_domain_org_association_bypasses_feature_check(self, mock_domain_org, mock_feature_check):
-        """Users with a DomainOrg association must not be denied by (or even trigger) the
-        feature check."""
+    def test_domain_org_bypasses_guard(self, mock_domain_org):
+        """Users with a DomainOrg association bypass the content guard entirely."""
         mock_domain_org.filter.return_value.exists.return_value = True
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=False)
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
 
         assert permission.has_permission(request, view) is True
-        mock_feature_check.assert_not_called()
+        guard.cast.return_value.permit.assert_not_called()
 
-    @patch("pulp_service.app.models.FeatureContentGuard._get_cached_result", return_value=None)
-    @patch("pulp_service.app.models.FeatureContentGuard._check_for_feature", side_effect=PermissionError)
     @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_feature_service_failure_fails_closed(self, mock_domain_org, mock_check_feature, mock_cache_result):
-        """If the Features Service call fails, access must be denied, not silently allowed."""
+    def test_no_domain_org_falls_through_to_guard(self, mock_domain_org):
+        """Without a DomainOrg association, the content guard is checked."""
         mock_domain_org.filter.return_value.exists.return_value = False
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
 
-        assert permission.has_permission(request, view) is False
+        assert permission.has_permission(request, view) is True
+        guard.cast.return_value.permit.assert_called_once()
+
+    def test_guard_works_on_any_domain_name(self):
+        """The content guard check is domain-name-agnostic, no hardcoded names."""
+        for domain_name in ["lightwell", "my-domain", "domain-xyz", "domain-abc"]:
+            permission = DomainBasedPermission()
+            guard = _make_content_guard(permits=True)
+            domain = _make_domain(domain_name)
+            request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="12345")
+            view = _make_pypi_view(content_guard=guard)
+
+            assert permission.has_permission(request, view) is True
 
 
-class TestLightwellPyPIAccessLogging:
-    """
-    Verify _has_pypi_read_access logs its allow/deny decision and the reason for it (DomainOrg
-    match, missing org_id, or feature check outcome), so incidents can be diagnosed from logs
-    alone -- see the discussion that prompted this in the "brand new user can read lightwell
-    pypi" investigation.
-    """
+class TestContentGuardAccessLogging:
+    """Verify that the content-guard PyPI access check logs its allow/deny decision
+    and the reason for it (DomainOrg match or content guard outcome)."""
 
     @patch("pulp_service.app.authorization.DomainOrg.objects")
     def test_domain_org_grant_is_logged(self, mock_domain_org, caplog):
         mock_domain_org.filter.return_value.exists.return_value = True
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=False)
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
 
         with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
             assert permission.has_permission(request, view) is True
 
-        assert any(
-            "GRANTED via DomainOrg" in record.message and "1979710" in record.message for record in caplog.records
-        )
+        assert all("GRANTED via DomainOrg" in record.message and "12345" in record.message for record in caplog.records)
 
     @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_missing_org_id_denial_is_logged(self, mock_domain_org, caplog):
+    def test_guard_grant_is_logged(self, mock_domain_org, caplog):
         mock_domain_org.filter.return_value.exists.return_value = False
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain)
-        view = _make_pypi_view()
-
-        with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
-            assert permission.has_permission(request, view) is False
-
-        assert any("DENIED: no org_id" in record.message for record in caplog.records)
-
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
-    @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_feature_check_outcome_is_logged(self, mock_domain_org, mock_feature_check, caplog):
-        mock_domain_org.filter.return_value.exists.return_value = False
-        mock_feature_check.return_value = True
-        permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="20368420")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
 
         with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
             assert permission.has_permission(request, view) is True
 
-        assert any(
-            "GRANTED via lightwell-network feature check" in record.message and "20368420" in record.message
-            for record in caplog.records
+        assert all(
+            "GRANTED via content guard" in record.message and "12345" in record.message for record in caplog.records
         )
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature")
     @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_feature_check_denial_is_logged(self, mock_domain_org, mock_feature_check, caplog):
+    def test_guard_denial_is_logged(self, mock_domain_org, caplog):
         mock_domain_org.filter.return_value.exists.return_value = False
-        mock_feature_check.return_value = False
         permission = DomainBasedPermission()
-        domain = _make_domain("lightwell")
-        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="1979710")
-        view = _make_pypi_view()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=False)
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
 
         with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
             assert permission.has_permission(request, view) is False
 
-        assert any(
-            "DENIED via lightwell-network feature check" in record.message and "1979710" in record.message
-            for record in caplog.records
+        assert all(
+            "DENIED via content guard" in record.message and "12345" in record.message for record in caplog.records
         )
 
 
@@ -360,22 +358,21 @@ class TestLightwellReadOnlyGroupAccess:
 
         assert permission.has_permission(request, MagicMock()) is False
 
-    @patch("pulp_service.app.authorization.DomainBasedPermission._has_lightwell_network_feature", return_value=False)
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
     @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_readonly_group_member_pypi_view_still_requires_feature(self, mock_domain_org, mock_feature_check):
-        """Group membership must not bypass the lightwell-network feature check on PyPI
-        views -- a member with no feature entitlement and no DomainOrg association is
-        still denied."""
+    def test_readonly_group_member_pypi_view_still_requires_guard(self, mock_domain_org, mock_get_domain_pk):
+        """Group membership must not bypass the content guard on PyPI views -- a member
+        with no DomainOrg association is still denied if the guard denies."""
         mock_domain_org.filter.return_value.exists.return_value = False
         permission = DomainBasedPermission()
         domain = _make_domain("lightwell")
+        guard = _make_content_guard(permits=False)
         request = _make_request(
             method="GET", user=_make_authenticated_user(in_readonly_group=True), domain=domain, org_id="1979710"
         )
-        view = _make_pypi_view()
+        view = _make_pypi_view(content_guard=guard)
 
         assert permission.has_permission(request, view) is False
-        mock_feature_check.assert_called_once_with("1979710")
 
     @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
     @patch("pulp_service.app.authorization.DomainOrg.objects")
@@ -456,3 +453,85 @@ class TestSuperuserBypass:
         view = _make_regular_view()
 
         assert permission.has_permission(request, view) is True
+
+
+class TestDistributionResolutionErrors:
+    """Verify exception handling when view.distribution raises."""
+
+    def test_http404_returns_true(self):
+        """Http404 lets view handle 404 naturally -- doesn't deny access at permission layer."""
+        from django.http import Http404
+
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain)
+        view = _make_pypi_view_with_error(Http404("not found"))
+
+        assert permission.has_permission(request, view) is True
+
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_unexpected_error_fails_closed(self, mock_domain_org, mock_get_domain_pk):
+        """Unexpected errors fail closed even if user would otherwise have domain access."""
+        mock_domain_org.filter.return_value.exists.return_value = True
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view_with_error(RuntimeError("db timeout"))
+
+        assert permission.has_permission(request, view) is False
+
+    def test_unexpected_error_is_logged(self, caplog):
+        """Unexpected errors are logged with exception details."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain)
+        view = _make_pypi_view_with_error(RuntimeError("db timeout"))
+
+        with caplog.at_level("ERROR", logger="pulp_service.app.authorization"):
+            permission.has_permission(request, view)
+
+        assert all("Unexpected error resolving distribution" in r.message for r in caplog.records)
+
+
+class TestContentGuardCastFailure:
+    """Verify that guard.cast() failures fail closed instead of bubbling as 500s."""
+
+    def test_cast_failure_returns_false(self):
+        """If guard.cast() raises (orphaned FK, race condition), fail closed."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        guard.cast.side_effect = Exception("content guard subclass row deleted")
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
+
+        assert permission.has_permission(request, view) is False
+
+    def test_cast_failure_is_logged(self, caplog):
+        """cast() failures are logged with exception details."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        guard.cast.side_effect = Exception("content guard subclass row deleted")
+        request = _make_request(method="GET", user=_make_anonymous_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
+
+        with caplog.at_level("ERROR", logger="pulp_service.app.authorization"):
+            permission.has_permission(request, view)
+
+        assert all("Failed to resolve content guard" in r.message for r in caplog.records)
+
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_cast_failure_not_reached_when_domain_org_matches(self, mock_domain_org):
+        """DomainOrg bypass short-circuits before cast() is ever called."""
+        mock_domain_org.filter.return_value.exists.return_value = True
+        permission = DomainBasedPermission()
+        domain = _make_domain("any-domain")
+        guard = _make_content_guard(permits=True)
+        guard.cast.side_effect = Exception("should not be called")
+        request = _make_request(method="GET", user=_make_authenticated_user(), domain=domain, org_id="12345")
+        view = _make_pypi_view(content_guard=guard)
+
+        assert permission.has_permission(request, view) is True
+        guard.cast.assert_not_called()

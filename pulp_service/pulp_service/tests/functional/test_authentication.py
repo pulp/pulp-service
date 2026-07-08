@@ -122,7 +122,7 @@ def test_get_requests_without_auth_to_simple_api(
 ):
     """Test that all domains (other than "lightwell") allow GET requests without
     authentication but block other methods. The "lightwell" domain is excluded from this
-    behavior -- see test_lightwell_feature_permission.py.
+    behavior -- see test_content_guard_permission.py.
     """
     # Create a user with credentials to set up the domain
     setup_user = {

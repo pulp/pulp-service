@@ -3,11 +3,11 @@ from django.urls import include, path
 from .admin import admin_site
 from .viewsets import (
     CreateDomainView,
-    MigrateDomainView,
     DatabaseTriggersView,
     DebugAuthenticationHeadersView,
     InternalServerErrorCheck,
     InternalServerErrorCheckWithException,
+    MigrateDomainView,
     OOMKillTriggerView,
     RDSConnectionTestDispatcherView,
     RedirectCheck,

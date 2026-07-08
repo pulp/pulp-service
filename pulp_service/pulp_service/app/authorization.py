@@ -6,12 +6,13 @@ from contextvars import ContextVar
 
 import jq
 from django.db.models import Q
+from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 
-from pulp_service.app.models import DomainOrg, FeatureContentGuard
+from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
 org_id_var = ContextVar("org_id")
@@ -20,19 +21,15 @@ org_id_json_path = jq.compile(".identity.internal.org_id")
 user_id_var = ContextVar("user_id")
 group_var = ContextVar("group")
 
-# The domain whose PyPI views require the lightwell-network feature entitlement (see
-# has_permission()). Other domains' PyPI views keep the pre-existing "any SAFE_METHOD
-# request is allowed" behavior.
+# The hardcoded domain name used by the lightwell read-only group check (see
+# _has_lightwell_readonly_group_access and _check_safe_method_access).
 LIGHTWELL_DOMAIN_NAME = "lightwell"
-# Feature entitlement required to read the lightwell domain's PyPI views (simple API, etc.)
-# for orgs that don't have a DomainOrg association with the domain. See has_permission().
-LIGHTWELL_NETWORK_FEATURE = "lightwell-network"
 # Hardcoded group whose members get read-only (SAFE_METHODS) access to the lightwell
 # domain's non-PyPI endpoints (repository/content/artifact listing, Pulp REST API, Maven
 # content API), independent of any DomainOrg association. This is a plain Group -- there is
 # no DomainOrg row backing this access, unlike the normal group-based access model. It does
-# NOT grant write access, and it does NOT apply to PyPI views, which are still gated
-# exclusively by the lightwell-network feature check (see _check_pypi_safe_method_access()).
+# NOT grant write access, and it does NOT apply to PyPI views, which are gated
+# by the distribution's content guard (see _check_pypi_safe_method_access()).
 LIGHTWELL_READONLY_GROUP_NAME = "Lightwell-ReadOnly"
 
 
@@ -56,52 +53,6 @@ class DomainBasedPermission(BasePermission):
 
         return DomainOrg.objects.filter(query).exists()
 
-    def _has_pypi_read_access(self, request, domain):
-        """
-        Checks SAFE_METHOD access to the lightwell domain's PyPI views.
-
-        Users with a DomainOrg association bypass the feature check entirely (existing
-        permission model). Everyone else -- including unauthenticated users -- must belong
-        to an org that has the lightwell-network feature entitlement.
-        """
-        user = request.user
-        domain_pk = domain.pk if domain is not None else get_domain_pk()
-
-        decoded_header_content = self.get_decoded_identity_header(request)
-        org_id = self.get_org_id(decoded_header_content)
-
-        if user.is_authenticated and self._has_domain_access(domain_pk, org_id, user):
-            _logger.info("lightwell PyPI access GRANTED via DomainOrg: user=%s org_id=%s", user, org_id)
-            return True
-
-        if org_id is None:
-            _logger.info(
-                "lightwell PyPI access DENIED: no org_id in identity header and no DomainOrg match (user=%s)",
-                user,
-            )
-            return False
-
-        allowed = self._has_lightwell_network_feature(org_id)
-        _logger.info(
-            "lightwell PyPI access %s via %s feature check: org_id=%s user=%s",
-            "GRANTED" if allowed else "DENIED",
-            LIGHTWELL_NETWORK_FEATURE,
-            org_id,
-            user,
-        )
-        return allowed
-
-    def _has_lightwell_network_feature(self, org_id):
-        """
-        Checks (with caching) whether `org_id` has the lightwell-network feature, via the
-        same cache/lookup mechanism as FeatureContentGuard.
-        """
-        guard = FeatureContentGuard(features=[LIGHTWELL_NETWORK_FEATURE], pulp_domain=None)
-        try:
-            return guard.check_feature(org_id)
-        except PermissionError:
-            return False
-
     def _has_lightwell_readonly_group_access(self, user):
         """
         Members of the hardcoded LIGHTWELL_READONLY_GROUP_NAME group get read-only
@@ -113,25 +64,68 @@ class DomainBasedPermission(BasePermission):
         """
         return user.is_authenticated and user.groups.filter(name=LIGHTWELL_READONLY_GROUP_NAME).exists()
 
-    def _check_pypi_safe_method_access(self, request, view, domain):
+    def _check_pypi_safe_method_access(self, request, view, domain):  # noqa: PLR0911
         """
         Returns True/False for a SAFE_METHOD request to a PyPI `view`, or None if `view`
         isn't a PyPI view (the caller should then fall through to the standard
         DomainOrg-based checks below).
 
-        Only the lightwell domain's PyPI views require a DomainOrg association or the
-        lightwell-network feature entitlement. Other domains' PyPI views keep the
-        pre-existing "any SAFE_METHOD request is allowed" behavior; non-PyPI endpoints
-        (Maven, repository listing, Pulp REST API, ...) never hit this method.
+        If the distribution has a content guard, access is gated by guard.cast().permit():
+        users with a DomainOrg association bypass the guard (domain owner privilege);
+        everyone else must satisfy the guard. Distributions without a content guard allow
+        all SAFE_METHOD access (the pre-existing default behavior).
         """
         from pulp_python.app.pypi.views import PyPIMixin
 
         if not isinstance(view, PyPIMixin):
             return None
 
-        if domain and domain.name == LIGHTWELL_DOMAIN_NAME:
-            return self._has_pypi_read_access(request, domain)
-        return True
+        try:
+            distribution = view.distribution
+        except Http404:
+            return True
+        except Exception:
+            _logger.exception("Unexpected error resolving distribution for PyPI permission check")
+            return False
+
+        guard = distribution.content_guard
+        if not guard:
+            return True
+
+        user = request.user
+        domain_pk = domain.pk if domain is not None else get_domain_pk()
+        decoded_header = self.get_decoded_identity_header(request)
+        org_id = self.get_org_id(decoded_header)
+
+        if user.is_authenticated and self._has_domain_access(domain_pk, org_id, user):
+            _logger.info(
+                "Content-guarded PyPi access GRANTED via DomainOrg: user=%s org_id=%s",
+                user,
+                org_id,
+            )
+            return True
+
+        try:
+            casted_guard = guard.cast()
+        except Exception:
+            _logger.exception("Failed to resolve content guard type for distribution")
+            return False
+
+        try:
+            casted_guard.permit(request)
+            _logger.info(
+                "Content-guarded PyPi access GRANTED via content guard: org_id=%s user=%s",
+                org_id,
+                user,
+            )
+            return True
+        except PermissionError:
+            _logger.info(
+                "Content-guarded PyPi access DENIED via content guard: org_id=%s user=%s",
+                org_id,
+                user,
+            )
+            return False
 
     def _check_safe_method_access(self, request, view, domain, user):
         """
