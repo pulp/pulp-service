@@ -282,7 +282,7 @@ class TestContentGuardAccessLogging:
         with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
             assert permission.has_permission(request, view) is True
 
-        assert all("GRANTED via DomainOrg" in record.message and "12345" in record.message for record in caplog.records)
+        assert any("GRANTED via DomainOrg" in record.message and "12345" in record.message for record in caplog.records)
 
     @patch("pulp_service.app.authorization.DomainOrg.objects")
     def test_guard_grant_is_logged(self, mock_domain_org, caplog):
@@ -296,7 +296,7 @@ class TestContentGuardAccessLogging:
         with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
             assert permission.has_permission(request, view) is True
 
-        assert all(
+        assert any(
             "GRANTED via content guard" in record.message and "12345" in record.message for record in caplog.records
         )
 
@@ -312,7 +312,7 @@ class TestContentGuardAccessLogging:
         with caplog.at_level("INFO", logger="pulp_service.app.authorization"):
             assert permission.has_permission(request, view) is False
 
-        assert all(
+        assert any(
             "DENIED via content guard" in record.message and "12345" in record.message for record in caplog.records
         )
 
@@ -491,7 +491,7 @@ class TestDistributionResolutionErrors:
         with caplog.at_level("ERROR", logger="pulp_service.app.authorization"):
             permission.has_permission(request, view)
 
-        assert all("Unexpected error resolving distribution" in r.message for r in caplog.records)
+        assert any("Unexpected error resolving distribution" in r.message for r in caplog.records)
 
 
 class TestContentGuardCastFailure:
@@ -520,7 +520,7 @@ class TestContentGuardCastFailure:
         with caplog.at_level("ERROR", logger="pulp_service.app.authorization"):
             permission.has_permission(request, view)
 
-        assert all("Failed to resolve content guard" in r.message for r in caplog.records)
+        assert any("Failed to resolve content guard" in r.message for r in caplog.records)
 
     @patch("pulp_service.app.authorization.DomainOrg.objects")
     def test_cast_failure_not_reached_when_domain_org_matches(self, mock_domain_org):
