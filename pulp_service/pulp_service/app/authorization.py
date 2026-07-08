@@ -99,7 +99,7 @@ class DomainBasedPermission(BasePermission):
 
         if user.is_authenticated and self._has_domain_access(domain_pk, org_id, user):
             _logger.info(
-                "Content-guarded PyPi access GRANTED via DomainOrg: user=%s org_id=%s",
+                "Content-guarded PyPI access GRANTED via DomainOrg: user=%s org_id=%s",
                 user,
                 org_id,
             )
@@ -114,14 +114,14 @@ class DomainBasedPermission(BasePermission):
         try:
             casted_guard.permit(request)
             _logger.info(
-                "Content-guarded PyPi access GRANTED via content guard: org_id=%s user=%s",
+                "Content-guarded PyPI access GRANTED via content guard: org_id=%s user=%s",
                 org_id,
                 user,
             )
             return True
         except PermissionError:
             _logger.info(
-                "Content-guarded PyPi access DENIED via content guard: org_id=%s user=%s",
+                "Content-guarded PyPI access DENIED via content guard: org_id=%s user=%s",
                 org_id,
                 user,
             )
