@@ -1,0 +1,20 @@
+diff --git a/pulpcore/app/models/repository.py b/pulpcore/app/models/repository.py
+index 5cbc51bef..10f661f62 100644
+--- a/pulpcore/app/models/repository.py
++++ b/pulpcore/app/models/repository.py
+@@ -1245,13 +1245,13 @@ class RepositoryVersion(BaseModel):
+             # Undo addition by deleting the RepositoryContent.
+             RepositoryContent.objects.filter(
+                 repository=self.repository,
+-                content_id__in=content,
++                content_id__in=to_remove,
+                 version_added=self,
+                 version_removed=None,
+             ).delete()
+ 
+             q_set = RepositoryContent.objects.filter(
+-                repository=self.repository, content_id__in=content, version_removed=None
++                repository=self.repository, content_id__in=to_remove, version_removed=None
+             )
+             q_set.update(version_removed=self)
+ 
