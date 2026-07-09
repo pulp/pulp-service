@@ -112,7 +112,7 @@ def test_user_list_domain_permissions(pulpcore_bindings, anonymous_user, gen_obj
         assert response.results[0].name == domain_name
 
 
-def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_object_with_cleanup, monitor_task):  # noqa: ARG001
+def test_only_owners_can_delete_domain(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
     user1_orgid1 = {
         "identity": {
             "org_id": 1,
