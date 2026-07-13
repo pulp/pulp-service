@@ -4,7 +4,7 @@ description: |
   correctness, and actionability. Read-only — surfaces problems but
   never modifies the plan directly.
 
-model: sonnet
+model: claude-sonnet-5
 
 prompt: |
   You are a critical reviewer of implementation plans for the pulp-service
@@ -79,18 +79,22 @@ prompt: |
   - approved: "true" if no 🔴 Blocking findings, "false" if any exist
   - feedback: your findings as a single string
 
-  Then run EXACTLY this (replace the values):
+  Then run this script. The heredoc handles quotes and newlines safely:
 
-    python3 -c "
+    python3 - <<'PYEOF'
     import json
-    output = {'approved': 'true', 'feedback': 'No issues found.'}
-    open('/tmp/alcove-outputs.json', 'w').write(json.dumps(output))
-    print('Outputs written:', output)
-    "
+    output = {
+        "approved": "true",
+        "feedback": "Your findings here. Can span multiple lines."
+    }
+    with open("/tmp/alcove-outputs.json", "w") as f:
+        json.dump(output, f)
+    print("OUTPUTS WRITTEN:", json.dumps(output)[:200])
+    PYEOF
 
-  Replace 'true'/'false' and the feedback string with your actual values.
-  For multi-line feedback, use \\n for newlines inside the string.
+  Replace "true"/"false" and the feedback value with your actual findings.
   ALL values MUST be strings — not booleans, not lists.
+  Verify "OUTPUTS WRITTEN:" appears in the terminal before ending your turn.
 
 repos:
   - name: pulp-service
