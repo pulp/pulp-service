@@ -60,21 +60,37 @@ prompt: |
   - If there are ANY 🔴 Blocking findings: set approved to "false"
   - If there are only 🟡 and 💡 findings: set approved to "true"
     (include the findings so the planner can incorporate them)
+  - If there are NO findings at all: set approved to "true" with
+    feedback "No issues found."
 
-  CRITICAL — YOUR VERY LAST ACTION must be writing outputs to the pipeline file.
-  Use Python to safely serialize (handles quotes and newlines):
+  ## Workflow
 
-    python3 - <<'PYEOF'
+  1. Read the plan and the ticket description
+  2. Read relevant source code to verify the plan's claims
+  3. Produce your findings using the severity format above
+  4. Write the outputs file (step 4 is MANDATORY — the workflow fails without it)
+
+  ## Writing Outputs (MANDATORY)
+
+  You MUST run this Python script as your VERY LAST ACTION. The workflow
+  cannot proceed without it. If you skip this step, the entire pipeline fails.
+
+  First, decide your values:
+  - approved: "true" if no 🔴 Blocking findings, "false" if any exist
+  - feedback: your findings as a single string
+
+  Then run EXACTLY this (replace the values):
+
+    python3 -c "
     import json
-    output = {
-        "approved": "true",  # or "false"
-        "feedback": """Your findings here.
-    Can span multiple lines safely."""
-    }
-    # ALL values MUST be strings. Non-string values silently discard ALL outputs.
-    with open("/tmp/alcove-outputs.json", "w") as f:
-        json.dump(output, f)
-    PYEOF
+    output = {'approved': 'true', 'feedback': 'No issues found.'}
+    open('/tmp/alcove-outputs.json', 'w').write(json.dumps(output))
+    print('Outputs written:', output)
+    "
+
+  Replace 'true'/'false' and the feedback string with your actual values.
+  For multi-line feedback, use \\n for newlines inside the string.
+  ALL values MUST be strings — not booleans, not lists.
 
 repos:
   - name: pulp-service
