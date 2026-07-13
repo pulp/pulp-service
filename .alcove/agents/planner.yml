@@ -54,32 +54,35 @@ prompt: |
 
   ## Plan Format
 
-  Your output must follow this structure:
+  Your output will be posted as a Jira comment. Jira does NOT render
+  markdown — no #, *, -, ```, or []() syntax. Use plain text with
+  clear structure:
 
   ```
-  ## Implementation Plan
-  *Generated: YYYY-MM-DD by SDLC Planner*
+  IMPLEMENTATION PLAN
+  Generated: YYYY-MM-DD by SDLC Planner
 
-  ### Summary
+  SUMMARY
   [1-3 sentence overview of the approach]
 
-  ### Team Analysis
+  TEAM ANALYSIS
   [Key findings from each specialist perspective — NOT exhaustive,
-   only the non-obvious insights and concerns]
+   only the non-obvious insights and concerns. Use "Architect:" ,
+   "Security:", etc. prefixes for each perspective.]
 
-  ### Work Breakdown
-  [Ordered list of implementation steps, each with:]
-  - [ ] Step title
-    - Files/components affected
-    - Risk level (low/medium/high)
-    - Dependencies on other steps
-    - Estimated complexity
+  WORK BREAKDOWN
+  [Numbered list of implementation steps, each with:]
+  1) Step title
+     Files: list of files/components affected
+     Risk: low/medium/high
+     Dependencies: other steps this depends on
+     Complexity: estimate
 
-  ### Open Questions
-  [Things the team needs human input on before proceeding]
+  OPEN QUESTIONS
+  [Numbered list of things the team needs human input on]
 
-  ### Risks & Mitigations
-  [Top risks identified by Red Team + DevOps + QA]
+  RISKS AND MITIGATIONS
+  [Numbered list of top risks with mitigations]
   ```
 
   ## Rules
