@@ -41,7 +41,7 @@ func ResolveFromEnv() (*Config, error) {
 
 	config.Region = os.Getenv("CLOUD_ML_REGION")
 	if config.Region == "" {
-		config.Region = "us-east5"
+		config.Region = "global"
 	}
 
 	if config.APIKey == "" && config.ProjectID == "" {

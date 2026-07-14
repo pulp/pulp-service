@@ -2,5 +2,6 @@ go 1.25.3
 
 use (
 	./agent-alertmanager
+	./agent-akamai-report
 	./shared
 )
