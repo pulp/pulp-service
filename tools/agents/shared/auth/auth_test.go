@@ -88,6 +88,25 @@ func TestResolveFromEnv_ProxyModeIgnoresBadSAJSON(t *testing.T) {
 	}
 }
 
+func TestNormalizeBaseURL_AppendsV1(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"http://localhost:8443", "http://localhost:8443/v1"},
+		{"http://localhost:8443/", "http://localhost:8443/v1"},
+		{"http://localhost:8443/v1", "http://localhost:8443/v1"},
+		{"http://localhost:8443/v1/", "http://localhost:8443/v1"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := normalizeBaseURL(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeBaseURL(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func TestResolveFromEnv_DefaultRegion(t *testing.T) {
 	t.Setenv("ANTHROPIC_VERTEX_PROJECT_ID", "my-project")
 	t.Setenv("CLOUD_ML_REGION", "")
@@ -98,7 +117,7 @@ func TestResolveFromEnv_DefaultRegion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if config.Region != "us-east5" {
-		t.Errorf("Region = %q, want %q", config.Region, "us-east5")
+	if config.Region != "global" {
+		t.Errorf("Region = %q, want %q", config.Region, "global")
 	}
 }
