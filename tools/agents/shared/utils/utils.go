@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,4 +32,23 @@ func Truncate(text string, max int) string {
 		max--
 	}
 	return text[:max] + "\n... (truncated)"
+}
+
+// NormalizeBaseURL ensures the base URL ends with /v1, which langchaingo
+// expects (it appends "/messages" to form the final endpoint).
+func NormalizeBaseURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	u.Path = strings.TrimSuffix(u.Path, "/messages")
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	if !strings.HasSuffix(u.Path, "/v1") {
+		u.Path += "/v1"
+	}
+	return u.String()
 }
