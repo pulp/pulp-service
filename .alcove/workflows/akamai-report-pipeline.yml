@@ -1,0 +1,7 @@
+name: Akamai Report Pipeline
+
+workflow:
+  - id: generate-report
+    type: agent
+    agent: Akamai Report
+    outputs: [report_path, traffic_summary]
