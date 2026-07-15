@@ -1,0 +1,64 @@
+name: Build agent-akamai-report
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/agents/agent-akamai-report/**'
+      - 'tools/agents/shared/**'
+      - 'tools/agents/go.work'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (default: auto-generated)'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+      - name: Build
+        working-directory: tools/agents/agent-akamai-report
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o agent-akamai-report .
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: agent-akamai-report
+          path: tools/agents/agent-akamai-report/agent-akamai-report
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="agent-akamai-report-$(date +'%Y%m%d')-${GITHUB_SHA::7}"
+          fi
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Download binary artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: agent-akamai-report
+          path: .
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          chmod +x agent-akamai-report
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" agent-akamai-report --clobber
+          else
+            gh release create "$TAG" \
+              --title "agent-akamai-report $TAG" \
+              agent-akamai-report
+          fi
