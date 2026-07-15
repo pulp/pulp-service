@@ -1,0 +1,24 @@
+name: Akamai Report
+description: |
+  Analyzes 7-day Akamai traffic data via Splunk and produces a formatted
+  traffic report with LLM-driven analysis. Runs as a pre-compiled agent
+  binary from GitHub Releases.
+
+executable:
+  url: https://github.com/pulp/pulp-service/releases/download/agent-akamai-report-20260715-d2f911e/agent-akamai-report
+  args: ["--model", "claude-opus-4-6"]
+  env:
+    SPLUNK_INSECURE_SKIP_VERIFY: "true"
+    SPLUNK_URL: "https://splunk-api.corp.redhat.com:8089/"
+
+timeout: 1800
+enforcement_mode: monitor
+
+direct_outbound: true
+
+credentials:
+  SPLUNK_TOKEN: splunk
+
+schedule:
+  cron: "0 3 * * 1"
+  enabled: true
