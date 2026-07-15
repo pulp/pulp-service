@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -55,8 +56,11 @@ func normalizeBaseURL(url string) string {
 	if url == "" {
 		return ""
 	}
-	if url[len(url)-1] == '/' {
-		return url[:len(url)-1]
+	url = strings.TrimRight(url, "/")
+	// langchaingo's anthropic client expects the base URL to include /v1
+	// (it appends /messages, not /v1/messages)
+	if !strings.HasSuffix(url, "/v1") {
+		url += "/v1"
 	}
 	return url
 }
