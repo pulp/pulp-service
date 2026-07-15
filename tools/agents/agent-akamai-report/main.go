@@ -121,7 +121,7 @@ func run() error {
 		}
 	}
 
-	_, err = model.ModelRun(ctx, models.RunConfig{
+	report, err := model.ModelRun(ctx, models.RunConfig{
 		Prompt: prompt,
 		Tools:  tools,
 		MCP:    mcpMgr,
@@ -130,5 +130,6 @@ func run() error {
 		return fmt.Errorf("model run: %w", err)
 	}
 
+	fmt.Println(report)
 	return nil
 }
