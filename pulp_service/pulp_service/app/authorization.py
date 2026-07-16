@@ -68,8 +68,10 @@ class DomainBasedPermission(BasePermission):
         return user.is_authenticated and user.groups.filter(name=LIGHTWELL_READONLY_GROUP_NAME).exists()
 
     def _is_content_listing_request(self, request):
-        # Substring match: content endpoints span multiple plugins with no shared mixin (unlike PyPI).
-        return "/api/v3/content/" in request.META.get("PATH_INFO", "")
+        # view_name (not isinstance) because BaseContentViewSet is not in pulpcore's public
+        # plugin API, and the public subclasses miss ListContentViewSet.
+        view_name = getattr(request.resolver_match, "view_name", None)
+        return view_name is not None and view_name.startswith("content-")
 
     def _check_lightwell_subscription(self, request, domain):
         if not (domain and domain.name == LIGHTWELL_DOMAIN_NAME):

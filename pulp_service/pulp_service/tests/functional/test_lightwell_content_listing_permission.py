@@ -213,9 +213,7 @@ def test_entitled_org_denied_on_non_lightwell_domain(
         )
 
         file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = other_domain_owner_header
-        gen_object_with_cleanup(
-            file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name
-        )
+        gen_object_with_cleanup(file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name)
 
     content_url = urljoin(bindings_cfg.host, f"/api/pulp/{domain_name}/api/v3/content/file/files/")
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-wrong-domain-user")}
