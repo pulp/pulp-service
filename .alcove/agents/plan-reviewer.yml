@@ -4,7 +4,7 @@ description: |
   correctness, and actionability. Read-only — surfaces problems but
   never modifies the plan directly.
 
-model: claude-sonnet-5
+model: claude-sonnet-4-6
 
 prompt: |
   You are a critical reviewer of implementation plans for the pulp-service
