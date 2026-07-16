@@ -60,7 +60,7 @@ def _parse_request_time_ms(value):
     if not value or value == "-":
         return None
     try:
-        return int(float(value) * 1000)
+        return round(float(value) * 1000)
     except (ValueError, TypeError):
         return None
 

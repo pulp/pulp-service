@@ -70,7 +70,7 @@ class TestParseRequestTimeMs:
         assert _parse_request_time_ms("0.042000") == 42
         assert _parse_request_time_ms("0.003200") == 3
         assert _parse_request_time_ms("0.156000") == 156
-        assert _parse_request_time_ms("1.234567") == 1234
+        assert _parse_request_time_ms("1.234567") == 1235
 
     def test_handles_none_and_dash(self):
         assert _parse_request_time_ms(None) is None
@@ -81,9 +81,9 @@ class TestParseRequestTimeMs:
         assert _parse_request_time_ms("invalid") is None
         assert _parse_request_time_ms("not_a_number") is None
 
-    def test_truncates_to_integer_milliseconds(self):
-        assert _parse_request_time_ms("0.0016") == 1  # 1.6ms truncates to 1
-        assert _parse_request_time_ms("0.0019") == 1  # 1.9ms truncates to 1
+    def test_rounds_to_integer_milliseconds(self):
+        assert _parse_request_time_ms("0.0016") == 2  # 1.6ms rounds to 2
+        assert _parse_request_time_ms("0.0019") == 2  # 1.9ms rounds to 2
 
 
 class TestParseWheelFilename:
@@ -409,7 +409,7 @@ class TestContentToParquetPython:
         assert rows["distribution"][1] == "rhoai/3.5-EA2/cpu-ubi9"
 
         assert rows["request_time_ms"][0] == 3  # 0.003200s = 3ms
-        assert rows["request_time_ms"][1] == 45  # 0.045600s = 45ms
+        assert rows["request_time_ms"][1] == 46  # 0.045600s = 45.6ms, rounds to 46
 
     def test_skips_invalid_and_non_matching_records(
         self, sample_content_cloudwatch_results
