@@ -56,6 +56,15 @@ def _parse_org_id(org_value):
     return org_value
 
 
+def _parse_request_time_ms(value):
+    if not value or value == "-":
+        return None
+    try:
+        return int(float(value) * 1000)
+    except (ValueError, TypeError):
+        return None
+
+
 def _parse_timestamp(timestamp_str):
     if not timestamp_str:
         return None
@@ -142,6 +151,7 @@ def convert_content_to_arrow_table(results, content_type):
             "user_agent": parsed_line["user_agent"],
             "org_id": _parse_org_id(parsed_line["rh_org_id"]),
             "x_forwarded_for": parsed_line["x_forwarded_for"],
+            "request_time_ms": _parse_request_time_ms(parsed_line.get("request_time")),
         }
         record.update(parsed_filename)
         records.append(record)

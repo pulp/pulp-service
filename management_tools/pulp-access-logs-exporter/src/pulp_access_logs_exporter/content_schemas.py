@@ -14,6 +14,7 @@ COMMON_FIELDS = [
     ("user_agent", pa.string()),
     ("org_id", pa.string()),
     ("x_forwarded_for", pa.string()),
+    ("request_time_ms", pa.int32()),
 ]
 
 PYTHON_SCHEMA = pa.schema(

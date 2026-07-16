@@ -12,6 +12,7 @@ CONTENT_LOG_REGEX = re.compile(
     r'artifact_size:"(?P<artifact_size>[^"]*)"\s+'
     r'rh_org_id:"(?P<rh_org_id>[^"]*)"\s+'
     r'x_forwarded_for:"(?P<x_forwarded_for>[^"]*)"'
+    r'(?:\s+request_time:"(?P<request_time>[^"]*)")?'
 )
 
 # From pulp_python/app/utils.py:80-85 (regex sourced from pip)
