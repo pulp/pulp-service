@@ -18,12 +18,12 @@ direct_outbound: true
 credentials:
   ALERTMANAGER_CLUSTERS: ALERTMANAGER_CLUSTERS
   ANTHROPIC_VERTEX_PROJECT_ID: ANTHROPIC_VERTEX_PROJECT_ID
-  JIRA_API_TOKEN: Jira-pulp-sre-agent
+  JIRA_API_TOKEN: jira
   GLITCHTIP_TOKEN: glitchtip-decko-sa-token
   AWS_ACCESS_KEY_ID: aws-access-key-id-log-readonly
   AWS_SECRET_ACCESS_KEY: aws-secret-access-key-log-readonly
   VERTEX_SA_JSON: google-vertex
 
 schedule:
-  cron: "*/5 * * * *"
+  cron: "*/30 * * * *"
   enabled: true
