@@ -5,7 +5,6 @@ from binascii import Error as Base64DecodeError
 from contextvars import ContextVar
 
 import jq
-from django.conf import settings
 from django.db.models import Q
 from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS, BasePermission
@@ -32,6 +31,9 @@ LIGHTWELL_DOMAIN_NAME = "lightwell"
 # NOT grant write access, and it does NOT apply to PyPI views, which are gated
 # by the distribution's content guard (see _check_pypi_safe_method_access()).
 LIGHTWELL_READONLY_GROUP_NAME = "Lightwell-ReadOnly"
+# Fixed identifier in the Features Service; checked by _check_lightwell_subscription() to
+# gate content listing access for orgs with an active lightwell subscription.
+LIGHTWELL_FEATURE_NAME = "lightwell-network"
 
 
 class DomainBasedPermission(BasePermission):
@@ -66,6 +68,7 @@ class DomainBasedPermission(BasePermission):
         return user.is_authenticated and user.groups.filter(name=LIGHTWELL_READONLY_GROUP_NAME).exists()
 
     def _is_content_listing_request(self, request):
+        # Substring match: content endpoints span multiple plugins with no shared mixin (unlike PyPI).
         return "/api/v3/content/" in request.META.get("PATH_INFO", "")
 
     def _check_lightwell_subscription(self, request, domain):
@@ -79,12 +82,12 @@ class DomainBasedPermission(BasePermission):
         if org_id is None:
             return None
 
-        guard = FeatureContentGuard(features=[settings.LIGHTWELL_FEATURE_NAME])
+        guard = FeatureContentGuard(features=[LIGHTWELL_FEATURE_NAME])
         try:
             if guard.check_feature(org_id):
                 return True
-        except PermissionError:
-            pass
+        except Exception:
+            _logger.exception("Unexpected error checking lightwell subscription")
         return None
 
     def _check_pypi_safe_method_access(self, request, view, domain):  # noqa: PLR0911
