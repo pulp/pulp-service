@@ -5,6 +5,7 @@ from binascii import Error as Base64DecodeError
 from contextvars import ContextVar
 
 import jq
+from django.conf import settings
 from django.db.models import Q
 from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS, BasePermission
@@ -12,7 +13,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 
-from pulp_service.app.models import DomainOrg
+from pulp_service.app.models import DomainOrg, FeatureContentGuard
 
 _logger = logging.getLogger(__name__)
 org_id_var = ContextVar("org_id")
@@ -63,6 +64,28 @@ class DomainBasedPermission(BasePermission):
         scope_queryset() for where this is applied.
         """
         return user.is_authenticated and user.groups.filter(name=LIGHTWELL_READONLY_GROUP_NAME).exists()
+
+    def _is_content_listing_request(self, request):
+        return "/api/v3/content/" in request.META.get("PATH_INFO", "")
+
+    def _check_lightwell_subscription(self, request, domain):
+        if not (domain and domain.name == LIGHTWELL_DOMAIN_NAME):
+            return None
+        if not self._is_content_listing_request(request):
+            return None
+
+        decoded_header = self.get_decoded_identity_header(request)
+        org_id = self.get_org_id(decoded_header)
+        if org_id is None:
+            return None
+
+        guard = FeatureContentGuard(features=[settings.LIGHTWELL_FEATURE_NAME])
+        try:
+            if guard.check_feature(org_id):
+                return True
+        except PermissionError:
+            pass
+        return None
 
     def _check_pypi_safe_method_access(self, request, view, domain):  # noqa: PLR0911
         """
@@ -142,6 +165,10 @@ class DomainBasedPermission(BasePermission):
         pypi_access = self._check_pypi_safe_method_access(request, view, domain)
         if pypi_access is not None:
             return pypi_access
+
+        subscription_access = self._check_lightwell_subscription(request, domain)
+        if subscription_access is not None:
+            return subscription_access
 
         if domain and domain.name == LIGHTWELL_DOMAIN_NAME and self._has_lightwell_readonly_group_access(user):
             return True

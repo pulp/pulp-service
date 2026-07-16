@@ -18,6 +18,7 @@ FEATURE_SERVICE_API_CERT_PATH = ""
 FEATURE_SERVICE_API_CONNECT_TIMEOUT = 2
 FEATURE_SERVICE_API_READ_TIMEOUT = 5
 AUTHENTICATION_HEADER_DEBUG = False
+LIGHTWELL_FEATURE_NAME = "lightwell-network"
 INSTALLED_APPS = "@merge django.contrib.admin.apps.SimpleAdminConfig,hijack,hijack.contrib.admin"
 TEST_TASK_INGESTION = False
 LOGIN_REDIRECT_URL = "/api/pulp-mgmt/"
