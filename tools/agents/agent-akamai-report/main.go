@@ -88,6 +88,12 @@ func run() error {
 	}
 	fmt.Fprintf(os.Stderr, "[traffic] results written to %s\n", outPath)
 
+	htmlPath, err := generateHTMLReport(outputDir, results)
+	if err != nil {
+		return fmt.Errorf("generate HTML report: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "[traffic] HTML report written to %s\n", htmlPath)
+
 	// Build the LLM prompt.
 	question := *inputQuestion
 	if question == "" {
