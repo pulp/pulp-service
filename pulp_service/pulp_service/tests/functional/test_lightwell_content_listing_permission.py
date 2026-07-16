@@ -24,6 +24,7 @@ from uuid import uuid4
 import pytest
 import requests
 
+from pulp_service.app.authorization import LIGHTWELL_READONLY_GROUP_NAME
 from pulp_service.tests.functional.constants import (
     LIGHTWELL_ENTITLED_ORG_ID,
     LIGHTWELL_NOT_ENTITLED_ORG_ID,
@@ -32,6 +33,11 @@ from pulp_service.tests.functional.constants import (
 LIGHTWELL_DOMAIN_NAME = "lightwell"
 
 DOMAIN_OWNER_ORG_ID = "555555555"
+GROUP_MEMBER_ORG_ID = "666666666"
+
+
+def _combined_username(org_id, username):
+    return f"{org_id}|{username}"
 
 
 def _identity_header(org_id, username):
@@ -137,3 +143,86 @@ def test_domain_owner_can_list_content(configure_lightwell_domain):
     response = requests.get(content_url, headers=headers, timeout=30)
 
     assert response.status_code == 200
+
+
+def test_entitled_org_post_denied_on_content_endpoint(configure_lightwell_domain):
+    """A subscribed user cannot POST to a content listing endpoint -- the subscription check
+    only applies to SAFE_METHODS (GET/HEAD/OPTIONS)."""
+    content_url, _, _ = configure_lightwell_domain
+    headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-post-user")}
+
+    response = requests.post(content_url, headers=headers, json={}, timeout=30)
+
+    assert response.status_code in (401, 403)
+
+
+@pytest.fixture
+def lightwell_readonly_group(gen_group):
+    return gen_group(name=LIGHTWELL_READONLY_GROUP_NAME)
+
+
+@pytest.fixture
+def gen_readonly_group_member(pulpcore_bindings, gen_object_with_cleanup, lightwell_readonly_group):
+    def _gen_member(username_suffix):
+        username = f"readonly-member-{username_suffix}-{uuid4()}"
+        combined_username = _combined_username(GROUP_MEMBER_ORG_ID, username)
+        gen_object_with_cleanup(
+            pulpcore_bindings.UsersApi,
+            {"username": combined_username},
+        )
+        pulpcore_bindings.GroupsUsersApi.create(
+            group_href=lightwell_readonly_group.pulp_href,
+            group_user={"username": combined_username},
+        )
+        return _identity_header(GROUP_MEMBER_ORG_ID, username)
+
+    return _gen_member
+
+
+def test_readonly_group_member_without_subscription_can_list_content(
+    configure_lightwell_domain, gen_readonly_group_member
+):
+    """A user in the Lightwell-ReadOnly group whose org does not have the lightwell-network
+    feature can still list content via the group-based fallback path."""
+    content_url, _, _ = configure_lightwell_domain
+    headers = {"x-rh-identity": gen_readonly_group_member("content-list")}
+
+    response = requests.get(content_url, headers=headers, timeout=30)
+
+    assert response.status_code == 200
+
+
+def test_entitled_org_denied_on_non_lightwell_domain(
+    pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup, bindings_cfg
+):
+    """A subscribed user hitting /api/v3/content/ on a non-lightwell domain without a
+    DomainOrg association gets 403 -- the subscription check is scoped to the lightwell
+    domain name."""
+    other_domain_owner_header = _identity_header("777777777", "other-domain-owner")
+    domain_name = f"not-lightwell-{uuid4()}"
+
+    with anonymous_user:
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = other_domain_owner_header
+        gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
+
+        file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = other_domain_owner_header
+        gen_object_with_cleanup(
+            file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name
+        )
+
+    content_url = urljoin(bindings_cfg.host, f"/api/pulp/{domain_name}/api/v3/content/file/files/")
+    headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-wrong-domain-user")}
+
+    response = requests.get(content_url, headers=headers, timeout=30)
+
+    assert response.status_code == 403
+
+    pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+    file_bindings.RepositoriesFileApi.api_client.default_headers.pop("x-rh-identity", None)
