@@ -29,10 +29,7 @@ from uuid import uuid4
 
 import pytest
 import requests
-
-from pulp_service.app.authorization import LIGHTWELL_READONLY_GROUP_NAME
-
-LIGHTWELL_DOMAIN_NAME = "lightwell"
+from django.conf import settings
 
 # An org with no DomainOrg association with the test domain and no lightwell-network
 # feature entitlement; only used to own the test domain/repo/distribution.
@@ -40,6 +37,8 @@ DOMAIN_OWNER_ORG_ID = "555555555"
 # A distinct org used for the group members created in these tests, so they never
 # accidentally collide with the domain owner's DomainOrg association.
 GROUP_MEMBER_ORG_ID = "666666666"
+# See DOMAIN_ACCESS_POLICIES in settings.py
+LIGHTWELL_DOMAIN_NAME = "lightwell"
 
 
 def _identity_header(org_id, username):
@@ -62,7 +61,14 @@ def _combined_username(org_id, username):
 @pytest.fixture
 def lightwell_readonly_group(gen_group):
     """The hardcoded read-only group, created with its real (hardcoded) name."""
-    return gen_group(name=LIGHTWELL_READONLY_GROUP_NAME)
+    group = (
+        getattr(settings, "DOMAIN_ACCESS_POLICIES", {})
+        .get(
+            "lightwell",
+        )
+        .get("readonly_group")
+    )
+    return gen_group(name=group)
 
 
 @pytest.fixture
