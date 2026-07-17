@@ -5,87 +5,121 @@ trigger:
     labels: [needs-planning]
 
 workflow:
-  - id: plan
-    type: agent
-    agent: Planner
+  # Step 1: Detect issue type and parent
+  - id: detect
+    type: bridge
+    action: jira-get-issue
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      issue_title: "{{trigger.issue_title}}"
-      issue_body: "{{trigger.issue_body}}"
-      issue_url: "{{trigger.issue_url}}"
-    outputs: [plan]
+    outputs: [issue_type, parent_key]
 
-  - id: review
-    type: agent
-    agent: Plan Reviewer
-    depends: "plan.Succeeded"
-    max_iterations: 3
-    inputs:
-      issue_key: "{{trigger.issue_key}}"
-      issue_title: "{{trigger.issue_title}}"
-      issue_body: "{{trigger.issue_body}}"
-      issue_url: "{{trigger.issue_url}}"
-      plan: "{{steps.plan.outputs.plan}}"
-    outputs: [approved, feedback]
-    output_contract:
-      required: [approved, feedback]
-      allowed_values:
-        approved: ["true", "false"]
-      routing_field: approved
-      success_value: "true"
-
-  - id: revise
-    type: agent
-    agent: Planner
-    depends: "review.Failed"
-    max_iterations: 2
-    inputs:
-      issue_key: "{{trigger.issue_key}}"
-      issue_title: "{{trigger.issue_title}}"
-      issue_body: "{{trigger.issue_body}}"
-      issue_url: "{{trigger.issue_url}}"
-      review_feedback: "{{steps.review.outputs.feedback}}"
-    outputs: [plan]
-
-  - id: review-revised
-    type: agent
-    agent: Plan Reviewer
-    depends: "revise.Succeeded"
-    max_iterations: 2
-    inputs:
-      issue_key: "{{trigger.issue_key}}"
-      issue_title: "{{trigger.issue_title}}"
-      issue_body: "{{trigger.issue_body}}"
-      issue_url: "{{trigger.issue_url}}"
-      plan: "{{steps.revise.outputs.plan}}"
-    outputs: [approved, feedback]
-    output_contract:
-      required: [approved, feedback]
-      allowed_values:
-        approved: ["true", "false"]
-      routing_field: approved
-      success_value: "true"
-
-  - id: post-plan
+  # --- Flow 2: Non-epic WITH parent → redirect to epic ---
+  - id: redirect-comment
     type: bridge
     action: jira-add-comment
-    depends: "review.Succeeded"
+    depends: "detect.Succeeded"
+    condition: "steps.detect.outputs.issue_type != 'Epic' && steps.detect.outputs.parent_key != ''"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "{{steps.plan.outputs.plan}}"
+      body: "Planning should be done at the epic level. Please add needs-planning to {{steps.detect.outputs.parent_key}} instead."
 
-  - id: post-revised-plan
+  - id: redirect-remove-label
+    type: bridge
+    action: jira-update-issue
+    depends: "redirect-comment.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      remove_labels: ["needs-planning"]
+
+  # --- Flow 3: Standalone non-epic (no parent) → comment-based plan ---
+  - id: plan-standalone
+    type: agent
+    agent: Planner
+    depends: "detect.Succeeded"
+    condition: "steps.detect.outputs.issue_type != 'Epic' && steps.detect.outputs.parent_key == ''"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      flow: "standalone"
+    outputs: [plan]
+
+  - id: post-standalone-plan
     type: bridge
     action: jira-add-comment
-    depends: "review-revised.Succeeded"
+    depends: "plan-standalone.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "{{steps.revise.outputs.plan}}"
+      body: "{{steps.plan-standalone.outputs.plan}}"
 
+  # --- Flow 1: Epic → plan task lifecycle ---
+  - id: find-plan-task
+    type: bridge
+    action: jira-search-issues
+    depends: "detect.Succeeded"
+    condition: "steps.detect.outputs.issue_type == 'Epic'"
+    inputs:
+      jql: "parent = {{trigger.issue_key}} AND summary ~ 'Implementation Plan'"
+      max_results: 1
+    outputs: [issue_keys, total]
+
+  - id: create-plan-task
+    type: bridge
+    action: jira-create-issue
+    depends: "find-plan-task.Succeeded"
+    condition: "steps.find-plan-task.outputs.total == 0"
+    inputs:
+      project: "PULP"
+      summary: "Implementation Plan for {{trigger.issue_key}}"
+      issue_type: "Task"
+      parent: "{{trigger.issue_key}}"
+      labels: ["plan"]
+    outputs: [issue_key]
+
+  - id: plan-epic
+    type: agent
+    agent: Planner
+    depends: "create-plan-task.Succeeded || find-plan-task.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      flow: "epic"
+      new_plan_task_key: "{{steps.create-plan-task.outputs.issue_key}}"
+      existing_plan_task_keys: "{{steps.find-plan-task.outputs.issue_keys}}"
+    outputs: [plan, plan_task_key]
+
+  - id: update-plan-task
+    type: bridge
+    action: jira-update-issue
+    depends: "plan-epic.Succeeded"
+    inputs:
+      issue_key: "{{steps.plan-epic.outputs.plan_task_key}}"
+      description: "{{steps.plan-epic.outputs.plan}}"
+
+  - id: plan-changelog
+    type: bridge
+    action: jira-add-comment
+    depends: "update-plan-task.Succeeded"
+    inputs:
+      issue_key: "{{steps.plan-epic.outputs.plan_task_key}}"
+      body: "Plan created/updated. See the description for the current version."
+
+  - id: notify-epic
+    type: bridge
+    action: jira-add-comment
+    depends: "plan-changelog.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "Implementation plan created at {{steps.plan-epic.outputs.plan_task_key}}. The plan includes a draft task breakdown. Reply here to discuss or request changes."
+
+  # --- Failure handling ---
   - id: post-failure
     type: bridge
     action: jira-add-comment
-    depends: "plan.Failed || review-revised.Failed"
+    depends: "detect.Failed || find-plan-task.Failed || create-plan-task.Failed || plan-epic.Failed || plan-standalone.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "⚠️ Automated planning could not converge after multiple review rounds. Manual planning needed. Remove the `needs-planning` label to prevent re-triggering."
+      body: "Automated planning failed. Check the workflow logs for details."
