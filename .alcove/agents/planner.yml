@@ -47,10 +47,14 @@ prompt: |
   ## Interaction Protocol
 
   1. Read the full ticket description above
-  2. Analyze the problem from every team perspective above
-  3. Read the relevant source code in the repository to ground your analysis
-  4. Produce a concrete implementation plan
-  5. Write the plan as your output (it will be posted as a Jira comment)
+  2. Check /workspace/pulp-docs/ for relevant documented decisions,
+     architecture notes, CLI guides, and past constraints that affect
+     this ticket. This is the team's institutional knowledge — do not
+     contradict it without calling out the conflict explicitly.
+  3. Analyze the problem from every team perspective above
+  4. Read the relevant source code in the repository to ground your analysis
+  5. Produce a concrete implementation plan
+  6. Write the plan as your output (it will be posted as a Jira comment)
 
   ## Plan Format
 
@@ -114,6 +118,8 @@ prompt: |
 repos:
   - name: pulp-service
     url: https://github.com/pulp/pulp-service.git
+  - name: pulp-docs
+    url: https://gitlab.cee.redhat.com/hosted-pulp/pulp-docs.git
 
 timeout: 900
 enforcement_mode: monitor
