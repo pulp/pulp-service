@@ -11,6 +11,7 @@ from pulp_access_logs_exporter.content_parser import (
     parse_wheel_filename,
 )
 from pulp_access_logs_exporter.content_cloudwatch import (
+    _parse_request_time_ms,
     build_content_query,
     convert_content_to_arrow_table,
 )
@@ -50,6 +51,39 @@ class TestParseContentLogLine:
         line = '10.0.0.1 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/d/r/file.whl HTTP/1.1" 200 100 "-" "pip/24.0" cache:"HIT" artifact_size:"100" rh_org_id:"-" x_forwarded_for:"1.2.3.4"'
         result = parse_content_log_line(line)
         assert result["rh_org_id"] == "-"
+
+    def test_parses_request_time(self):
+        line = '10.128.4.123 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/default/dist/pkg-1.0-py3-none-any.whl HTTP/1.1" 200 19456789 "-" "pip/24.0" cache:"HIT" artifact_size:"19456789" rh_org_id:"123456" x_forwarded_for:"23.48.249.160,10.0.0.1" request_time:"0.042000"'
+        result = parse_content_log_line(line)
+        assert result is not None
+        assert result["request_time"] == "0.042000"
+
+    def test_parses_without_request_time(self):
+        line = '10.0.0.1 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/d/r/file.rpm HTTP/1.1" 200 100 "-" "dnf/4.0" cache:"MISS" artifact_size:"100" rh_org_id:"-" x_forwarded_for:"1.2.3.4"'
+        result = parse_content_log_line(line)
+        assert result is not None
+        assert result["request_time"] is None
+
+
+class TestParseRequestTimeMs:
+    def test_converts_seconds_to_milliseconds(self):
+        assert _parse_request_time_ms("0.042000") == 42
+        assert _parse_request_time_ms("0.003200") == 3
+        assert _parse_request_time_ms("0.156000") == 156
+        assert _parse_request_time_ms("1.234567") == 1235
+
+    def test_handles_none_and_dash(self):
+        assert _parse_request_time_ms(None) is None
+        assert _parse_request_time_ms("-") is None
+        assert _parse_request_time_ms("") is None
+
+    def test_handles_invalid_values(self):
+        assert _parse_request_time_ms("invalid") is None
+        assert _parse_request_time_ms("not_a_number") is None
+
+    def test_rounds_to_integer_milliseconds(self):
+        assert _parse_request_time_ms("0.0016") == 2  # 1.6ms rounds to 2
+        assert _parse_request_time_ms("0.0019") == 2  # 1.9ms rounds to 2
 
 
 class TestParseWheelFilename:
@@ -374,6 +408,9 @@ class TestContentToParquetPython:
         assert rows["cache_hit"][1] is False
         assert rows["distribution"][1] == "rhoai/3.5-EA2/cpu-ubi9"
 
+        assert rows["request_time_ms"][0] == 3  # 0.003200s = 3ms
+        assert rows["request_time_ms"][1] == 46  # 0.045600s = 45.6ms, rounds to 46
+
     def test_skips_invalid_and_non_matching_records(
         self, sample_content_cloudwatch_results
     ):
@@ -449,6 +486,9 @@ class TestContentToParquetRpm:
         assert rows["org_id"][1] == "555666"
         assert rows["distribution"][1] == "templates"
 
+        assert rows["request_time_ms"][0] == 78  # 0.078300s = 78ms
+        assert rows["request_time_ms"][1] == 2  # 0.002500s = 2ms
+
 
 class TestContentToParquetMaven:
     def test_converts_maven_downloads(
@@ -486,6 +526,10 @@ class TestContentToParquetMaven:
         assert rows["packaging"][2] == "jar"
         assert rows["cache_hit"][2] is True
 
+        assert rows["request_time_ms"][0] == 156  # 0.156000s = 156ms
+        assert rows["request_time_ms"][1] == 89  # 0.089000s = 89ms
+        assert rows["request_time_ms"][2] == 4  # 0.004200s = 4ms
+
     def test_skips_checksum_files(self):
         results = [
             {
@@ -522,6 +566,21 @@ class TestEmptyContentResults:
         table = convert_content_to_arrow_table([], "maven")
         assert table.num_rows == 0
         assert table.schema == MAVEN_SCHEMA
+
+
+class TestContentBackwardCompatibility:
+    def test_old_format_without_request_time(self):
+        """Old-format log lines (before request_time was added) produce request_time_ms=None."""
+        results = [
+            {
+                "@timestamp": "2026-06-09 14:30:00.000",
+                "message": '10.128.4.123 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/public-rhai/rhoai/3.5-EA2/cpu-ubi9/requests-2.34.2-2-py3-none-any.whl HTTP/1.1" 200 19456789 "-" "pip/24.0" cache:"HIT" artifact_size:"19456789" rh_org_id:"123456" x_forwarded_for:"23.48.249.160,10.0.0.1"',
+            },
+        ]
+        table = convert_content_to_arrow_table(results, "python")
+        assert table.num_rows == 1
+        rows = table.to_pydict()
+        assert rows["request_time_ms"][0] is None
 
 
 class TestContentQueryBuilding:

@@ -46,23 +46,23 @@ def sample_content_cloudwatch_results():
     return [
         {
             '@timestamp': '2026-06-09 14:30:00.000',
-            'message': '10.128.4.123 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/public-rhai/rhoai/3.5-EA2/cpu-ubi9/requests-2.34.2-2-py3-none-any.whl HTTP/1.1" 200 19456789 "-" "pip/24.0" cache:"HIT" artifact_size:"19456789" rh_org_id:"123456" x_forwarded_for:"23.48.249.160,10.0.0.1"',
+            'message': '10.128.4.123 [09/Jun/2026:14:30:00 +0000] "GET /api/pulp-content/public-rhai/rhoai/3.5-EA2/cpu-ubi9/requests-2.34.2-2-py3-none-any.whl HTTP/1.1" 200 19456789 "-" "pip/24.0" cache:"HIT" artifact_size:"19456789" rh_org_id:"123456" x_forwarded_for:"23.48.249.160,10.0.0.1" request_time:"0.003200"',
         },
         {
             '@timestamp': '2026-06-09 14:30:01.000',
-            'message': '10.128.4.124 [09/Jun/2026:14:30:01 +0000] "GET /api/pulp-content/public-rhai/rhoai/3.5-EA2/cpu-ubi9/numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata HTTP/1.1" 200 1234 "-" "uv/0.9.26" cache:"MISS" artifact_size:"1234" rh_org_id:"789012" x_forwarded_for:"10.20.30.40"',
+            'message': '10.128.4.124 [09/Jun/2026:14:30:01 +0000] "GET /api/pulp-content/public-rhai/rhoai/3.5-EA2/cpu-ubi9/numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata HTTP/1.1" 200 1234 "-" "uv/0.9.26" cache:"MISS" artifact_size:"1234" rh_org_id:"789012" x_forwarded_for:"10.20.30.40" request_time:"0.045600"',
         },
         {
             '@timestamp': '2026-06-09 14:30:02.000',
-            'message': '10.128.4.125 [09/Jun/2026:14:30:02 +0000] "GET /api/pulp-content/public-copr/packit/teemtee-tmt-4901/fedora-43-x86_64/Packages/b/bash-5.2.26-4.fc43.x86_64.rpm HTTP/1.1" 200 5678901 "-" "dnf/4.18.0" cache:"MISS" artifact_size:"5678901" rh_org_id:"-" x_forwarded_for:"192.168.1.1"',
+            'message': '10.128.4.125 [09/Jun/2026:14:30:02 +0000] "GET /api/pulp-content/public-copr/packit/teemtee-tmt-4901/fedora-43-x86_64/Packages/b/bash-5.2.26-4.fc43.x86_64.rpm HTTP/1.1" 200 5678901 "-" "dnf/4.18.0" cache:"MISS" artifact_size:"5678901" rh_org_id:"-" x_forwarded_for:"192.168.1.1" request_time:"0.078300"',
         },
         {
             '@timestamp': '2026-06-09 14:30:03.000',
-            'message': '10.128.4.126 [09/Jun/2026:14:30:03 +0000] "GET /api/pulp-content/public-copr/packit/teemtee-tmt-4901/fedora-43-x86_64/repodata/repomd.xml HTTP/1.1" 200 3456 "-" "dnf/4.18.0" cache:"HIT" artifact_size:"3456" rh_org_id:"-" x_forwarded_for:"192.168.1.2"',
+            'message': '10.128.4.126 [09/Jun/2026:14:30:03 +0000] "GET /api/pulp-content/public-copr/packit/teemtee-tmt-4901/fedora-43-x86_64/repodata/repomd.xml HTTP/1.1" 200 3456 "-" "dnf/4.18.0" cache:"HIT" artifact_size:"3456" rh_org_id:"-" x_forwarded_for:"192.168.1.2" request_time:"0.001200"',
         },
         {
             '@timestamp': '2026-06-09 14:30:04.000',
-            'message': '10.128.4.127 [09/Jun/2026:14:30:04 +0000] "GET /api/pulp-content/ccac33ac/templates/kernel-core-6.8.0-300.fc40.x86_64.rpm HTTP/1.1" 200 99887766 "-" "yum/4.0" cache:"HIT" artifact_size:"99887766" rh_org_id:"555666" x_forwarded_for:"172.16.0.1"',
+            'message': '10.128.4.127 [09/Jun/2026:14:30:04 +0000] "GET /api/pulp-content/ccac33ac/templates/kernel-core-6.8.0-300.fc40.x86_64.rpm HTTP/1.1" 200 99887766 "-" "yum/4.0" cache:"HIT" artifact_size:"99887766" rh_org_id:"555666" x_forwarded_for:"172.16.0.1" request_time:"0.002500"',
         },
     ]
 
@@ -73,15 +73,15 @@ def sample_maven_cloudwatch_results():
     return [
         {
             "@timestamp": "2026-06-20 13:47:49.000",
-            "message": '10.131.32.14 [20/Jun/2026:13:47:49 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/cloud/spring-cloud-config-server/4.3.0-redhat-1/spring-cloud-config-server-4.3.0-redhat-1.jar HTTP/1.1" 302 727 "-" "curl/8.15.0" cache:"MISS" artifact_size:"18432000" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140, 66.187.232.140, 23.220.105.201"',
+            "message": '10.131.32.14 [20/Jun/2026:13:47:49 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/cloud/spring-cloud-config-server/4.3.0-redhat-1/spring-cloud-config-server-4.3.0-redhat-1.jar HTTP/1.1" 302 727 "-" "curl/8.15.0" cache:"MISS" artifact_size:"18432000" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140, 66.187.232.140, 23.220.105.201" request_time:"0.156000"',
         },
         {
             "@timestamp": "2026-06-20 13:47:50.000",
-            "message": '10.128.2.5 [20/Jun/2026:13:47:50 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/spring-expression/5.3.18-redhat-1/spring-expression-5.3.18-redhat-1.pom HTTP/1.1" 302 729 "-" "Apache-Maven/3.9.11 (Java 25.0.3; Linux 7.0.12-201.fc44.x86_64)" cache:"MISS" artifact_size:"2048" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140"',
+            "message": '10.128.2.5 [20/Jun/2026:13:47:50 +0000] "GET /api/pulp-content/balor-stage/maven-releases/org/springframework/spring-expression/5.3.18-redhat-1/spring-expression-5.3.18-redhat-1.pom HTTP/1.1" 302 729 "-" "Apache-Maven/3.9.11 (Java 25.0.3; Linux 7.0.12-201.fc44.x86_64)" cache:"MISS" artifact_size:"2048" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140" request_time:"0.089000"',
         },
         {
             "@timestamp": "2026-06-20 13:47:51.000",
-            "message": '10.129.8.16 [20/Jun/2026:13:47:51 +0000] "GET /api/pulp-content/balor-stage/maven-releases/net/minidev/json-smart/2.5.0/json-smart-2.5.0-sources.jar HTTP/1.1" 302 733 "-" "curl/8.15.0" cache:"HIT" artifact_size:"45056" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140"',
+            "message": '10.129.8.16 [20/Jun/2026:13:47:51 +0000] "GET /api/pulp-content/balor-stage/maven-releases/net/minidev/json-smart/2.5.0/json-smart-2.5.0-sources.jar HTTP/1.1" 302 733 "-" "curl/8.15.0" cache:"HIT" artifact_size:"45056" rh_org_id:"5894300" x_forwarded_for:"66.187.232.140" request_time:"0.004200"',
         },
     ]
 
