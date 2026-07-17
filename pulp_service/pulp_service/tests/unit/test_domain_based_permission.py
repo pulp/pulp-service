@@ -15,6 +15,8 @@ from unittest.mock import MagicMock, patch
 
 from django.test import override_settings
 
+from pulpcore.plugin.models import Domain
+
 from pulp_service.app.authorization import DomainBasedPermission
 
 
@@ -732,3 +734,127 @@ class TestGenericDomainAccessPolicies:
         view = _make_regular_view()
 
         assert permission.has_permission(request, view) is False
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": ["/api/v3/content/"],
+            },
+        }
+    )
+    @patch("pulp_service.app.authorization.FeatureContentGuard")
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_subscription_feature_guard_exception_denies_access(
+        self, mock_domain_org, mock_get_domain_pk, mock_guard_cls
+    ):
+        """If FeatureContentGuard.check_feature raises, access denied and guard still invoked."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        mock_guard_cls.return_value.check_feature.side_effect = Exception("guard-error")
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+        mock_guard_cls.return_value.check_feature.assert_called_once_with("12345")
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "Lightwell-ReadOnly",
+                "subscription_feature": "lightwell-network",
+            },
+        }
+    )
+    def test_subscription_feature_without_endpoints_only_grants_via_readonly_group(self):
+        """Policy with subscription_feature but no subscription_endpoints skips
+        subscription logic; only readonly_group grants access."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(in_readonly_group=True),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+
+        assert permission.has_permission(request, _make_regular_view()) is True
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "Lightwell-ReadOnly",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": [],
+            },
+        }
+    )
+    def test_empty_subscription_endpoints_only_grants_via_readonly_group(self):
+        """Policy with empty subscription_endpoints list skips subscription logic;
+        only readonly_group grants access."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(in_readonly_group=True),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+
+        assert permission.has_permission(request, _make_regular_view()) is True
+
+
+class TestScopeQueryset:
+    """Verify scope_queryset includes domains from DOMAIN_ACCESS_POLICIES
+    when user belongs to the readonly_group."""
+
+    @override_settings(DOMAIN_ACCESS_POLICIES=_MULTI_DOMAIN_POLICIES)
+    def test_scope_queryset_includes_readonly_policy_domains(self):
+        """User in readonly groups sees domains from matching policies in queryset."""
+        permission = DomainBasedPermission()
+        user = _make_authenticated_user(in_readonly_group=True)
+        request = _make_request(method="GET", user=user)
+
+        view = MagicMock()
+        view.request = request
+        qs = MagicMock()
+        qs.model = Domain
+
+        permission.scope_queryset(view, qs)
+
+        qs.filter.assert_called_once()
+        filter_arg = qs.filter.call_args[0][0]
+        q_str = str(filter_arg)
+        assert "lightwell" in q_str
+        assert "acme" in q_str
+
+    @override_settings(DOMAIN_ACCESS_POLICIES={})
+    def test_scope_queryset_empty_policies_no_policy_domains(self):
+        """With no policies, scope_queryset filters by DomainOrg only."""
+        permission = DomainBasedPermission()
+        user = _make_authenticated_user(in_readonly_group=True)
+        request = _make_request(method="GET", user=user, org_id="12345")
+
+        view = MagicMock()
+        view.request = request
+        qs = MagicMock()
+        qs.model = Domain
+
+        permission.scope_queryset(view, qs)
+
+        qs.filter.assert_called_once()
+        filter_arg = qs.filter.call_args[0][0]
+        q_str = str(filter_arg)
+        assert "lightwell" not in q_str
+        assert "acme" not in q_str

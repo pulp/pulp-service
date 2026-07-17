@@ -109,15 +109,28 @@ class DomainBasedPermission(BasePermission):
             _logger.exception("Unexpected error evaluating content guard permit")
             return False
 
+    @staticmethod
+    def _get_domain_policies():
+        return getattr(settings, "DOMAIN_ACCESS_POLICIES", {})
+
     def _check_domain_policy(self, request, domain, user, policy):
         """
         Returns True if the policy grants access, or None if it does not apply.
+
+        ``subscription_endpoints`` are treated as path prefixes: a policy applies
+        when the request path (after stripping the domain routing prefix) starts
+        with one of the configured endpoint values.
         """
         subscription_feature = policy.get("subscription_feature")
         subscription_endpoints = policy.get("subscription_endpoints", [])
         if subscription_feature and subscription_endpoints:
             path = request.path_info
-            if any(endpoint in path for endpoint in subscription_endpoints):
+            if domain:
+                api_root = getattr(settings, "API_ROOT", "/api/pulp/")
+                domain_prefix = f"{api_root.rstrip('/')}/{domain.name}/"
+                if path.startswith(domain_prefix):
+                    path = "/" + path[len(domain_prefix) :]
+            if any(path.startswith(endpoint) for endpoint in subscription_endpoints):
                 decoded_header = self.get_decoded_identity_header(request)
                 org_id = self.get_org_id(decoded_header)
                 guard = FeatureContentGuard(features=[subscription_feature])
@@ -146,12 +159,10 @@ class DomainBasedPermission(BasePermission):
         if pypi_access is not None:
             return pypi_access
 
-        domain_policy_settings = getattr(settings, "DOMAIN_ACCESS_POLICIES", {})
-
         if not domain:
             return None
 
-        policy = domain_policy_settings.get(domain.name, {})
+        policy = self._get_domain_policies().get(domain.name, {})
         if not policy:
             return None
 
@@ -270,9 +281,7 @@ class DomainBasedPermission(BasePermission):
         if org_id is not None:
             query |= Q(domain_orgs__org_id=org_id)
 
-        domain_policy_settings = getattr(settings, "DOMAIN_ACCESS_POLICIES", {})
-
-        for domain_name, policy in domain_policy_settings.items():
+        for domain_name, policy in self._get_domain_policies().items():
             group = policy.get("readonly_group")
             if group and user.is_authenticated and user.groups.filter(name=group).exists():
                 query |= Q(name=domain_name)
