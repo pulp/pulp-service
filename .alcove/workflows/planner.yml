@@ -113,13 +113,13 @@ workflow:
     depends: "plan-changelog.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "Implementation plan created at {{steps.plan-epic.outputs.plan_task_key}}. The plan includes a draft task breakdown. Reply here to discuss or request changes. When ready, reply 'approve plan' and I'll create the tasks."
+      body: "Implementation plan created at {{steps.plan-epic.outputs.plan_task_key}}. The plan includes a draft task breakdown. Reply here to discuss or request changes."
 
   # --- Failure handling ---
   - id: post-failure
     type: bridge
     action: jira-add-comment
-    depends: "plan-epic.Failed || plan-standalone.Failed"
+    depends: "detect.Failed || find-plan-task.Failed || create-plan-task.Failed || plan-epic.Failed || plan-standalone.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Automated planning failed. Check the workflow logs for details."
