@@ -14,7 +14,7 @@ workflow:
     outputs: [issue_type, parent_key]
 
   # --- Flow 2: Non-epic WITH parent → redirect to epic ---
-  - id: redirect-comment
+  - id: redirect_comment
     type: bridge
     action: jira-add-comment
     depends: "detect.Succeeded"
@@ -23,16 +23,16 @@ workflow:
       issue_key: "{{trigger.issue_key}}"
       body: "Planning should be done at the epic level. Please add needs-planning to {{steps.detect.outputs.parent_key}} instead."
 
-  - id: redirect-remove-label
+  - id: redirect_remove_label
     type: bridge
     action: jira-update-issue
-    depends: "redirect-comment.Succeeded"
+    depends: "redirect_comment.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       remove_labels: ["needs-planning"]
 
   # --- Flow 3: Standalone non-epic (no parent) → comment-based plan ---
-  - id: plan-standalone
+  - id: plan_standalone
     type: agent
     agent: Planner
     depends: "detect.Succeeded"
@@ -45,16 +45,16 @@ workflow:
       flow: "standalone"
     outputs: [plan]
 
-  - id: post-standalone-plan
+  - id: post_standalone_plan
     type: bridge
     action: jira-add-comment
-    depends: "plan-standalone.Succeeded"
+    depends: "plan_standalone.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "{{steps.plan-standalone.outputs.plan}}"
+      body: "{{steps.plan_standalone.outputs.plan}}"
 
   # --- Flow 1: Epic → plan task lifecycle ---
-  - id: find-plan-task
+  - id: find_plan_task
     type: bridge
     action: jira-search-issues
     depends: "detect.Succeeded"
@@ -64,11 +64,11 @@ workflow:
       max_results: 1
     outputs: [issue_keys, total]
 
-  - id: create-plan-task
+  - id: create_plan_task
     type: bridge
     action: jira-create-issue
-    depends: "find-plan-task.Succeeded"
-    condition: "steps.find-plan-task.outputs.total == 0"
+    depends: "find_plan_task.Succeeded"
+    condition: "steps.find_plan_task.outputs.total == 0"
     inputs:
       project: "PULP"
       summary: "Implementation Plan for {{trigger.issue_key}}"
@@ -77,49 +77,49 @@ workflow:
       labels: ["plan"]
     outputs: [issue_key]
 
-  - id: plan-epic
+  - id: plan_epic
     type: agent
     agent: Planner
-    depends: "create-plan-task.Succeeded || find-plan-task.Succeeded"
+    depends: "create_plan_task.Succeeded || find_plan_task.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       issue_title: "{{trigger.issue_title}}"
       issue_body: "{{trigger.issue_body}}"
       issue_url: "{{trigger.issue_url}}"
       flow: "epic"
-      new_plan_task_key: "{{steps.create-plan-task.outputs.issue_key}}"
-      existing_plan_task_keys: "{{steps.find-plan-task.outputs.issue_keys}}"
+      new_plan_task_key: "{{steps.create_plan_task.outputs.issue_key}}"
+      existing_plan_task_keys: "{{steps.find_plan_task.outputs.issue_keys}}"
     outputs: [plan, plan_task_key]
 
-  - id: update-plan-task
+  - id: update_plan_task
     type: bridge
     action: jira-update-issue
-    depends: "plan-epic.Succeeded"
+    depends: "plan_epic.Succeeded"
     inputs:
-      issue_key: "{{steps.plan-epic.outputs.plan_task_key}}"
-      description: "{{steps.plan-epic.outputs.plan}}"
+      issue_key: "{{steps.plan_epic.outputs.plan_task_key}}"
+      description: "{{steps.plan_epic.outputs.plan}}"
 
-  - id: plan-changelog
+  - id: plan_changelog
     type: bridge
     action: jira-add-comment
-    depends: "update-plan-task.Succeeded"
+    depends: "update_plan_task.Succeeded"
     inputs:
-      issue_key: "{{steps.plan-epic.outputs.plan_task_key}}"
+      issue_key: "{{steps.plan_epic.outputs.plan_task_key}}"
       body: "Plan created/updated. See the description for the current version."
 
-  - id: notify-epic
+  - id: notify_epic
     type: bridge
     action: jira-add-comment
-    depends: "plan-changelog.Succeeded"
+    depends: "plan_changelog.Succeeded"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "Implementation plan created at {{steps.plan-epic.outputs.plan_task_key}}. The plan includes a draft task breakdown. Reply here to discuss or request changes."
+      body: "Implementation plan created at {{steps.plan_epic.outputs.plan_task_key}}. The plan includes a draft task breakdown. Reply here to discuss or request changes."
 
   # --- Failure handling ---
-  - id: post-failure
+  - id: post_failure
     type: bridge
     action: jira-add-comment
-    depends: "detect.Failed || find-plan-task.Failed || create-plan-task.Failed || plan-epic.Failed || plan-standalone.Failed"
+    depends: "detect.Failed || find_plan_task.Failed || create_plan_task.Failed || plan_epic.Failed || plan_standalone.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Automated planning failed. Check the workflow logs for details."
