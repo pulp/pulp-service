@@ -810,6 +810,60 @@ class TestGenericDomainAccessPolicies:
 
         assert permission.has_permission(request, _make_regular_view()) is True
 
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": ["/api/v3/content/"],
+            },
+        },
+        API_ROOT="/api/pulp/",
+    )
+    @patch("pulp_service.app.authorization.check_subscription", return_value=True)
+    def test_domain_prefix_stripped_before_endpoint_matching(self, mock_check_sub):
+        """Requests routed through the domain prefix (e.g. /api/pulp/lightwell/api/v3/content/...)
+        must have the prefix stripped before matching against subscription_endpoints."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(),
+            domain=domain,
+            path_info="/api/pulp/lightwell/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is True
+        mock_check_sub.assert_called_once_with("12345", ["lightwell-network"])
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "Lightwell-ReadOnly",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": ["/api/v3/content/"],
+            },
+        }
+    )
+    @patch("pulp_service.app.authorization.check_subscription", side_effect=Exception("service down"))
+    def test_subscription_failure_falls_back_to_readonly_group(self, mock_check_sub):
+        """When check_subscription raises but user is in the readonly_group,
+        access is still granted via the group fallback."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(in_readonly_group=True),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is True
+
 
 class TestScopeQueryset:
     """Verify scope_queryset includes domains from DOMAIN_ACCESS_POLICIES
