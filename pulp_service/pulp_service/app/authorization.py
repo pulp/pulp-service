@@ -13,7 +13,8 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import extract_pk, get_domain_pk
 
-from pulp_service.app.models import DomainOrg, FeatureContentGuard
+from pulp_service.app.features_service import check_subscription
+from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
 org_id_var = ContextVar("org_id")
@@ -133,9 +134,8 @@ class DomainBasedPermission(BasePermission):
             if any(path.startswith(endpoint) for endpoint in subscription_endpoints):
                 decoded_header = self.get_decoded_identity_header(request)
                 org_id = self.get_org_id(decoded_header)
-                guard = FeatureContentGuard(features=[subscription_feature])
                 try:
-                    if org_id and guard.check_feature(org_id):
+                    if org_id and check_subscription(org_id, [subscription_feature]):
                         return True
                 except Exception:
                     _logger.exception("Unexpected error checking %s subscription", subscription_feature)
