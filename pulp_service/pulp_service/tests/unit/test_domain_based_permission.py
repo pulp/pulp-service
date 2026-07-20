@@ -687,10 +687,9 @@ class TestGenericDomainAccessPolicies:
             },
         }
     )
-    @patch("pulp_service.app.authorization.FeatureContentGuard")
-    def test_subscription_path_matches_and_entitled(self, mock_guard_cls):
+    @patch("pulp_service.app.authorization.check_subscription", return_value=True)
+    def test_subscription_path_matches_and_entitled(self, mock_check_sub):
         """When path matches subscription_endpoints and org has the feature, access granted."""
-        mock_guard_cls.return_value.check_feature.return_value = True
         permission = DomainBasedPermission()
         domain = _make_domain("lightwell")
         request = _make_request(
@@ -703,8 +702,7 @@ class TestGenericDomainAccessPolicies:
         view = _make_regular_view()
 
         assert permission.has_permission(request, view) is True
-        mock_guard_cls.assert_called_once_with(features=["lightwell-network"])
-        mock_guard_cls.return_value.check_feature.assert_called_once_with("12345")
+        mock_check_sub.assert_called_once_with("12345", ["lightwell-network"])
 
     @override_settings(
         DOMAIN_ACCESS_POLICIES={
@@ -715,13 +713,12 @@ class TestGenericDomainAccessPolicies:
             },
         }
     )
-    @patch("pulp_service.app.authorization.FeatureContentGuard")
+    @patch("pulp_service.app.authorization.check_subscription", return_value=False)
     @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
     @patch("pulp_service.app.authorization.DomainOrg.objects")
-    def test_subscription_path_matches_but_not_entitled(self, mock_domain_org, mock_get_domain_pk, mock_guard_cls):
+    def test_subscription_path_matches_but_not_entitled(self, mock_domain_org, mock_get_domain_pk, mock_check_sub):
         """When path matches but org lacks the feature and no readonly_group, denied."""
         mock_domain_org.filter.return_value.exists.return_value = False
-        mock_guard_cls.return_value.check_feature.return_value = False
         permission = DomainBasedPermission()
         domain = _make_domain("lightwell")
         request = _make_request(
@@ -744,15 +741,14 @@ class TestGenericDomainAccessPolicies:
             },
         }
     )
-    @patch("pulp_service.app.authorization.FeatureContentGuard")
+    @patch("pulp_service.app.authorization.check_subscription", side_effect=Exception("sub-error"))
     @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
     @patch("pulp_service.app.authorization.DomainOrg.objects")
     def test_subscription_feature_guard_exception_denies_access(
-        self, mock_domain_org, mock_get_domain_pk, mock_guard_cls
+        self, mock_domain_org, mock_get_domain_pk, mock_check_sub
     ):
-        """If FeatureContentGuard.check_feature raises, access denied and guard still invoked."""
+        """If check_subscription raises, access denied and subscription still checked."""
         mock_domain_org.filter.return_value.exists.return_value = False
-        mock_guard_cls.return_value.check_feature.side_effect = Exception("guard-error")
         permission = DomainBasedPermission()
         domain = _make_domain("lightwell")
         request = _make_request(
@@ -765,7 +761,7 @@ class TestGenericDomainAccessPolicies:
         view = _make_regular_view()
 
         assert permission.has_permission(request, view) is False
-        mock_guard_cls.return_value.check_feature.assert_called_once_with("12345")
+        mock_check_sub.assert_called_once_with("12345", ["lightwell-network"])
 
     @override_settings(
         DOMAIN_ACCESS_POLICIES={
