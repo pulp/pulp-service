@@ -13,6 +13,10 @@ from base64 import b64encode
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from django.test import override_settings
+
+from pulpcore.plugin.models import Domain
+
 from pulp_service.app.authorization import DomainBasedPermission
 
 
@@ -21,7 +25,14 @@ def _encode_identity_header(org_id):
     return b64encode(json.dumps(identity).encode()).decode()
 
 
-def _make_request(method="GET", user=None, domain=None, view_name="pypi-metadata", org_id=None):
+def _make_request(
+    method="GET",
+    user=None,
+    domain=None,
+    view_name="pypi-metadata",
+    org_id=None,
+    path_info="/api/pypi/test/main/simple/",
+):
     """Build a mock DRF request."""
     request = MagicMock()
     request.method = method
@@ -29,7 +40,8 @@ def _make_request(method="GET", user=None, domain=None, view_name="pypi-metadata
     request.pulp_domain = domain
     request.resolver_match = MagicMock()
     request.resolver_match.view_name = view_name
-    request.META = {"REQUEST_METHOD": method, "PATH_INFO": "/api/pypi/test/main/simple/"}
+    request.path_info = path_info
+    request.META = {"REQUEST_METHOD": method, "PATH_INFO": path_info}
     if org_id is not None:
         request.META["HTTP_X_RH_IDENTITY"] = _encode_identity_header(org_id)
     return request
@@ -564,3 +576,285 @@ class TestPermitUnexpectedError:
             permission.has_permission(request, view)
 
         assert any("Unexpected error" in r.message and "guard permit" in r.message for r in caplog.records)
+
+
+_MULTI_DOMAIN_POLICIES = {
+    "lightwell": {
+        "readonly_group": "Lightwell-ReadOnly",
+        "subscription_feature": "lightwell-network",
+        "subscription_endpoints": ["/api/v3/content/"],
+    },
+    "acme": {
+        "readonly_group": "Acme-ReadOnly",
+        "subscription_feature": "acme-feature",
+        "subscription_endpoints": ["/api/v3/content/"],
+    },
+}
+
+
+class TestGenericDomainAccessPolicies:
+    """Verify DOMAIN_ACCESS_POLICIES supports multiple domains, that an empty
+    config disables policy-based access, and that subscription endpoint path
+    matching works correctly."""
+
+    @override_settings(DOMAIN_ACCESS_POLICIES={})
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_empty_policies_readonly_group_no_access(self, mock_domain_org, mock_get_domain_pk):
+        """With no policies configured, readonly group membership grants nothing."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(method="GET", user=_make_authenticated_user(in_readonly_group=True), domain=domain)
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+
+    @override_settings(DOMAIN_ACCESS_POLICIES=_MULTI_DOMAIN_POLICIES)
+    def test_second_domain_readonly_group_grants_access(self):
+        """A second domain's readonly_group policy grants read access."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("acme")
+        request = _make_request(method="GET", user=_make_authenticated_user(in_readonly_group=True), domain=domain)
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is True
+
+    @override_settings(DOMAIN_ACCESS_POLICIES=_MULTI_DOMAIN_POLICIES)
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_second_domain_write_denied(self, mock_domain_org, mock_get_domain_pk):
+        """Readonly group on a second domain still denies write access."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("acme")
+        request = _make_request(
+            method="POST",
+            user=_make_authenticated_user(in_readonly_group=True),
+            domain=domain,
+            view_name="repositories-list",
+        )
+
+        assert permission.has_permission(request, MagicMock()) is False
+
+    @override_settings(DOMAIN_ACCESS_POLICIES={"acme": {"readonly_group": "Acme-ReadOnly"}})
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_policy_scoped_to_own_domain(self, mock_domain_org, mock_get_domain_pk):
+        """A policy for 'acme' grants nothing on 'other-domain'."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("other-domain")
+        request = _make_request(method="GET", user=_make_authenticated_user(in_readonly_group=True), domain=domain)
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": ["/api/v3/content/"],
+            },
+        }
+    )
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_subscription_path_no_match_skips_check(self, mock_domain_org, mock_get_domain_pk):
+        """When request path doesn't match subscription_endpoints and no readonly_group,
+        no policy-based access is granted."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(),
+            domain=domain,
+            path_info="/api/v3/repositories/",
+            org_id="12345",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": ["/api/v3/content/"],
+            },
+        }
+    )
+    @patch("pulp_service.app.authorization.FeatureContentGuard")
+    def test_subscription_path_matches_and_entitled(self, mock_guard_cls):
+        """When path matches subscription_endpoints and org has the feature, access granted."""
+        mock_guard_cls.return_value.check_feature.return_value = True
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is True
+        mock_guard_cls.assert_called_once_with(features=["lightwell-network"])
+        mock_guard_cls.return_value.check_feature.assert_called_once_with("12345")
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": ["/api/v3/content/"],
+            },
+        }
+    )
+    @patch("pulp_service.app.authorization.FeatureContentGuard")
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_subscription_path_matches_but_not_entitled(self, mock_domain_org, mock_get_domain_pk, mock_guard_cls):
+        """When path matches but org lacks the feature and no readonly_group, denied."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        mock_guard_cls.return_value.check_feature.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": ["/api/v3/content/"],
+            },
+        }
+    )
+    @patch("pulp_service.app.authorization.FeatureContentGuard")
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_subscription_feature_guard_exception_denies_access(
+        self, mock_domain_org, mock_get_domain_pk, mock_guard_cls
+    ):
+        """If FeatureContentGuard.check_feature raises, access denied and guard still invoked."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        mock_guard_cls.return_value.check_feature.side_effect = Exception("guard-error")
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+        mock_guard_cls.return_value.check_feature.assert_called_once_with("12345")
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "Lightwell-ReadOnly",
+                "subscription_feature": "lightwell-network",
+            },
+        }
+    )
+    def test_subscription_feature_without_endpoints_only_grants_via_readonly_group(self):
+        """Policy with subscription_feature but no subscription_endpoints skips
+        subscription logic; only readonly_group grants access."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(in_readonly_group=True),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+
+        assert permission.has_permission(request, _make_regular_view()) is True
+
+    @override_settings(
+        DOMAIN_ACCESS_POLICIES={
+            "lightwell": {
+                "readonly_group": "Lightwell-ReadOnly",
+                "subscription_feature": "lightwell-network",
+                "subscription_endpoints": [],
+            },
+        }
+    )
+    def test_empty_subscription_endpoints_only_grants_via_readonly_group(self):
+        """Policy with empty subscription_endpoints list skips subscription logic;
+        only readonly_group grants access."""
+        permission = DomainBasedPermission()
+        domain = _make_domain("lightwell")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(in_readonly_group=True),
+            domain=domain,
+            path_info="/api/v3/content/rpm/packages/",
+            org_id="12345",
+        )
+
+        assert permission.has_permission(request, _make_regular_view()) is True
+
+
+class TestScopeQueryset:
+    """Verify scope_queryset includes domains from DOMAIN_ACCESS_POLICIES
+    when user belongs to the readonly_group."""
+
+    @override_settings(DOMAIN_ACCESS_POLICIES=_MULTI_DOMAIN_POLICIES)
+    def test_scope_queryset_includes_readonly_policy_domains(self):
+        """User in readonly groups sees domains from matching policies in queryset."""
+        permission = DomainBasedPermission()
+        user = _make_authenticated_user(in_readonly_group=True)
+        request = _make_request(method="GET", user=user)
+
+        view = MagicMock()
+        view.request = request
+        qs = MagicMock()
+        qs.model = Domain
+
+        permission.scope_queryset(view, qs)
+
+        qs.filter.assert_called_once()
+        filter_arg = qs.filter.call_args[0][0]
+        q_str = str(filter_arg)
+        assert "lightwell" in q_str
+        assert "acme" in q_str
+
+    @override_settings(DOMAIN_ACCESS_POLICIES={})
+    def test_scope_queryset_empty_policies_no_policy_domains(self):
+        """With no policies, scope_queryset filters by DomainOrg only."""
+        permission = DomainBasedPermission()
+        user = _make_authenticated_user(in_readonly_group=True)
+        request = _make_request(method="GET", user=user, org_id="12345")
+
+        view = MagicMock()
+        view.request = request
+        qs = MagicMock()
+        qs.model = Domain
+
+        permission.scope_queryset(view, qs)
+
+        qs.filter.assert_called_once()
+        filter_arg = qs.filter.call_args[0][0]
+        q_str = str(filter_arg)
+        assert "lightwell" not in q_str
+        assert "acme" not in q_str

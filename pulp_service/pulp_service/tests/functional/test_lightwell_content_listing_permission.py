@@ -24,13 +24,14 @@ from uuid import uuid4
 import pytest
 import requests
 
-from pulp_service.app.authorization import LIGHTWELL_READONLY_GROUP_NAME
 from pulp_service.tests.functional.constants import (
     LIGHTWELL_ENTITLED_ORG_ID,
     LIGHTWELL_NOT_ENTITLED_ORG_ID,
 )
 
+# See DOMAIN_ACCESS_POLICIES in settings.py
 LIGHTWELL_DOMAIN_NAME = "lightwell"
+LIGHTWELL_READONLY_GROUP_NAME = "Lightwell-ReadOnly"
 
 DOMAIN_OWNER_ORG_ID = "555555555"
 GROUP_MEMBER_ORG_ID = "666666666"

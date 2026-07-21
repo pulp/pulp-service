@@ -50,3 +50,11 @@ AUTHENTICATION_JSON_HEADER = "HTTP_X_RH_IDENTITY"
 AUTHENTICATION_JSON_HEADER_JQ_FILTER = ".identity.user.username"
 
 ATTESTATION_VERIFICATION_KEY = "/etc/pki/attestation/test-key.pem"
+
+DOMAIN_ACCESS_POLICIES = {
+    "lightwell": {
+        "readonly_group": "Lightwell-ReadOnly",
+        "subscription_feature": "lightwell-network",
+        "subscription_endpoints": ["/api/v3/content/"],
+    },
+}

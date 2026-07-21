@@ -30,3 +30,12 @@ HIJACK_ALLOW_GET_REQUESTS = True
 
 # RDS Test endpoints setting
 RDS_CONNECTION_TESTS_ENABLED = False
+
+
+DOMAIN_ACCESS_POLICIES = {
+    "lightwell": {
+        "readonly_group": "Lightwell-ReadOnly",
+        "subscription_feature": "lightwell-network",
+        "subscription_endpoints": ["/api/v3/content/"],
+    },
+}

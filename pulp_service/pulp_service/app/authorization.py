@@ -5,6 +5,7 @@ from binascii import Error as Base64DecodeError
 from contextvars import ContextVar
 
 import jq
+from django.conf import settings
 from django.db.models import Q
 from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS, BasePermission
@@ -20,20 +21,6 @@ org_id_json_path = jq.compile(".identity.internal.org_id")
 
 user_id_var = ContextVar("user_id")
 group_var = ContextVar("group")
-
-# The hardcoded domain name used by the lightwell read-only group check (see
-# _has_lightwell_readonly_group_access and _check_safe_method_access).
-LIGHTWELL_DOMAIN_NAME = "lightwell"
-# Hardcoded group whose members get read-only (SAFE_METHODS) access to the lightwell
-# domain's non-PyPI endpoints (repository/content/artifact listing, Pulp REST API, Maven
-# content API), independent of any DomainOrg association. This is a plain Group -- there is
-# no DomainOrg row backing this access, unlike the normal group-based access model. It does
-# NOT grant write access, and it does NOT apply to PyPI views, which are gated
-# by the distribution's content guard (see _check_pypi_safe_method_access()).
-LIGHTWELL_READONLY_GROUP_NAME = "Lightwell-ReadOnly"
-# Fixed identifier in the Features Service; checked by _check_lightwell_subscription() to
-# gate content listing access for orgs with an active lightwell subscription.
-LIGHTWELL_FEATURE_NAME = "lightwell-network"
 
 
 class DomainBasedPermission(BasePermission):
@@ -55,42 +42,6 @@ class DomainBasedPermission(BasePermission):
             query |= Q(domains__pk=domain_pk, org_id=org_id)
 
         return DomainOrg.objects.filter(query).exists()
-
-    def _has_lightwell_readonly_group_access(self, user):
-        """
-        Members of the hardcoded LIGHTWELL_READONLY_GROUP_NAME group get read-only
-        (SAFE_METHODS) access to the lightwell domain's non-PyPI endpoints, independent of
-        any DomainOrg association. Unlike normal groups (linked to a domain via DomainOrg,
-        which grant unrestricted read+write access), this is a standalone check based purely
-        on group membership + the hardcoded lightwell domain name -- see has_permission() and
-        scope_queryset() for where this is applied.
-        """
-        return user.is_authenticated and user.groups.filter(name=LIGHTWELL_READONLY_GROUP_NAME).exists()
-
-    def _is_content_listing_request(self, request):
-        # view_name (not isinstance) because BaseContentViewSet is not in pulpcore's public
-        # plugin API, and the public subclasses miss ListContentViewSet.
-        view_name = getattr(request.resolver_match, "view_name", None)
-        return view_name is not None and view_name.startswith("content-")
-
-    def _check_lightwell_subscription(self, request, domain):
-        if not (domain and domain.name == LIGHTWELL_DOMAIN_NAME):
-            return None
-        if not self._is_content_listing_request(request):
-            return None
-
-        decoded_header = self.get_decoded_identity_header(request)
-        org_id = self.get_org_id(decoded_header)
-        if org_id is None:
-            return None
-
-        guard = FeatureContentGuard(features=[LIGHTWELL_FEATURE_NAME])
-        try:
-            if guard.check_feature(org_id):
-                return True
-        except Exception:
-            _logger.exception("Unexpected error checking lightwell subscription")
-        return None
 
     def _check_pypi_safe_method_access(self, request, view, domain):  # noqa: PLR0911
         """
@@ -158,6 +109,43 @@ class DomainBasedPermission(BasePermission):
             _logger.exception("Unexpected error evaluating content guard permit")
             return False
 
+    @staticmethod
+    def _get_domain_policies():
+        return getattr(settings, "DOMAIN_ACCESS_POLICIES", {})
+
+    def _check_domain_policy(self, request, domain, user, policy):
+        """
+        Returns True if the policy grants access, or None if it does not apply.
+
+        ``subscription_endpoints`` are treated as path prefixes: a policy applies
+        when the request path (after stripping the domain routing prefix) starts
+        with one of the configured endpoint values.
+        """
+        subscription_feature = policy.get("subscription_feature")
+        subscription_endpoints = policy.get("subscription_endpoints", [])
+        if subscription_feature and subscription_endpoints:
+            path = request.path_info
+            if domain:
+                api_root = getattr(settings, "API_ROOT", "/api/pulp/")
+                domain_prefix = f"{api_root.rstrip('/')}/{domain.name}/"
+                if path.startswith(domain_prefix):
+                    path = "/" + path[len(domain_prefix) :]
+            if any(path.startswith(endpoint) for endpoint in subscription_endpoints):
+                decoded_header = self.get_decoded_identity_header(request)
+                org_id = self.get_org_id(decoded_header)
+                guard = FeatureContentGuard(features=[subscription_feature])
+                try:
+                    if org_id and guard.check_feature(org_id):
+                        return True
+                except Exception:
+                    _logger.exception("Unexpected error checking %s subscription", subscription_feature)
+
+        readonly_group = policy.get("readonly_group", "")
+        if readonly_group and user.is_authenticated and user.groups.filter(name=readonly_group).exists():
+            return True
+
+        return None
+
     def _check_safe_method_access(self, request, view, domain, user):
         """
         Returns True/False for a SAFE_METHOD request, or None if none of the SAFE_METHOD
@@ -171,14 +159,14 @@ class DomainBasedPermission(BasePermission):
         if pypi_access is not None:
             return pypi_access
 
-        subscription_access = self._check_lightwell_subscription(request, domain)
-        if subscription_access is not None:
-            return subscription_access
+        if not domain:
+            return None
 
-        if domain and domain.name == LIGHTWELL_DOMAIN_NAME and self._has_lightwell_readonly_group_access(user):
-            return True
+        policy = self._get_domain_policies().get(domain.name, {})
+        if not policy:
+            return None
 
-        return None
+        return self._check_domain_policy(request, domain, user, policy)
 
     def has_permission(self, request, view):  # noqa: PLR0911
         # Admins have all permissions
@@ -293,7 +281,9 @@ class DomainBasedPermission(BasePermission):
         if org_id is not None:
             query |= Q(domain_orgs__org_id=org_id)
 
-        if self._has_lightwell_readonly_group_access(user):
-            query |= Q(name=LIGHTWELL_DOMAIN_NAME)
+        for domain_name, policy in self._get_domain_policies().items():
+            group = policy.get("readonly_group")
+            if group and user.is_authenticated and user.groups.filter(name=group).exists():
+                query |= Q(name=domain_name)
 
         return qs.filter(query).distinct()
