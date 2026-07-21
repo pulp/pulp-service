@@ -181,6 +181,39 @@ class TestFeatureContentGuardCaching:
         payload = json.loads(mock_set.call_args.args[1])
         assert payload["allowed"] is False
 
+    @patch(_GET_SESSION)
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_multi_feature_guard_allows_when_all_features_present(self, mock_get, mock_set, mock_get_session):
+        multi = ["lightwell-network", "lightwell-analytics"]
+        mock_get.return_value = None
+        session = MagicMock()
+        session.get.return_value = _feature_response(multi)
+        mock_get_session.return_value = session
+        guard = _make_guard(features=multi)
+
+        guard.permit(_make_request())
+
+        payload = json.loads(mock_set.call_args.args[1])
+        assert payload["allowed"] is True
+
+    @patch(_GET_SESSION)
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_multi_feature_guard_denies_when_only_partial_match(self, mock_get, mock_set, mock_get_session):
+        multi = ["lightwell-network", "lightwell-analytics"]
+        mock_get.return_value = None
+        session = MagicMock()
+        session.get.return_value = _feature_response(["lightwell-network"])
+        mock_get_session.return_value = session
+        guard = _make_guard(features=multi)
+
+        with pytest.raises(PermissionError):
+            guard.permit(_make_request())
+
+        payload = json.loads(mock_set.call_args.args[1])
+        assert payload["allowed"] is False
+
 
 class TestFeatureContentGuardFeatureServiceCall:
     @patch(_GET_SESSION)
