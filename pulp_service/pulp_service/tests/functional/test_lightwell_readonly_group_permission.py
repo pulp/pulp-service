@@ -61,13 +61,8 @@ def _combined_username(org_id, username):
 @pytest.fixture
 def lightwell_readonly_group(gen_group):
     """The hardcoded read-only group, created with its real (hardcoded) name."""
-    group = (
-        getattr(settings, "DOMAIN_ACCESS_POLICIES", {})
-        .get(
-            "lightwell",
-        )
-        .get("readonly_group")
-    )
+    policy = getattr(settings, "DOMAIN_ACCESS_POLICIES", {}).get("lightwell", {})
+    group = policy.get("readonly_group")
     return gen_group(name=group)
 
 
