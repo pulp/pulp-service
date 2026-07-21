@@ -17,10 +17,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from pulp_service.app.models import FeatureContentGuard, FeatureContentGuardCache
+import pulp_service.app.features_service as _features_mod
+from pulp_service.app.features_service import FeatureContentGuardCache
+from pulp_service.app.models import FeatureContentGuard
 
 FEATURES = ["lightwell-network"]
 ACCOUNT_ID = "1979710"
+
+_GET_SESSION = "pulp_service.app.features_service._get_session"
 
 
 def _make_guard(features=FEATURES):
@@ -51,48 +55,48 @@ def _feature_response(feature_names):
 
 @pytest.fixture(autouse=True)
 def _reset_shared_session():
-    # `_session` is a class-level singleton; make sure tests don't share mocked state.
-    FeatureContentGuard._session = None
+    _features_mod._session = None
     yield
-    FeatureContentGuard._session = None
+    _features_mod._session = None
 
 
 class TestFeatureContentGuardCaching:
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_cache_hit_skips_feature_service_call(self, mock_get, mock_set):
+    def test_cache_hit_skips_feature_service_call(self, mock_get, mock_set, mock_get_session):
         entry = json.dumps({"allowed": True, "expires_at": time.time() + 3600})
         mock_get.return_value = entry.encode()
         guard = _make_guard()
-        guard._get_session = MagicMock()
 
         guard.permit(_make_request())
 
-        guard._get_session.assert_not_called()
+        mock_get_session.assert_not_called()
         mock_set.assert_not_called()
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_cache_hit_denied_skips_feature_service_call_and_raises(self, mock_get, mock_set):
+    def test_cache_hit_denied_skips_feature_service_call_and_raises(self, mock_get, mock_set, mock_get_session):
         entry = json.dumps({"allowed": False, "expires_at": time.time() + 3600})
         mock_get.return_value = entry.encode()
         guard = _make_guard()
-        guard._get_session = MagicMock()
 
         with pytest.raises(PermissionError):
             guard.permit(_make_request())
 
-        guard._get_session.assert_not_called()
+        mock_get_session.assert_not_called()
         mock_set.assert_not_called()
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_cache_miss_calls_feature_service_and_populates_cache(self, mock_get, mock_set):
+    def test_cache_miss_calls_feature_service_and_populates_cache(self, mock_get, mock_set, mock_get_session):
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         guard.permit(_make_request())
 
@@ -104,49 +108,54 @@ class TestFeatureContentGuardCaching:
         assert payload["allowed"] is True
         assert payload["expires_at"] > 0
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_expired_cache_entry_is_treated_as_a_miss(self, mock_get, mock_set):
+    def test_expired_cache_entry_is_treated_as_a_miss(self, mock_get, mock_set, mock_get_session):
         stale_entry = json.dumps({"allowed": True, "expires_at": time.time() - 1})
         mock_get.return_value = stale_entry.encode()
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         guard.permit(_make_request())
 
         session.get.assert_called_once()
         mock_set.assert_called_once()
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_legacy_cache_format_does_not_crash_and_is_treated_as_a_miss(self, mock_get, mock_set):
+    def test_legacy_cache_format_does_not_crash_and_is_treated_as_a_miss(self, mock_get, mock_set, mock_get_session):
         # Cached values written by the pre-fix code were bare "true"/"false" strings, not
         # a {"allowed": ..., "expires_at": ...} object. Confirm the new reader degrades
         # gracefully instead of raising.
         mock_get.return_value = b"true"
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         guard.permit(_make_request())
 
         session.get.assert_called_once()
 
     @pytest.mark.parametrize("corrupted_value", [b"{not-json", b"{}", b"[]", b"null"])
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_corrupted_cache_entry_does_not_crash_and_is_treated_as_a_miss(self, mock_get, mock_set, corrupted_value):
+    def test_corrupted_cache_entry_does_not_crash_and_is_treated_as_a_miss(
+        self, mock_get, mock_set, mock_get_session, corrupted_value
+    ):
         # Malformed or structurally invalid payloads (truncated writes, unrelated data,
         # a schema change, etc.) must degrade to a cache miss rather than raising out of
         # permit() and turning a caching bug into an outage.
         mock_get.return_value = corrupted_value
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         guard.permit(_make_request())
 
@@ -156,14 +165,48 @@ class TestFeatureContentGuardCaching:
         assert set(payload.keys()) == {"allowed", "expires_at"}
         assert payload["allowed"] is True
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_account_without_feature_is_denied_and_result_is_cached(self, mock_get, mock_set):
+    def test_account_without_feature_is_denied_and_result_is_cached(self, mock_get, mock_set, mock_get_session):
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(["some-other-feature"])
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
+
+        with pytest.raises(PermissionError):
+            guard.permit(_make_request())
+
+        payload = json.loads(mock_set.call_args.args[1])
+        assert payload["allowed"] is False
+
+    @patch(_GET_SESSION)
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_multi_feature_guard_allows_when_all_features_present(self, mock_get, mock_set, mock_get_session):
+        multi = ["lightwell-network", "lightwell-analytics"]
+        mock_get.return_value = None
+        session = MagicMock()
+        session.get.return_value = _feature_response(multi)
+        mock_get_session.return_value = session
+        guard = _make_guard(features=multi)
+
+        guard.permit(_make_request())
+
+        payload = json.loads(mock_set.call_args.args[1])
+        assert payload["allowed"] is True
+
+    @patch(_GET_SESSION)
+    @patch.object(FeatureContentGuardCache, "set")
+    @patch.object(FeatureContentGuardCache, "get")
+    def test_multi_feature_guard_denies_when_only_partial_match(self, mock_get, mock_set, mock_get_session):
+        multi = ["lightwell-network", "lightwell-analytics"]
+        mock_get.return_value = None
+        session = MagicMock()
+        session.get.return_value = _feature_response(["lightwell-network"])
+        mock_get_session.return_value = session
+        guard = _make_guard(features=multi)
 
         with pytest.raises(PermissionError):
             guard.permit(_make_request())
@@ -173,14 +216,15 @@ class TestFeatureContentGuardCaching:
 
 
 class TestFeatureContentGuardFeatureServiceCall:
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_feature_service_timeout_fails_closed_without_hanging(self, mock_get, mock_set):
+    def test_feature_service_timeout_fails_closed_without_hanging(self, mock_get, mock_set, mock_get_session):
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.side_effect = requests.Timeout("Features Service did not respond")
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         with pytest.raises(PermissionError):
             guard.permit(_make_request())
@@ -191,14 +235,15 @@ class TestFeatureContentGuardFeatureServiceCall:
         # outage clears.
         mock_set.assert_not_called()
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_feature_service_call_passes_a_bounded_timeout(self, mock_get, mock_set):
+    def test_feature_service_call_passes_a_bounded_timeout(self, mock_get, mock_set, mock_get_session):
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         guard.permit(_make_request())
 
@@ -206,28 +251,32 @@ class TestFeatureContentGuardFeatureServiceCall:
         assert "timeout" in kwargs
         assert kwargs["timeout"] is not None
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_feature_service_timeout_is_a_real_tuple_not_a_list(self, mock_get, mock_set):
+    def test_feature_service_timeout_is_a_real_tuple_not_a_list(self, mock_get, mock_set, mock_get_session):
         # Regression test: `requests`/`urllib3` only splits a *tuple* into (connect, read)
         # timeouts -- a list is treated as a single scalar value and raises a ValueError.
         # Pulp's settings pipeline can silently turn a tuple *setting* into a list, which is
         # exactly what happened in production, so the (connect, read) pair must be
         # constructed as a plain tuple in code rather than passed through from settings as-is.
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         guard.permit(_make_request())
 
         _, kwargs = session.get.call_args
         assert type(kwargs["timeout"]) is tuple
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_unexpected_error_from_feature_service_fails_closed_without_crashing(self, mock_get, mock_set):
+    def test_unexpected_error_from_feature_service_fails_closed_without_crashing(
+        self, mock_get, mock_set, mock_get_session
+    ):
         # Regression test: `permit()` must only ever return normally or raise
         # `PermissionError`. pulpcore's `Handler.auth_cached` wraps the guard call in a
         # try/except that only handles `HTTPForbidden`; any other exception type leaves its
@@ -235,10 +284,10 @@ class TestFeatureContentGuardFeatureServiceCall:
         # its `finally` block, masking the real error. This previously happened for real:
         # a misconfigured timeout setting raised a bare `ValueError` that escaped uncaught.
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.side_effect = ValueError("Timeout value connect was [2, 5]...")
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         with pytest.raises(PermissionError):
             guard.permit(_make_request())
@@ -246,13 +295,10 @@ class TestFeatureContentGuardFeatureServiceCall:
         mock_set.assert_not_called()
 
     def test_session_is_a_process_wide_singleton(self):
-        guard_a = FeatureContentGuard(name="a", header_name="x-rh-identity", features=FEATURES, pulp_domain=None)
-        guard_b = FeatureContentGuard(name="b", header_name="x-rh-identity", features=FEATURES, pulp_domain=None)
-
-        with patch("pulp_service.app.models.requests.Session") as mock_session_cls:
+        with patch("pulp_service.app.features_service.requests.Session") as mock_session_cls:
             mock_session_cls.return_value = MagicMock()
-            first = guard_a._get_session()
-            second = guard_b._get_session()
+            first = _features_mod._get_session()
+            second = _features_mod._get_session()
 
         assert first is second
         mock_session_cls.assert_called_once()
@@ -262,69 +308,73 @@ class TestFeatureContentGuardCheckFeature:
     """Unit tests for `check_feature()`, the caching entry point reused by `permit()` and by
     `DomainBasedPermission` (for the lightwell-network feature check on PyPI views)."""
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_cache_hit_skips_feature_service_call(self, mock_get, mock_set):
+    def test_cache_hit_skips_feature_service_call(self, mock_get, mock_set, mock_get_session):
         entry = json.dumps({"allowed": True, "expires_at": time.time() + 3600})
         mock_get.return_value = entry.encode()
         guard = _make_guard()
-        guard._get_session = MagicMock()
 
         assert guard.check_feature(ACCOUNT_ID) is True
 
-        guard._get_session.assert_not_called()
+        mock_get_session.assert_not_called()
         mock_set.assert_not_called()
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_cache_miss_calls_feature_service_and_populates_cache(self, mock_get, mock_set):
+    def test_cache_miss_calls_feature_service_and_populates_cache(self, mock_get, mock_set, mock_get_session):
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         assert guard.check_feature(ACCOUNT_ID) is True
 
         session.get.assert_called_once()
         mock_set.assert_called_once()
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_account_without_feature_returns_false_without_raising(self, mock_get, mock_set):
+    def test_account_without_feature_returns_false_without_raising(self, mock_get, mock_set, mock_get_session):
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(["some-other-feature"])
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         assert guard.check_feature(ACCOUNT_ID) is False
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_feature_service_failure_raises_permission_error(self, mock_get, mock_set):
+    def test_feature_service_failure_raises_permission_error(self, mock_get, mock_set, mock_get_session):
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.side_effect = requests.Timeout("Features Service did not respond")
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         with pytest.raises(PermissionError):
             guard.check_feature(ACCOUNT_ID)
 
         mock_set.assert_not_called()
 
+    @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")
     @patch.object(FeatureContentGuardCache, "get")
-    def test_permit_and_check_feature_share_the_same_cache_key(self, mock_get, mock_set):
+    def test_permit_and_check_feature_share_the_same_cache_key(self, mock_get, mock_set, mock_get_session):
         """`permit()` and `check_feature()` must compute identical cache keys for the same
         (account_id, features) pair, so a lookup made through one path is reused by the
         other and the Features Service isn't hit twice for the same account/feature."""
         mock_get.return_value = None
-        guard = _make_guard()
         session = MagicMock()
         session.get.return_value = _feature_response(FEATURES)
-        guard._get_session = MagicMock(return_value=session)
+        mock_get_session.return_value = session
+        guard = _make_guard()
 
         guard.permit(_make_request(account_id=ACCOUNT_ID))
         permit_cache_key = mock_set.call_args.args[0]

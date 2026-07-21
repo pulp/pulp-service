@@ -1,23 +1,19 @@
 import json
 import logging
-import threading
-import time
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
-from datetime import UTC, datetime
 from gettext import gettext as _
-from hashlib import sha256
 
 import jq
-import requests
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField, HStoreField
 from django.db import models
 
 from pulpcore.app.models import HeaderContentGuard
-from pulpcore.cache import Cache
 from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel, Domain, Group
 from pulpcore.plugin.util import get_domain_pk
+
+from pulp_service.app.features_service import check_subscription
 
 _logger = logging.getLogger(__name__)
 
@@ -46,147 +42,18 @@ class DomainOrg(models.Model):
         return f"DomainOrg(org_id={self.org_id})"
 
 
-class FeatureContentGuardCache(Cache):
-    default_base_key = "PULP_FEATURE_CONTENTGUARD_CACHE"
-    default_expires_ttl = 86400  # The key expires in one day.
-
-
 class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
     features = ArrayField(models.TextField())
 
-    _session_lock = threading.Lock()
-    _session = None
-
-    @classmethod
-    def _get_session(cls):
-        """
-        Returns a process-wide ``requests.Session`` configured with the client certificate.
-
-        The previous implementation built a brand new ``ssl.SSLContext`` (re-reading and
-        re-parsing the certificate off disk), a new ``aiohttp.ClientSession``, and a brand
-        new asyncio event loop (via ``asyncio.run``) on *every single content request* that
-        missed the cache. Reusing a session lets urllib3 keep a warm, pooled TLS connection
-        to the Features Service and avoids that repeated setup cost.
-        """
-        if cls._session is None:
-            with cls._session_lock:
-                if cls._session is None:
-                    session = requests.Session()
-                    session.cert = settings.FEATURE_SERVICE_API_CERT_PATH
-                    cls._session = session
-        return cls._session
-
-    def _check_for_feature(self, account_id):
-        session = self._get_session()
-        params = [("accountId", account_id), *(("features", feature) for feature in self.features)]
-        # permit() runs synchronously on the content app's shared sync-to-async worker thread
-        # (pulpcore.content.handler.Handler._permit is invoked via sync_to_async). A slow or
-        # hanging call here doesn't just delay this request -- it can stall every other
-        # request being served through that same thread, so this must be bounded.
-        #
-        # This must be a real Python tuple built here, not a settings value passed through
-        # as-is: `requests` only splits a *tuple* into (connect, read) timeouts, and Pulp's
-        # settings pipeline can silently turn a tuple default into a list, which `requests`
-        # then treats as a single (invalid) timeout value and raises a ValueError.
-        timeout = (settings.FEATURE_SERVICE_API_CONNECT_TIMEOUT, settings.FEATURE_SERVICE_API_READ_TIMEOUT)
-
-        try:
-            _logger.info("[%s] Making a request to feature service API ...", datetime.now(tz=UTC))
-            response = session.get(
-                settings.FEATURE_SERVICE_API_URL,
-                params=params,
-                timeout=timeout,
-            )
-            response.raise_for_status()
-            _logger.info("[%s] Got a response from feature service API!", datetime.now(tz=UTC))
-
-            features_available = {feature["name"] for feature in response.json()["features"]}
-            return features_available == set(self.features)
-        except requests.Timeout as err:
-            _logger.warning(
-                "Failed to fetch the Subscription feature information for a user. "
-                "The Features Service API did not respond within %s seconds.",
-                timeout,
-            )
-            raise PermissionError(_("Access denied.")) from err
-        except requests.HTTPError as err:
-            status_code = err.response.status_code if err.response is not None else None
-            if status_code == 400:
-                _logger.exception("Failed to request information for a user. BadRequest. URL: %s", err.request.url)
-
-            if status_code == 403:
-                _logger.exception(
-                    "Failed to request information for a user. "
-                    "Permission Denied. Verify if the certificate is still valid."
-                )
-
-            _logger.warning(_("Failed to fetch the Subscription feature information for a user."))
-            raise PermissionError(_("Access denied.")) from err
-        except requests.RequestException as err:
-            _logger.warning("Failed to reach the Features Service API: %s", err)
-            raise PermissionError(_("Access denied.")) from err
-        except Exception as err:
-            # `permit()` is only ever allowed to return normally or raise `PermissionError`
-            # (pulpcore.content.handler.Handler.auth_cached assumes exactly that contract).
-            # Anything else -- a bug here, a misconfigured setting, an unexpected response
-            # shape -- would otherwise escape as-is and crash with a confusing, unrelated
-            # `UnboundLocalError` in pulpcore's guard-caching `finally` block, masking the
-            # real error entirely. Fail closed and log loudly instead.
-            _logger.exception("Unexpected error while checking the Features Service.")
-            raise PermissionError(_("Access denied.")) from err
-
-    @staticmethod
-    def _get_cached_result(feature_cache, key):
-        """
-        Returns the cached True/False result for `key`, or None if there is no live entry.
-
-        `Cache.set`'s `expires` argument calls Redis' `EXPIRE` on the *entire* hash the
-        entry lives under, not on the individual field (Redis hash fields don't carry their
-        own TTL). Every account sharing `FeatureContentGuardCache`'s single base key would
-        therefore have its cached result's lifetime reset by any *other* account's write,
-        which can prematurely evict still-valid entries. Instead, the expiration is embedded
-        in the cached value itself and validated on read here, matching the pattern
-        `pulpcore.cache.AsyncContentCache` already uses for the same reason.
-        """
-        raw = feature_cache.get(key)
-        if not raw:
-            return None
-        try:
-            entry = json.loads(raw)
-            if entry["expires_at"] < time.time():
-                return None
-            return entry["allowed"]
-        except (TypeError, ValueError, KeyError):
-            return None
-
-    @staticmethod
-    def _set_cached_result(feature_cache, key, allowed):
-        entry = {"allowed": allowed, "expires_at": time.time() + feature_cache.default_expires_ttl}
-        feature_cache.set(key, json.dumps(entry), expires=feature_cache.default_expires_ttl)
-
     def check_feature(self, account_id):
         """
-        Returns whether `account_id` has all of `self.features`, per the Features Service.
+        Returns whether ``account_id`` has all of ``self.features``, per the Features Service.
 
-        Reuses the same `FeatureContentGuardCache` cache key scheme as `permit()` so that
-        callers checking the same (account_id, features) pair -- e.g. `DomainBasedPermission`
-        checking the `lightwell-network` feature -- share cache entries with this guard and
-        avoid redundant Features Service calls. May raise `PermissionError` if the Features
-        Service call fails (see `_check_for_feature`).
+        Delegates to check_subscription(), which caches results so that callers checking
+        the same (account_id, features) pair share cache entries. May raise PermissionError
+        if the Features Service call fails.
         """
-        cache_key = f"{account_id}-{','.join(self.features)}"
-        cache_key_digest = sha256(bytes(cache_key, "utf8")).hexdigest()
-        feature_cache = FeatureContentGuardCache()
-        account_allowed = self._get_cached_result(feature_cache, cache_key_digest)
-
-        if account_allowed is None:
-            _logger.debug("Feature cache MISS for key %s", cache_key_digest)
-            account_allowed = self._check_for_feature(account_id)
-            self._set_cached_result(feature_cache, cache_key_digest, account_allowed)
-        else:
-            _logger.debug("Feature cache HIT for key %s", cache_key_digest)
-
-        return account_allowed
+        return check_subscription(account_id, self.features)
 
     def permit(self, request):
         try:
