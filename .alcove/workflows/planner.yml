@@ -119,7 +119,7 @@ workflow:
   - id: post_failure
     type: bridge
     action: jira-add-comment
-    depends: "detect.Failed || find_plan_task.Failed || create_plan_task.Failed || plan_epic.Failed || plan_standalone.Failed"
+    depends: "detect.Failed || find_plan_task.Failed || create_plan_task.Failed || plan_epic.Failed || update_plan_task.Failed || plan_standalone.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Automated planning failed. Check the workflow logs for details."
