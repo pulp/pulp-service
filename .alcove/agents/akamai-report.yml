@@ -6,7 +6,7 @@ description: |
   Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
-  url: https://github.com/pulp/pulp-service/releases/download/agent-akamai-report-20260716-8587c52/agent-akamai-report
+  url: https://github.com/pulp/pulp-service/releases/download/agent-akamai-report-20260722-6849695/agent-akamai-report
   args: ["--model", "claude-opus-4-6", "--gitlab-repo", "https://gitlab.cee.redhat.com/hyagi/akamai-report"]
   env:
     SPLUNK_INSECURE_SKIP_VERIFY: "true"
