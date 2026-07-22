@@ -1,59 +1,16 @@
-From ad565cd57a1d1f643d1fc2757965f22bbb164624 Mon Sep 17 00:00:00 2001
-From: Dennis Kliban <dkliban@redhat.com>
-Date: Tue, 4 Mar 2025 11:19:30 -0500
-Subject: [PATCH] Re-root the registry API at /api/pulp/v2/
-
-Moves all container registry URL routes from /v2/ to /api/pulp/v2/ and
-the content app prefix from /pulp/container/ to /api/pulp-container/.
-Replaces RegistryPermission with DomainBasedPermission.
-
-Co-Authored-By: Andre "decko" de Brito <decko@redhat.com>
----
- pulp_container/app/content.py            |  2 +-
- pulp_container/app/redirects.py          |  4 ++--
- pulp_container/app/token_verification.py | 16 +---------------
- pulp_container/app/urls.py               | 14 +++++++-------
- 4 files changed, 12 insertions(+), 26 deletions(-)
-
-diff --git a/pulp_container/app/content.py b/pulp_container/app/content.py
-index dbe6418d..006e8afb 100644
---- a/pulp_container/app/content.py
-+++ b/pulp_container/app/content.py
-@@ -6,7 +6,7 @@ from pulp_container.app.registry import Registry
- 
- registry = Registry()
- 
--PREFIX = "/pulp/container/{pulp_domain}/" if settings.DOMAIN_ENABLED else "/pulp/container/"
-+PREFIX = "/api/pulp-container/{pulp_domain}/" if settings.DOMAIN_ENABLED else "/pulp/container/"
- 
- app.add_routes(
-     [
-diff --git a/pulp_container/app/redirects.py b/pulp_container/app/redirects.py
-index 0c7a5898..fa4808cb 100644
---- a/pulp_container/app/redirects.py
-+++ b/pulp_container/app/redirects.py
-@@ -21,7 +21,7 @@ class CommonRedirects:
-         self.path = path
-         self.request = request
-         self.path_prefix = (
--            f"pulp/container/{request.pulp_domain.name}"
-+            f"api/pulp-container/{request.pulp_domain.name}"
-             if settings.DOMAIN_ENABLED
-             else "pulp/container"
-         )
 diff --git a/pulp_container/app/token_verification.py b/pulp_container/app/token_verification.py
-index d78738a4..faf05cd6 100644
+index 019310ac..9c685b68 100644
 --- a/pulp_container/app/token_verification.py
 +++ b/pulp_container/app/token_verification.py
-@@ -15,6 +15,7 @@ from rest_framework.authentication import (
- from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
- from rest_framework.permissions import BasePermission, SAFE_METHODS
+@@ -14,6 +14,7 @@ from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated
+ from rest_framework.permissions import SAFE_METHODS, BasePermission
+ 
  from pulp_container.app.utils import get_full_path
 +from pulp_service.app.authorization import DomainBasedPermission
  
  Scope = namedtuple("Scope", "resource_type, name, action")
  User = get_user_model()
-@@ -178,23 +179,11 @@ def get_scopes(request):
+@@ -177,23 +178,11 @@ def get_scopes(request):
      return scopes
  
  
@@ -78,33 +35,3 @@ index d78738a4..faf05cd6 100644
  
  
  class TokenPermission(BasePermission):
-diff --git a/pulp_container/app/urls.py b/pulp_container/app/urls.py
-index 47c4342a..6c93b927 100644
---- a/pulp_container/app/urls.py
-+++ b/pulp_container/app/urls.py
-@@ -32,16 +32,16 @@ head_route = Route(
- )
- 
- router.routes.append(head_route)
--router.register(rf"v2/{re_path}/blobs/uploads\/?", BlobUploads, basename="docker-upload")
--router.register(rf"v2/{re_path}/blobs", Blobs, basename="blobs")
--router.register(rf"v2/{re_path}/manifests", Manifests, basename="manifests")
--router.register(rf"extensions/v2/{re_path}/signatures", Signatures, basename="signatures")
-+router.register(rf"api/pulp/v2/{re_path}/blobs/uploads\/?", BlobUploads, basename="docker-upload")
-+router.register(rf"api/pulp/v2/{re_path}/blobs", Blobs, basename="blobs")
-+router.register(rf"api/pulp/v2/{re_path}/manifests", Manifests, basename="manifests")
-+router.register(rf"api/pulp/extensions/v2/{re_path}/signatures", Signatures, basename="signatures")
- 
- urlpatterns = [
-     path("token/", BearerTokenView.as_view()),
--    path("v2/", VersionView.as_view()),
--    path("v2/_catalog", CatalogView.as_view()),
--    path(f"v2/{da_path}/tags/list", TagsListView.as_view()),
-+    path("api/pulp/v2/", VersionView.as_view()),
-+    path("api/pulp/v2/_catalog", CatalogView.as_view()),
-+    path(f"api/pulp/v2/{da_path}/tags/list", TagsListView.as_view()),
-     path("", include(router.urls)),
- ]
- # print(router.urls)
---
-2.49.0
