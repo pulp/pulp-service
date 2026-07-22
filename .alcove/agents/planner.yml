@@ -129,8 +129,6 @@ prompt: |
 repos:
   - name: pulp-service
     url: https://github.com/pulp/pulp-service.git
-  - name: pulp-docs
-    url: https://gitlab.cee.redhat.com/hosted-pulp/pulp-docs.git
 
 timeout: 900
 enforcement_mode: monitor
