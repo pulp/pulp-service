@@ -37,6 +37,9 @@ workflow:
     agent: Planner
     depends: "detect.Succeeded"
     condition: "steps.detect.outputs.issue_type != 'Epic' && steps.detect.outputs.parent_key == ''"
+    direct_outbound: true
+    credentials:
+      GIT_SSL_NO_VERIFY: git-ssl-no-verify
     inputs:
       issue_key: "{{trigger.issue_key}}"
       issue_title: "{{trigger.issue_title}}"
@@ -81,6 +84,9 @@ workflow:
     type: agent
     agent: Planner
     depends: "create_plan_task.Succeeded || find_plan_task.Succeeded"
+    direct_outbound: true
+    credentials:
+      GIT_SSL_NO_VERIFY: git-ssl-no-verify
     inputs:
       issue_key: "{{trigger.issue_key}}"
       issue_title: "{{trigger.issue_title}}"
