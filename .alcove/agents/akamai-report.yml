@@ -11,6 +11,7 @@ executable:
   env:
     SPLUNK_INSECURE_SKIP_VERIFY: "true"
     SPLUNK_URL: "https://splunk-api.corp.redhat.com:8089/"
+    GIT_SSL_NO_VERIFY: "true"
 
 timeout: 1800
 enforcement_mode: monitor
