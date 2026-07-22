@@ -1,12 +1,13 @@
 name: Akamai Report
 description: |
   Analyzes 7-day Akamai traffic data via Splunk and produces a formatted
-  traffic report with LLM-driven analysis. Runs as a pre-compiled agent
-  binary from GitHub Releases.
+  traffic report with LLM-driven analysis. Publishes HTML and JSON reports
+  to GitLab Pages with a date-based index for historical browsing.
+  Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
   url: https://github.com/pulp/pulp-service/releases/download/agent-akamai-report-20260716-8587c52/agent-akamai-report
-  args: ["--model", "claude-opus-4-6"]
+  args: ["--model", "claude-opus-4-6", "--gitlab-repo", "https://gitlab.cee.redhat.com/hyagi/akamai-report"]
   env:
     SPLUNK_INSECURE_SKIP_VERIFY: "true"
     SPLUNK_URL: "https://splunk-api.corp.redhat.com:8089/"
@@ -18,7 +19,8 @@ direct_outbound: true
 
 credentials:
   SPLUNK_TOKEN: splunk
+  GITLAB_TOKEN: AKAMAI_REPORT_GITLAB_TOKEN
 
 schedule:
-  cron: "0 3 * * 1"
+  cron: "0 3 * * *"
   enabled: true

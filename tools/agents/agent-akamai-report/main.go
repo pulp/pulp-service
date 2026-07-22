@@ -45,6 +45,7 @@ func run() error {
 	inputModel := flag.String("model", llmModel, "LLM model (claude-opus-4-6, gemini-2.5-pro)")
 	inputQuestion := flag.String("question", "", "Question to ask the model about the traffic data")
 	inputOutputDir := flag.String("output-dir", "", "Output directory for results (default: /tmp/traffic-report-<timestamp>)")
+	inputGitLabRepo := flag.String("gitlab-repo", "", "GitLab repository URL to publish reports to")
 	flag.Parse()
 
 	supportedModels := map[string]struct{}{
@@ -53,6 +54,14 @@ func run() error {
 	}
 	if _, exists := supportedModels[*inputModel]; !exists {
 		return fmt.Errorf("unsupported model: %s. Supported models: claude-opus-4-6, gemini-2.5-pro", *inputModel)
+	}
+
+	gitlabToken := ""
+	if *inputGitLabRepo != "" {
+		gitlabToken = os.Getenv("GITLAB_TOKEN")
+		if gitlabToken == "" {
+			return fmt.Errorf("GITLAB_TOKEN is required when --gitlab-repo is set")
+		}
 	}
 
 	// Splunk is required for this agent.
@@ -137,5 +146,14 @@ func run() error {
 	}
 
 	fmt.Println(report)
+
+	if *inputGitLabRepo != "" {
+		publisher := newGitLabPublisher(*inputGitLabRepo, gitlabToken)
+		defer publisher.Cleanup()
+		if _, err := publisher.Publish(ctx, outputDir); err != nil {
+			return fmt.Errorf("publish to GitLab: %w", err)
+		}
+	}
+
 	return nil
 }

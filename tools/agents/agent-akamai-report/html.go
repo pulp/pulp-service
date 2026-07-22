@@ -146,9 +146,13 @@ const htmlTemplate = `<!DOCTYPE html>
     .type-Other { background: var(--header-bg); color: var(--muted); }
   }
   #filter { padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; background: var(--bg); color: var(--fg); font-size: 0.875rem; width: 20rem; max-width: 100%; margin-bottom: 1rem; }
+  .breadcrumb { margin-bottom: 1rem; }
+  .breadcrumb a { color: var(--accent); text-decoration: none; font-size: 0.875rem; }
+  .breadcrumb a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
+<nav class="breadcrumb"><a href="../../index.html">&larr; All Reports</a></nav>
 <h1>Akamai Traffic Report</h1>
 <p class="meta">Generated {{.GeneratedAt}} &middot; Last 7 days</p>
 
