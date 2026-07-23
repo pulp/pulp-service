@@ -71,7 +71,7 @@ workflow:
     type: bridge
     action: jira-create-issue
     depends: "find_plan_task.Succeeded"
-    condition: "steps.find_plan_task.outputs.total == 0"
+    condition: "steps.find_plan_task.outputs.issue_keys == null"
     inputs:
       project: "PULP"
       summary: "Implementation Plan for {{trigger.issue_key}}"
