@@ -150,10 +150,12 @@ workflow:
       body: "Closes {{trigger.issue_url}}\n\n## Summary\n\n{{steps.implement.outputs.summary}}"
 
   # Phase 6: CI — wait for checks, fix failures if needed.
+  # Does NOT depend on revision — revision addresses review feedback
+  # and goes straight back to reviews, not through CI again.
   - id: await_ci
     type: bridge
     action: await-checks
-    depends: "create_pr.Succeeded || ci_fix.Succeeded || revision.Succeeded"
+    depends: "create_pr.Succeeded || ci_fix.Succeeded"
     max_iterations: 4
     inputs:
       repo: pulp/pulp-service
@@ -177,14 +179,15 @@ workflow:
     outputs: [summary]
 
   # Phase 7: Review — parallel specialist reviewers.
-  # All 4 reviewers run unconditionally (V1 simplification — no conditional
-  # dispatch based on Review Domains; that is V2).
-  # Reviewers depend on CI passing to avoid reviewing code with broken builds.
+  # All 4 reviewers run unconditionally (V1 — no conditional dispatch by
+  # Review Domains; that is V2). Reviewers re-run after revision.
+  # All cycle participants (reviews + revision) have max_iterations for
+  # bounded cycles — required by alcove's cycle detector.
   - id: review_django
     type: agent
     agent: Django Specialist Reviewer
-    depends: "await_ci.Succeeded"
-    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    depends: "await_ci.Succeeded || revision.Succeeded"
+    max_iterations: 2
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
@@ -201,8 +204,8 @@ workflow:
   - id: review_security
     type: agent
     agent: Security Reviewer
-    depends: "await_ci.Succeeded"
-    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    depends: "await_ci.Succeeded || revision.Succeeded"
+    max_iterations: 2
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
@@ -219,8 +222,8 @@ workflow:
   - id: review_go
     type: agent
     agent: Go Specialist Reviewer
-    depends: "await_ci.Succeeded"
-    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    depends: "await_ci.Succeeded || revision.Succeeded"
+    max_iterations: 2
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
@@ -237,8 +240,8 @@ workflow:
   - id: review_pulp
     type: agent
     agent: Pulp Domain Reviewer
-    depends: "await_ci.Succeeded"
-    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    depends: "await_ci.Succeeded || revision.Succeeded"
+    max_iterations: 2
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
@@ -252,10 +255,8 @@ workflow:
       routing_field: approved
       success_value: "true"
 
-  # Phase 7b: Revision — address review feedback, then re-enter CI and reviews.
-  # After revision succeeds, await_ci re-enters (via depends), then reviewers
-  # re-run. Bounded by max_iterations: 2 — after that, revision fails and
-  # post_failure fires.
+  # Phase 7b: Revision — address review feedback, then reviewers re-run.
+  # Bounded cycle: reviews → revision → reviews (max 2 iterations each).
   - id: revision
     type: agent
     agent: Pulp Developer

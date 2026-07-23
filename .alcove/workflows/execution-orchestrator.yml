@@ -32,7 +32,7 @@ workflow:
     inputs:
       jql: "parent = {{trigger.issue_key}} AND summary ~ 'Implementation Plan'"
       max_results: 1
-    outputs: [issue_keys]
+    outputs: [issue_keys, total]
 
   # Step 4: Find all child tasks (excluding the plan task)
   - id: get_children
@@ -43,7 +43,7 @@ workflow:
     inputs:
       jql: "parent = {{trigger.issue_key}} AND summary !~ 'Implementation Plan' AND issuetype = Task"
       max_results: 50
-    outputs: [issue_keys]
+    outputs: [issue_keys, total]
 
   # Step 5: Fetch plan task content for DEPENDENCIES block (requires alcove >= v0.55.0)
   - id: fetch_plan

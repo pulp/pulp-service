@@ -71,8 +71,8 @@ workflow:
     type: bridge
     action: jira-create-issue
     depends: "find_plan_task.Succeeded"
-    # Use issue_keys == null (not total == 0) because jira-search-issues
-    # returns total: 0 even when results exist (alcove-ai/alcove#772).
+    # Use issue_keys == null (not total == 0) because total is unreliable
+    # (alcove-ai/alcove#772). Requires alcove >= v0.56.0 for null support.
     condition: "steps.find_plan_task.outputs.issue_keys == null"
     inputs:
       project: "PULP"

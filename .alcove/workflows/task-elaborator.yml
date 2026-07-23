@@ -32,7 +32,7 @@ workflow:
     inputs:
       jql: "parent = {{trigger.issue_key}} AND summary ~ 'Implementation Plan'"
       max_results: 1
-    outputs: [issue_keys]
+    outputs: [issue_keys, total]
 
   # Step 4: No plan task found — comment and stop
   - id: no_plan
