@@ -71,7 +71,9 @@ workflow:
     type: bridge
     action: jira-create-issue
     depends: "find_plan_task.Succeeded"
-    condition: "steps.find_plan_task.outputs.total == 0"
+    # Use issue_keys == null (not total == 0) because jira-search-issues
+    # returns total: 0 even when results exist (alcove-ai/alcove#772).
+    condition: "steps.find_plan_task.outputs.issue_keys == null"
     inputs:
       project: "PULP"
       summary: "Implementation Plan for {{trigger.issue_key}}"
@@ -80,10 +82,20 @@ workflow:
       labels: ["plan"]
     outputs: [issue_key]
 
+  # Fetch previous plan for iterative refinement (requires alcove >= v0.55.0)
+  - id: fetch_previous_plan
+    type: bridge
+    action: jira-get-issue
+    depends: "find_plan_task.Succeeded"
+    condition: "steps.find_plan_task.outputs.issue_keys != null"
+    inputs:
+      issue_key: "{{steps.find_plan_task.outputs.issue_keys[0]}}"
+    outputs: [description]
+
   - id: plan_epic
     type: agent
     agent: Planner
-    depends: "create_plan_task.Succeeded || find_plan_task.Succeeded"
+    depends: "create_plan_task.Succeeded || fetch_previous_plan.Succeeded || find_plan_task.Succeeded"
     direct_outbound: true
     credentials:
       GIT_SSL_NO_VERIFY: git-ssl-no-verify
@@ -95,7 +107,8 @@ workflow:
       flow: "epic"
       new_plan_task_key: "{{steps.create_plan_task.outputs.issue_key}}"
       existing_plan_task_keys: "{{steps.find_plan_task.outputs.issue_keys}}"
-    outputs: [plan, plan_task_key]
+      previous_plan: "{{steps.fetch_previous_plan.outputs.description}}"
+    outputs: [plan, plan_task_key, spec_summary, verification_steps]
 
   - id: update_plan_task
     type: bridge
@@ -121,11 +134,23 @@ workflow:
       issue_key: "{{trigger.issue_key}}"
       body: "Implementation plan created at {{steps.plan_epic.outputs.plan_task_key}}. The plan includes a draft task breakdown. Reply here to discuss or request changes."
 
+  # Post spec summary and verification steps as a comment on the epic.
+  # We use a comment instead of updating the epic description to avoid
+  # overwriting human-authored content (alcove-ai/alcove#773).
+  - id: post_spec_summary
+    type: bridge
+    action: jira-add-comment
+    depends: "notify_epic.Succeeded"
+    condition: "steps.plan_epic.outputs.spec_summary != ''"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "h3. Spec Summary\n\n{{steps.plan_epic.outputs.spec_summary}}\n\nh3. Verification Steps\n\n{{steps.plan_epic.outputs.verification_steps}}"
+
   # --- Failure handling ---
   - id: post_failure
     type: bridge
     action: jira-add-comment
-    depends: "detect.Failed || find_plan_task.Failed || create_plan_task.Failed || plan_epic.Failed || update_plan_task.Failed || plan_changelog.Failed || notify_epic.Failed || plan_standalone.Failed"
+    depends: "detect.Failed || find_plan_task.Failed || create_plan_task.Failed || plan_epic.Failed || update_plan_task.Failed || plan_changelog.Failed || notify_epic.Failed || post_spec_summary.Failed || plan_standalone.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Automated planning failed. Check the workflow logs for details."

@@ -1,0 +1,315 @@
+name: Planned Task SDLC Pipeline (W4)
+
+trigger:
+  jira:
+    projects: [PULP]
+    labels: [agentic-sdlc]
+
+workflow:
+  # Phase 0: Detect — get task metadata and parent epic key.
+  - id: get_task
+    type: bridge
+    action: jira-get-issue
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+    outputs: [issue_type, parent_key]
+
+  # Phase 1: Check if parent epic is planned (has-plan label).
+  # Uses jira-get-issue with labels output (requires alcove >= v0.55.0).
+  - id: get_parent
+    type: bridge
+    action: jira-get-issue
+    depends: "get_task.Succeeded"
+    condition: "steps.get_task.outputs.parent_key != ''"
+    inputs:
+      issue_key: "{{steps.get_task.outputs.parent_key}}"
+    outputs: [labels]
+
+  - id: check_planned
+    type: bridge
+    action: jira-search-issues
+    depends: "get_parent.Succeeded"
+    inputs:
+      jql: "key = {{steps.get_task.outputs.parent_key}} AND labels = has-plan"
+      max_results: 1
+    outputs: [issue_keys]
+
+  # --- Standalone fallback: no parent epic ---
+  - id: standalone_no_parent
+    type: bridge
+    action: jira-add-comment
+    depends: "get_task.Succeeded"
+    condition: "steps.get_task.outputs.parent_key == ''"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "This task has no plan — use the standard SDLC pipeline (agentic-sdlc label on a standalone task or agentic-sdlc-v2 label for the full v2 pipeline)."
+
+  - id: standalone_no_parent_cleanup
+    type: bridge
+    action: jira-update-issue
+    depends: "standalone_no_parent.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      remove_labels: ["agentic-sdlc"]
+
+  # --- Standalone fallback: parent exists but no has-plan label ---
+  - id: standalone_not_planned
+    type: bridge
+    action: jira-add-comment
+    depends: "check_planned.Succeeded"
+    condition: "steps.check_planned.outputs.issue_keys == null"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "This task has no plan — use the standard SDLC pipeline (agentic-sdlc label on a standalone task or agentic-sdlc-v2 label for the full v2 pipeline)."
+
+  - id: standalone_not_planned_cleanup
+    type: bridge
+    action: jira-update-issue
+    depends: "standalone_not_planned.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      remove_labels: ["agentic-sdlc"]
+
+  # Phase 2: Find and fetch the Implementation Plan task (requires alcove >= v0.55.0).
+  - id: find_plan
+    type: bridge
+    action: jira-search-issues
+    depends: "check_planned.Succeeded"
+    condition: "steps.check_planned.outputs.issue_keys != null"
+    inputs:
+      jql: "parent = {{steps.get_task.outputs.parent_key}} AND summary ~ 'Implementation Plan'"
+      max_results: 1
+    outputs: [issue_keys]
+
+  - id: fetch_spec
+    type: bridge
+    action: jira-get-issue
+    depends: "find_plan.Succeeded"
+    condition: "steps.find_plan.outputs.issue_keys != null"
+    inputs:
+      issue_key: "{{steps.find_plan.outputs.issue_keys[0]}}"
+    outputs: [description]
+
+  # Phase 3: Claim — remove trigger label to prevent re-processing.
+  - id: claim_task
+    type: bridge
+    action: jira-update-issue
+    depends: "find_plan.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      remove_labels: ["agentic-sdlc"]
+
+  # Phase 4: Implement — developer writes code following the plan.
+  # The task description (issue_body) contains the <!-- planned-task --> marker,
+  # which puts the developer agent into GUIDED MODE.
+  - id: implement
+    type: agent
+    agent: Pulp Developer
+    depends: "claim_task.Succeeded"
+    inputs:
+      branch: "{{trigger.issue_key}}-fix"
+      issue_number: "{{trigger.issue_key}}"
+      repo: "pulp/pulp-service"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+    outputs: [summary, plan_deviation]
+
+  # Phase 4b: Handle deviation — flag epic if developer reports plan deviation.
+  # Deviation label goes on the EPIC (parent), not the task itself.
+  - id: handle_deviation
+    type: bridge
+    action: jira-update-issue
+    depends: "implement.Succeeded"
+    condition: "steps.implement.outputs.plan_deviation != ''"
+    inputs:
+      issue_key: "{{steps.get_task.outputs.parent_key}}"
+      add_labels: ["blocked"]
+
+  - id: deviation_comment
+    type: bridge
+    action: jira-add-comment
+    depends: "handle_deviation.Succeeded"
+    inputs:
+      issue_key: "{{steps.get_task.outputs.parent_key}}"
+      body: "Plan deviation detected during {{trigger.issue_key}} implementation:\n\n{{steps.implement.outputs.plan_deviation}}"
+
+  # Phase 5: Create merge request.
+  # Skipped when a plan deviation was reported (no code to submit).
+  - id: create_pr
+    type: bridge
+    action: create-merge-request
+    depends: "implement.Succeeded"
+    condition: "steps.implement.outputs.plan_deviation == ''"
+    inputs:
+      repo: pulp/pulp-service
+      branch: "{{steps.implement.inputs.branch}}"
+      title: "{{trigger.issue_key}}: {{trigger.issue_title}}"
+      base: main
+      draft: true
+      body: "Closes {{trigger.issue_url}}\n\n## Summary\n\n{{steps.implement.outputs.summary}}"
+
+  # Phase 6: CI — wait for checks, fix failures if needed.
+  - id: await_ci
+    type: bridge
+    action: await-checks
+    depends: "create_pr.Succeeded || ci_fix.Succeeded || revision.Succeeded"
+    max_iterations: 4
+    inputs:
+      repo: pulp/pulp-service
+      pr: "{{steps.create_pr.outputs.pr_number}}"
+      timeout: 3600
+
+  - id: ci_fix
+    type: agent
+    agent: Pulp Developer
+    depends: "await_ci.Failed"
+    max_iterations: 3
+    inputs:
+      branch: "{{steps.implement.inputs.branch}}"
+      issue_number: "{{trigger.issue_key}}"
+      repo: "pulp/pulp-service"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      plan: ""
+      ci_logs: "{{steps.await_ci.outputs.failure_logs}}"
+    outputs: [summary]
+
+  # Phase 7: Review — parallel specialist reviewers.
+  # All 4 reviewers run unconditionally (V1 simplification — no conditional
+  # dispatch based on Review Domains; that is V2).
+  # Reviewers depend on CI passing to avoid reviewing code with broken builds.
+  - id: review_django
+    type: agent
+    agent: Django Specialist Reviewer
+    depends: "await_ci.Succeeded"
+    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    inputs:
+      branch: "{{steps.implement.inputs.branch}}"
+      repo: "pulp/pulp-service"
+      spec: "{{steps.fetch_spec.outputs.description}}"
+      implement_summary: "{{steps.implement.outputs.summary}}"
+    outputs: [approved, comments, issues]
+    output_contract:
+      required: [approved, comments]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
+
+  - id: review_security
+    type: agent
+    agent: Security Reviewer
+    depends: "await_ci.Succeeded"
+    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    inputs:
+      branch: "{{steps.implement.inputs.branch}}"
+      repo: "pulp/pulp-service"
+      spec: "{{steps.fetch_spec.outputs.description}}"
+      implement_summary: "{{steps.implement.outputs.summary}}"
+    outputs: [approved, comments, issues]
+    output_contract:
+      required: [approved, comments]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
+
+  - id: review_go
+    type: agent
+    agent: Go Specialist Reviewer
+    depends: "await_ci.Succeeded"
+    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    inputs:
+      branch: "{{steps.implement.inputs.branch}}"
+      repo: "pulp/pulp-service"
+      spec: "{{steps.fetch_spec.outputs.description}}"
+      implement_summary: "{{steps.implement.outputs.summary}}"
+    outputs: [approved, comments, issues]
+    output_contract:
+      required: [approved, comments]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
+
+  - id: review_pulp
+    type: agent
+    agent: Pulp Domain Reviewer
+    depends: "await_ci.Succeeded"
+    condition: "steps.await_ci.outputs.checks_passed == 'true'"
+    inputs:
+      branch: "{{steps.implement.inputs.branch}}"
+      repo: "pulp/pulp-service"
+      spec: "{{steps.fetch_spec.outputs.description}}"
+      implement_summary: "{{steps.implement.outputs.summary}}"
+    outputs: [approved, comments, issues]
+    output_contract:
+      required: [approved, comments]
+      allowed_values:
+        approved: ["true", "false"]
+      routing_field: approved
+      success_value: "true"
+
+  # Phase 7b: Revision — address review feedback, then re-enter CI and reviews.
+  # After revision succeeds, await_ci re-enters (via depends), then reviewers
+  # re-run. Bounded by max_iterations: 2 — after that, revision fails and
+  # post_failure fires.
+  - id: revision
+    type: agent
+    agent: Pulp Developer
+    depends: "review_django.Failed || review_security.Failed || review_go.Failed || review_pulp.Failed"
+    max_iterations: 2
+    inputs:
+      branch: "{{steps.implement.inputs.branch}}"
+      issue_number: "{{trigger.issue_key}}"
+      repo: "pulp/pulp-service"
+      issue_title: "{{trigger.issue_title}}"
+      issue_body: "{{trigger.issue_body}}"
+      issue_url: "{{trigger.issue_url}}"
+      spec: "{{steps.fetch_spec.outputs.description}}"
+      code_feedback: "{{steps.review_django.outputs.comments}}\n---\n{{steps.review_security.outputs.comments}}\n---\n{{steps.review_go.outputs.comments}}\n---\n{{steps.review_pulp.outputs.comments}}"
+    outputs: [summary]
+
+  # Phase 8: Merge — all reviewers must approve.
+  - id: merge
+    type: bridge
+    action: merge
+    depends: "review_django.Succeeded && review_security.Succeeded && review_go.Succeeded && review_pulp.Succeeded"
+    inputs:
+      repo: pulp/pulp-service
+      pr: "{{steps.create_pr.outputs.pr_number}}"
+
+  # Phase 9: Close task in Jira.
+  # Runs BEFORE notify_epic to mitigate race conditions where the epic
+  # orchestrator sees the notification before the task is closed.
+  - id: close_task
+    type: bridge
+    action: jira-transition-issue
+    depends: "merge.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      transition: "Closed"
+
+  # Phase 10: Notify parent epic that this task completed.
+  - id: notify_epic
+    type: bridge
+    action: jira-add-comment
+    depends: "close_task.Succeeded"
+    inputs:
+      issue_key: "{{steps.get_task.outputs.parent_key}}"
+      body: "{{trigger.issue_key}} completed. PR: {{steps.create_pr.outputs.pr_url}}"
+
+  # --- Failure handling ---
+  # Covers terminal failures in the main pipeline. Does not include:
+  # - await_ci.Failed (recovered by ci_fix)
+  # - review_*.Failed (recovered by revision)
+  # - standalone_* steps (separate fallback path)
+  - id: post_failure
+    type: bridge
+    action: jira-add-comment
+    depends: "get_task.Failed || get_parent.Failed || check_planned.Failed || find_plan.Failed || fetch_spec.Failed || claim_task.Failed || implement.Failed || create_pr.Failed || ci_fix.Failed || revision.Failed || merge.Failed || close_task.Failed || notify_epic.Failed"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "Automated planned-task pipeline failed. Check the workflow logs for details."
