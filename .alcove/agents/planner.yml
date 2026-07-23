@@ -45,11 +45,19 @@ prompt: |
   If no previous plan is present (empty or placeholder), create a new
   plan from scratch.
 
+  ## Feedback (comments from the epic)
+
+  {{feedback}}
+
+  If feedback is present above, address it in your plan update. These
+  are comments from the team on the epic — they may request changes to
+  the plan, answer open questions, or provide additional context.
+
   ## Interaction Protocol
 
   1. Read the full ticket description above
-  2. If a previous plan exists, read it and identify what needs refinement
-     based on the latest feedback in the ticket
+  2. If a previous plan exists, read the feedback comments and identify
+     what needs refinement
   3. Check /workspace/pulp-docs/ for relevant documented decisions,
      architecture notes, CLI guides, and past constraints. This is the
      team's institutional knowledge — do not contradict it without

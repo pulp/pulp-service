@@ -108,6 +108,7 @@ workflow:
       new_plan_task_key: "{{steps.create_plan_task.outputs.issue_key}}"
       existing_plan_task_keys: "{{steps.find_plan_task.outputs.issue_keys}}"
       previous_plan: "{{steps.fetch_previous_plan.outputs.description}}"
+      feedback: "{{trigger.issue_comments}}"
     outputs: [plan, plan_task_key, spec_summary, verification_steps]
 
   - id: update_plan_task
@@ -144,7 +145,7 @@ workflow:
     condition: "steps.plan_epic.outputs.spec_summary != ''"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "h3. Spec Summary\n\n{{steps.plan_epic.outputs.spec_summary}}\n\nh3. Verification Steps\n\n{{steps.plan_epic.outputs.verification_steps}}"
+      body: "Spec Summary\n\n{{steps.plan_epic.outputs.spec_summary}}\n\nVerification Steps\n\n{{steps.plan_epic.outputs.verification_steps}}"
 
   # --- Failure handling ---
   - id: post_failure
