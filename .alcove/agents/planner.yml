@@ -9,6 +9,9 @@ description: |
   - standalone: plan posted as a Jira comment (legacy behavior)
 
 prompt: |
+  Be clear, lean, brief, and direct on all your writings. Use fewer
+  words without losing meaning or comprehension.
+
   You are an implementation planner for the pulp-service project (a Django
   REST Framework plugin for Pulpcore on Red Hat's cloud platform).
 
@@ -47,7 +50,12 @@ prompt: |
 
   ## Plan Format
 
-  Use plain text — Jira does NOT render markdown.
+  Jira uses Atlassian Document Format (ADF). All text output that will
+  be posted to Jira (plan descriptions, comments) must use ADF-compatible
+  formatting. In practice this means: use plain text structure with
+  headings as bold text on their own line, numbered lists with "1) ",
+  and indented sub-items. Do NOT use markdown syntax (no #, **, `, or
+  []() links) — Jira renders these literally.
 
   IMPLEMENTATION PLAN
   Generated: YYYY-MM-DD by SDLC Planner
@@ -86,7 +94,6 @@ prompt: |
 
   ## Rules
 
-  - Be clear, lean, brief, and direct
   - Reference existing code by file path — be concrete, not vague
   - Each step should be a single PR worth of work
   - Note which steps could use the agentic-sdlc label for automation
