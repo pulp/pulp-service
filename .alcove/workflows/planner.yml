@@ -80,15 +80,20 @@ workflow:
       labels: ["plan"]
     outputs: [issue_key]
 
-  # NOTE: jira-get-issue does not return `description` (alcove-ai/alcove#773).
-  # We cannot fetch the plan task description via a bridge step. Instead, we pass
-  # existing_plan_task_keys to the agent, which can read the description itself
-  # using its Jira API tools. This enables iterative re-planning: the agent reads
-  # the previous plan from the task description and refines rather than regenerates.
+  # Fetch previous plan for iterative refinement (requires alcove >= v0.55.0)
+  - id: fetch_previous_plan
+    type: bridge
+    action: jira-get-issue
+    depends: "find_plan_task.Succeeded"
+    condition: "steps.find_plan_task.outputs.issue_keys != null"
+    inputs:
+      issue_key: "{{steps.find_plan_task.outputs.issue_keys[0]}}"
+    outputs: [description]
+
   - id: plan_epic
     type: agent
     agent: Planner
-    depends: "create_plan_task.Succeeded || find_plan_task.Succeeded"
+    depends: "create_plan_task.Succeeded || fetch_previous_plan.Succeeded || find_plan_task.Succeeded"
     direct_outbound: true
     credentials:
       GIT_SSL_NO_VERIFY: git-ssl-no-verify
@@ -100,6 +105,7 @@ workflow:
       flow: "epic"
       new_plan_task_key: "{{steps.create_plan_task.outputs.issue_key}}"
       existing_plan_task_keys: "{{steps.find_plan_task.outputs.issue_keys}}"
+      previous_plan: "{{steps.fetch_previous_plan.outputs.description}}"
     outputs: [plan, plan_task_key, spec_summary, verification_steps]
 
   - id: update_plan_task

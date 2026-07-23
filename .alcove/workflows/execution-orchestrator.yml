@@ -45,18 +45,24 @@ workflow:
       max_results: 50
     outputs: [issue_keys]
 
-  # Step 5: Run the Execution Orchestrator agent
-  # NOTE: jira-get-issue does not return `description` (alcove-ai/alcove#773).
-  # The agent fetches the plan task description itself using Jira API tools.
-  # Template array indexing not supported — pass whole arrays to agent.
+  # Step 5: Fetch plan task content for DEPENDENCIES block (requires alcove >= v0.55.0)
+  - id: fetch_plan
+    type: bridge
+    action: jira-get-issue
+    depends: "get_children.Succeeded"
+    inputs:
+      issue_key: "{{steps.find_plan.outputs.issue_keys[0]}}"
+    outputs: [description]
+
+  # Step 6: Run the Execution Orchestrator agent
   - id: orchestrate
     type: agent
     agent: Execution Orchestrator Agent
-    depends: "get_children.Succeeded"
+    depends: "fetch_plan.Succeeded"
     direct_outbound: true
     inputs:
       epic_key: "{{trigger.issue_key}}"
-      plan_task_keys: "{{steps.find_plan.outputs.issue_keys}}"
+      plan_content: "{{steps.fetch_plan.outputs.description}}"
       child_task_keys: "{{steps.get_children.outputs.issue_keys}}"
     outputs: [next_tasks, all_done, blocked_tasks, action_summary]
 
@@ -93,7 +99,7 @@ workflow:
   - id: post_failure
     type: bridge
     action: jira-add-comment
-    depends: "get_epic.Failed || find_plan.Failed || get_children.Failed || orchestrate.Failed"
+    depends: "get_epic.Failed || find_plan.Failed || get_children.Failed || fetch_plan.Failed || orchestrate.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Execution orchestrator failed. Check workflow logs for details."

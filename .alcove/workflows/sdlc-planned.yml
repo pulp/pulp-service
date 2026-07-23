@@ -15,17 +15,24 @@ workflow:
     outputs: [issue_type, parent_key]
 
   # Phase 1: Check if parent epic is planned (has-plan label).
-  # Uses jira-search-issues because jira-get-issue does not return labels
-  # (alcove-ai/alcove#773).
-  - id: check_planned
+  # Uses jira-get-issue with labels output (requires alcove >= v0.55.0).
+  - id: get_parent
     type: bridge
-    action: jira-search-issues
+    action: jira-get-issue
     depends: "get_task.Succeeded"
     condition: "steps.get_task.outputs.parent_key != ''"
     inputs:
+      issue_key: "{{steps.get_task.outputs.parent_key}}"
+    outputs: [labels]
+
+  - id: check_planned
+    type: bridge
+    action: jira-search-issues
+    depends: "get_parent.Succeeded"
+    inputs:
       jql: "key = {{steps.get_task.outputs.parent_key}} AND labels = has-plan"
       max_results: 1
-    outputs: [issue_keys, total]
+    outputs: [issue_keys]
 
   # --- Standalone fallback: no parent epic ---
   - id: standalone_no_parent
@@ -63,10 +70,7 @@ workflow:
       issue_key: "{{trigger.issue_key}}"
       remove_labels: ["agentic-sdlc"]
 
-  # Phase 2: Find the Implementation Plan task under the parent epic.
-  # The plan task description contains the full implementation plan. Since
-  # jira-get-issue cannot return descriptions, the agent fetches it directly
-  # using Jira API tools via the plan_task_key reference.
+  # Phase 2: Find and fetch the Implementation Plan task (requires alcove >= v0.55.0).
   - id: find_plan
     type: bridge
     action: jira-search-issues
@@ -76,6 +80,15 @@ workflow:
       jql: "parent = {{steps.get_task.outputs.parent_key}} AND summary ~ 'Implementation Plan'"
       max_results: 1
     outputs: [issue_keys]
+
+  - id: fetch_spec
+    type: bridge
+    action: jira-get-issue
+    depends: "find_plan.Succeeded"
+    condition: "steps.find_plan.outputs.issue_keys != null"
+    inputs:
+      issue_key: "{{steps.find_plan.outputs.issue_keys[0]}}"
+    outputs: [description]
 
   # Phase 3: Claim — remove trigger label to prevent re-processing.
   - id: claim_task
@@ -88,8 +101,7 @@ workflow:
 
   # Phase 4: Implement — developer writes code following the plan.
   # The task description (issue_body) contains the <!-- planned-task --> marker,
-  # which puts the developer agent into GUIDED MODE. The agent reads the full
-  # plan from the plan_task_key reference via Jira API.
+  # which puts the developer agent into GUIDED MODE.
   - id: implement
     type: agent
     agent: Pulp Developer
@@ -101,7 +113,6 @@ workflow:
       issue_title: "{{trigger.issue_title}}"
       issue_body: "{{trigger.issue_body}}"
       issue_url: "{{trigger.issue_url}}"
-      plan: "Plan task: {{steps.find_plan.outputs.issue_keys}} — fetch the task description from Jira for the full implementation plan."
     outputs: [summary, plan_deviation]
 
   # Phase 4b: Handle deviation — flag epic if developer reports plan deviation.
@@ -177,7 +188,7 @@ workflow:
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
-      plan: "Plan task: {{steps.find_plan.outputs.issue_keys}}"
+      spec: "{{steps.fetch_spec.outputs.description}}"
       implement_summary: "{{steps.implement.outputs.summary}}"
     outputs: [approved, comments, issues]
     output_contract:
@@ -195,7 +206,7 @@ workflow:
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
-      plan: "Plan task: {{steps.find_plan.outputs.issue_keys}}"
+      spec: "{{steps.fetch_spec.outputs.description}}"
       implement_summary: "{{steps.implement.outputs.summary}}"
     outputs: [approved, comments, issues]
     output_contract:
@@ -213,7 +224,7 @@ workflow:
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
-      plan: "Plan task: {{steps.find_plan.outputs.issue_keys}}"
+      spec: "{{steps.fetch_spec.outputs.description}}"
       implement_summary: "{{steps.implement.outputs.summary}}"
     outputs: [approved, comments, issues]
     output_contract:
@@ -231,7 +242,7 @@ workflow:
     inputs:
       branch: "{{steps.implement.inputs.branch}}"
       repo: "pulp/pulp-service"
-      plan: "Plan task: {{steps.find_plan.outputs.issue_keys}}"
+      spec: "{{steps.fetch_spec.outputs.description}}"
       implement_summary: "{{steps.implement.outputs.summary}}"
     outputs: [approved, comments, issues]
     output_contract:
@@ -257,7 +268,7 @@ workflow:
       issue_title: "{{trigger.issue_title}}"
       issue_body: "{{trigger.issue_body}}"
       issue_url: "{{trigger.issue_url}}"
-      plan: "Plan task: {{steps.find_plan.outputs.issue_keys}}"
+      spec: "{{steps.fetch_spec.outputs.description}}"
       code_feedback: "{{steps.review_django.outputs.comments}}\n---\n{{steps.review_security.outputs.comments}}\n---\n{{steps.review_go.outputs.comments}}\n---\n{{steps.review_pulp.outputs.comments}}"
     outputs: [summary]
 
@@ -298,7 +309,7 @@ workflow:
   - id: post_failure
     type: bridge
     action: jira-add-comment
-    depends: "get_task.Failed || check_planned.Failed || find_plan.Failed || claim_task.Failed || implement.Failed || create_pr.Failed || ci_fix.Failed || revision.Failed || merge.Failed || close_task.Failed || notify_epic.Failed"
+    depends: "get_task.Failed || get_parent.Failed || check_planned.Failed || find_plan.Failed || fetch_spec.Failed || claim_task.Failed || implement.Failed || create_pr.Failed || ci_fix.Failed || revision.Failed || merge.Failed || close_task.Failed || notify_epic.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Automated planned-task pipeline failed. Check the workflow logs for details."

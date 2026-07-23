@@ -44,23 +44,29 @@ workflow:
       issue_key: "{{trigger.issue_key}}"
       body: "Task elaboration failed — no Implementation Plan task found. Add needs-planning label first."
 
-  # Step 5: Run the Task Elaborator agent
-  # NOTE: jira-get-issue does not return `description` (alcove-ai/alcove#773).
-  # We pass the plan task keys to the agent, which fetches the description itself
-  # using its Jira API tools. Template array indexing (issue_keys[0]) is not
-  # supported, so we pass the full issue_keys array — the agent picks the first.
+  # Step 5: Fetch plan task content (requires alcove >= v0.55.0)
+  - id: fetch_plan
+    type: bridge
+    action: jira-get-issue
+    depends: "find_plan.Succeeded"
+    condition: "steps.find_plan.outputs.issue_keys != null"
+    inputs:
+      issue_key: "{{steps.find_plan.outputs.issue_keys[0]}}"
+    outputs: [description]
+
+  # Step 6: Run the Task Elaborator agent
   - id: elaborate
     type: agent
     agent: Task Elaborator
-    depends: "find_plan.Succeeded"
-    condition: "steps.find_plan.outputs.issue_keys != null"
+    depends: "fetch_plan.Succeeded"
     direct_outbound: true
     credentials:
       GIT_SSL_NO_VERIFY: git-ssl-no-verify
     inputs:
       epic_key: "{{trigger.issue_key}}"
       epic_url: "{{trigger.issue_url}}"
-      plan_task_keys: "{{steps.find_plan.outputs.issue_keys}}"
+      plan_task_key: "{{steps.find_plan.outputs.issue_keys[0]}}"
+      plan_content: "{{steps.fetch_plan.outputs.description}}"
     outputs: [tasks_created, ready_tasks]
 
   # Step 6: Add labels to the epic
@@ -86,7 +92,7 @@ workflow:
   - id: post_failure
     type: bridge
     action: jira-add-comment
-    depends: "get_epic.Failed || find_plan.Failed || elaborate.Failed || label_epic.Failed"
+    depends: "get_epic.Failed || find_plan.Failed || fetch_plan.Failed || elaborate.Failed || label_epic.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Task elaboration failed. Check workflow logs for details."
