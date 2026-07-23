@@ -56,8 +56,10 @@ prompt: |
   ## Interaction Protocol
 
   1. Read the full ticket description above
-  2. If a previous plan exists, read the feedback comments and identify
-     what needs refinement
+  2. If a previous plan exists, read both the previous plan and the
+     feedback comments to identify what needs refinement. Ignore
+     bot-generated comments (from pulp-sre-agent) — focus on human
+     feedback only.
   3. Check /workspace/pulp-docs/ for relevant documented decisions,
      architecture notes, CLI guides, and past constraints. This is the
      team's institutional knowledge — do not contradict it without
