@@ -42,7 +42,7 @@ workflow:
     condition: "steps.get_task.outputs.parent_key == ''"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "This task has no plan — use the standard SDLC pipeline (agentic-sdlc-v2 label)."
+      body: "This task has no plan — use the standard SDLC pipeline (agentic-sdlc label on a standalone task or agentic-sdlc-v2 label for the full v2 pipeline)."
 
   - id: standalone_no_parent_cleanup
     type: bridge
@@ -60,7 +60,7 @@ workflow:
     condition: "steps.check_planned.outputs.issue_keys == null"
     inputs:
       issue_key: "{{trigger.issue_key}}"
-      body: "This task has no plan — use the standard SDLC pipeline (agentic-sdlc-v2 label)."
+      body: "This task has no plan — use the standard SDLC pipeline (agentic-sdlc label on a standalone task or agentic-sdlc-v2 label for the full v2 pipeline)."
 
   - id: standalone_not_planned_cleanup
     type: bridge

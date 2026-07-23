@@ -16,15 +16,13 @@ prompt: |
   ## Inputs
 
   Epic key: {{epic_key}}
-  Plan task keys: {{plan_task_keys}}
+  Plan content: {{plan_content}}
   Child task keys: {{child_task_keys}}
 
   ## Interaction Protocol
 
-  1. Resolve the plan task key from plan_task_keys (use the first key
-     in the list)
-  2. Fetch the plan task description using the Jira API
-  3. Parse the DEPENDENCIES block between ---BEGIN-DEPS--- and
+  1. The plan content is provided above — no need to fetch it from Jira
+  2. Parse the DEPENDENCIES block between ---BEGIN-DEPS--- and
      ---END-DEPS--- markers
   4. If no DEPS block found, output all_done=false, next_tasks='',
      blocked_tasks='', action_summary='No DEPENDENCIES block found in

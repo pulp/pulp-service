@@ -49,7 +49,8 @@ workflow:
   - id: fetch_plan
     type: bridge
     action: jira-get-issue
-    depends: "get_children.Succeeded"
+    depends: "find_plan.Succeeded"
+    condition: "steps.find_plan.outputs.issue_keys != null"
     inputs:
       issue_key: "{{steps.find_plan.outputs.issue_keys[0]}}"
     outputs: [description]
@@ -58,7 +59,7 @@ workflow:
   - id: orchestrate
     type: agent
     agent: Execution Orchestrator Agent
-    depends: "fetch_plan.Succeeded"
+    depends: "fetch_plan.Succeeded && get_children.Succeeded"
     direct_outbound: true
     inputs:
       epic_key: "{{trigger.issue_key}}"
