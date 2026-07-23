@@ -44,6 +44,11 @@ and human review. Delivers code and gets human sign-off.
 
 ### V2 (future)
 
+- PR conversation loop — human comments on a PR trigger the developer
+  agent to read feedback, apply changes, and push. Same conversational
+  pattern as W1 planning, but on PR/MR comments instead of epic comments.
+  Alcove's GitHub trigger supports `issue_comment` events; needs a new
+  workflow that detects PR-scoped comments and dispatches the developer.
 - Process Review (RAKI) — analyzes pipeline performance across the epic
 - Wrap-up (Knowledge Extraction) — extracts learnings into pulp-docs MR
 - Read-only interface contracts fed forward between dependent tasks
