@@ -44,7 +44,7 @@ go build -o agent-akamai-report .
 ./agent-akamai-report -output-dir /tmp/my-report
 
 # Run and publish to GitLab Pages
-./agent-akamai-report -gitlab-repo https://gitlab.cee.redhat.com/hyagi/akamai-report
+./agent-akamai-report -gitlab-repo https://gitlab.cee.redhat.com/hosted-pulp/traffic-report
 
 # Run with a custom question about the data
 ./agent-akamai-report -question "which base paths have the most traffic on packages.redhat.com?"
