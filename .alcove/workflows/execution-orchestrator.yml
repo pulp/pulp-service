@@ -1,0 +1,99 @@
+name: Execution Orchestrator
+trigger:
+  jira:
+    projects: [PULP]
+    labels: [executing]
+
+workflow:
+  # Step 1: Get the epic details
+  - id: get_epic
+    type: bridge
+    action: jira-get-issue
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+    outputs: [issue_type, summary]
+
+  # Step 2: Not an epic — comment and stop
+  - id: verify_epic
+    type: bridge
+    action: jira-add-comment
+    depends: "get_epic.Succeeded"
+    condition: "steps.get_epic.outputs.issue_type != 'Epic'"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "Execution orchestrator skipped -- this is not an Epic."
+
+  # Step 3: Find the plan task under this epic
+  - id: find_plan
+    type: bridge
+    action: jira-search-issues
+    depends: "get_epic.Succeeded"
+    condition: "steps.get_epic.outputs.issue_type == 'Epic'"
+    inputs:
+      jql: "parent = {{trigger.issue_key}} AND summary ~ 'Implementation Plan'"
+      max_results: 1
+    outputs: [issue_keys]
+
+  # Step 4: Find all child tasks (excluding the plan task)
+  - id: get_children
+    type: bridge
+    action: jira-search-issues
+    depends: "find_plan.Succeeded"
+    condition: "steps.find_plan.outputs.issue_keys != null"
+    inputs:
+      jql: "parent = {{trigger.issue_key}} AND summary !~ 'Implementation Plan' AND issuetype = Task"
+      max_results: 50
+    outputs: [issue_keys]
+
+  # Step 5: Run the Execution Orchestrator agent
+  # NOTE: jira-get-issue does not return `description` (alcove-ai/alcove#773).
+  # The agent fetches the plan task description itself using Jira API tools.
+  # Template array indexing not supported — pass whole arrays to agent.
+  - id: orchestrate
+    type: agent
+    agent: Execution Orchestrator Agent
+    depends: "get_children.Succeeded"
+    direct_outbound: true
+    inputs:
+      epic_key: "{{trigger.issue_key}}"
+      plan_task_keys: "{{steps.find_plan.outputs.issue_keys}}"
+      child_task_keys: "{{steps.get_children.outputs.issue_keys}}"
+    outputs: [next_tasks, all_done, blocked_tasks, action_summary]
+
+  # Step 6: All done — comment on epic
+  - id: all_done_comment
+    type: bridge
+    action: jira-add-comment
+    depends: "orchestrate.Succeeded"
+    condition: "steps.orchestrate.outputs.all_done == 'true'"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "All tasks complete. Moving epic to In Review.\n\n{{steps.orchestrate.outputs.action_summary}}"
+
+  # Step 7: All done — transition epic to In Review
+  - id: all_done_transition
+    type: bridge
+    action: jira-transition-issue
+    depends: "all_done_comment.Succeeded"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      transition: "In Review"
+
+  # Step 8: Blocked tasks — comment on epic
+  - id: blocked_comment
+    type: bridge
+    action: jira-add-comment
+    depends: "orchestrate.Succeeded"
+    condition: "steps.orchestrate.outputs.blocked_tasks != '' && steps.orchestrate.outputs.all_done != 'true'"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "Orchestrator update: {{steps.orchestrate.outputs.action_summary}}"
+
+  # Failure handling
+  - id: post_failure
+    type: bridge
+    action: jira-add-comment
+    depends: "get_epic.Failed || find_plan.Failed || get_children.Failed || orchestrate.Failed"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "Execution orchestrator failed. Check workflow logs for details."
