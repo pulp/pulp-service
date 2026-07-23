@@ -80,6 +80,11 @@ workflow:
       labels: ["plan"]
     outputs: [issue_key]
 
+  # NOTE: jira-get-issue does not return `description` (alcove-ai/alcove#773).
+  # We cannot fetch the plan task description via a bridge step. Instead, we pass
+  # existing_plan_task_keys to the agent, which can read the description itself
+  # using its Jira API tools. This enables iterative re-planning: the agent reads
+  # the previous plan from the task description and refines rather than regenerates.
   - id: plan_epic
     type: agent
     agent: Planner
@@ -95,7 +100,7 @@ workflow:
       flow: "epic"
       new_plan_task_key: "{{steps.create_plan_task.outputs.issue_key}}"
       existing_plan_task_keys: "{{steps.find_plan_task.outputs.issue_keys}}"
-    outputs: [plan, plan_task_key]
+    outputs: [plan, plan_task_key, spec_summary, verification_steps]
 
   - id: update_plan_task
     type: bridge
@@ -121,11 +126,23 @@ workflow:
       issue_key: "{{trigger.issue_key}}"
       body: "Implementation plan created at {{steps.plan_epic.outputs.plan_task_key}}. The plan includes a draft task breakdown. Reply here to discuss or request changes."
 
+  # Post spec summary and verification steps as a comment on the epic.
+  # We use a comment instead of updating the epic description to avoid
+  # overwriting human-authored content (alcove-ai/alcove#773).
+  - id: post_spec_summary
+    type: bridge
+    action: jira-add-comment
+    depends: "notify_epic.Succeeded"
+    condition: "steps.plan_epic.outputs.spec_summary != ''"
+    inputs:
+      issue_key: "{{trigger.issue_key}}"
+      body: "h3. Spec Summary\n\n{{steps.plan_epic.outputs.spec_summary}}\n\nh3. Verification Steps\n\n{{steps.plan_epic.outputs.verification_steps}}"
+
   # --- Failure handling ---
   - id: post_failure
     type: bridge
     action: jira-add-comment
-    depends: "detect.Failed || find_plan_task.Failed || create_plan_task.Failed || plan_epic.Failed || update_plan_task.Failed || plan_changelog.Failed || notify_epic.Failed || plan_standalone.Failed"
+    depends: "detect.Failed || find_plan_task.Failed || create_plan_task.Failed || plan_epic.Failed || update_plan_task.Failed || plan_changelog.Failed || notify_epic.Failed || post_spec_summary.Failed || plan_standalone.Failed"
     inputs:
       issue_key: "{{trigger.issue_key}}"
       body: "Automated planning failed. Check the workflow logs for details."
