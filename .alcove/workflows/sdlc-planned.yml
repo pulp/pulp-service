@@ -32,7 +32,7 @@ workflow:
     inputs:
       jql: "key = {{steps.get_task.outputs.parent_key}} AND labels = has-plan"
       max_results: 1
-    outputs: [issue_keys]
+    outputs: [issue_keys, total]
 
   # --- Standalone fallback: no parent epic ---
   - id: standalone_no_parent
@@ -79,7 +79,7 @@ workflow:
     inputs:
       jql: "parent = {{steps.get_task.outputs.parent_key}} AND summary ~ 'Implementation Plan'"
       max_results: 1
-    outputs: [issue_keys]
+    outputs: [issue_keys, total]
 
   - id: fetch_spec
     type: bridge
