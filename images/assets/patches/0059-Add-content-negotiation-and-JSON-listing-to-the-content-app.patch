@@ -1,0 +1,564 @@
+From 65dfb06f202c269c8e864e2f7b939b7c905c674d Mon Sep 17 00:00:00 2001
+From: Yasen <yasen@trahnov.eu>
+Date: Fri, 24 Jul 2026 12:03:32 +0200
+Subject: [PATCH] Add content negotiation and JSON listing to the content app
+
+Adds Accept-header based content negotiation to the content app's
+Handler. Requests with Accept: application/json now receive a
+generic, recursive, paginated JSON listing of every package under
+the requested distribution path instead of the default HTML
+directory listing.
+
+Also adds Distribution.content_handler_json(path), a JSON
+counterpart to content_handler(path), letting plugins return a
+type-specific JSON representation for a path instead of the
+generic recursive listing.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ pulpcore/app/models/publication.py |  25 +++
+ pulpcore/cache/__init__.py         |   1 +
+ pulpcore/cache/cache.py            |  55 ++++-
+ pulpcore/content/handler.py        | 335 +++++++++++++++++++++++++----
+ 4 files changed, 370 insertions(+), 46 deletions(-)
+
+diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
+index b953be30d..1cb9275b4 100644
+--- a/pulpcore/app/models/publication.py
++++ b/pulpcore/app/models/publication.py
+@@ -731,6 +731,31 @@ class Distribution(MasterModel):
+         """
+         return set()
+ 
++    def content_handler_json(self, path):
++        """
++        Handler to serve a JSON representation of the content at ``path`` for this Distribution.
++
++        This is the JSON counterpart to :meth:`content_handler`. It is invoked instead of (and
++        checked before) the generic, plugin-agnostic JSON directory listing whenever the
++        client's ``Accept`` header indicates a preference for JSON over HTML. Plugins override
++        this to provide type-specific JSON (e.g. package metadata, a de-duplicated "package"
++        listing, etc.) rather than falling back to the generic file/size/date listing that
++        pulpcore builds automatically for every Distribution.
++
++        The default implementation returns ``None`` for every path, which is safe for any
++        Distribution subclass that doesn't override it: pulpcore's generic JSON directory
++        listing (or the normal HTML/binary behavior) is used instead.
++
++        Args:
++            path (str): The path being requested
++        Returns:
++            None if there is no JSON representation to serve at path. Otherwise, a
++            JSON-serializable object (dict/list) to be returned to the client, or an
++            aiohttp.web.StreamResponse (e.g. built via aiohttp.web.json_response) for full
++            control over headers/status.
++        """
++        return None
++
+     def content_headers_for(self, path):
+         """
+         Opportunity for Distribution to specify response-headers for a specific path
+diff --git a/pulpcore/cache/__init__.py b/pulpcore/cache/__init__.py
+index a5a4b9d01..54f1f0589 100644
+--- a/pulpcore/cache/__init__.py
++++ b/pulpcore/cache/__init__.py
+@@ -6,4 +6,5 @@ from .cache import (
+     CacheKeys,
+     ConnectionError,
+     SyncContentCache,
++    accept_prefers_json,
+ )
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 6fcf470e1..91db28b43 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -29,6 +29,54 @@ class CacheKeys(enum.Enum):
+     path = "path"
+     host = "host"
+     method = "method"
++    format = "format"
++
++
++def accept_prefers_json(accept_header):
++    """
++    Determine whether an HTTP Accept header value prefers application/json over other types.
++
++    A missing/empty header, or one whose highest-quality (per RFC 9110 q-values) entry isn't
++    "application/json" or a "+json" subtype, is treated as "does not prefer JSON". This is the
++    single source of truth for JSON content negotiation in the content app; it lives here (a
++    dependency-free leaf module) rather than in ``pulpcore.content.handler`` so that both the
++    content app's response logic and its cache key (see ``AsyncContentCache.make_key``) can use
++    the exact same decision, avoiding any risk of a JSON response being cached/served for an
++    HTML request or vice versa.
++
++    Args:
++        accept_header (str): The raw value of the request's Accept header, or None.
++
++    Returns:
++        bool: True if the client's top choice is JSON, False otherwise.
++    """
++    if not accept_header:
++        return False
++
++    best_type = None
++    best_q = -1.0
++    for part in accept_header.split(","):
++        part = part.strip()
++        if not part:
++            continue
++        media_type, _, params_str = part.partition(";")
++        media_type = media_type.strip().lower()
++        q = 1.0
++        for param in params_str.split(";"):
++            param = param.strip()
++            if param.startswith("q="):
++                try:
++                    q = float(param[2:])
++                except ValueError:
++                    q = 1.0
++        if q > best_q:
++            best_q = q
++            best_type = media_type
++
++    if not best_type or best_q <= 0:
++        return False
++
++    return best_type == "application/json" or best_type.endswith("+json")
+ 
+ 
+ def connection_error_wrapper(func):
+@@ -323,7 +371,9 @@ class AsyncContentCache(AsyncCache):
+                       can be a callable taking the request and cache instance as arguments
+             expires_ttl: length in seconds entries should live in the cache, EXPIRES_TTL is default
+             keys: a list of CacheKeys to use for key creation upon entry placement,
+-                (path, method) is default
++                (path, method) is default. Pass CacheKeys.format if responses for the same
++                path/method can differ based on the request's Accept header (e.g. JSON vs.
++                HTML), so that they are cached under separate keys.
+             auth: a callable to check authorization of the request; takes the request, cache
+                   instance, and base_key as arguments.
+         """
+@@ -448,6 +498,9 @@ class AsyncContentCache(AsyncCache):
+             CacheKeys.path: request.path,
+             CacheKeys.method: request.method,
+             CacheKeys.host: request.url.host,
++            CacheKeys.format: (
++                "json" if accept_prefers_json(request.headers.get("Accept")) else "other"
++            ),
+         }
+         key = ":".join(all_keys[k] for k in self.keys)
+         return key
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index 671ab72c8..585f6f375 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -1,4 +1,5 @@
+ import asyncio
++import json
+ import logging
+ import os
+ import re
+@@ -58,7 +59,7 @@ from pulpcore.app.util import (  # noqa: E402
+     cache_key,
+     get_domain,
+ )
+-from pulpcore.cache import AsyncContentCache  # noqa: E402
++from pulpcore.cache import AsyncContentCache, CacheKeys, accept_prefers_json  # noqa: E402
+ from pulpcore.exceptions import (  # noqa: E402
+     DigestValidationError,
+     UnsupportedDigestValidationError,
+@@ -185,6 +186,10 @@ class Handler:
+ 
+     distribution_model = None
+ 
++    # Defaults/bounds for the ?limit=&offset= pagination of the generic JSON directory listing.
++    DEFAULT_JSON_LIST_LIMIT = 1000
++    MAX_JSON_LIST_LIMIT = 10000
++
+     @staticmethod
+     def _reset_db_connection():
+         """
+@@ -272,6 +277,11 @@ class Handler:
+     @AsyncContentCache(
+         base_key=lambda req, cac: Handler.find_base_path_cached(req, cac),
+         auth=lambda req, cac, bk: Handler.auth_cached(req, cac, bk),
++        # A response for a given path/method can now differ based on the client's Accept
++        # header (JSON vs. HTML/binary), so CacheKeys.format must be part of the cache key.
++        # Without it, a JSON response could be cached and served back for an HTML request
++        # (or vice versa). See pulpcore.cache.accept_prefers_json.
++        keys=(CacheKeys.path, CacheKeys.method, CacheKeys.format),
+     )
+     async def stream_content(self, request):
+         """
+@@ -582,6 +592,198 @@ class Handler:
+             sizes=sizes,
+         )
+ 
++    @staticmethod
++    def negotiate_json(request):
++        """
++        Determine whether the client's Accept header prefers application/json over text/html.
++
++        A missing Accept header, or one whose highest-priority entry is "*/*" or some other
++        non-JSON type, is treated as "not asking for JSON" so that existing clients (browsers,
++        package managers, etc.) keep receiving today's HTML/binary responses unchanged.
++
++        This delegates to :func:`pulpcore.cache.accept_prefers_json`, which is also used by
++        :meth:`pulpcore.cache.AsyncContentCache.make_key` (via ``CacheKeys.format``) to key
++        cache entries by negotiated representation. Keeping a single implementation guarantees
++        the caching layer and this negotiation decision can never disagree.
++
++        Args:
++            request (aiohttp.web.Request): The incoming request.
++
++        Returns:
++            bool: True if the highest-quality (per RFC 9110 q-values) media type the client
++                accepts is "application/json" or a "+json" subtype, False otherwise.
++        """
++        return accept_prefers_json(request.headers.get("Accept"))
++
++    @classmethod
++    def _pagination_params(cls, request):
++        """
++        Parse and bound the ?limit=&offset= query params used by the generic JSON listing.
++
++        Invalid or missing values fall back to defaults rather than raising, since pagination
++        parameters should never be the reason a request fails.
++
++        Args:
++            request (aiohttp.web.Request): The incoming request.
++
++        Returns:
++            (int, int): A (limit, offset) tuple.
++        """
++
++        def parse_int(name, default, minimum, maximum):
++            try:
++                value = int(request.query.get(name, default))
++            except (TypeError, ValueError):
++                value = default
++            return max(minimum, min(value, maximum))
++
++        limit = parse_int("limit", cls.DEFAULT_JSON_LIST_LIMIT, 1, cls.MAX_JSON_LIST_LIMIT)
++        offset = parse_int("offset", 0, 0, 2**31 - 1)
++        return limit, offset
++
++    @staticmethod
++    def _json_response(data):
++        """
++        Wrap a JSON-serializable object as a JSON HTTP response, passing responses through as-is.
++
++        Args:
++            data: Either an aiohttp.web.StreamResponse (returned as-is, giving a Distribution
++                full control over headers/status) or a JSON-serializable object (dict/list).
++
++        Returns:
++            aiohttp.web.StreamResponse: The response to return to the client.
++        """
++        if isinstance(data, StreamResponse):
++            return data
++        return HTTPOk(
++            headers={"Content-Type": "application/json", "Vary": "Accept"},
++            text=json.dumps(data, default=str),
++        )
++
++    @staticmethod
++    def _json_listing_response(request_path, entries, total, limit, offset):
++        """
++        Build the JSON response envelope for the generic, recursive directory listing.
++
++        Args:
++            request_path (str): The full request path, echoed back for client convenience.
++            entries (list): List of {"path", "size", "date"} dicts, already paginated.
++            total (int): Total number of matching entries before pagination was applied.
++            limit (int): The limit that was applied.
++            offset (int): The offset that was applied.
++
++        Returns:
++            aiohttp.web.HTTPOk: The JSON response.
++        """
++        body = {
++            "path": request_path,
++            "packages": entries,
++            "count": total,
++            "limit": limit,
++            "offset": offset,
++        }
++        if offset + len(entries) < total:
++            body["next_offset"] = offset + len(entries)
++        return HTTPOk(
++            headers={"Content-Type": "application/json", "Vary": "Accept"},
++            text=json.dumps(body, default=str),
++        )
++
++    async def list_directory_flat(self, repo_version, publication, path, limit, offset):
++        """
++        Generate a flat, recursive listing of every actual file under ``path``.
++
++        Unlike :meth:`list_directory`, this does not collapse nested files down to their
++        first path segment (i.e. it never synthesizes directory placeholders): every leaf
++        file anywhere below ``path`` is returned with its full path relative to ``path``.
++        This backs the generic, plugin-agnostic JSON representation of a distribution's
++        contents (see :meth:`negotiate_json`), so that a client can request the root (or
++        any subdirectory) of a distribution and get every package beneath it without having
++        to walk the directory tree itself.
++
++        Args:
++            repo_version (pulpcore.app.models.RepositoryVersion) The repository version
++            publication (pulpcore.app.models.Publication) Publication
++            path (str): relative path inside the repo version or publication.
++            limit (int): Maximum number of entries to return.
++            offset (int): Number of matching entries (sorted by path) to skip.
++
++        Returns:
++            (list, int): A tuple of (entries, total) where entries is a list of
++                {"path": str, "size": int|None, "date": str|None} dicts already sliced to
++                [offset:offset + limit] and sorted by path, and total is the number of
++                matching entries before slicing (for pagination).
++        """
++
++        def list_directory_flat_blocking():
++            if not publication and not repo_version:
++                raise Exception("Either a repo_version or publication is required.")
++            if publication and repo_version:
++                raise Exception("Either a repo_version or publication can be specified.")
++            content_repo_ver = repo_version or publication.repository_version
++            entries = {}
++            content_to_find = {}
++            artifacts_to_find = {}
++
++            if publication:
++                pas = publication.published_artifact.select_related(
++                    "content_artifact__artifact"
++                ).filter(relative_path__startswith=path)
++                for pa in pas:
++                    rel = pa.relative_path[len(path) :]
++                    # Mirror list_directory: later matches for the same path win.
++                    entries[rel] = {"date": pa.pulp_created, "size": None}
++                    content_to_find[pa.content_artifact.content_id] = rel
++                    if pa.content_artifact.artifact:
++                        entries[rel]["size"] = pa.content_artifact.artifact.size
++                    else:
++                        artifacts_to_find[pa.content_artifact.pk] = rel
++
++            if repo_version or publication.pass_through:
++                cas = ContentArtifact.objects.select_related("artifact").filter(
++                    content__in=content_repo_ver.content, relative_path__startswith=path
++                )
++                for ca in cas:
++                    rel = ca.relative_path[len(path) :]
++                    entries[rel] = {"date": ca.pulp_created, "size": None}
++                    content_to_find[ca.content_id] = rel
++                    if ca.artifact:
++                        entries[rel]["size"] = ca.artifact.size
++                    else:
++                        artifacts_to_find[ca.pk] = rel
++
++            if entries:
++                # Find the dates the content got added to the repository, mirroring
++                # list_directory's behavior of preferring the repo-membership date.
++                dates = {
++                    content_to_find[rc.content_id]: rc.pulp_created
++                    for rc in content_repo_ver._content_relationships()
++                    if rc.content_id in content_to_find
++                }
++                for rel, pulp_created in dates.items():
++                    entries[rel]["date"] = pulp_created
++
++                # Find the sizes for on_demand artifacts
++                r_artifacts = RemoteArtifact.objects.filter(
++                    content_artifact__in=artifacts_to_find.keys(), size__isnull=False
++                ).values_list("content_artifact_id", "size")
++                for ca_pk, size in r_artifacts:
++                    entries[artifacts_to_find[ca_pk]]["size"] = size
++
++            total = len(entries)
++            page_paths = sorted(entries)[offset : offset + limit]
++            result = [
++                {
++                    "path": rel,
++                    "size": entries[rel]["size"],
++                    "date": (entries[rel]["date"].isoformat() if entries[rel]["date"] else None),
++                }
++                for rel in page_paths
++            ]
++            return result, total
++
++        return await sync_to_async(list_directory_flat_blocking)()
++
+     async def list_directory(self, repo_version, publication, path):
+         """
+         Generate a set with directory listing of the path.
+@@ -683,6 +885,13 @@ class Handler:
+         Finally, when nothing is served to client yet, we check if there is a remote for the
+         Distribution. If so, the Artifact is pulled from the remote and streamed to the client.
+ 
++        If the client's ``Accept`` header prefers JSON (see :meth:`negotiate_json`), this method
++        instead calls :meth:`Distribution.content_handler_json` for a plugin-specific JSON
++        representation of ``path``; if that returns None, it falls back to a generic, recursive
++        JSON listing of every file at or below ``path`` (see :meth:`list_directory_flat`) when
++        ``path`` resolves to a directory. Concrete artifact paths are unaffected by ``Accept``
++        unless a plugin's ``content_handler_json`` explicitly handles them.
++
+         Args:
+             path (str): The path component of the URL.
+             request(aiohttp.web.Request) The request to prepare a response for.
+@@ -717,6 +926,11 @@ class Handler:
+ 
+         headers = self.response_headers(original_rel_path, distro)
+ 
++        # Determine, once, whether the client is asking for a JSON representation of this path
++        # rather than the default HTML/binary behavior. See negotiate_json() for details.
++        wants_json = self.negotiate_json(request)
++        json_limit, json_offset = self._pagination_params(request) if wants_json else (None, None)
++
+         content_handler_result = await sync_to_async(distro.content_handler)(original_rel_path)
+         if content_handler_result is not None:
+             if isinstance(content_handler_result, ContentArtifact):
+@@ -732,6 +946,13 @@ class Handler:
+                 # the result is a response so just return it
+                 return content_handler_result
+ 
++        if wants_json:
++            content_handler_json_result = await sync_to_async(distro.content_handler_json)(
++                original_rel_path
++            )
++            if content_handler_json_result is not None:
++                return self._json_response(content_handler_json_result)
++
+         if distro.checkpoint:
+             repository = repo_version = None
+             publication = await sync_to_async(self._select_checkpoint_publication)(
+@@ -746,30 +967,42 @@ class Handler:
+             )()
+ 
+         if publication:
+-            try:
+-                index_path = "{}index.html".format(rel_path)
+-
+-                await publication.published_artifact.aget(relative_path=index_path)
+-                if not ends_in_slash:
+-                    # index.html found, but user didn't specify a trailing slash
+-                    raise HTTPMovedPermanently(f"{request.path}/")
+-                original_rel_path = index_path
+-                headers = self.response_headers(original_rel_path, distro)
+-            except ObjectDoesNotExist:
+-                dir_list, dates, sizes = await self.list_directory(None, publication, rel_path)
+-                dir_list.update(
+-                    await sync_to_async(distro.content_handler_list_directory)(rel_path)
++            if wants_json:
++                entries, total = await self.list_directory_flat(
++                    None, publication, rel_path, json_limit, json_offset
+                 )
+-                if dir_list and not ends_in_slash:
+-                    # Directory can be listed, but user did not specify trailing slash
+-                    raise HTTPMovedPermanently(f"{request.path}/")
+-                elif dir_list:
+-                    return HTTPOk(
+-                        headers={"Content-Type": "text/html"},
+-                        text=self.render_html(
+-                            dir_list, path=request.path, dates=dates, sizes=sizes
+-                        ),
++                if total:
++                    if not ends_in_slash:
++                        # Directory can be listed, but user did not specify trailing slash
++                        raise HTTPMovedPermanently(f"{request.path}/")
++                    return self._json_listing_response(
++                        request.path, entries, total, json_limit, json_offset
+                     )
++            else:
++                try:
++                    index_path = "{}index.html".format(rel_path)
++
++                    await publication.published_artifact.aget(relative_path=index_path)
++                    if not ends_in_slash:
++                        # index.html found, but user didn't specify a trailing slash
++                        raise HTTPMovedPermanently(f"{request.path}/")
++                    original_rel_path = index_path
++                    headers = self.response_headers(original_rel_path, distro)
++                except ObjectDoesNotExist:
++                    dir_list, dates, sizes = await self.list_directory(None, publication, rel_path)
++                    dir_list.update(
++                        await sync_to_async(distro.content_handler_list_directory)(rel_path)
++                    )
++                    if dir_list and not ends_in_slash:
++                        # Directory can be listed, but user did not specify trailing slash
++                        raise HTTPMovedPermanently(f"{request.path}/")
++                    elif dir_list:
++                        return HTTPOk(
++                            headers={"Content-Type": "text/html", "Vary": "Accept"},
++                            text=self.render_html(
++                                dir_list, path=request.path, dates=dates, sizes=sizes
++                            ),
++                        )
+ 
+             # published artifact
+             try:
+@@ -832,30 +1065,42 @@ class Handler:
+                     )
+ 
+         if repo_version and not publication and not distro.SERVE_FROM_PUBLICATION:
+-            # Look for index.html or list the directory
+-            index_path = "{}index.html".format(rel_path)
+-
+-            contentartifact_exists = await ContentArtifact.objects.filter(
+-                content__in=repo_version.content, relative_path=index_path
+-            ).aexists()
+-            if contentartifact_exists:
+-                original_rel_path = index_path
+-                headers = self.response_headers(original_rel_path, distro)
+-            else:
+-                dir_list, dates, sizes = await self.list_directory(repo_version, None, rel_path)
+-                dir_list.update(
+-                    await sync_to_async(distro.content_handler_list_directory)(rel_path)
++            if wants_json:
++                entries, total = await self.list_directory_flat(
++                    repo_version, None, rel_path, json_limit, json_offset
+                 )
+-                if dir_list and not ends_in_slash:
+-                    # Directory can be listed, but user did not specify trailing slash
+-                    raise HTTPMovedPermanently(f"{request.path}/")
+-                elif dir_list:
+-                    return HTTPOk(
+-                        headers={"Content-Type": "text/html"},
+-                        text=self.render_html(
+-                            dir_list, path=request.path, dates=dates, sizes=sizes
+-                        ),
++                if total:
++                    if not ends_in_slash:
++                        # Directory can be listed, but user did not specify trailing slash
++                        raise HTTPMovedPermanently(f"{request.path}/")
++                    return self._json_listing_response(
++                        request.path, entries, total, json_limit, json_offset
+                     )
++            else:
++                # Look for index.html or list the directory
++                index_path = "{}index.html".format(rel_path)
++
++                contentartifact_exists = await ContentArtifact.objects.filter(
++                    content__in=repo_version.content, relative_path=index_path
++                ).aexists()
++                if contentartifact_exists:
++                    original_rel_path = index_path
++                    headers = self.response_headers(original_rel_path, distro)
++                else:
++                    dir_list, dates, sizes = await self.list_directory(repo_version, None, rel_path)
++                    dir_list.update(
++                        await sync_to_async(distro.content_handler_list_directory)(rel_path)
++                    )
++                    if dir_list and not ends_in_slash:
++                        # Directory can be listed, but user did not specify trailing slash
++                        raise HTTPMovedPermanently(f"{request.path}/")
++                    elif dir_list:
++                        return HTTPOk(
++                            headers={"Content-Type": "text/html", "Vary": "Accept"},
++                            text=self.render_html(
++                                dir_list, path=request.path, dates=dates, sizes=sizes
++                            ),
++                        )
+ 
+             try:
+                 ca = await ContentArtifact.objects.select_related(
+-- 
+2.53.0
+

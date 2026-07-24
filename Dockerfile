@@ -150,6 +150,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0058-fix-migrate.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0058-fix-migrate.patch
 
+COPY images/assets/patches/0059-Add-content-negotiation-and-JSON-listing-to-the-content-app.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0059-Add-content-negotiation-and-JSON-listing-to-the-content-app.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
