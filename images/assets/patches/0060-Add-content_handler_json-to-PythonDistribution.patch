@@ -1,0 +1,179 @@
+From de22a3671552944fa176f1b3b89cf7c4cdafb40a Mon Sep 17 00:00:00 2001
+From: Yasen <yasen@trahnov.eu>
+Date: Fri, 24 Jul 2026 12:47:51 +0200
+Subject: [PATCH] Add content_handler_json to PythonDistribution
+
+Reuses the existing PyPI JSON API and PEP 691 'Simple' JSON serialization
+(python_content_to_json, write_simple_index_json, write_simple_detail_json)
+so requests made directly against the content app with an
+Accept: application/json header return the same structured data already
+available through the separate pypi/*/json and pypi/simple DRF endpoints,
+without clients needing to know those URL conventions.
+
+Requires pulpcore's new Distribution.content_handler_json content
+negotiation support in the content app Handler.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ pulp_python/app/models.py | 87 +++++++++++++++++++++++++++++++++++++++
+ pulp_python/app/utils.py  | 23 +++++++----
+ 2 files changed, 102 insertions(+), 8 deletions(-)
+
+diff --git a/pulp_python/app/models.py b/pulp_python/app/models.py
+index bdfe9e7..5215742 100644
+--- a/pulp_python/app/models.py
++++ b/pulp_python/app/models.py
+@@ -8,6 +8,7 @@ from django.conf import settings
+ from django.contrib.postgres.fields import ArrayField
+ from django.core.exceptions import ObjectDoesNotExist
+ from django.db import models
++from django.db.models import F, FilteredRelation, Q
+ from django_lifecycle import (
+     BEFORE_SAVE,
+     hook,
+@@ -37,8 +38,11 @@ from .utils import (
+     PYPI_SERIAL_CONSTANT,
+     artifact_to_metadata_artifact,
+     artifact_to_python_content_data,
++    build_content_url,
+     canonicalize_name,
+     python_content_to_json,
++    write_simple_detail_json,
++    write_simple_index_json,
+ )
+ 
+ log = getLogger(__name__)
+@@ -136,6 +140,89 @@ class PythonDistribution(Distribution, AutoAddObjPermsMixin):
+ 
+         return None
+ 
++    def content_handler_json(self, path):
++        """
++        Handler to serve a JSON representation of the content at ``path`` for this Distribution.
++
++        Called by pulpcore's content app when a client's ``Accept`` header prefers JSON,
++        instead of pulpcore's generic recursive file listing. This reuses the same
++        serialization already used by the ``pypi/*/json`` and ``pypi/simple`` PyPI APIs, so
++        requests made directly against the content app (e.g. by a UI or ``pip``-compatible
++        tool) get the same structured data without needing to know those separate URL
++        conventions.
++
++        Args:
++            path (str): The path being requested
++        Returns:
++            None if there is no JSON representation to serve at path. Otherwise a
++            JSON-serializable dict, or an aiohttp.web.Response for full header control.
++        """
++        path = PurePath(path)
++        parts = path.parts
++        if not parts:
++            # Distro root: let pulpcore's generic recursive listing handle it.
++            return None
++
++        _, repo_version, _ = self.get_repository_publication_and_version()
++        if repo_version is None:
++            return None
++        content = PythonPackageContent.objects.filter(pk__in=repo_version.content)
++        domain = get_domain() if settings.DOMAIN_ENABLED else None
++
++        if parts[0] == "pypi" and 2 <= len(parts) <= 3:
++            # e.g. pypi/<name>/ or pypi/<name>/<version>/ (the *-suffixed /json paths are
++            # already handled above by content_handler, unconditionally on Accept).
++            name = parts[1]
++            version = parts[2] if len(parts) == 3 else None
++            normalized = canonicalize_name(name)
++            package_content = content.filter(name_normalized=normalized)
++            headers = {PYPI_LAST_SERIAL: str(PYPI_SERIAL_CONSTANT)}
++            json_body = python_content_to_json(
++                self.base_path, package_content, version=version, domain=domain
++            )
++            if json_body:
++                return json_response(json_body, headers=headers)
++            return None
++
++        if parts[0] == "simple":
++            if len(parts) == 1:
++                names = (
++                    content.order_by("name_normalized")
++                    .values_list("name", flat=True)
++                    .distinct("name_normalized")
++                )
++                return write_simple_index_json(list(names))
++
++            normalized = canonicalize_name(parts[1])
++            packages = content.filter(name_normalized=normalized).annotate(
++                active_membership=FilteredRelation(
++                    "version_memberships",
++                    condition=Q(
++                        version_memberships__repository=repo_version.repository,
++                        version_memberships__version_removed=None,
++                    ),
++                ),
++                repo_added_time=F("active_membership__pulp_created"),
++            )
++            if not packages.exists():
++                return None
++            releases = [
++                {
++                    "filename": p.filename,
++                    "sha256": p.sha256,
++                    "metadata_sha256": p.metadata_sha256,
++                    "requires_python": p.requires_python,
++                    "size": p.size,
++                    "upload_time": p.repo_added_time or p.pulp_created,
++                    "version": p.version,
++                    "url": build_content_url(self.base_path, p.filename, domain=domain),
++                }
++                for p in packages
++            ]
++            return write_simple_detail_json(normalized, releases)
++
++        return None
++
+     class Meta:
+         default_related_name = "%(app_label)s_%(model_name)s"
+         permissions = [
+diff --git a/pulp_python/app/utils.py b/pulp_python/app/utils.py
+index 3e9849b..c883f32 100644
+--- a/pulp_python/app/utils.py
++++ b/pulp_python/app/utils.py
+@@ -492,6 +492,20 @@ def python_content_to_urls(contents, base_path, domain=None):
+     return [python_content_to_download_info(content, base_path, domain) for content in contents]
+ 
+ 
++def build_content_url(base_path, filename, domain=None):
++    """
++    Builds the absolute content-app URL for a filename served under a distribution's base_path.
++    """
++    origin = settings.CONTENT_ORIGIN or settings.PYPI_API_HOSTNAME or ""
++    origin = origin.strip("/")
++    prefix = settings.CONTENT_PATH_PREFIX.strip("/")
++    base_path = base_path.strip("/")
++    components = [origin, prefix, base_path, filename]
++    if domain:
++        components.insert(2, domain.name)
++    return "/".join(components)
++
++
+ def python_content_to_download_info(content, base_path, domain=None):
+     """
+     Takes in a PythonPackageContent and base path of the distribution to create a dictionary of
+@@ -510,14 +524,7 @@ def python_content_to_download_info(content, base_path, domain=None):
+         relative_path__endswith=".metadata"
+     ).first()
+     artifact = find_artifact()
+-    origin = settings.CONTENT_ORIGIN or settings.PYPI_API_HOSTNAME or ""
+-    origin = origin.strip("/")
+-    prefix = settings.CONTENT_PATH_PREFIX.strip("/")
+-    base_path = base_path.strip("/")
+-    components = [origin, prefix, base_path, content.filename]
+-    if domain:
+-        components.insert(2, domain.name)
+-    url = "/".join(components)
++    url = build_content_url(base_path, content.filename, domain=domain)
+     md5 = artifact.md5 if artifact and artifact.md5 else ""
+     return {
+         "comment_text": "",
+-- 
+2.53.0
+
