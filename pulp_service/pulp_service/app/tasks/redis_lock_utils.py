@@ -8,8 +8,13 @@ Functions in this module are consumed by both the ``StaleLockScanView``
 """
 
 import logging
+from datetime import timedelta
+
+from django.utils import timezone
 
 _logger = logging.getLogger(__name__)
+
+TASK_TERMINAL_STATES = {"completed", "failed", "canceled", "skipped"}
 
 
 def scan_resource_locks(redis_conn, cursor=0, max_keys=None):
@@ -172,3 +177,149 @@ def check_lock_holder_liveness(lock_holders):
                 "verdict": ("alive" if app.online else "DEAD: AppStatus exists but is not online, lock is orphaned"),
             }
     return result
+
+
+def detect_abandoned_task_locks(task_locks, min_age_seconds=60):
+    """
+    Identify task locks that are abandoned despite the holder being alive.
+
+    A task lock is abandoned if:
+    - The task is ``waiting`` with no ``app_lock`` (worker acquired the lock
+      but failed to claim the task via DB, then moved on).
+    - The task is in a terminal state (lock was not released after completion).
+    - The task no longer exists in the database (purged).
+
+    A minimum age threshold avoids a race with the normal acquire-to-claim
+    window in ``fetch_task()``.
+
+    Args:
+        task_locks: List of task lock dicts from ``scan_task_locks()``.
+        min_age_seconds: Ignore locks for tasks created less than this many
+            seconds ago (default 60).
+
+    Returns:
+        A list of abandoned task lock dicts, each augmented with
+        ``task_state`` and ``reason`` keys.
+    """
+    from pulpcore.app.models import Task
+
+    if not task_locks:
+        return []
+
+    task_ids = [lock["task_id"] for lock in task_locks]
+    tasks_by_id = {
+        str(t.pk): t
+        for t in Task.objects.filter(pk__in=task_ids).select_related("app_lock")
+    }
+
+    age_cutoff = timezone.now() - timedelta(seconds=min_age_seconds)
+    abandoned = []
+
+    for lock_info in task_locks:
+        task_id = lock_info["task_id"]
+        task = tasks_by_id.get(task_id)
+
+        if task is None:
+            entry = dict(lock_info)
+            entry["task_state"] = "NOT_FOUND"
+            entry["reason"] = "Task does not exist in database; lock is orphaned"
+            abandoned.append(entry)
+            continue
+
+        if task.pulp_created > age_cutoff:
+            continue
+
+        if task.state == "waiting" and task.app_lock is None:
+            entry = dict(lock_info)
+            entry["task_state"] = task.state
+            entry["reason"] = (
+                "Task is waiting with no app_lock; worker acquired the Redis "
+                "lock but did not claim the task"
+            )
+            abandoned.append(entry)
+        elif task.state in TASK_TERMINAL_STATES:
+            entry = dict(lock_info)
+            entry["task_state"] = task.state
+            entry["reason"] = (
+                f"Task is in terminal state '{task.state}' but Redis lock "
+                f"was not released"
+            )
+            abandoned.append(entry)
+
+    return abandoned
+
+
+def detect_abandoned_resource_locks(abandoned_task_locks, resource_locks, redis_conn):
+    """
+    Identify resource locks that correspond to abandoned tasks.
+
+    Starts from abandoned task locks, looks up each task's
+    ``reserved_resources_record``, and checks whether the matching Redis
+    resource lock is still held by the same worker.
+
+    Args:
+        abandoned_task_locks: List of abandoned task lock dicts (output of
+            ``detect_abandoned_task_locks``).
+        resource_locks: List of resource lock dicts from
+            ``scan_resource_locks()``.
+        redis_conn: Active Redis connection (unused but kept for API
+            consistency; resource lock state comes from the pre-scanned list).
+
+    Returns:
+        A list of abandoned resource lock dicts, each augmented with
+        ``abandoned_by_task`` and ``reason`` keys.
+    """
+    from pulpcore.app.models import Task
+
+    if not abandoned_task_locks:
+        return []
+
+    resource_locks_by_key = {}
+    for lock_info in resource_locks:
+        resource_locks_by_key[lock_info["lock_key"]] = lock_info
+
+    task_ids = [
+        lock["task_id"]
+        for lock in abandoned_task_locks
+        if lock.get("task_state") != "NOT_FOUND"
+    ]
+    tasks_by_id = {
+        str(t.pk): t
+        for t in Task.objects.filter(pk__in=task_ids)
+    } if task_ids else {}
+
+    from pulpcore.tasking.redis_locks import REDIS_LOCK_PREFIX
+
+    abandoned = []
+    seen_keys = set()
+
+    for task_lock in abandoned_task_locks:
+        task_id = task_lock["task_id"]
+        holder = task_lock.get("holder")
+        task = tasks_by_id.get(task_id)
+
+        if task is None:
+            continue
+
+        for resource in task.reserved_resources_record:
+            clean_resource = resource.removeprefix("shared:")
+            lock_key = f"{REDIS_LOCK_PREFIX}{clean_resource}"
+
+            if lock_key in seen_keys:
+                continue
+
+            resource_lock = resource_locks_by_key.get(lock_key)
+            if resource_lock is None:
+                continue
+
+            if holder and holder in resource_lock.get("holders", []):
+                entry = dict(resource_lock)
+                entry["abandoned_by_task"] = task_id
+                entry["abandoned_holder"] = holder
+                entry["reason"] = (
+                    f"Resource lock held by worker that abandoned task {task_id}"
+                )
+                abandoned.append(entry)
+                seen_keys.add(lock_key)
+
+    return abandoned

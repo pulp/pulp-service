@@ -54,6 +54,8 @@ from pulp_service.app.serializers import (
 from pulp_service.app.tasks.package_scan import check_content_from_repo_version, check_npm_package
 from pulp_service.app.tasks.redis_lock_utils import (
     check_lock_holder_liveness,
+    detect_abandoned_resource_locks,
+    detect_abandoned_task_locks,
     scan_resource_locks,
     scan_task_locks,
 )
@@ -1749,7 +1751,29 @@ class StaleLockScanView(APIView):
                 else:
                     healthy_task_locks.append(lock_info)
 
-            # Phase 4: Correlate orphaned resource locks to tasks
+            # Phase 4: Detect abandoned locks (live holder, bad task state)
+            abandoned_task_lock_list = detect_abandoned_task_locks(healthy_task_locks)
+            abandoned_resource_lock_list = detect_abandoned_resource_locks(
+                abandoned_task_lock_list, healthy_resource_locks, redis_conn
+            )
+
+            # Remove abandoned locks from healthy lists
+            abandoned_task_ids = {
+                lock["task_id"] for lock in abandoned_task_lock_list
+            }
+            abandoned_resource_keys = {
+                lock["lock_key"] for lock in abandoned_resource_lock_list
+            }
+            healthy_task_locks = [
+                lock for lock in healthy_task_locks
+                if lock["task_id"] not in abandoned_task_ids
+            ]
+            healthy_resource_locks = [
+                lock for lock in healthy_resource_locks
+                if lock["lock_key"] not in abandoned_resource_keys
+            ]
+
+            # Phase 5: Correlate orphaned resource locks to tasks
             task_correlations = _correlate_orphaned_locks_to_tasks(orphaned_resource_locks)
 
             # Also correlate orphaned task locks -- check if the task still
@@ -1777,6 +1801,8 @@ class StaleLockScanView(APIView):
                 "total_task_locks": len(task_locks_list),
                 "orphaned_task_locks": len(orphaned_task_locks),
                 "healthy_task_locks": len(healthy_task_locks),
+                "abandoned_task_locks": len(abandoned_task_lock_list),
+                "abandoned_resource_locks": len(abandoned_resource_lock_list),
                 "unique_lock_holders": len(all_holders),
                 "dead_lock_holders": sum(1 for info in lock_holder_liveness.values() if not info.get("online", False)),
             }
@@ -1785,6 +1811,8 @@ class StaleLockScanView(APIView):
                 "summary": summary,
                 "orphaned_resource_locks": orphaned_resource_locks,
                 "orphaned_task_locks": orphaned_task_locks,
+                "abandoned_task_locks": abandoned_task_lock_list,
+                "abandoned_resource_locks": abandoned_resource_lock_list,
                 "lock_holder_liveness": lock_holder_liveness,
                 "task_correlations": task_correlations,
                 "worker_summary": worker_summary,
@@ -1797,6 +1825,12 @@ class StaleLockScanView(APIView):
             if include_healthy:
                 response_data["healthy_resource_locks"] = healthy_resource_locks
                 response_data["healthy_task_locks"] = healthy_task_locks
+
+            if has_more:
+                response_data["abandoned_locks_note"] = (
+                    "Abandoned lock detection in paginated mode is approximate; "
+                    "task locks and resource locks may be on different pages."
+                )
 
             return Response(response_data)
 

@@ -17,6 +17,8 @@ from pulpcore.app.redis_connection import get_redis_connection
 
 from pulp_service.app.tasks.redis_lock_utils import (
     check_lock_holder_liveness,
+    detect_abandoned_resource_locks,
+    detect_abandoned_task_locks,
     scan_resource_locks,
     scan_task_locks,
 )
@@ -128,7 +130,65 @@ def cleanup_stale_locks():
         )
         task_locks_cleaned += 1
 
-    # -- Phase 5: return summary --------------------------------------------
+    # -- Phase 5: detect and clean abandoned locks (live holder, bad state) ---
+    remaining_task_locks = [
+        lock for lock in task_locks
+        if not lock.get("holder") or lock["holder"] not in dead_holders
+    ]
+    remaining_resource_locks = [
+        lock for lock in resource_locks
+        if not any(h in dead_holders for h in lock["holders"])
+    ]
+
+    abandoned_task_lock_list = detect_abandoned_task_locks(remaining_task_locks)
+    abandoned_resource_lock_list = detect_abandoned_resource_locks(
+        abandoned_task_lock_list, remaining_resource_locks, redis_conn
+    )
+
+    abandoned_resource_locks_cleaned = 0
+    abandoned_task_locks_cleaned = 0
+
+    # Delete resource locks first (safe ordering)
+    for lock_info in abandoned_resource_lock_list:
+        lock_key = lock_info["lock_key"]
+        lock_type = lock_info["lock_type"]
+        abandoned_holder = lock_info.get("abandoned_holder")
+
+        if lock_type == "set" and abandoned_holder:
+            redis_conn.srem(lock_key, abandoned_holder)
+            healthy_holders = [
+                h for h in lock_info["holders"] if h != abandoned_holder
+            ]
+            if not healthy_holders:
+                redis_conn.delete(lock_key)
+            _logger.info(
+                "Removed abandoned holder '%s' from resource lock '%s' (task %s)",
+                abandoned_holder,
+                lock_key,
+                lock_info.get("abandoned_by_task"),
+            )
+        elif lock_type == "string":
+            redis_conn.delete(lock_key)
+            _logger.info(
+                "Deleted abandoned exclusive resource lock '%s' (task %s)",
+                lock_key,
+                lock_info.get("abandoned_by_task"),
+            )
+        abandoned_resource_locks_cleaned += 1
+
+    # Then delete task locks
+    for lock_info in abandoned_task_lock_list:
+        lock_key = lock_info["lock_key"]
+        redis_conn.delete(lock_key)
+        _logger.info(
+            "Deleted abandoned task lock '%s' (state=%s, reason=%s)",
+            lock_key,
+            lock_info.get("task_state"),
+            lock_info.get("reason"),
+        )
+        abandoned_task_locks_cleaned += 1
+
+    # -- Phase 6: return summary --------------------------------------------
     summary = {
         "resource_locks_scanned": resource_locks_scanned,
         "resource_locks_orphaned": resource_locks_orphaned,
@@ -136,6 +196,10 @@ def cleanup_stale_locks():
         "task_locks_scanned": task_locks_scanned,
         "task_locks_orphaned": task_locks_orphaned,
         "task_locks_cleaned": task_locks_cleaned,
+        "abandoned_task_locks_detected": len(abandoned_task_lock_list),
+        "abandoned_task_locks_cleaned": abandoned_task_locks_cleaned,
+        "abandoned_resource_locks_detected": len(abandoned_resource_lock_list),
+        "abandoned_resource_locks_cleaned": abandoned_resource_locks_cleaned,
         "dead_holders": sorted(dead_holders),
     }
 
