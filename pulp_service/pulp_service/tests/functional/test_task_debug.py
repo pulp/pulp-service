@@ -325,6 +325,8 @@ class TestStaleLockScanView:
         assert "total_task_locks" in summary
         assert "orphaned_task_locks" in summary
         assert "healthy_task_locks" in summary
+        assert "abandoned_task_locks" in summary
+        assert "abandoned_resource_locks" in summary
         assert "unique_lock_holders" in summary
         assert "dead_lock_holders" in summary
 
@@ -333,11 +335,17 @@ class TestStaleLockScanView:
             assert isinstance(value, int), f"summary[{key}] should be int, got {type(value)}"
             assert value >= 0, f"summary[{key}] should be >= 0, got {value}"
 
-        # Total should equal orphaned + healthy
+        # Total should equal orphaned + healthy + abandoned
         assert summary["total_resource_locks"] == (
-            summary["orphaned_resource_locks"] + summary["healthy_resource_locks"]
+            summary["orphaned_resource_locks"]
+            + summary["healthy_resource_locks"]
+            + summary["abandoned_resource_locks"]
         )
-        assert summary["total_task_locks"] == (summary["orphaned_task_locks"] + summary["healthy_task_locks"])
+        assert summary["total_task_locks"] == (
+            summary["orphaned_task_locks"]
+            + summary["healthy_task_locks"]
+            + summary["abandoned_task_locks"]
+        )
 
         # --- orphaned locks sections ---
         assert "orphaned_resource_locks" in data
@@ -345,6 +353,13 @@ class TestStaleLockScanView:
 
         assert "orphaned_task_locks" in data
         assert isinstance(data["orphaned_task_locks"], list)
+
+        # --- abandoned locks sections ---
+        assert "abandoned_task_locks" in data
+        assert isinstance(data["abandoned_task_locks"], list)
+
+        assert "abandoned_resource_locks" in data
+        assert isinstance(data["abandoned_resource_locks"], list)
 
         # --- liveness section ---
         assert "lock_holder_liveness" in data

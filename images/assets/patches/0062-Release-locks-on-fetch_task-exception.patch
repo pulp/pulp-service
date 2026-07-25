@@ -1,0 +1,39 @@
+From 1eb3eb0676db0f1904233cfa235a42b41e00b01e Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Sat, 25 Jul 2026 08:05:38 -0400
+Subject: [PATCH] Release Redis locks on fetch_task() exception
+
+When acquire_locks() succeeds but a subsequent operation (e.g., the
+app_lock DB update) throws an exception, the except handler previously
+did `continue` without releasing the acquired locks. This left both
+the task lock and resource locks orphaned in Redis with no TTL,
+permanently blocking other tasks that need the same resources.
+
+Add safe_release_task_locks() to the except handler so locks are
+always released when an exception occurs after acquisition.
+
+Fixes: https://github.com/pulp/pulpcore/issues/7902
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+---
+ pulpcore/tasking/redis_worker.py | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/pulpcore/tasking/redis_worker.py b/pulpcore/tasking/redis_worker.py
+index 9b6b96663..668093622 100644
+--- a/pulpcore/tasking/redis_worker.py
++++ b/pulpcore/tasking/redis_worker.py
+@@ -510,6 +510,10 @@ class RedisWorker:
+ 
+                 except Exception as e:
+                     _logger.error("Error processing task %s: %s", task.pk, e)
++                    try:
++                        safe_release_task_locks(task, lock_owner=self.name)
++                    except Exception:
++                        pass
+                     continue
+ 
+             if len(blocked_resources) == prev_blocked_count:
+-- 
+2.55.0
+
