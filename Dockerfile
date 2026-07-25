@@ -156,11 +156,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0060-Add-content_handler_json-to-PythonDistribution.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0060-Add-content_handler_json-to-PythonDistribution.patch
 
-COPY images/assets/patches/0061-Fix-RedisWorker-fetch_task-head-of-line-blocking.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0061-Fix-RedisWorker-fetch_task-head-of-line-blocking.patch
-
-COPY images/assets/patches/0062-Release-locks-on-fetch_task-exception.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0062-Release-locks-on-fetch_task-exception.patch
+COPY images/assets/patches/0061-Release-locks-on-fetch_task-exception.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0061-Release-locks-on-fetch_task-exception.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
