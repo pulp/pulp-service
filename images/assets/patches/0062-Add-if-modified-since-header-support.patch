@@ -1,21 +1,26 @@
 diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
-index 6fcf470e1..795e8a29b 100644
+index ec6ca80e6..d98358718 100644
 --- a/pulpcore/cache/cache.py
 +++ b/pulpcore/cache/cache.py
-@@ -4,10 +4,11 @@ import time
+@@ -4,7 +4,7 @@ import time
  from functools import wraps
  
  from aiohttp.web import FileResponse, HTTPSuccessful, Request, Response, StreamResponse
 -from aiohttp.web_exceptions import HTTPFound
 +from aiohttp.web_exceptions import HTTPFound, HTTPNotModified
- from django.conf import settings
  from django.http import FileResponse as ApiFileResponse
  from django.http import HttpResponse, HttpResponseRedirect
-+from django.utils.http import parse_http_date_safe
  from redis import ConnectionError
- from redis.asyncio import ConnectionError as AConnectionError
- from rest_framework.request import Request as ApiRequest
-@@ -356,13 +357,33 @@ class AsyncContentCache(AsyncCache):
+@@ -16,6 +16,8 @@ from pulpcore.app.redis_connection import (
+     get_async_redis_connection,
+     get_redis_connection,
+ )
++from django.utils.http import parse_http_date_safe
++
+ from pulpcore.app.settings import settings
+ from pulpcore.metrics import artifacts_size_counter
+ from pulpcore.responses import ArtifactResponse
+@@ -356,13 +358,33 @@ class AsyncContentCache(AsyncCache):
                  response = await self.make_entry(
                      key, bk, func, args, kwargs, self.default_expires_ttl
                  )
