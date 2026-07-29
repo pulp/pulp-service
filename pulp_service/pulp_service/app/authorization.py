@@ -6,6 +6,7 @@ from contextvars import ContextVar
 
 import jq
 from django.conf import settings
+from django.contrib.auth.backends import BaseBackend
 from django.db.models import Q
 from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS, BasePermission
@@ -287,3 +288,34 @@ class DomainBasedPermission(BasePermission):
                 query |= Q(name=domain_name)
 
         return qs.filter(query).distinct()
+
+
+class DomainOrgAuthenticationBackend(BaseBackend):
+    """
+    Answers object-level ``core.view_domain`` permission checks against ``DomainOrg``
+    membership, outside of the request/response cycle.
+
+    ``DomainBasedPermission`` (above) governs ordinary API access and can key off of the
+    org_id in the request's identity header. But some pulpcore features -- e.g. the
+    ``ContentView`` resource's cross-domain distribution resolution -- call
+    ``user.has_perm("core.view_domain", obj=domain)`` directly, for domains other than
+    the one the current request is scoped to, with no request/identity header available.
+    This backend answers those checks the same way ``_has_domain_access`` would for a
+    request with no identity header: via direct user or group ``DomainOrg`` association.
+    The org_id-based branch of ``_has_domain_access`` is intentionally not replicated
+    here, since it depends on the requesting user's *current* org (from the identity
+    header), which is meaningless when evaluating access to an arbitrary other domain.
+    """
+
+    def has_perm(self, user_obj, perm, obj=None):
+        if perm != "core.view_domain" or obj is None or not isinstance(obj, Domain):
+            return False
+        if not user_obj or not user_obj.is_authenticated:
+            return False
+
+        query = Q(domains__pk=obj.pk, user=user_obj)
+        group_pks = list(user_obj.groups.values_list("pk", flat=True))
+        if group_pks:
+            query |= Q(domains__pk=obj.pk, group_id__in=group_pks)
+
+        return DomainOrg.objects.filter(query).exists()
