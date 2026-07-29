@@ -1,0 +1,128 @@
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 6fcf470e1..795e8a29b 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -4,10 +4,11 @@ import time
+ from functools import wraps
+ 
+ from aiohttp.web import FileResponse, HTTPSuccessful, Request, Response, StreamResponse
+-from aiohttp.web_exceptions import HTTPFound
++from aiohttp.web_exceptions import HTTPFound, HTTPNotModified
+ from django.conf import settings
+ from django.http import FileResponse as ApiFileResponse
+ from django.http import HttpResponse, HttpResponseRedirect
++from django.utils.http import parse_http_date_safe
+ from redis import ConnectionError
+ from redis.asyncio import ConnectionError as AConnectionError
+ from rest_framework.request import Request as ApiRequest
+@@ -356,13 +357,33 @@ class AsyncContentCache(AsyncCache):
+                 response = await self.make_entry(
+                     key, bk, func, args, kwargs, self.default_expires_ttl
+                 )
+-            elif size := response.headers.get("X-PULP-ARTIFACT-SIZE"):
+-                artifacts_size_counter.add(size)
++            else:
++                if size := response.headers.get("X-PULP-ARTIFACT-SIZE"):
++                    artifacts_size_counter.add(size)
++                self._check_not_modified(request, response)
+ 
+             return response
+ 
+         return cached_function
+ 
++    @staticmethod
++    def _check_not_modified(request, response):
++        """Raise HTTPNotModified if the cached response satisfies If-Modified-Since."""
++        last_modified = response.headers.get("Last-Modified")
++        if not last_modified:
++            return
++        ims_header = request.headers.get("If-Modified-Since")
++        if not ims_header:
++            return
++        ims_epoch = parse_http_date_safe(ims_header)
++        if ims_epoch is None:
++            return
++        lm_epoch = parse_http_date_safe(last_modified)
++        if lm_epoch is not None and lm_epoch <= ims_epoch:
++            headers = dict(response.headers)
++            headers["X-PULP-CACHE"] = "HIT"
++            raise HTTPNotModified(headers=headers)
++
+     def get_request_from_args(self, args):
+         """Finds the request object from list of args"""
+         for arg in args:
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index 671ab72c8..a1fd95f50 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -42,6 +42,7 @@ from django.db import (  # noqa: E402
+     models,
+     transaction,
+ )
++from django.utils.http import http_date  # noqa: E402
+ from jinja2 import Template  # noqa: E402
+ 
+ from pulpcore.app import mime_types  # noqa: E402
+@@ -524,12 +525,32 @@ class Handler:
+         if content_type:
+             headers["Content-Type"] = content_type
+ 
++        headers["Cache-Control"] = "public, max-age=0, must-revalidate"
++
+         # Let plugin-Distribution set headers for this path if it wants.
+         if distribution:
+             headers.update(distribution.content_headers_for(path))
+ 
+         return headers
+ 
++    @staticmethod
++    def _get_content_modified_time(content_id, repo_version):
++        """Get the RepositoryContent.pulp_created for content in a repository version."""
++        return (
++            repo_version._content_relationships()
++            .filter(content_id=content_id)
++            .values_list("pulp_created", flat=True)
++            .first()
++        )
++
++    async def _set_last_modified(self, headers, content_id, repo_version):
++        """Set Last-Modified header from RepositoryContent.pulp_created."""
++        last_modified = await sync_to_async(self._get_content_modified_time)(
++            content_id, repo_version
++        )
++        if last_modified:
++            headers["Last-Modified"] = http_date(last_modified.timestamp())
++
+     @staticmethod
+     def render_html(directory_list, path="", dates=None, sizes=None):
+         """
+@@ -784,6 +805,9 @@ class Handler:
+             except ObjectDoesNotExist:
+                 pass
+             else:
++                await self._set_last_modified(
++                    headers, ca.content_id, publication.repository_version
++                )
+                 if ca.artifact:
+                     return await self._serve_content_artifact(ca, headers, request)
+                 else:
+@@ -813,6 +837,9 @@ class Handler:
+                 except ObjectDoesNotExist:
+                     pass
+                 else:
++                    await self._set_last_modified(
++                        headers, ca.content_id, publication.repository_version
++                    )
+                     if ca.artifact:
+                         return await self._serve_content_artifact(ca, headers, request)
+                     else:
+@@ -871,6 +898,9 @@ class Handler:
+             except ObjectDoesNotExist:
+                 pass
+             else:
++                await self._set_last_modified(
++                    headers, ca.content_id, repo_version
++                )
+                 if ca.artifact:
+                     return await self._serve_content_artifact(ca, headers, request)
+                 else:
