@@ -33,6 +33,7 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.RemoteUserBackend",
     "django.contrib.auth.backends.ModelBackend",
     "pulp_service.app.authentication.RHSamlAuthentication",
+    "pulp_service.app.authorization.DomainOrgAuthenticationBackend",
 ]
 
 REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES = (

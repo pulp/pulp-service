@@ -1,0 +1,1 @@
+Applied patches adding the ``ContentView`` resource and RPM cross-domain search endpoints (see ``images/assets/patches/CLAUDE.md``). Added a ``DomainOrgAuthenticationBackend`` so that ``ContentView``'s cross-domain distribution resolution correctly reflects ``DomainOrg`` membership when checking ``core.view_domain`` permission on domains outside of the current request's scope.

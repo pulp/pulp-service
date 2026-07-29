@@ -7,11 +7,12 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.112.0             |
-| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.115.2             |
+| `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.115.2             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.31.2              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.12.0              |
+| `pulp_rpm/`      | [pulp/pulp_rpm](https://github.com/pulp/pulp_rpm)          | pulp-rpm         | 3.38.2               |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
 
 Versions are pinned in `pulp_service/requirements.txt`. Django-storages is a
@@ -96,3 +97,15 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/app/models/repository.py`
 - **Description:** Optimizes repository deletion by materializing publication PKs before deleting published artifacts and switching to batched deletes (500 per batch) to limit WAL size in PostgreSQL.
+
+### 0062 — Add Content View resource
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/migrations/0155_contentview.py`, `pulpcore/app/models/__init__.py`, `pulpcore/app/models/content_view.py`, `pulpcore/app/serializers/__init__.py`, `pulpcore/app/serializers/content_view.py`, `pulpcore/app/util.py`, `pulpcore/app/util_content_view.py`, `pulpcore/app/viewsets/__init__.py`, `pulpcore/app/viewsets/content_view.py`, `pulpcore/plugin/models/__init__.py`, `pulpcore/plugin/serializers/__init__.py`, `pulpcore/plugin/util.py`, `pulpcore/plugin/viewsets/__init__.py`
+- **Description:** Adds a new first-class `ContentView` resource: a domain-scoped, named object that composes Distributions -- potentially spanning multiple domains -- into a single, persistable search scope, with full CRUD and RBAC (`core.contentview_creator`/`_owner`/`_viewer` locked roles). Also adds a reusable `resolve_content_view_distributions`/`group_versions_by_domain`/`scatter_gather` utility, exposed via `pulpcore.plugin.*`, that lets plugins implement their own RBAC-respecting, cross-domain search endpoints nested under a Content View without querying the database directly. Under pulp-service, org-scoped sharing of Content Views is inherited for free from `DomainBasedPermission`, since standard pulpcore RBAC governs the resource. Also fixes `get_viewset_for_model` so it still resolves a content type's canonical viewset when a plugin (e.g. patch 0063) registers additional nested, read-only viewsets that reuse that model's queryset -- without this, RPM repository version `content_summary` hrefs and master-viewset queryset scoping broke for every content type patch 0063 touches (discovered via live end-to-end testing in the hosted dev container: an RPM sync task failed with `Could not determine ViewSet base name for model UpdateRecord`).
+
+### 0063 — Add RPM Content View search endpoints
+
+- **Package:** pulp_rpm
+- **Files:** `pulp_rpm/app/serializers/__init__.py`, `pulp_rpm/app/serializers/content_view_search.py`, `pulp_rpm/app/viewsets/__init__.py`, `pulp_rpm/app/viewsets/content_view_search.py`
+- **Description:** Implements six read-only RPM search endpoints nested under a Content View (`search/rpm/packages`, `package-groups`, `environments`, `errata`, `module-streams`, and `packages/list`), replacing the raw-Postgres batch search previously used by Content Sources. Each endpoint resolves the parent Content View's Distributions to their current repository versions across whatever domains they live in (via patch 0062's utilities) and either scatter-gathers a paginated queryset (errata, packages/list) or merges/dedups a lighter typeahead result set (packages, package-groups, environments) in Python. Requires patch 0062.

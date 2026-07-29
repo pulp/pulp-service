@@ -1,0 +1,755 @@
+From eee17b334382325d68140b14b7ff330316c72d99 Mon Sep 17 00:00:00 2001
+From: Yasen <yasen@trahnov.eu>
+Date: Wed, 29 Jul 2026 11:27:14 +0200
+Subject: [PATCH] Add RPM search endpoints nested under Content View
+
+Implements the six search/rpm/* endpoints (packages, package-groups,
+environments, errata, module-streams, packages/list) on top of
+pulpcore's new ContentView resource, using its scatter_gather utility
+for cross-domain resolution. Includes functional tests covering all
+six endpoints across two domains and RBAC exclusion.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ pulp_rpm/app/serializers/__init__.py          |   8 +
+ .../app/serializers/content_view_search.py    | 102 +++++
+ pulp_rpm/app/viewsets/__init__.py             |   8 +
+ pulp_rpm/app/viewsets/content_view_search.py  | 352 ++++++++++++++++++
+ .../api/test_content_view_search.py           | 219 +++++++++++
+ 5 files changed, 689 insertions(+)
+ create mode 100644 pulp_rpm/app/serializers/content_view_search.py
+ create mode 100644 pulp_rpm/app/viewsets/content_view_search.py
+ create mode 100644 pulp_rpm/tests/functional/api/test_content_view_search.py
+
+diff --git a/pulp_rpm/app/serializers/__init__.py b/pulp_rpm/app/serializers/__init__.py
+index 3d84ec2c..19bc0ad6 100644
+--- a/pulp_rpm/app/serializers/__init__.py
++++ b/pulp_rpm/app/serializers/__init__.py
+@@ -13,6 +13,14 @@ from .comps import (  # noqa
+     PackageGroupSerializer,
+     PackageLangpacksSerializer,
+ )
++from .content_view_search import (  # noqa
++    ContentViewErrataSerializer,
++    ContentViewModuleStreamSerializer,
++    ContentViewPackageEnvironmentSerializer,
++    ContentViewPackageGroupSerializer,
++    ContentViewPackageSerializer,
++    ContentViewUpdateReferenceSerializer,
++)
+ from .custom_metadata import RepoMetadataFileSerializer  # noqa
+ from .distribution import (  # noqa
+     AddonSerializer,
+diff --git a/pulp_rpm/app/serializers/content_view_search.py b/pulp_rpm/app/serializers/content_view_search.py
+new file mode 100644
+index 00000000..0e7c5e9e
+--- /dev/null
++++ b/pulp_rpm/app/serializers/content_view_search.py
+@@ -0,0 +1,102 @@
++from gettext import gettext as _
++
++from rest_framework import serializers
++
++from pulpcore.plugin.serializers import IdentityField
++
++
++class ContentViewPackageSerializer(serializers.Serializer):
++    """
++    A lightweight representation of a Package for Content View search results.
++
++    Used by the ``packages/`` (typeahead) and ``packages/list/`` search endpoints. Instances
++    may originate from any domain the ContentView's Distributions span, so ``pulp_href``
++    resolves per-object using each Package's own domain.
++    """
++
++    pulp_href = IdentityField(view_name="content-rpm/packages-detail")
++    name = serializers.CharField(help_text=_("Name of the package"))
++    epoch = serializers.CharField(help_text=_("The package's epoch"))
++    version = serializers.CharField(help_text=_("The version of the package"))
++    release = serializers.CharField(help_text=_("The release of the package"))
++    arch = serializers.CharField(help_text=_("The target architecture for the package"))
++    summary = serializers.CharField(help_text=_("Short description of the packaged software"))
++    description = serializers.CharField(help_text=_("In-depth description of the package"))
++    checksum_type = serializers.CharField(help_text=_("Type of checksum, e.g. 'sha256'"))
++    pkgId = serializers.CharField(help_text=_("Checksum of the package file"))
++    url = serializers.CharField(help_text=_("URL with more information about the package"))
++    location_href = serializers.CharField(help_text=_("Relative location of the package"))
++    is_modular = serializers.BooleanField(help_text=_("Whether the package is modular"))
++
++
++class ContentViewPackageGroupSerializer(serializers.Serializer):
++    """A representation of a PackageGroup for Content View search results."""
++
++    pulp_href = IdentityField(view_name="content-rpm/packagegroups-detail")
++    id = serializers.CharField(help_text=_("ID of the group"))
++    name = serializers.CharField(help_text=_("Name of the group"))
++    description = serializers.CharField(help_text=_("Description of the group"))
++    packages = serializers.JSONField(help_text=_("The list of packages in this group"))
++
++
++class ContentViewPackageEnvironmentSerializer(serializers.Serializer):
++    """A representation of a PackageEnvironment for Content View search results."""
++
++    pulp_href = IdentityField(view_name="content-rpm/packageenvironments-detail")
++    id = serializers.CharField(help_text=_("ID of the environment"))
++    name = serializers.CharField(help_text=_("The name of the environment"))
++    description = serializers.CharField(help_text=_("The description of the environment"))
++    group_ids = serializers.JSONField(help_text=_("A list of group ids"))
++
++
++class ContentViewUpdateReferenceSerializer(serializers.Serializer):
++    """A representation of an UpdateReference, used to surface CVEs on errata search results."""
++
++    href = serializers.CharField(help_text=_("Reference URL"))
++    ref_id = serializers.CharField(help_text=_("ID of the reference"))
++    title = serializers.CharField(help_text=_("Title of the reference"))
++    ref_type = serializers.CharField(help_text=_("Type of the reference, e.g. 'cve'"))
++
++
++class ContentViewErrataSerializer(serializers.Serializer):
++    """A representation of an UpdateRecord (advisory/errata) for Content View search results."""
++
++    pulp_href = IdentityField(view_name="content-rpm/advisories-detail")
++    id = serializers.CharField(help_text=_("Update id (e.g. RHEA-2013:1777)"))
++    updated_date = serializers.CharField(help_text=_("Date when the update was updated"))
++    issued_date = serializers.CharField(help_text=_("Date when the update was issued"))
++    description = serializers.CharField(help_text=_("Update description"))
++    title = serializers.CharField(help_text=_("Update name"))
++    summary = serializers.CharField(help_text=_("Short summary"))
++    version = serializers.CharField(help_text=_("Update version"))
++    type = serializers.CharField(help_text=_("Update type ('enhancement', 'bugfix', ...)"))
++    severity = serializers.CharField(help_text=_("Severity"))
++    solution = serializers.CharField(help_text=_("Solution"))
++    release = serializers.CharField(help_text=_("Update release"))
++    rights = serializers.CharField(help_text=_("Copyrights"))
++    reboot_suggested = serializers.BooleanField(help_text=_("Whether a reboot is suggested"))
++    cves = serializers.SerializerMethodField(
++        help_text=_("CVE references attached to this errata")
++    )
++
++    def get_cves(self, obj):
++        return ContentViewUpdateReferenceSerializer(
++            [ref for ref in obj.references.all() if ref.ref_type == "cve"], many=True
++        ).data
++
++
++class ContentViewModuleStreamSerializer(serializers.Serializer):
++    """A representation of a Modulemd for Content View search results."""
++
++    pulp_href = IdentityField(view_name="content-rpm/modulemds-detail")
++    name = serializers.CharField(help_text=_("Name of the modulemd"))
++    stream = serializers.CharField(help_text=_("The modulemd's stream"))
++    version = serializers.CharField(help_text=_("The version of the modulemd"))
++    context = serializers.CharField(help_text=_("The modulemd's context flag"))
++    arch = serializers.CharField(help_text=_("Module artifact architecture"))
++    description = serializers.CharField(help_text=_("A verbose description of the module"))
++    profiles = serializers.JSONField(help_text=_("Package lists of installable profiles"))
++    packages = serializers.SerializerMethodField(help_text=_("Names of packages in this module"))
++
++    def get_packages(self, obj):
++        return list(obj.packages.values_list("name", flat=True))
+diff --git a/pulp_rpm/app/viewsets/__init__.py b/pulp_rpm/app/viewsets/__init__.py
+index 9d5f0aee..a11f2957 100644
+--- a/pulp_rpm/app/viewsets/__init__.py
++++ b/pulp_rpm/app/viewsets/__init__.py
+@@ -7,6 +7,14 @@ from .comps import (  # noqa
+     PackageEnvironmentViewSet,
+     PackageLangpacksViewSet,
+ )
++from .content_view_search import (  # noqa
++    RpmContentViewEnvironmentSearchViewSet,
++    RpmContentViewErrataViewSet,
++    RpmContentViewModuleStreamsViewSet,
++    RpmContentViewPackageGroupSearchViewSet,
++    RpmContentViewPackageListViewSet,
++    RpmContentViewPackageSearchViewSet,
++)
+ from .custom_metadata import RepoMetadataFileViewSet  # noqa
+ from .distribution import DistributionTreeViewSet  # noqa
+ from .modulemd import ModulemdViewSet, ModulemdDefaultsViewSet, ModulemdObsoleteViewSet  # noqa
+diff --git a/pulp_rpm/app/viewsets/content_view_search.py b/pulp_rpm/app/viewsets/content_view_search.py
+new file mode 100644
+index 00000000..be402f8e
+--- /dev/null
++++ b/pulp_rpm/app/viewsets/content_view_search.py
+@@ -0,0 +1,352 @@
++"""
++Nested, read-only search endpoints exposed under a ContentView, e.g.
++``content-views/{content_view_pk}/search/rpm/packages/``.
++
++Each viewset here resolves the parent ContentView's Distributions (across whatever domains they
++live in) to their current RepositoryVersions via ``pulpcore.plugin.util.resolve_content_view_distributions``
++/``group_versions_by_domain``, then queries RPM content across those versions -- either with the
++generic ``scatter_gather`` helper (for the two paginated, offset/limit endpoints) or a lighter
++Python-side merge (for the three typeahead-style endpoints, which never compute a total count,
++matching tang's existing behavior).
++"""
++
++from django.db.models import Prefetch, Q
++from django.shortcuts import get_object_or_404
++from rest_framework.pagination import LimitOffsetPagination
++from rest_framework.response import Response
++
++from pulpcore.plugin.util import (
++    group_versions_by_domain,
++    resolve_content_view_distributions,
++    scatter_gather,
++    with_domain,
++)
++from pulpcore.plugin.viewsets import ContentViewViewSet, NamedModelViewSet
++
++from pulp_rpm.app.models import Modulemd, Package, PackageEnvironment, PackageGroup, UpdateRecord
++from pulp_rpm.app.models.advisory import UpdateReference
++from pulp_rpm.app.serializers import (
++    ContentViewErrataSerializer,
++    ContentViewModuleStreamSerializer,
++    ContentViewPackageEnvironmentSerializer,
++    ContentViewPackageGroupSerializer,
++    ContentViewPackageSerializer,
++)
++
++KNOWN_ERRATA_TYPES = {"security", "bugfix", "enhancement", "newpackage"}
++KNOWN_ERRATA_SEVERITIES = {"critical", "important", "moderate", "low", "none"}
++ERRATA_SORT_FIELDS = {"id", "updated_date", "issued_date", "severity", "type", "title"}
++MODULE_STREAM_SORT_FIELDS = {"name", "stream", "version", "context", "arch"}
++MODULE_STREAMS_HARD_CAP = 5000
++
++
++def content_for_versions(model, versions):
++    """Combine the content of one or more RepositoryVersions (all in the same domain)."""
++    if not versions:
++        return model.objects.none()
++    if len(versions) == 1:
++        return versions[0].get_content(model.objects)
++    pks = set()
++    for version in versions:
++        pks.update(version.content_ids)
++    return model.objects.filter(pk__in=pks)
++
++
++def _int_param(request, name, default, minimum=0, maximum=None):
++    try:
++        value = int(request.query_params[name])
++    except (KeyError, ValueError, TypeError):
++        return default
++    value = max(value, minimum)
++    if maximum is not None:
++        value = min(value, maximum)
++    return value
++
++
++def _list_param(request, name):
++    value = request.query_params.get(name)
++    if not value:
++        return []
++    return [v.strip() for v in value.split(",") if v.strip()]
++
++
++def _catch_all_filter(field, requested, known):
++    """Build a ``Q`` for a type/severity-style filter with an "other" catch-all bucket."""
++    known_requested = [v for v in requested if v in known]
++    other_requested = any(v not in known for v in requested)
++    condition = Q(**{f"{field}__in": known_requested}) if known_requested else Q(pk__in=[])
++    if other_requested:
++        condition = condition | ~Q(**{f"{field}__in": known})
++    return condition
++
++
++def paginated_response(request, results, count, limit, offset):
++    paginator = LimitOffsetPagination()
++    paginator.request = request
++    paginator.limit = limit
++    paginator.offset = offset
++    paginator.count = count
++    return paginator.get_paginated_response(results)
++
++
++def _union_package_lists(existing, new):
++    seen = {pkg.get("name") for pkg in existing}
++    merged = list(existing)
++    for pkg in new:
++        if pkg.get("name") not in seen:
++            seen.add(pkg.get("name"))
++            merged.append(pkg)
++    return merged
++
++
++class ContentViewSearchViewSet(NamedModelViewSet):
++    """Shared plumbing for all ``content-views/{content_view_pk}/search/rpm/...`` viewsets."""
++
++    parent_viewset = ContentViewViewSet
++    parent_lookup_kwargs = {"content_view_pk": "content_view__pk"}
++
++    DEFAULT_ACCESS_POLICY = {
++        "statements": [
++            {"action": ["list"], "principal": "authenticated", "effect": "allow"},
++        ],
++    }
++
++    def _get_content_view(self):
++        """
++        Re-resolve the parent ContentView through ContentViewViewSet's own RBAC-scoped queryset.
++
++        The base ``initial()``/``get_parent_field_and_object()`` machinery only checks that a
++        ContentView with this pk exists at all (unfiltered), so we deliberately re-check here
++        against the permission-scoped queryset instead of trusting that ambient check.
++        """
++        parent_viewset = ContentViewViewSet()
++        parent_viewset.request = self.request
++        parent_viewset.kwargs = {}
++        parent_viewset.format_kwarg = None
++        scoped_queryset = parent_viewset.get_queryset()
++        return get_object_or_404(scoped_queryset, pk=self.kwargs["content_view_pk"])
++
++    def _versions_by_domain(self):
++        content_view = self._get_content_view()
++        resolutions = resolve_content_view_distributions(content_view, self.request.user)
++        return group_versions_by_domain(resolutions)
++
++
++class RpmContentViewPackageSearchViewSet(ContentViewSearchViewSet):
++    """Typeahead package search: prefix match, deduplicated by name."""
++
++    endpoint_name = "search/rpm/packages"
++    queryset = Package.objects.none()
++    serializer_class = ContentViewPackageSerializer
++
++    def list(self, request, *args, **kwargs):
++        versions_by_domain = self._versions_by_domain()
++        search = request.query_params.get("search", "")
++        limit = _int_param(request, "limit", default=25, minimum=1, maximum=100)
++
++        def build_queryset(versions):
++            qs = content_for_versions(Package, versions)
++            if search:
++                qs = qs.filter(name__istartswith=search)
++            return qs.order_by("name").distinct("name")
++
++        rows = []
++        seen_names = set()
++        for domain, versions in versions_by_domain.items():
++            with with_domain(domain):
++                for package in build_queryset(versions)[: limit * 5]:
++                    if package.name in seen_names:
++                        continue
++                    seen_names.add(package.name)
++                    rows.append(package)
++        rows.sort(key=lambda p: p.name)
++        page = rows[:limit]
++        serializer = self.get_serializer(page, many=True)
++        return Response({"results": serializer.data})
++
++
++class RpmContentViewPackageGroupSearchViewSet(ContentViewSearchViewSet):
++    """
++    Typeahead package-group search: substring match, with the ``packages`` list of same-keyed
++    groups found in multiple domains/repository versions unioned together.
++    """
++
++    endpoint_name = "search/rpm/package-groups"
++    queryset = PackageGroup.objects.none()
++    serializer_class = ContentViewPackageGroupSerializer
++
++    def list(self, request, *args, **kwargs):
++        versions_by_domain = self._versions_by_domain()
++        search = request.query_params.get("search", "")
++        limit = _int_param(request, "limit", default=25, minimum=1, maximum=100)
++
++        def build_queryset(versions):
++            qs = content_for_versions(PackageGroup, versions)
++            if search:
++                qs = qs.filter(name__icontains=search)
++            return qs.order_by("name", "id")
++
++        merged = {}
++        order = []
++        for domain, versions in versions_by_domain.items():
++            with with_domain(domain):
++                for group in build_queryset(versions)[: limit * 5]:
++                    key = (group.name, group.id)
++                    if key not in merged:
++                        merged[key] = group
++                        order.append(key)
++                    else:
++                        merged[key].packages = _union_package_lists(
++                            merged[key].packages, group.packages
++                        )
++        order.sort(key=lambda key: key[0])
++        page = [merged[key] for key in order[:limit]]
++        serializer = self.get_serializer(page, many=True)
++        return Response({"results": serializer.data})
++
++
++class RpmContentViewEnvironmentSearchViewSet(ContentViewSearchViewSet):
++    """Typeahead package-environment search: substring match, deduplicated by (name, id)."""
++
++    endpoint_name = "search/rpm/environments"
++    queryset = PackageEnvironment.objects.none()
++    serializer_class = ContentViewPackageEnvironmentSerializer
++
++    def list(self, request, *args, **kwargs):
++        versions_by_domain = self._versions_by_domain()
++        search = request.query_params.get("search", "")
++        limit = _int_param(request, "limit", default=25, minimum=1, maximum=100)
++
++        def build_queryset(versions):
++            qs = content_for_versions(PackageEnvironment, versions)
++            if search:
++                qs = qs.filter(name__icontains=search)
++            return qs.order_by("name", "id").distinct("name", "id")
++
++        merged = {}
++        order = []
++        for domain, versions in versions_by_domain.items():
++            with with_domain(domain):
++                for environment in build_queryset(versions)[: limit * 5]:
++                    key = (environment.name, environment.id)
++                    if key not in merged:
++                        merged[key] = environment
++                        order.append(key)
++        order.sort(key=lambda key: key[0])
++        page = [merged[key] for key in order[:limit]]
++        serializer = self.get_serializer(page, many=True)
++        return Response({"results": serializer.data})
++
++
++class RpmContentViewErrataViewSet(ContentViewSearchViewSet):
++    """Full errata (advisory) search: filter/sort/paginate, with CVE references included."""
++
++    endpoint_name = "search/rpm/errata"
++    queryset = UpdateRecord.objects.none()
++    serializer_class = ContentViewErrataSerializer
++
++    def list(self, request, *args, **kwargs):
++        versions_by_domain = self._versions_by_domain()
++        search = request.query_params.get("search", "")
++        types = _list_param(request, "type")
++        severities = _list_param(request, "severity")
++        limit = _int_param(request, "limit", default=100, minimum=1, maximum=1000)
++        offset = _int_param(request, "offset", default=0, minimum=0)
++
++        sort_by = request.query_params.get("sort_by", "id")
++        descending = sort_by.startswith("-")
++        sort_field = sort_by[1:] if descending else sort_by
++        if sort_field not in ERRATA_SORT_FIELDS:
++            sort_field = "id"
++
++        def build_queryset(versions):
++            qs = content_for_versions(UpdateRecord, versions).prefetch_related(
++                Prefetch(
++                    "references", queryset=UpdateReference.objects.filter(ref_type="cve")
++                )
++            )
++            if search:
++                qs = qs.filter(Q(id__icontains=search) | Q(title__icontains=search))
++            if types:
++                qs = qs.filter(_catch_all_filter("type", types, KNOWN_ERRATA_TYPES))
++            if severities:
++                qs = qs.filter(_catch_all_filter("severity", severities, KNOWN_ERRATA_SEVERITIES))
++            return qs.order_by(sort_field)
++
++        page, total = scatter_gather(
++            versions_by_domain,
++            build_queryset,
++            order_by=(sort_field,),
++            limit=limit,
++            offset=offset,
++            descending=descending,
++        )
++        serializer = self.get_serializer(page, many=True)
++        return paginated_response(request, serializer.data, total, limit, offset)
++
++
++class RpmContentViewModuleStreamsViewSet(ContentViewSearchViewSet):
++    """Module stream search: name/stream substring match, optional RPM name filter, capped."""
++
++    endpoint_name = "search/rpm/module-streams"
++    queryset = Modulemd.objects.none()
++    serializer_class = ContentViewModuleStreamSerializer
++
++    def list(self, request, *args, **kwargs):
++        versions_by_domain = self._versions_by_domain()
++        search = request.query_params.get("search", "")
++        rpm_names = _list_param(request, "rpm_names")
++        limit = _int_param(request, "limit", default=100, minimum=1, maximum=MODULE_STREAMS_HARD_CAP)
++
++        sort_by = request.query_params.get("sort_by", "name")
++        descending = sort_by.startswith("-")
++        sort_field = sort_by[1:] if descending else sort_by
++        if sort_field not in MODULE_STREAM_SORT_FIELDS:
++            sort_field = "name"
++
++        def build_queryset(versions):
++            qs = content_for_versions(Modulemd, versions)
++            if search:
++                qs = qs.filter(Q(name__icontains=search) | Q(stream__icontains=search))
++            if rpm_names:
++                qs = qs.filter(packages__name__in=rpm_names).distinct()
++            return qs.order_by(sort_field)
++
++        rows = []
++        for domain, versions in versions_by_domain.items():
++            with with_domain(domain):
++                rows.extend(build_queryset(versions)[:limit])
++        rows.sort(key=lambda m: getattr(m, sort_field), reverse=descending)
++        page = rows[:limit]
++        serializer = self.get_serializer(page, many=True)
++        return Response({"results": serializer.data})
++
++
++class RpmContentViewPackageListViewSet(ContentViewSearchViewSet):
++    """Full package listing: exact name filter, fixed NEVRA sort, paginated."""
++
++    endpoint_name = "search/rpm/packages/list"
++    queryset = Package.objects.none()
++    serializer_class = ContentViewPackageSerializer
++
++    def list(self, request, *args, **kwargs):
++        versions_by_domain = self._versions_by_domain()
++        name = request.query_params.get("name", "")
++        limit = _int_param(request, "limit", default=100, minimum=1, maximum=1000)
++        offset = _int_param(request, "offset", default=0, minimum=0)
++
++        def build_queryset(versions):
++            qs = content_for_versions(Package, versions)
++            if name:
++                qs = qs.filter(name=name)
++            return qs.order_by("name", "version", "release", "arch")
++
++        page, total = scatter_gather(
++            versions_by_domain,
++            build_queryset,
++            order_by=("name", "version", "release", "arch"),
++            limit=limit,
++            offset=offset,
++        )
++        serializer = self.get_serializer(page, many=True)
++        return paginated_response(request, serializer.data, total, limit, offset)
+diff --git a/pulp_rpm/tests/functional/api/test_content_view_search.py b/pulp_rpm/tests/functional/api/test_content_view_search.py
+new file mode 100644
+index 00000000..2593f2ed
+--- /dev/null
++++ b/pulp_rpm/tests/functional/api/test_content_view_search.py
+@@ -0,0 +1,219 @@
++"""Tests for the cross-domain ContentView search endpoints exposed by pulp_rpm.
++
++These exercise the six ``content-views/{uuid}/search/rpm/...`` endpoints (implemented on top of
++pulpcore's generic ``ContentView`` resource) against two separate domains, verifying field
++parity with the underlying content, pagination, filtering/sorting, and that a user who loses
++access to one domain silently has that domain's content excluded from results rather than
++erroring out.
++
++The ``ContentView`` resource doesn't have generated bindings yet (it's brand new), so these
++tests talk to it directly via ``requests`` using the same credentials as the bindings client.
++"""
++
++import uuid
++
++import pytest
++import requests
++
++from pulp_rpm.tests.functional.constants import (
++    RPM_ADVISORY_COUNT,
++    RPM_PACKAGE_COUNT,
++    RPM_SIGNED_FIXTURE_URL,
++)
++
++
++@pytest.fixture
++def content_view_client(bindings_cfg):
++    """A minimal client for the not-yet-bindings-generated ContentView endpoints."""
++
++    class ContentViewClient:
++        def _url(self, domain, path):
++            return f"{bindings_cfg.host}/pulp/{domain}/api/v3/{path.lstrip('/')}"
++
++        def _auth(self):
++            return (bindings_cfg.username, bindings_cfg.password)
++
++        def create(self, domain, name, distributions=()):
++            resp = requests.post(
++                self._url(domain, "content-views/"),
++                json={"name": name, "distributions": list(distributions)},
++                auth=self._auth(),
++            )
++            resp.raise_for_status()
++            return resp.json()
++
++        def read(self, domain, pk):
++            resp = requests.get(
++                self._url(domain, f"content-views/{pk}/"), auth=self._auth()
++            )
++            resp.raise_for_status()
++            return resp.json()
++
++        def delete(self, domain, pk):
++            requests.delete(
++                self._url(domain, f"content-views/{pk}/"), auth=self._auth()
++            )
++
++        def search(self, domain, pk, subpath, params=None):
++            resp = requests.get(
++                self._url(domain, f"content-views/{pk}/{subpath}/"),
++                params=params or {},
++                auth=self._auth(),
++            )
++            return resp
++
++    return ContentViewClient()
++
++
++@pytest.fixture
++def two_domain_content_views(
++    setup_domain, rpm_distribution_factory, content_view_client, gen_object_with_cleanup
++):
++    """Two domains, each with a synced repo + distribution, composed into one ContentView."""
++    domain_a, _remote_a, src_a, _dest_a = setup_domain(
++        sync=True, url=RPM_SIGNED_FIXTURE_URL
++    )
++    domain_b, _remote_b, src_b, _dest_b = setup_domain(
++        sync=True, url=RPM_SIGNED_FIXTURE_URL
++    )
++
++    dist_a = rpm_distribution_factory(
++        repository=src_a.pulp_href, pulp_domain=domain_a.name
++    )
++    dist_b = rpm_distribution_factory(
++        repository=src_b.pulp_href, pulp_domain=domain_b.name
++    )
++
++    cv = content_view_client.create(
++        domain_a.name,
++        str(uuid.uuid4()),
++        distributions=[dist_a.pulp_href, dist_b.pulp_href],
++    )
++    yield domain_a, domain_b, cv
++    content_view_client.delete(
++        domain_a.name, cv["pulp_href"].rstrip("/").split("/")[-1]
++    )
++
++
++@pytest.mark.parallel
++def test_content_view_crud(setup_domain, rpm_distribution_factory, content_view_client):
++    """Create, read, update (via re-create since no bindings), and delete a ContentView."""
++    domain, _remote, src, _dest = setup_domain(sync=True, url=RPM_SIGNED_FIXTURE_URL)
++    dist = rpm_distribution_factory(repository=src.pulp_href, pulp_domain=domain.name)
++
++    cv = content_view_client.create(
++        domain.name, str(uuid.uuid4()), distributions=[dist.pulp_href]
++    )
++    pk = cv["pulp_href"].rstrip("/").split("/")[-1]
++
++    fetched = content_view_client.read(domain.name, pk)
++    assert fetched["name"] == cv["name"]
++    assert len(fetched["distributions"]) == 1
++    assert fetched["distributions_status"][0]["status"] == "ok"
++
++    content_view_client.delete(domain.name, pk)
++    resp = requests.get(
++        f"{content_view_client._url(domain.name, f'content-views/{pk}/')}",
++        auth=content_view_client._auth(),
++    )
++    assert resp.status_code == 404
++
++
++@pytest.mark.parallel
++def test_content_view_cross_domain_search(
++    two_domain_content_views, content_view_client
++):
++    """All six search endpoints should aggregate results across both domains."""
++    domain_a, domain_b, cv = two_domain_content_views
++    pk = cv["pulp_href"].rstrip("/").split("/")[-1]
++
++    resp = content_view_client.search(domain_a.name, pk, "search/rpm/packages/list")
++    assert resp.status_code == 200
++    body = resp.json()
++    assert body["count"] == 2 * RPM_PACKAGE_COUNT
++    domains_seen = {result["pulp_href"].split("/")[2] for result in body["results"]}
++    assert domains_seen == {domain_a.name, domain_b.name}
++
++    resp = content_view_client.search(
++        domain_a.name, pk, "search/rpm/packages", {"limit": 5}
++    )
++    assert resp.status_code == 200
++    assert len(resp.json()["results"]) <= 5
++
++    resp = content_view_client.search(domain_a.name, pk, "search/rpm/errata")
++    assert resp.status_code == 200
++    assert resp.json()["count"] == 2 * RPM_ADVISORY_COUNT
++
++    resp = content_view_client.search(domain_a.name, pk, "search/rpm/package-groups")
++    assert resp.status_code == 200
++    assert "results" in resp.json()
++
++    resp = content_view_client.search(domain_a.name, pk, "search/rpm/environments")
++    assert resp.status_code == 200
++    assert "results" in resp.json()
++
++    resp = content_view_client.search(domain_a.name, pk, "search/rpm/module-streams")
++    assert resp.status_code == 200
++    assert resp.json() == {"results": []}
++
++
++@pytest.mark.parallel
++def test_content_view_errata_filters(two_domain_content_views, content_view_client):
++    """The errata endpoint supports search/type/severity/sort_by/limit/offset."""
++    domain_a, _domain_b, cv = two_domain_content_views
++    pk = cv["pulp_href"].rstrip("/").split("/")[-1]
++
++    all_resp = content_view_client.search(domain_a.name, pk, "search/rpm/errata")
++    all_ids = [e["id"] for e in all_resp.json()["results"]]
++    assert len(all_ids) == 2 * RPM_ADVISORY_COUNT
++
++    page = content_view_client.search(
++        domain_a.name, pk, "search/rpm/errata", {"limit": 1, "offset": 1}
++    )
++    assert page.status_code == 200
++    page_body = page.json()
++    assert len(page_body["results"]) == 1
++    assert page_body["count"] == 2 * RPM_ADVISORY_COUNT
++    assert page_body["next"] is not None
++    assert page_body["previous"] is not None
++
++    sorted_desc = content_view_client.search(
++        domain_a.name, pk, "search/rpm/errata", {"sort_by": "-id"}
++    )
++    sorted_ids = [e["id"] for e in sorted_desc.json()["results"]]
++    assert sorted_ids == sorted(all_ids, reverse=True)
++
++
++@pytest.mark.parallel
++def test_content_view_rbac_excludes_inaccessible_domain(
++    two_domain_content_views, content_view_client, gen_user, bindings_cfg
++):
++    """A user without access to one domain should see that domain's content silently excluded."""
++    domain_a, domain_b, cv = two_domain_content_views
++    pk = cv["pulp_href"].rstrip("/").split("/")[-1]
++
++    # A user who can see the ContentView (domain_a) but has no visibility into domain_b at all.
++    # "core.contentview_viewer" is assigned *domain*-scoped (grants view_contentview for every
++    # ContentView in domain_a), while "core.domain_viewer" is assigned *object*-scoped directly on
++    # the domain_a Domain instance (grants view_domain for that specific Domain object) -- these
++    # are deliberately different role-assignment kinds, since Domain objects aren't themselves
++    # scoped to a domain the way ContentViews are.
++    limited_user = gen_user(
++        domain_roles=[("core.contentview_viewer", domain_a.pulp_href)],
++        object_roles=[("core.domain_viewer", domain_a.pulp_href)],
++    )
++
++    with limited_user:
++        resp = content_view_client.read(domain_a.name, pk)
++        statuses = {d["domain"]: d["status"] for d in resp["distributions_status"]}
++        assert statuses[domain_a.name] == "ok"
++        assert statuses[domain_b.name] == "no_domain_access"
++
++        search_resp = content_view_client.search(
++            domain_a.name, pk, "search/rpm/packages/list"
++        )
++        assert search_resp.status_code == 200
++        body = search_resp.json()
++        assert body["count"] == RPM_PACKAGE_COUNT
++        domains_seen = {result["pulp_href"].split("/")[2] for result in body["results"]}
++        assert domains_seen == {domain_a.name}
+-- 
+2.55.0
+
