@@ -156,11 +156,15 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0061-Release-locks-on-fetch_task-exception.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0061-Release-locks-on-fetch_task-exception.patch
 
+
 COPY images/assets/patches/0062-Add-Content-View-resource.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0062-Add-Content-View-resource.patch
 
 COPY images/assets/patches/0063-Add-RPM-Content-View-search-endpoints.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0063-Add-RPM-Content-View-search-endpoints.patch
+
+COPY images/assets/patches/0062-Add-if-modified-since-header-support.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0062-Add-if-modified-since-header-support.patch
 
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
