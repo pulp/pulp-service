@@ -1758,19 +1758,11 @@ class StaleLockScanView(APIView):
             )
 
             # Remove abandoned locks from healthy lists
-            abandoned_task_ids = {
-                lock["task_id"] for lock in abandoned_task_lock_list
-            }
-            abandoned_resource_keys = {
-                lock["lock_key"] for lock in abandoned_resource_lock_list
-            }
-            healthy_task_locks = [
-                lock for lock in healthy_task_locks
-                if lock["task_id"] not in abandoned_task_ids
-            ]
+            abandoned_task_ids = {lock["task_id"] for lock in abandoned_task_lock_list}
+            abandoned_resource_keys = {lock["lock_key"] for lock in abandoned_resource_lock_list}
+            healthy_task_locks = [lock for lock in healthy_task_locks if lock["task_id"] not in abandoned_task_ids]
             healthy_resource_locks = [
-                lock for lock in healthy_resource_locks
-                if lock["lock_key"] not in abandoned_resource_keys
+                lock for lock in healthy_resource_locks if lock["lock_key"] not in abandoned_resource_keys
             ]
 
             # Phase 5: Correlate orphaned resource locks to tasks
@@ -2070,4 +2062,26 @@ class MigrateDomainView(APIView):
                 exclusive_resources=[domain],
             )
 
+        return OperationPostponedResponse(task, request)
+
+
+class DataRepair7465View(APIView):
+    """Rebuild missing repository version content_ids cache (Issue #7465)."""
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        description="Trigger an async task that populates missing content_ids cache on repository versions.",
+        summary="Rebuild content_ids cache (Issue #7465)",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        dry_run = request.data.get("dry_run", False)
+        exclusive_resources = [f"pdrn:{request.pulp_domain.pulp_id}:datarepair-7465"]
+
+        task = dispatch(
+            "pulp_service.app.tasks.datarepair.repair_7465",
+            exclusive_resources=exclusive_resources,
+            args=[dry_run],
+        )
         return OperationPostponedResponse(task, request)
