@@ -788,8 +788,11 @@ spec:
 
               cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest\<8 gnupg"
 
-              curl -o functest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/functest_requirements.txt
-              curl -o unittest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/main/unittest_requirements.txt
+              PULP_RPM_VERSION=$(cmd_prefix python3 -c "from importlib.metadata import version; print(version('pulp-rpm'))")
+              echo "Installed pulp_rpm version: $PULP_RPM_VERSION"
+
+              curl -o functest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/${PULP_RPM_VERSION}/functest_requirements.txt
+              curl -o unittest_requirements.txt https://raw.githubusercontent.com/pulp/pulp_rpm/${PULP_RPM_VERSION}/unittest_requirements.txt
 
               ### Adapted from ./.github/workflows/scripts/script.sh
               cat unittest_requirements.txt | cmd_stdin_prefix bash -c "cat > /tmp/unittest_requirements.txt"
