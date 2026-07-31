@@ -40,13 +40,13 @@ objects:
           }
 
           location / {
-            set $$upstream https://${UPSTREAM_HOST};
-            proxy_pass $$upstream;
+            set $upstream https://${UPSTREAM_HOST};
+            proxy_pass $upstream;
             proxy_ssl_server_name on;
             proxy_set_header Host ${PROXY_SERVER_NAME};
             proxy_set_header X-Forwarded-Proto https;
             proxy_set_header X-Pulp-VPN-Access VPN_ACCESS_SECRET;
-            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_connect_timeout 10s;
             proxy_read_timeout 120s;
             proxy_send_timeout 120s;
@@ -96,6 +96,10 @@ objects:
           - -c
           - |
             NAMESERVER=$(grep nameserver /etc/resolv.conf | head -1 | awk '{print $2}')
+            if [ -z "${NAMESERVER}" ]; then
+              echo "ERROR: No nameserver found in /etc/resolv.conf" >&2
+              exit 1
+            fi
             sed -e "s/NAMESERVER/${NAMESERVER}/g" \
                 -e "s/VPN_ACCESS_SECRET/${VPN_ACCESS_SECRET}/g" \
                 /opt/nginx-template/nginx.conf.tpl > /opt/nginx-rendered/nginx.conf
