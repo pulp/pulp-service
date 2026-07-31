@@ -1,0 +1,197 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: pulp-vpn-proxy
+objects:
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: pulp-vpn-proxy
+    labels:
+      app: pulp-vpn-proxy
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: pulp-vpn-proxy
+    annotations:
+      qontract.recycle: "true"
+  data:
+    nginx.conf.tpl: |
+      worker_processes auto;
+      error_log /dev/stderr;
+      pid /var/run/nginx.pid;
+
+      events {
+        worker_connections 1024;
+      }
+
+      http {
+        access_log /dev/stdout;
+
+        resolver NAMESERVER valid=10s;
+
+        server {
+          listen 8080;
+          server_name ${PROXY_SERVER_NAME};
+
+          location /healthz {
+            return 200 "ok\n";
+            add_header Content-Type text/plain;
+          }
+
+          location / {
+            set $$upstream https://${UPSTREAM_HOST};
+            proxy_pass $$upstream;
+            proxy_ssl_server_name on;
+            proxy_set_header Host ${PROXY_SERVER_NAME};
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Pulp-VPN-Access VPN_ACCESS_SECRET;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_connect_timeout 10s;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+          }
+        }
+      }
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: pulp-vpn-proxy
+    labels:
+      app: pulp-vpn-proxy
+  spec:
+    replicas: ${{REPLICAS}}
+    selector:
+      matchLabels:
+        app: pulp-vpn-proxy
+    template:
+      metadata:
+        labels:
+          app: pulp-vpn-proxy
+      spec:
+        serviceAccountName: pulp-vpn-proxy
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - pulp-vpn-proxy
+                topologyKey: topology.kubernetes.io/zone
+        containers:
+        - name: nginx
+          image: ${NGINX_IMAGE}:${NGINX_IMAGE_TAG}
+          env:
+          - name: VPN_ACCESS_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: vpn-access-secret
+                key: vpn-access-secret
+          command:
+          - /bin/bash
+          - -c
+          - |
+            NAMESERVER=$(grep nameserver /etc/resolv.conf | head -1 | awk '{print $2}')
+            sed -e "s/NAMESERVER/${NAMESERVER}/g" \
+                -e "s/VPN_ACCESS_SECRET/${VPN_ACCESS_SECRET}/g" \
+                /opt/nginx-template/nginx.conf.tpl > /opt/nginx-rendered/nginx.conf
+            exec nginx -c /opt/nginx-rendered/nginx.conf -g 'daemon off;'
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          resources:
+            requests:
+              cpu: ${CPU_REQUEST}
+              memory: ${MEMORY_REQUEST}
+            limits:
+              memory: ${MEMORY_LIMIT}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+          - name: nginx-config
+            mountPath: /opt/nginx-template
+          - name: nginx-rendered
+            mountPath: /opt/nginx-rendered
+          - name: nginx-cache
+            mountPath: /var/cache/nginx
+          - name: nginx-run
+            mountPath: /var/run
+        volumes:
+        - name: nginx-config
+          configMap:
+            name: pulp-vpn-proxy
+        - name: nginx-rendered
+          emptyDir: {}
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: pulp-vpn-proxy
+    labels:
+      app: pulp-vpn-proxy
+  spec:
+    ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+    selector:
+      app: pulp-vpn-proxy
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: pulp-vpn-proxy
+    labels:
+      app: pulp-vpn-proxy
+  spec:
+    host: ${PROXY_SERVER_NAME}
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: pulp-vpn-proxy
+      weight: 100
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+parameters:
+- name: UPSTREAM_HOST
+  description: Route hostname on the Pulp cluster that accepts VPN traffic
+  required: true
+- name: PROXY_SERVER_NAME
+  description: Hostname the proxy accepts (e.g. packages.stage.redhat.com)
+  required: true
+- name: REPLICAS
+  description: Number of proxy replicas
+  value: "2"
+- name: NGINX_IMAGE
+  description: Nginx container image
+  value: registry.access.redhat.com/ubi9/nginx-124
+- name: NGINX_IMAGE_TAG
+  description: Nginx container image tag
+  value: "1"
+- name: CPU_REQUEST
+  description: CPU request
+  value: 100m
+- name: MEMORY_REQUEST
+  description: Memory request
+  value: 128Mi
+- name: MEMORY_LIMIT
+  description: Memory limit
+  value: 256Mi
