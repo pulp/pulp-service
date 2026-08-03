@@ -1,5 +1,5 @@
 pulpcore==3.115.2
-pulp-rpm==3.38.3
+pulp-rpm==3.38.4
 solv>=0.7.21,<0.7.38
 pulp-python==3.32.1
 pulp-npm==0.9.0
