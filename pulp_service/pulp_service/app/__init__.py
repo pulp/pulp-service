@@ -13,3 +13,29 @@ class PulpServicePluginAppConfig(PulpPluginAppConfig):
     def ready(self):
         super().ready()
         from . import signals  # noqa: F401
+
+        from django.db.models.signals import post_migrate
+
+        post_migrate.connect(_populate_domain_view_access_policies, sender=self)
+
+
+def _populate_domain_view_access_policies(sender, apps, **kwargs):  # noqa: ARG001
+    from pulp_service.app.viewsets import CreateDomainView, MigrateDomainView
+
+    try:
+        AccessPolicy = apps.get_model("core", "AccessPolicy")
+    except LookupError:
+        return
+
+    for view_cls in (CreateDomainView, MigrateDomainView):
+        access_policy = getattr(view_cls, "DEFAULT_ACCESS_POLICY", None)
+        if access_policy is None:
+            continue
+        viewset_name = view_cls.urlpattern()
+        db_access_policy, created = AccessPolicy.objects.get_or_create(
+            viewset_name=viewset_name, defaults=access_policy
+        )
+        if not created and not db_access_policy.customized:
+            for key, value in access_policy.items():
+                setattr(db_access_policy, key, value)
+            db_access_policy.save()

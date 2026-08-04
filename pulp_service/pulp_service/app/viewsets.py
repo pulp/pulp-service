@@ -21,6 +21,7 @@ from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from pulpcore.app.access_policy import AccessPolicyFromDB
 from pulpcore.app.contexts import with_domain
 from pulpcore.app.models import Domain, Group, Task
 from pulpcore.app.serializers import DomainSerializer
@@ -149,6 +150,68 @@ class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
     endpoint_name = "feature"
     queryset = FeatureContentGuard.objects.all()
     serializer_class = FeatureContentGuardSerializer
+    permission_classes = [DomainBasedPermission, AccessPolicyFromDB]
+    queryset_filtering_required_permission = "service.view_featurecontentguard"
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["list", "my_permissions"], "principal": "authenticated", "effect": "allow"},
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_perms:service.add_featurecontentguard",
+            },
+            {
+                "action": ["retrieve"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.view_featurecontentguard",
+            },
+            {
+                "action": ["update", "partial_update"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.change_featurecontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_featurecontentguard",
+                ],
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.delete_featurecontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_featurecontentguard",
+                ],
+            },
+            {
+                "action": ["list_roles", "add_role", "remove_role"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.manage_roles_featurecontentguard",
+            },
+        ],
+        "creation_hooks": [
+            {
+                "function": "add_roles_for_object_creator",
+                "parameters": {"roles": "service.featurecontentguard_owner"},
+            }
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
+
+    LOCKED_ROLES = {
+        "service.featurecontentguard_creator": ["service.add_featurecontentguard"],
+        "service.featurecontentguard_owner": [
+            "service.view_featurecontentguard",
+            "service.change_featurecontentguard",
+            "service.delete_featurecontentguard",
+            "service.manage_roles_featurecontentguard",
+        ],
+        "service.featurecontentguard_viewer": ["service.view_featurecontentguard"],
+    }
 
 
 class DebugAuthenticationHeadersView(APIView):
@@ -204,11 +267,31 @@ class DebugAuthenticationHeadersView(APIView):
 )
 class TaskViewSet(TaskViewSet):
     LOCKED_ROLES = {}
+    permission_classes = [DomainBasedPermission, AccessPolicyFromDB]
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["list"], "principal": "authenticated", "effect": "allow"},
+            {
+                "action": ["retrieve"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:core.view_task",
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:core.delete_task",
+            },
+            {"action": ["purge"], "principal": "admin", "effect": "allow"},
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
 
     def get_queryset(self):
         qs = self.queryset
         if isinstance(qs, QuerySet):
-            # Ensure queryset is re-evaluated on each request.
             qs = qs.all()
 
         if self.parent_lookup_kwargs and self.kwargs:
@@ -224,10 +307,62 @@ class TaskViewSet(TaskViewSet):
         return "admintasks"
 
 
-class VulnerabilityReport(NamedModelViewSet, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
+class VulnerabilityReport(NamedModelViewSet, RolesMixin, ListModelMixin, RetrieveModelMixin, DestroyModelMixin):
     endpoint_name = "vuln_report_service"
     queryset = VulnReport.objects.all()
     serializer_class = VulnerabilityReportSerializer
+    permission_classes = [DomainBasedPermission, AccessPolicyFromDB]
+    queryset_filtering_required_permission = "service.view_vulnerabilityreport"
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["list", "my_permissions"], "principal": "authenticated", "effect": "allow"},
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_perms:service.add_vulnerabilityreport",
+            },
+            {
+                "action": ["retrieve"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.view_vulnerabilityreport",
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.delete_vulnerabilityreport",
+                    "has_model_or_domain_or_obj_perms:service.view_vulnerabilityreport",
+                ],
+            },
+            {
+                "action": ["list_roles", "add_role", "remove_role"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.manage_roles_vulnerabilityreport",
+            },
+        ],
+        "creation_hooks": [
+            {
+                "function": "add_roles_for_object_creator",
+                "parameters": {"roles": "service.vulnerabilityreport_owner"},
+            }
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
+
+    LOCKED_ROLES = {
+        "service.vulnerabilityreport_creator": ["service.add_vulnerabilityreport"],
+        "service.vulnerabilityreport_owner": [
+            "service.view_vulnerabilityreport",
+            "service.delete_vulnerabilityreport",
+            "service.manage_roles_vulnerabilityreport",
+        ],
+        "service.vulnerabilityreport_viewer": ["service.view_vulnerabilityreport"],
+    }
 
     @extend_schema(
         request=ContentScanSerializer,
@@ -269,13 +404,89 @@ class PyPIYankMonitorFilter(BaseFilterSet):
 
 
 class PyPIYankMonitorViewSet(
-    NamedModelViewSet, CreateModelMixin, ListModelMixin, RetrieveModelMixin, DestroyModelMixin
+    NamedModelViewSet, RolesMixin, CreateModelMixin, ListModelMixin, RetrieveModelMixin, DestroyModelMixin
 ):
     endpoint_name = "pypi_yank_monitor"
     queryset = PyPIYankMonitor.objects.all()
     serializer_class = PyPIYankMonitorSerializer
     filterset_class = PyPIYankMonitorFilter
-    permission_classes = [DomainBasedPermission]
+    permission_classes = [DomainBasedPermission, AccessPolicyFromDB]
+    queryset_filtering_required_permission = "service.view_pypiyankmonitor"
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["list", "my_permissions"], "principal": "authenticated", "effect": "allow"},
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_perms:service.add_pypiyankmonitor",
+            },
+            {
+                "action": ["retrieve"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.view_pypiyankmonitor",
+            },
+            {
+                "action": ["update", "partial_update"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.change_pypiyankmonitor",
+                    "has_model_or_domain_or_obj_perms:service.view_pypiyankmonitor",
+                ],
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.delete_pypiyankmonitor",
+                    "has_model_or_domain_or_obj_perms:service.view_pypiyankmonitor",
+                ],
+            },
+            {
+                "action": ["check"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.change_pypiyankmonitor",
+                    "has_model_or_domain_or_obj_perms:service.view_pypiyankmonitor",
+                ],
+            },
+            {
+                "action": ["report"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.view_pypiyankmonitor",
+            },
+            {
+                "action": ["list_roles", "add_role", "remove_role"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.manage_roles_pypiyankmonitor",
+            },
+        ],
+        "creation_hooks": [
+            {
+                "function": "add_roles_for_object_creator",
+                "parameters": {"roles": "service.pypiyankmonitor_owner"},
+            }
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
+
+    LOCKED_ROLES = {
+        "service.pypiyankmonitor_creator": ["service.add_pypiyankmonitor"],
+        "service.pypiyankmonitor_owner": [
+            "service.view_pypiyankmonitor",
+            "service.change_pypiyankmonitor",
+            "service.delete_pypiyankmonitor",
+            "service.manage_roles_pypiyankmonitor",
+        ],
+        "service.pypiyankmonitor_viewer": ["service.view_pypiyankmonitor"],
+    }
 
     @extend_schema(request=None, responses={202: AsyncOperationResponseSerializer})
     @action(detail=True, methods=["post"], url_path="check")
@@ -1888,10 +2099,22 @@ class StaleLockCleanupDispatcherView(APIView):
 
 
 class CreateDomainView(APIView):
-    permission_classes = [DomainBasedPermission]
     """
     Custom endpoint to create domains with service-specific logic.
     """
+
+    action = "create"
+    permission_classes = [DomainBasedPermission, AccessPolicyFromDB]
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["create"], "principal": "authenticated", "effect": "allow"},
+        ],
+    }
+
+    @classmethod
+    def urlpattern(cls):
+        return "domains/create"
 
     @extend_schema(
         request=DomainSerializer,
@@ -1991,7 +2214,23 @@ class MigrateDomainView(APIView):
     for domain creation.
     """
 
-    permission_classes = [DomainBasedPermission]
+    action = "create"
+    permission_classes = [DomainBasedPermission, AccessPolicyFromDB]
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_domain_org_access",
+            },
+        ],
+    }
+
+    @classmethod
+    def urlpattern(cls):
+        return "domains/migrate"
 
     @extend_schema(
         description=(
