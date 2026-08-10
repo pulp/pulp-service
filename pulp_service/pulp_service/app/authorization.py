@@ -24,6 +24,27 @@ user_id_var = ContextVar("user_id")
 group_var = ContextVar("group")
 
 
+class IsAdminOrAdminReadOnly(BasePermission):
+    """
+    Full access for superusers/staff; GET/HEAD/OPTIONS-only for members of the
+    admin-readonly group (configured via ADMIN_READONLY_GROUP setting).
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        if request.user.is_staff or request.user.is_superuser:
+            return True
+
+        if request.method in SAFE_METHODS:
+            group_name = settings.ADMIN_READONLY_GROUP
+            if group_name and request.user.groups.filter(name=group_name).exists():
+                return True
+
+        return False
+
+
 class DomainBasedPermission(BasePermission):
     """
     A Permission Class that grants permission to users who's org_id matches the requested Domain's org_id.

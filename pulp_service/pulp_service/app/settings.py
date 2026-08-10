@@ -31,6 +31,8 @@ HIJACK_ALLOW_GET_REQUESTS = True
 # RDS Test endpoints setting
 RDS_CONNECTION_TESTS_ENABLED = False
 
+ADMIN_READONLY_GROUP = "admin-readonly"
+
 
 DOMAIN_ACCESS_POLICIES = {
     "lightwell": {
