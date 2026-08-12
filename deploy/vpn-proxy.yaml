@@ -40,7 +40,7 @@ objects:
           }
 
           location / {
-            set $upstream https://${UPSTREAM_HOST};
+            set $upstream https://${UPSTREAM_HOST}:${UPSTREAM_PORT};
             proxy_pass $upstream;
             proxy_ssl_server_name on;
             proxy_set_header Host ${PROXY_SERVER_NAME};
@@ -176,8 +176,11 @@ objects:
       insecureEdgeTerminationPolicy: Redirect
 parameters:
 - name: UPSTREAM_HOST
-  description: Route hostname on the Pulp cluster that accepts VPN traffic
+  description: Upstream hostname (Akamai CDN or direct cluster endpoint)
   required: true
+- name: UPSTREAM_PORT
+  description: Upstream HTTPS port
+  value: "443"
 - name: PROXY_SERVER_NAME
   description: Hostname the proxy accepts (e.g. packages.stage.redhat.com)
   required: true
