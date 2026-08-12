@@ -217,7 +217,7 @@ class DebugAuthenticationHeadersView(APIView):
     Returns the content of the authentication headers and client IP information.
     """
 
-    authentication_classes = [RHTermsBasedRegistryAuthentication]
+    authentication_classes = []
     permission_classes = []
 
     def get(self, request=None, path=None, pk=None):
@@ -226,22 +226,17 @@ class DebugAuthenticationHeadersView(APIView):
 
         response_data = {}
 
-        # Get x-rh-identity header
-        try:
-            header_content = request.headers["x-rh-identity"]
-        except KeyError:
-            _logger.exception("Access not allowed. Header %s not found.", settings.AUTHENTICATION_JSON_HEADER)
-            raise PermissionError("Access denied.") from None
+        header_content = request.headers.get("x-rh-identity")
+        if header_content:
+            try:
+                response_data["x_rh_identity"] = json.loads(b64decode(header_content))
+            except (Base64DecodeError, json.JSONDecodeError):
+                response_data["x_rh_identity"] = None
+        else:
+            response_data["x_rh_identity"] = None
 
-        try:
-            header_decoded_content = b64decode(header_content)
-        except Base64DecodeError as exc:
-            _logger.exception("Access not allowed - Header content is not Base64 encoded.")
-            raise PermissionError("Access denied.") from exc
+        response_data["x_pulp_vpn_access"] = request.headers.get("X-Pulp-VPN-Access")
 
-        response_data["x_rh_identity"] = json.loads(header_decoded_content)
-
-        # Get client IP headers
         response_data["client_ip_headers"] = {
             "true_client_ip": request.headers.get("True-Client-IP"),
             "x_forwarded_for": request.headers.get("X-Forwarded-For"),
@@ -249,7 +244,6 @@ class DebugAuthenticationHeadersView(APIView):
             "remote_addr": request.META.get("REMOTE_ADDR"),
         }
 
-        # Get other useful headers
         response_data["other_headers"] = {
             "x_rh_edge_host": request.headers.get("X-RH-EDGE-HOST"),
             "user_agent": request.headers.get("User-Agent"),
