@@ -207,10 +207,7 @@ def detect_abandoned_task_locks(task_locks, min_age_seconds=60):
         return []
 
     task_ids = [lock["task_id"] for lock in task_locks]
-    tasks_by_id = {
-        str(t.pk): t
-        for t in Task.objects.filter(pk__in=task_ids).select_related("app_lock")
-    }
+    tasks_by_id = {str(t.pk): t for t in Task.objects.filter(pk__in=task_ids).select_related("app_lock")}
 
     age_cutoff = timezone.now() - timedelta(seconds=min_age_seconds)
     abandoned = []
@@ -233,17 +230,13 @@ def detect_abandoned_task_locks(task_locks, min_age_seconds=60):
             entry = dict(lock_info)
             entry["task_state"] = task.state
             entry["reason"] = (
-                "Task is waiting with no app_lock; worker acquired the Redis "
-                "lock but did not claim the task"
+                "Task is waiting with no app_lock; worker acquired the Redis lock but did not claim the task"
             )
             abandoned.append(entry)
         elif task.state in TASK_TERMINAL_STATES:
             entry = dict(lock_info)
             entry["task_state"] = task.state
-            entry["reason"] = (
-                f"Task is in terminal state '{task.state}' but Redis lock "
-                f"was not released"
-            )
+            entry["reason"] = f"Task is in terminal state '{task.state}' but Redis lock was not released"
             abandoned.append(entry)
 
     return abandoned
@@ -278,15 +271,8 @@ def detect_abandoned_resource_locks(abandoned_task_locks, resource_locks, redis_
     for lock_info in resource_locks:
         resource_locks_by_key[lock_info["lock_key"]] = lock_info
 
-    task_ids = [
-        lock["task_id"]
-        for lock in abandoned_task_locks
-        if lock.get("task_state") != "NOT_FOUND"
-    ]
-    tasks_by_id = {
-        str(t.pk): t
-        for t in Task.objects.filter(pk__in=task_ids)
-    } if task_ids else {}
+    task_ids = [lock["task_id"] for lock in abandoned_task_locks if lock.get("task_state") != "NOT_FOUND"]
+    tasks_by_id = {str(t.pk): t for t in Task.objects.filter(pk__in=task_ids)} if task_ids else {}
 
     from pulpcore.tasking.redis_locks import REDIS_LOCK_PREFIX
 
@@ -316,9 +302,7 @@ def detect_abandoned_resource_locks(abandoned_task_locks, resource_locks, redis_
                 entry = dict(resource_lock)
                 entry["abandoned_by_task"] = task_id
                 entry["abandoned_holder"] = holder
-                entry["reason"] = (
-                    f"Resource lock held by worker that abandoned task {task_id}"
-                )
+                entry["reason"] = f"Resource lock held by worker that abandoned task {task_id}"
                 abandoned.append(entry)
                 seen_keys.add(lock_key)
 

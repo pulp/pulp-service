@@ -12,9 +12,9 @@ class PulpServicePluginAppConfig(PulpPluginAppConfig):
 
     def ready(self):
         super().ready()
-        from . import signals  # noqa: F401
-
         from django.db.models.signals import post_migrate
+
+        from . import signals  # noqa: F401
 
         post_migrate.connect(
             _populate_domain_view_access_policies,
