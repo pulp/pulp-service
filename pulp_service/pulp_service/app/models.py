@@ -118,7 +118,7 @@ class YankedPackageReport(BaseModel):
         default_related_name = "%(app_label)s_%(model_name)s"
 
 
-class PyPIYankMonitor(BaseModel):
+class PyPIYankMonitor(BaseModel, AutoAddObjPermsMixin):
     """
     Registers a Python repository or repository version for daily PyPI yank monitoring.
     Exactly one of repository or repository_version must be set.
@@ -144,9 +144,12 @@ class PyPIYankMonitor(BaseModel):
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
+        permissions = [
+            ("manage_roles_pypiyankmonitor", "Can manage roles on PyPI yank monitors"),
+        ]
 
 
-class VulnerabilityReport(BaseModel):
+class VulnerabilityReport(BaseModel, AutoAddObjPermsMixin):
     """
     Model used in vulnerability report.
     """
@@ -156,3 +159,6 @@ class VulnerabilityReport(BaseModel):
 
     class Meta:
         default_related_name = "%(app_label)s_%(model_name)s"
+        permissions = [
+            ("manage_roles_vulnerabilityreport", "Can manage roles on vulnerability reports"),
+        ]
