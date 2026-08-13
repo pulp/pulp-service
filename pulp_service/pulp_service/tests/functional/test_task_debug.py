@@ -337,14 +337,10 @@ class TestStaleLockScanView:
 
         # Total should equal orphaned + healthy + abandoned
         assert summary["total_resource_locks"] == (
-            summary["orphaned_resource_locks"]
-            + summary["healthy_resource_locks"]
-            + summary["abandoned_resource_locks"]
+            summary["orphaned_resource_locks"] + summary["healthy_resource_locks"] + summary["abandoned_resource_locks"]
         )
         assert summary["total_task_locks"] == (
-            summary["orphaned_task_locks"]
-            + summary["healthy_task_locks"]
-            + summary["abandoned_task_locks"]
+            summary["orphaned_task_locks"] + summary["healthy_task_locks"] + summary["abandoned_task_locks"]
         )
 
         # --- orphaned locks sections ---

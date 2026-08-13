@@ -131,14 +131,8 @@ def cleanup_stale_locks():
         task_locks_cleaned += 1
 
     # -- Phase 5: detect and clean abandoned locks (live holder, bad state) ---
-    remaining_task_locks = [
-        lock for lock in task_locks
-        if not lock.get("holder") or lock["holder"] not in dead_holders
-    ]
-    remaining_resource_locks = [
-        lock for lock in resource_locks
-        if not any(h in dead_holders for h in lock["holders"])
-    ]
+    remaining_task_locks = [lock for lock in task_locks if not lock.get("holder") or lock["holder"] not in dead_holders]
+    remaining_resource_locks = [lock for lock in resource_locks if not any(h in dead_holders for h in lock["holders"])]
 
     abandoned_task_lock_list = detect_abandoned_task_locks(remaining_task_locks)
     abandoned_resource_lock_list = detect_abandoned_resource_locks(
@@ -156,9 +150,7 @@ def cleanup_stale_locks():
 
         if lock_type == "set" and abandoned_holder:
             redis_conn.srem(lock_key, abandoned_holder)
-            healthy_holders = [
-                h for h in lock_info["holders"] if h != abandoned_holder
-            ]
+            healthy_holders = [h for h in lock_info["holders"] if h != abandoned_holder]
             if not healthy_holders:
                 redis_conn.delete(lock_key)
             _logger.info(

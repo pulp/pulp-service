@@ -3,8 +3,8 @@ from django.urls import include, path
 from .admin import admin_site
 from .viewsets import (
     CreateDomainView,
-    DataRepair7465View,
     DatabaseTriggersView,
+    DataRepair7465View,
     DebugAuthenticationHeadersView,
     InternalServerErrorCheck,
     InternalServerErrorCheckWithException,

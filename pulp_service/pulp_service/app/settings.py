@@ -44,5 +44,5 @@ DOMAIN_ACCESS_POLICIES = {
 
 DRF_ACCESS_POLICY = {
     "dynaconf_merge_unique": True,
-    "reusable_conditions": ["pulp_service.app.global_access_conditions"],
+    "reusable_conditions": ["pulp_service.app.access_conditions"],
 }
