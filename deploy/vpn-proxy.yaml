@@ -100,8 +100,9 @@ objects:
               echo "ERROR: No nameserver found in /etc/resolv.conf" >&2
               exit 1
             fi
+            VPN_SECRET_B64=$(echo -n "${VPN_ACCESS_SECRET}" | base64 -w0)
             sed -e "s|NAMESERVER|${NAMESERVER}|g" \
-                -e "s|VPN_ACCESS_SECRET|${VPN_ACCESS_SECRET}|g" \
+                -e "s|VPN_ACCESS_SECRET|${VPN_SECRET_B64}|g" \
                 /opt/nginx-template/nginx.conf.tpl > /opt/nginx-rendered/nginx.conf
             exec nginx -c /opt/nginx-rendered/nginx.conf -g 'daemon off;'
           ports:
