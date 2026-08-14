@@ -79,3 +79,42 @@ class TestRBACAdminAccess:
     def test_admin_can_list_content_guards(self, service_content_guards_api_client):
         result = service_content_guards_api_client.list()
         assert result.count >= 0
+
+
+@pytest.mark.parallel
+class TestServiceDomainRoles:
+    """Verify that service.domain_admin and service.domain_viewer roles
+    are created by post_migrate
+    """
+
+    def test_domain_admin_role_exists(self, pulpcore_bindings):
+        roles = pulpcore_bindings.RolesApi.list(name="service.domain_admin")
+        assert roles.count == 1
+        role = roles.results[0]
+        assert role.locked is False
+
+    def test_domain_admin_has_permissions(self, pulpcore_bindings):
+        roles = pulpcore_bindings.RolesApi.list(name="service.domain_admin")
+        role = roles.results[0]
+        assert len(role.permissions) > 0
+
+    def test_domain_viewer_role_exists(self, pulpcore_bindings):
+        roles = pulpcore_bindings.RolesApi.list(name="service.domain_viewer")
+        assert roles.count == 1
+        role = roles.results[0]
+        assert role.locked is False
+
+    def test_domain_viewer_has_only_view_permissions(self, pulpcore_bindings):
+        roles = pulpcore_bindings.RolesApi.list(name="service.domain_viewer")
+        role = roles.results[0]
+        assert len(role.permissions) > 0
+        for perm in role.permissions:
+            codename = perm.split(".", 1)[1] if "." in perm else perm
+            assert codename.startswith("view"), f"Non-view permission found in viewer role: {perm}"
+
+    def test_domain_viewer_is_subset_of_admin(self, pulpcore_bindings):
+        admin_roles = pulpcore_bindings.RolesApi.list(name="service.domain_admin")
+        viewer_roles = pulpcore_bindings.RolesApi.list(name="service.domain_viewer")
+        admin_perms = set(admin_roles.results[0].permissions)
+        viewer_perms = set(viewer_roles.results[0].permissions)
+        assert viewer_perms <= admin_perms, f"Viewer has permissions not in admin: {viewer_perms - admin_perms}"
