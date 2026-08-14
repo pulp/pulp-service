@@ -32,6 +32,7 @@ TOKEN_AUTH_DISABLED = True
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.RemoteUserBackend",
     "django.contrib.auth.backends.ModelBackend",
+    "pulpcore.backends.ObjectRolePermissionBackend",
     "pulp_service.app.authentication.RHSamlAuthentication",
 ]
 
