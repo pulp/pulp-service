@@ -15,3 +15,4 @@ memray
 pyinstrument
 django-hijack==3.7.4
 pycares>=4.0.0,<5.0
+pulp-hugging-face==0.3.2
