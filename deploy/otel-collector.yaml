@@ -1,0 +1,145 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: pulp-task-monitor-otel-collector
+objects:
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: pulp-task-monitor-otel-config
+  data:
+    config.yaml: |
+      receivers:
+        otlp:
+          protocols:
+            http:
+              endpoint: 0.0.0.0:4318
+
+      processors:
+        memory_limiter:
+          check_interval: 2s
+          limit_mib: ${OTEL_MEMORY_LIMITER_MIB}
+
+        batch:
+          timeout: 15s
+
+      exporters:
+        prometheus:
+          endpoint: "0.0.0.0:9000"
+          metric_expiration: 10m
+
+      extensions:
+        health_check:
+          endpoint: 0.0.0.0:13133
+
+      service:
+        extensions: [health_check]
+        pipelines:
+          metrics:
+            receivers: [otlp]
+            processors: [memory_limiter, batch]
+            exporters: [prometheus]
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: pulp-task-monitor-otel-collector
+    labels:
+      app: pulp-task-monitor-otel-collector
+  spec:
+    replicas: ${{OTEL_REPLICAS}}
+    selector:
+      matchLabels:
+        app: pulp-task-monitor-otel-collector
+    template:
+      metadata:
+        labels:
+          app: pulp-task-monitor-otel-collector
+      spec:
+        containers:
+        - name: otel-collector
+          image: ${OTEL_COLLECTOR_IMAGE}:${OTEL_COLLECTOR_IMAGE_TAG}
+          args:
+          - --config=/etc/otel/config.yaml
+          ports:
+          - name: otlp-http
+            containerPort: 4318
+            protocol: TCP
+          - name: metrics
+            containerPort: 9000
+            protocol: TCP
+          - name: health
+            containerPort: 13133
+            protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: ${OTEL_CPU_REQUEST}
+              memory: ${OTEL_MEMORY_REQUEST}
+            limits:
+              cpu: ${OTEL_CPU_LIMIT}
+              memory: ${OTEL_MEMORY_LIMIT}
+          volumeMounts:
+          - name: otel-config
+            mountPath: /etc/otel
+            readOnly: true
+        volumes:
+        - name: otel-config
+          configMap:
+            name: pulp-task-monitor-otel-config
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: pulp-task-monitor-otel-collector
+    labels:
+      app: pulp-task-monitor-otel-collector
+  spec:
+    selector:
+      app: pulp-task-monitor-otel-collector
+    ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+      protocol: TCP
+    - name: metrics
+      port: 9000
+      targetPort: metrics
+      protocol: TCP
+
+parameters:
+  - name: OTEL_COLLECTOR_IMAGE
+    description: OTel Collector container image
+    value: registry.redhat.io/rhosdt/opentelemetry-collector-rhel8
+  - name: OTEL_COLLECTOR_IMAGE_TAG
+    description: OTel Collector image tag
+    value: latest
+  - name: OTEL_REPLICAS
+    description: Number of collector replicas
+    value: "1"
+  - name: OTEL_CPU_REQUEST
+    description: CPU request for the collector
+    value: "100m"
+  - name: OTEL_CPU_LIMIT
+    description: CPU limit for the collector
+    value: "250m"
+  - name: OTEL_MEMORY_REQUEST
+    description: Memory request for the collector
+    value: "128Mi"
+  - name: OTEL_MEMORY_LIMIT
+    description: Memory limit for the collector
+    value: "256Mi"
+  - name: OTEL_MEMORY_LIMITER_MIB
+    description: Memory limiter processor threshold in MiB
+    value: "128"
