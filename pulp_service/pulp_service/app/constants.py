@@ -44,3 +44,6 @@ PYTHON_REPOSITORY_PULP_TYPE = "python.python"
 
 CONTENT_SOURCES_LABEL_NAME = "contentsources"
 RHEL_AI_DOMAIN_NAME = "rhel-ai"
+
+# Prefix for the per-org groups users are auto-assigned to on authentication.
+ORG_GROUP_PREFIX = "rh-org-"

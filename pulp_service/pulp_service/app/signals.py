@@ -8,6 +8,7 @@ from django.dispatch import receiver
 from pulpcore.plugin.models import Domain
 
 from pulp_service.app.authorization import group_var
+from pulp_service.app.constants import ORG_GROUP_PREFIX
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -54,7 +55,10 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
             user = get_user_model().objects.get(pk=user_id)
             if explicit_group:
                 do = DomainOrg.objects.create(org_id=org_id, group=explicit_group)
-            elif group := user.groups.first():
+            # Skip the auto-assigned rh-org-<org_id> groups: those are per-org and
+            # already covered by the org_id match in DomainBasedPermission. Only an
+            # explicit "team" group should scope domain visibility to a group.
+            elif group := user.groups.exclude(name__startswith=ORG_GROUP_PREFIX).first():
                 do = DomainOrg.objects.create(org_id=org_id, group=group)
             else:
                 do = DomainOrg.objects.create(org_id=org_id, user=user)
