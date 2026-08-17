@@ -25,8 +25,11 @@ objects:
 
       exporters:
         prometheus:
+          # Must exceed the PulpMonitorAgentDown alert window (600s threshold +
+          # 60s "for" + scrape margin). At 10m the last-success value expired
+          # exactly at the threshold, so the alert could never fire (PULP-2184).
+          metric_expiration: 15m
           endpoint: "0.0.0.0:9000"
-          metric_expiration: 10m
 
       extensions:
         health_check:
