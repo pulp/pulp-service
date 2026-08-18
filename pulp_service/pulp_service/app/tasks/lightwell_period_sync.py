@@ -1,3 +1,4 @@
+from pulpcore.app.contexts import with_domain
 from pulpcore.plugin.tasking import dispatch
 
 from pulp_python.app.models import PythonRemote, PythonRepository
@@ -18,12 +19,17 @@ def python_repository_sync():
         return
 
     remote_pk = PythonRemote.objects.values_list("pk", flat=True).get(name=remote_name, pulp_domain__name=domain_name)
-    dispatch(
-        "pulp_python.app.tasks.sync.sync",
-        exclusive_resources=[repository],
-        kwargs={
-            "remote_pk": str(remote_pk),
-            "repository_pk": str(repository.pk),
-            "mirror": False,
-        },
-    )
+
+    # The scheduler runs this with the default domain active; dispatch the sync
+    # in the repository's domain so its content and artifacts land there instead
+    # of the default domain's storage.
+    with with_domain(repository.pulp_domain):
+        dispatch(
+            "pulp_python.app.tasks.sync.sync",
+            exclusive_resources=[repository],
+            kwargs={
+                "remote_pk": str(remote_pk),
+                "repository_pk": str(repository.pk),
+                "mirror": False,
+            },
+        )
