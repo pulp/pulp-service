@@ -1,6 +1,8 @@
 name: SDLC Developer
 description: Implements changes described in the issue context. Used by the SDLC workflow.
 
+model: claude-sonnet-4-6
+
 repos:
   - url: https://github.com/pulp/pulp-service.git
 

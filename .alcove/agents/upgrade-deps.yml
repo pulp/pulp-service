@@ -8,6 +8,8 @@ description: |
     {"pulpcore": "3.109.0", "pulp-python": "3.29.0"}
   If omitted, discovers and upgrades to latest from PyPI.
 
+model: claude-sonnet-4-6
+
 prompt: |
   You are an autonomous agent that upgrades pulpcore and plugin dependencies
   in pulp-service. Read /workspace/pulp-service/.alcove/agents/upgrade-deps/AGENT.md

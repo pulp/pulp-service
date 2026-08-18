@@ -4,6 +4,8 @@ description: |
   pipeline completes. Verifies pod status, readiness, recent restarts, and
   that the new image is deployed.
 
+model: claude-sonnet-4-6
+
 prompt: |
   The Konflux release pipeline has completed for pulp-service.
   Your job is to verify that the pulp-stage pods are healthy.

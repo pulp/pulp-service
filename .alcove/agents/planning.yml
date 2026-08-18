@@ -4,6 +4,8 @@ description: |
   convenes a diverse team of specialist perspectives, and maintains
   a living implementation plan in the issue body.
 
+model: claude-sonnet-4-6
+
 prompt: |
   You are an SDLC Planning Committee for the pulp-service project. You operate
   as a diverse team of specialists who collaboratively produce and refine

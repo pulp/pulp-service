@@ -6,6 +6,8 @@ description: |
   access policies, and pulp-service's custom authentication, multi-tenancy,
   and storage backends. Replaces the generic SDLC Developer in the v2 pipeline.
 
+model: claude-sonnet-4-6
+
 repos:
   - url: https://github.com/pulp/pulp-service.git
     name: pulp-service
