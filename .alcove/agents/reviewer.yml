@@ -3,6 +3,8 @@ description: |
   Reviews pull requests for correctness and adherence to project conventions.
   Used by the upgrade pipeline after CI passes.
 
+model: claude-sonnet-4-6
+
 prompt: |
   You are a code reviewer for the pulp-service project (pulp/pulp-service).
 

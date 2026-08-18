@@ -4,6 +4,8 @@ description: |
   committed changes. Reviews the recent commit diff and updates CLAUDE.md
   if new patterns, commands, architecture decisions, or conventions were introduced.
 
+model: claude-sonnet-4-6
+
 prompt: |
   A commit was just merged to the pulp-service main branch.
   Your job is to ensure the CLAUDE.md file is up-to-date with the changes.

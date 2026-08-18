@@ -3,6 +3,8 @@ description: |
   Monitors the Konflux release pipeline after a commit is merged to pulp-service main.
   Polls GitHub check runs on the merge commit until the Konflux release pipeline completes.
 
+model: claude-sonnet-4-6
+
 prompt: |
   A commit was just merged to the pulp-service main branch.
   Your job is to wait for the Konflux release pipeline to finish.

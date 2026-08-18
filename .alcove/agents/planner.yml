@@ -11,6 +11,8 @@ description: |
   planner with the latest comment, and the agent modifies only the
   sections that need updating.
 
+model: claude-sonnet-4-6
+
 prompt: |
   Be clear, lean, brief, and direct on all your writings. Use fewer
   words without losing meaning or comprehension.

@@ -5,6 +5,8 @@ description: |
   current codebase, and produces self-sufficient task descriptions for
   developer agent execution. Runs after Tech Lead approves the plan (W2).
 
+model: claude-sonnet-4-6
+
 prompt: |
   Be clear, lean, brief, and direct on all your writings. Use fewer
   words without losing meaning or comprehension.
