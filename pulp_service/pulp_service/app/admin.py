@@ -30,10 +30,16 @@ USERNAME_HELP_TEXT = (
 pulp_username_validator = RegexValidator(USERNAME_PATTERN, USERNAME_ERROR_MSG, "invalid")
 
 
-# Apply the new validator to the User model
+# Apply the new validator to the User model.
+# NOTE: only mutate attributes that are NOT tracked by Django's migration
+# autodetector. `validators` is safe because Field.deconstruct() reads the
+# original `_validators`, not this assignment (which only overrides the
+# cached `validators` property). Do NOT set `help_text` here: it IS tracked
+# by deconstruct(), so mutating it on the vendored auth.User field makes
+# `migrate` report "app 'auth' has changes not yet reflected in a migration"
+# on every deploy. The user-facing help_text is set at the form level in
+# PulpUserFormMixin instead.
 User._meta.get_field("username").validators = [pulp_username_validator]
-# Update the help_text as well
-User._meta.get_field("username").help_text = USERNAME_HELP_TEXT
 
 
 # Custom/Pulp forms to allow additional characters
