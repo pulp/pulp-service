@@ -96,4 +96,3 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/app/models/repository.py`
 - **Description:** Optimizes repository deletion by materializing publication PKs before deleting published artifacts and switching to batched deletes (500 per batch) to limit WAL size in PostgreSQL.
-
