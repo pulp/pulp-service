@@ -1,5 +1,5 @@
 pulpcore==3.116.0
-pulp-rpm==3.38.4
+pulp-rpm==3.38.5
 solv>=0.7.21,<0.7.38
 pulp-python==3.34.0
 pulp-npm==0.10.0
@@ -16,4 +16,5 @@ pyinstrument
 django-hijack==3.7.4
 pycares>=4.0.0,<5.0
 pulp-hugging-face==0.3.2
+
 
