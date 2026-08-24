@@ -35,6 +35,16 @@ class TestRBACAccessPoliciesRegistered:
         assert policy.creation_hooks is not None
         assert policy.queryset_scoping is not None
 
+    def test_envvar_header_content_guard_access_policy_exists(self, pulpcore_bindings):
+        policies = pulpcore_bindings.AccessPoliciesApi.list(viewset_name="contentguards/service/envvar_header")
+        assert policies.count == 1
+        policy = policies.results[0]
+        assert policy.statements
+        actions = {a for s in policy.statements for a in s["action"]}
+        assert {"list", "create", "retrieve", "update", "partial_update", "destroy"} <= actions
+        assert policy.creation_hooks is not None
+        assert policy.queryset_scoping is not None
+
     def test_domain_create_access_policy_exists(self, pulpcore_bindings):
         policies = pulpcore_bindings.AccessPoliciesApi.list(viewset_name="domains/create")
         assert policies.count == 1

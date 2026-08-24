@@ -1,5 +1,7 @@
+import hmac
 import json
 import logging
+import os
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from gettext import gettext as _
@@ -9,7 +11,7 @@ from django.conf import settings
 from django.contrib.postgres.fields import ArrayField, HStoreField
 from django.db import models
 
-from pulpcore.app.models import HeaderContentGuard
+from pulpcore.app.models import ContentGuard, HeaderContentGuard
 from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel, Domain, Group
 from pulpcore.plugin.util import get_domain_pk
 
@@ -95,6 +97,46 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             (
                 "manage_roles_featurecontentguard",
                 "Can manage role assignments on Feature ContentGuard",
+            ),
+        )
+
+
+class EnvVarHeaderContentGuard(ContentGuard, AutoAddObjPermsMixin):
+    """
+    Content guard that validates a header value against a server-side environment variable.
+
+    The expected secret is read from ``os.environ[env_var]`` at request time so key
+    rotation only requires updating the environment and redeploying pods.
+    """
+
+    TYPE = "envvar_header"
+
+    header_name = models.TextField()
+    env_var = models.TextField()
+
+    def permit(self, request):
+        header_content = request.headers.get(self.header_name)
+        if not header_content:
+            _logger.debug("Access not allowed. Header %s not found.", self.header_name)
+            raise PermissionError(_("Access denied."))
+
+        expected = os.environ.get(self.env_var)
+        if expected is None or not expected.strip():
+            _logger.warning("Access not allowed. Environment variable %s is unset or empty.", self.env_var)
+            raise PermissionError(_("Access denied."))
+
+        if not hmac.compare_digest(header_content, expected.strip()):
+            _logger.debug("Access not allowed. Header value does not match environment variable.")
+            raise PermissionError(_("Access denied."))
+
+        return
+
+    class Meta:
+        default_related_name = "%(app_label)s_%(model_name)s"
+        permissions = (
+            (
+                "manage_roles_envvarheadercontentguard",
+                "Can manage role assignments on EnvVar Header ContentGuard",
             ),
         )
 

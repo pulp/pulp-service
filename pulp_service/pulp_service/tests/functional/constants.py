@@ -38,6 +38,11 @@ CONTENT_GUARD_FEATURES = ["OPENSHIFT-OCP-x86_64", "RHEL-HA-x86_64"]
 CONTENT_GUARD_FEATURES_NOT_SUBSCRIBED = ["rhods"]
 CONTENT_GUARD_FILTER = ".identity.org_id"
 
+# ENV-VAR HEADER CONTENT GUARD CONSTANTS
+ENVVAR_HEADER_GUARD_ENV_VAR = "ENVVAR_HEADER_GUARD_TEST_SECRET"
+ENVVAR_HEADER_GUARD_HEADER_NAME = "X-Test-Content-Guard-Header"
+ENVVAR_HEADER_GUARD_TEST_SECRET = "functional-test-secret-value"  # noqa: S105
+
 # LIGHTWELL-NETWORK FEATURE CONSTANTS
 # Used to test the lightwell-network feature check enforced by DomainBasedPermission on the
 # "lightwell" domain's PyPI views. These are real staging Features Service accounts.
