@@ -144,7 +144,7 @@ class OOMKillTriggerView(APIView):
 
 class EnvVarHeaderContentGuardViewSet(ContentGuardViewSet, RolesMixin):
     """
-    Content guard that validates a header against a server-side environment variable.
+    Content guard that validates a Base64-encoded header against a server-side environment variable.
     """
 
     endpoint_name = "envvar_header"

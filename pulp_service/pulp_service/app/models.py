@@ -103,10 +103,15 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
 
 class EnvVarHeaderContentGuard(ContentGuard, AutoAddObjPermsMixin):
     """
-    Content guard that validates a header value against a server-side environment variable.
+    Content guard that validates a Base64-encoded header value against a server-side environment variable.
 
-    The expected secret is read from ``os.environ[env_var]`` at request time so key
-    rotation only requires updating the environment and redeploying pods.
+    Clients and proxies must send the expected secret as a Base64-encoded UTF-8 string in
+    ``header_name``. Pulp decodes the header, then compares the result to the value of
+    ``os.environ[env_var]`` using a timing-safe comparison. Base64 keeps arbitrary UTF-8
+    secrets transport-safe over HTTP headers.
+
+    The expected secret is read from the environment at request time so rotation only
+    requires updating the environment and redeploying pods.
     """
 
     TYPE = "envvar_header"
@@ -120,12 +125,28 @@ class EnvVarHeaderContentGuard(ContentGuard, AutoAddObjPermsMixin):
             _logger.debug("Access not allowed. Header %s not found.", self.header_name)
             raise PermissionError(_("Access denied."))
 
+        try:
+            header_decoded_content = b64decode(header_content)
+        except Base64DecodeError:
+            _logger.debug("Access not allowed - Header content is not Base64 encoded.")
+            raise PermissionError(_("Access denied.")) from None
+
+        try:
+            header_value = header_decoded_content.decode("utf-8")
+        except UnicodeDecodeError:
+            _logger.debug("Access not allowed - Header content is not valid UTF-8.")
+            raise PermissionError(_("Access denied.")) from None
+
         expected = os.environ.get(self.env_var)
         if expected is None or not expected.strip():
             _logger.warning("Access not allowed. Environment variable %s is unset or empty.", self.env_var)
             raise PermissionError(_("Access denied."))
 
-        if not hmac.compare_digest(header_content, expected.strip()):
+        expected_stripped = expected.strip()
+        if not hmac.compare_digest(
+            header_value.encode("utf-8"),
+            expected_stripped.encode("utf-8"),
+        ):
             _logger.debug("Access not allowed. Header value does not match environment variable.")
             raise PermissionError(_("Access denied."))
 

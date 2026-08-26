@@ -1,3 +1,4 @@
+import base64
 import os
 
 import pytest
@@ -79,7 +80,9 @@ def test_denied_without_header(configure_envvar_guarded_content):
 
 def test_denied_with_wrong_header(configure_envvar_guarded_content):
     _, distribution = configure_envvar_guarded_content(name="envvar-guard-wrong-header")
-    headers = {ENVVAR_HEADER_GUARD_HEADER_NAME: "wrong-secret"}
+    headers = {
+        ENVVAR_HEADER_GUARD_HEADER_NAME: base64.b64encode(b"wrong-secret").decode("ascii"),
+    }
     response = requests.get(url=distribution.base_url, headers=headers, timeout=30)
     assert response.status_code == 403
 
@@ -87,7 +90,9 @@ def test_denied_with_wrong_header(configure_envvar_guarded_content):
 def test_allowed_with_matching_header(configure_envvar_guarded_content):
     secret = os.environ[ENVVAR_HEADER_GUARD_ENV_VAR].strip()
     _, distribution = configure_envvar_guarded_content(name="envvar-guard-allowed")
-    headers = {ENVVAR_HEADER_GUARD_HEADER_NAME: secret}
+    headers = {
+        ENVVAR_HEADER_GUARD_HEADER_NAME: base64.b64encode(secret.encode("utf-8")).decode("ascii"),
+    }
     response = requests.get(url=distribution.base_url, headers=headers, timeout=30)
     assert response.status_code == 200
     assert "repodata" in str(response.content)

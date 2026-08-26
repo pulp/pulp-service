@@ -37,12 +37,17 @@ _logger = logging.getLogger(__name__)
 class EnvVarHeaderContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerializerMixin):
     """
     A serializer for EnvVarHeaderContentGuard.
+
+    The guard expects the request header named ``header_name`` to carry a Base64-encoded
+    UTF-8 representation of the secret. The plaintext secret is read from ``env_var`` on
+    the server at request time and is never stored in or returned by the API.
     """
 
     header_name = serializers.CharField(help_text=_("The header name the guard will check on."))
     env_var = serializers.CharField(
         help_text=_(
-            "Name of a server-side environment variable holding the expected header value. "
+            "Name of a server-side environment variable holding the expected secret (plaintext UTF-8). "
+            "The request header must send that value Base64-encoded. "
             "The value is never stored in or returned by the API."
         ),
     )
