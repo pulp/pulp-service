@@ -109,7 +109,7 @@ def test_looks_up_configured_resource_names(mock_repo_model, mock_remote_model, 
     lightwell_period_sync.python_repository_sync()
 
     mock_repo_model.objects.get.assert_called_once_with(
-        name="network-python-validated-landing",
+        name="python-validated-landing",
         pulp_domain__name="lightwell",
     )
     mock_remote_model.objects.values_list.return_value.get.assert_called_once_with(
@@ -118,12 +118,15 @@ def test_looks_up_configured_resource_names(mock_repo_model, mock_remote_model, 
     )
 
 
+@patch(f"{MODULE}._logger")
 @patch(f"{MODULE}.dispatch")
 @patch(f"{MODULE}.with_domain")
 @patch(f"{MODULE}.PythonRemote")
 @patch(f"{MODULE}.PythonRepository")
-def test_noop_when_repository_missing(mock_repo_model, _mock_remote_model, mock_with_domain, mock_dispatch):
-    """If the repository does not exist: no domain switch and no dispatch."""
+def test_noop_when_repository_missing(
+    mock_repo_model, _mock_remote_model, mock_with_domain, mock_dispatch, mock_logger
+):
+    """If the repository does not exist: log, no domain switch, and no dispatch."""
     from pulp_service.app.tasks import lightwell_period_sync
 
     mock_repo_model.DoesNotExist = _ModelDoesNotExistError
@@ -133,6 +136,7 @@ def test_noop_when_repository_missing(mock_repo_model, _mock_remote_model, mock_
 
     mock_dispatch.assert_not_called()
     mock_with_domain.assert_not_called()
+    mock_logger.warning.assert_called_once()
 
 
 @patch(f"{MODULE}.dispatch")
