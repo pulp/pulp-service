@@ -42,10 +42,11 @@ from pulp_service.app.authentication import (
     RHTermsBasedRegistryAuthentication,
 )
 from pulp_service.app.authorization import DomainBasedPermission, IsAdminOrAdminReadOnly, group_var
-from pulp_service.app.models import FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
+from pulp_service.app.models import EnvVarHeaderContentGuard, FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     ContentScanSerializer,
+    EnvVarHeaderContentGuardSerializer,
     FeatureContentGuardSerializer,
     PyPIYankMonitorSerializer,
     VulnerabilityReportSerializer,
@@ -139,6 +140,77 @@ class OOMKillTriggerView(APIView):
             chunks.append(b"x" * (chunk_size_mb * 1024 * 1024))
             allocated_mb += chunk_size_mb
             _logger.warning("OOM test: allocated %d MB", allocated_mb)
+
+
+class EnvVarHeaderContentGuardViewSet(ContentGuardViewSet, RolesMixin):
+    """
+    Content guard that validates a Base64-encoded header against a server-side environment variable.
+    """
+
+    endpoint_name = "envvar_header"
+    queryset = EnvVarHeaderContentGuard.objects.all()
+    serializer_class = EnvVarHeaderContentGuardSerializer
+    queryset_filtering_required_permission = "service.view_envvarheadercontentguard"
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["list", "my_permissions"], "principal": "authenticated", "effect": "allow"},
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_perms:service.add_envvarheadercontentguard",
+            },
+            {
+                "action": ["retrieve"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.view_envvarheadercontentguard",
+            },
+            {
+                "action": ["update", "partial_update"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.change_envvarheadercontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_envvarheadercontentguard",
+                ],
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.delete_envvarheadercontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_envvarheadercontentguard",
+                ],
+            },
+            {
+                "action": ["list_roles", "add_role", "remove_role"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.manage_roles_envvarheadercontentguard",
+            },
+        ],
+        "creation_hooks": [
+            {
+                "function": "add_roles_for_object_creator",
+                "parameters": {"roles": "service.envvarheadercontentguard_owner"},
+            }
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
+
+    LOCKED_ROLES = {
+        "service.envvarheadercontentguard_creator": ["service.add_envvarheadercontentguard"],
+        "service.envvarheadercontentguard_owner": [
+            "service.view_envvarheadercontentguard",
+            "service.change_envvarheadercontentguard",
+            "service.delete_envvarheadercontentguard",
+            "service.manage_roles_envvarheadercontentguard",
+        ],
+        "service.envvarheadercontentguard_viewer": ["service.view_envvarheadercontentguard"],
+    }
 
 
 class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):

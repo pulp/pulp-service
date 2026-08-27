@@ -38,6 +38,12 @@ def service_content_guards_api_client(service_bindings):
     return service_bindings.ContentguardsFeatureApi
 
 
+@pytest.fixture(scope="session")
+def service_envvar_header_content_guards_api_client(service_bindings):
+    """Api for env-var header service content guards."""
+    return service_bindings.ContentguardsEnvvarHeaderApi
+
+
 @pytest.fixture
 def gen_group(pulpcore_bindings, gen_object_with_cleanup):
     """A fixture to create a group."""
