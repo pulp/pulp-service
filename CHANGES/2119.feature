@@ -1,0 +1,1 @@
+Domain creation now dual-writes RBAC role assignments (``core.domain_owner`` and ``service.domain_admin``) alongside the existing ``DomainOrg`` entry, so new domains work under both the legacy ``DomainBasedPermission`` and the RBAC backend during the migration transition.
