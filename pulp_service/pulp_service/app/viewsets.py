@@ -141,6 +141,25 @@ class OOMKillTriggerView(APIView):
             _logger.warning("OOM test: allocated %d MB", allocated_mb)
 
 
+class PagerDutyAlertTestView(APIView):
+    """Arm the synthetic pagerduty.test gauge for one hour.
+
+    Requires staff authentication. Used to fire PulpPagerDutyTest in prod
+    (pages PagerDuty) or stage (Alertmanager blackhole; Prometheus only).
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request=None, path=None, pk=None):
+        from .pagerduty_test import arm, remaining_seconds
+
+        arm()
+        return Response(
+            {"armed": True, "value": 2, "ttl_seconds": remaining_seconds()},
+            status=status.HTTP_200_OK,
+        )
+
+
 class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
     """
     Content guard to protect the content guarded by Subscription Features.

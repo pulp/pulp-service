@@ -10,6 +10,7 @@ from .viewsets import (
     InternalServerErrorCheckWithException,
     MigrateDomainView,
     OOMKillTriggerView,
+    PagerDutyAlertTestView,
     RDSConnectionTestDispatcherView,
     RedirectCheck,
     ReleaseTaskLocksView,
@@ -42,5 +43,6 @@ urlpatterns = [
     path("api/pulp/create-domain/", CreateDomainView.as_view()),
     path("api/pulp/migrate-domain/", MigrateDomainView.as_view()),
     path("api/pulp/test/trigger-oom/", OOMKillTriggerView.as_view()),
+    path("api/pulp/test/pagerduty-alert/", PagerDutyAlertTestView.as_view()),
     path("api/pulp/<slug:pulp_domain>/api/v3/datarepair/7465-v2/", DataRepair7465View.as_view()),
 ]
