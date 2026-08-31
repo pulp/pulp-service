@@ -42,7 +42,7 @@ CONTENT_GUARD_FILTER = ".identity.org_id"
 # Used to test the lightwell-network feature check enforced by DomainBasedPermission on the
 # "lightwell" domain's PyPI views. These are real staging Features Service accounts.
 LIGHTWELL_NETWORK_FEATURE = "lightwell-network"
-LIGHTWELL_ENTITLED_ORG_ID = "20368420"  # has the lightwell-network feature
+LIGHTWELL_ENTITLED_ORG_ID = "20434047"  # has the lightwell-network feature (entitlement expires 2027-08-30)
 LIGHTWELL_NOT_ENTITLED_ORG_ID = "11111111"  # does not have the lightwell-network feature
 
 # VULNERABILITY REPORT CONSTANTS
