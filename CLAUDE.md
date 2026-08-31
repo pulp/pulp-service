@@ -222,3 +222,5 @@ The main workflow (`.alcove/workflows/post-merge-release-pipeline.yml`) coordina
 3. **update-claude-md** — Updates documentation to reflect any architectural changes in the merged commit
 
 This ensures that every merge to main triggers a complete release verification cycle and keeps documentation current.
+
+
