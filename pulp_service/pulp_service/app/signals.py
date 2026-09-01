@@ -6,6 +6,7 @@ from django.db import connection, transaction
 from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
 
+from pulpcore.app.models import HeaderContentGuard
 from pulpcore.plugin.models import Domain, Group
 from pulpcore.plugin.util import assign_role
 
@@ -68,6 +69,20 @@ def _assign_domain_roles(entity, domain):
     assign_role("service.domain_admin", entity, domain=domain)
 
 
+def _assign_default_content_guard(domain):
+    if domain.name.startswith("public-"):
+        return
+
+    domain.default_content_guard = HeaderContentGuard.objects.create(
+        name="x-rh-identity",
+        header_name="x-rh-identity",
+        header_value="",
+        jq_filter='""',
+        pulp_domain=domain,
+    )
+    domain.save(update_fields=["default_content_guard"])
+
+
 @receiver(post_save, sender=Domain)
 def post_create_domain(sender, **kwargs):  # noqa: ARG001
     if kwargs["created"]:
@@ -81,16 +96,16 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
         group_var.set(None)
 
         domain = kwargs["instance"]
-        if user_id:
-            # post_save fires after the Domain INSERT. When the creating request already
-            # wraps the save in a transaction (self-service CreateDomainView), the block
-            # below nests as a savepoint and a failure rolls the Domain back with it. When
-            # the caller is in autocommit (generic DomainViewSet), the Domain row is already
-            # committed on its own, so on failure we delete it to avoid leaving a domain
-            # without its RBAC/DomainOrg dual-write state.
-            domain_committed_standalone = not connection.in_atomic_block
-            try:
-                with transaction.atomic():
+        # post_save fires after the Domain INSERT. When the creating request already
+        # wraps the save in a transaction (self-service CreateDomainView), the block
+        # below nests as a savepoint and a failure rolls the Domain back with it. When
+        # the caller is in autocommit (generic DomainViewSet), the Domain row is already
+        # committed on its own, so on failure we delete it to avoid leaving a domain
+        # without its RBAC/DomainOrg or default content guard state.
+        domain_committed_standalone = not connection.in_atomic_block
+        try:
+            with transaction.atomic():
+                if user_id:
                     user = get_user_model().objects.get(pk=user_id)
                     # When the create request carried no identity.internal.org_id, org_id_var
                     # is None -- the calunga null-org_id shape that leaves the rh-org-<org_id>
@@ -111,7 +126,7 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                     # explicit "team" group should scope domain visibility to a group.
                     # Query through the pulpcore Group proxy (not user.groups, which yields
                     # base auth.Group instances) so assign_role classifies it as a Group.
-                    elif group := Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first():
+                    elif group := (Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first()):
                         do = DomainOrg.objects.create(org_id=org_id, group=group)
                     else:
                         do = DomainOrg.objects.create(org_id=org_id, user=user)
@@ -124,7 +139,9 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                             _assign_domain_roles(org_group, domain)
 
                     do.domains.add(domain)
-            except Exception:
-                if domain_committed_standalone:
-                    domain.delete()
-                raise
+
+                _assign_default_content_guard(domain)
+        except Exception:
+            if domain_committed_standalone:
+                domain.delete()
+            raise
