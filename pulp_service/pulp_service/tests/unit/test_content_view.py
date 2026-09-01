@@ -52,7 +52,7 @@ class TestUserCanViewDomain:
         user.is_superuser = False
         domain = MagicMock()
 
-        def has_perm(perm, obj=None):
+        def has_perm(_perm, obj=None):
             if obj is None:
                 return False
             return obj is domain
