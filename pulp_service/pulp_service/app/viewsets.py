@@ -42,6 +42,16 @@ from pulp_service.app.authentication import (
     RHTermsBasedRegistryAuthentication,
 )
 from pulp_service.app.authorization import DomainBasedPermission, IsAdminOrAdminReadOnly, group_var
+from pulp_service.app.content_view_viewsets import (  # noqa: F401
+    ContentViewFilter,
+    ContentViewViewSet,
+    RpmContentViewEnvironmentSearchViewSet,
+    RpmContentViewErrataViewSet,
+    RpmContentViewModuleStreamsViewSet,
+    RpmContentViewPackageGroupSearchViewSet,
+    RpmContentViewPackageListViewSet,
+    RpmContentViewPackageSearchViewSet,
+)
 from pulp_service.app.models import FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
