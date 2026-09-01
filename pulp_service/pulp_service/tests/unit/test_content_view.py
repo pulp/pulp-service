@@ -163,7 +163,8 @@ class TestGroupVersionsByDomain:
 
 
 class _FakeQuerySet(list):
-    """Minimal QuerySet stand-in supporting .count() and slicing, for scatter_gather tests."""
+    """Minimal QuerySet stand-in supporting .count(), slicing, and .order_by(), for
+    scatter_gather tests."""
 
     def count(self):
         return len(self)
@@ -172,6 +173,14 @@ class _FakeQuerySet(list):
         if isinstance(item, slice):
             return _FakeQuerySet(list.__getitem__(self, item))
         return list.__getitem__(self, item)
+
+    def order_by(self, *fields):
+        # Minimal stand-in: rows are already ascending-sorted (as build_queryset would
+        # return), so descending re-ordering (the only case scatter_gather itself triggers)
+        # is just a reversal.
+        if fields and all(field.startswith("-") for field in fields):
+            return _FakeQuerySet(reversed(self))
+        return self
 
 
 class TestScatterGather:
@@ -196,6 +205,30 @@ class TestScatterGather:
         assert total == 5
         assert page == [{"name": "pkg1"}, {"name": "pkg2"}]
         mock_with_domain.assert_called_once_with(domain)
+
+    @patch("pulp_service.app.content_view_util.with_domain")
+    def test_single_domain_descending_reverses_order(self, mock_with_domain):
+        # Regression test: a ContentView resolving to exactly one domain must apply
+        # `descending` too, not just the multi-domain merge path -- otherwise the same
+        # request returns different orderings depending on how many domains it resolves to.
+        mock_with_domain.return_value.__enter__.return_value = None
+        mock_with_domain.return_value.__exit__.return_value = False
+
+        domain = _make_domain("only")
+        rows = _FakeQuerySet([{"name": f"pkg{i}"} for i in range(5)])
+        build_queryset = MagicMock(return_value=rows)
+
+        page, total = scatter_gather(
+            {domain: [MagicMock()]},
+            build_queryset,
+            order_by="name",
+            limit=2,
+            offset=1,
+            descending=True,
+        )
+
+        assert total == 5
+        assert page == [{"name": "pkg3"}, {"name": "pkg2"}]
 
     @patch("pulp_service.app.content_view_util.with_domain")
     def test_multi_domain_merges_and_sorts(self, mock_with_domain):

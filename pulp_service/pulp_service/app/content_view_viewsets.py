@@ -10,6 +10,9 @@ style endpoints, which never compute a total count, since they're meant for auto
 usage rather than exhaustive pagination).
 """
 
+import functools
+import operator
+
 from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
@@ -297,7 +300,12 @@ class RpmContentViewPackageSearchViewSet(ContentViewSearchViewSet):
         seen_names = set()
         for domain, versions in versions_by_domain.items():
             with with_domain(domain):
-                for package in build_queryset(versions)[: limit * 5]:
+                # Fetching each domain's own top `limit` (already name-deduplicated, ascending)
+                # rows is provably sufficient, not just a heuristic: in a k-way merge of sorted
+                # lists, any element ranked <= `limit` globally must also be ranked <= `limit`
+                # within every per-domain list it appears in (otherwise that one domain alone
+                # would already contribute more than `limit` distinct names smaller than it).
+                for package in build_queryset(versions)[:limit]:
                     if package.name in seen_names:
                         continue
                     seen_names.add(package.name)
@@ -340,7 +348,20 @@ class RpmContentViewPackageGroupSearchViewSet(ContentViewSearchViewSet):
         order = []
         for domain, versions in versions_by_domain.items():
             with with_domain(domain):
-                for group in build_queryset(versions)[: limit * 5]:
+                base_qs = build_queryset(versions)
+                # This queryset intentionally isn't DB-deduplicated (unlike the packages/
+                # environments typeahead endpoints above) because duplicate (name, id) rows --
+                # from multiple repository versions linked in this domain -- need their
+                # `packages` lists unioned below, not discarded. So identify the true top
+                # `limit` *distinct* keys cheaply via DISTINCT ON first (same exact k-way-merge
+                # bound as above: any key ranked <= `limit` globally is ranked <= `limit` within
+                # every domain's own distinct, sorted key list), then re-fetch every row -- not
+                # just the first -- matching those specific keys to compute a correct union.
+                top_keys = list(base_qs.distinct("name", "id").values_list("name", "id")[:limit])
+                if not top_keys:
+                    continue
+                key_filter = functools.reduce(operator.or_, (Q(name=name, id=id_) for name, id_ in top_keys))
+                for group in base_qs.filter(key_filter):
                     key = (group.name, group.id)
                     if key not in merged:
                         merged[key] = group
@@ -382,7 +403,10 @@ class RpmContentViewEnvironmentSearchViewSet(ContentViewSearchViewSet):
         order = []
         for domain, versions in versions_by_domain.items():
             with with_domain(domain):
-                for environment in build_queryset(versions)[: limit * 5]:
+                # See RpmContentViewPackageSearchViewSet.list for why `limit` (not a heuristic
+                # multiplier) is the exact bound needed here: this queryset is already
+                # deduplicated by (name, id) and sorted per domain.
+                for environment in build_queryset(versions)[:limit]:
                     key = (environment.name, environment.id)
                     if key not in merged:
                         merged[key] = environment

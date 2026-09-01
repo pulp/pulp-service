@@ -178,6 +178,8 @@ def scatter_gather(  # noqa: PLR0913
         domain, versions = domains[0]
         with with_domain(domain):
             qs = build_queryset(versions)
+            if descending:
+                qs = qs.order_by(*[f"-{field}" for field in fields])
             total = qs.count() if count else None
             page = list(qs[offset : offset + limit])
         return page, total
