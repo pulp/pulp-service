@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
 
+from pulpcore.app.models import HeaderContentGuard
 from pulpcore.plugin.models import Domain
 
 from pulp_service.app.authorization import group_var
@@ -63,3 +64,12 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
             else:
                 do = DomainOrg.objects.create(org_id=org_id, user=user)
             do.domains.add(kwargs["instance"])
+
+        HeaderContentGuard.objects.create(
+            name="x-rh-identity",
+            header_name="x-rh-identity",
+            header_value="",
+            # The filter's fixed value means the identity payload is never inspected.
+            jq_filter='""',
+            pulp_domain=kwargs["instance"],
+        )
