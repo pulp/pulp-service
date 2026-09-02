@@ -23,6 +23,16 @@ from pulp_service.app.constants import (
     OSV_RH_ECOSYSTEM_LABEL,
     PYTHON_REPOSITORY_PULP_TYPE,
 )
+from pulp_service.app.content_view_serializers import (  # noqa: F401
+    ContentViewDistributionStatusSerializer,
+    ContentViewErrataSerializer,
+    ContentViewModuleStreamSerializer,
+    ContentViewPackageEnvironmentSerializer,
+    ContentViewPackageGroupSerializer,
+    ContentViewPackageSerializer,
+    ContentViewSerializer,
+    ContentViewUpdateReferenceSerializer,
+)
 from pulp_service.app.models import (
     FeatureContentGuard,
     PyPIYankMonitor,

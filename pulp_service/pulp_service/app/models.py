@@ -13,6 +13,7 @@ from pulpcore.app.models import HeaderContentGuard
 from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel, Domain, Group
 from pulpcore.plugin.util import get_domain_pk
 
+from pulp_service.app.content_view_models import ContentView, ContentViewSearchScope  # noqa: F401
 from pulp_service.app.features_service import check_subscription
 
 _logger = logging.getLogger(__name__)
