@@ -51,6 +51,7 @@ def configure_pypi_distribution(
     python_bindings,
     service_content_guards_api_client,
     bindings_cfg,
+    create_service_domain,
 ):
     """
     Creates a domain owned by DOMAIN_OWNER_ORG_ID, with a Python repository and a PyPI
@@ -63,16 +64,14 @@ def configure_pypi_distribution(
 
     def _configure(domain_name, features=None):
         with anonymous_user:
-            pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = owner_header
+            # After PULP-2120 non-admins create domains via the self-service endpoint, not
+            # DomainsApi. This also creates the owner's DomainOrg association, which the
+            # content-guard bypass test relies on.
+            create_service_domain(domain_name, identity_header=owner_header)
 
-            gen_object_with_cleanup(
-                pulpcore_bindings.DomainsApi,
-                {
-                    "name": domain_name,
-                    "storage_class": "pulpcore.app.models.storage.FileSystem",
-                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-                },
-            )
+            # monitor_task (used by gen_object_with_cleanup for async creates below) reads via
+            # pulpcore_bindings.TasksApi, which needs the identity header inside anonymous_user.
+            pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = owner_header
 
             python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = owner_header
             repo = gen_object_with_cleanup(
@@ -182,15 +181,17 @@ def test_write_operations_unaffected_by_content_guard(configure_guarded_pypi_dis
 
 
 def test_non_pypi_endpoints_unaffected_by_content_guard(configure_guarded_pypi_distribution):
-    """Non-PyPI endpoints (here, the Pulp REST API's repository listing) must keep using the
-    existing DomainOrg-based permission model: the content guard on a PyPI distribution
-    grants no access to non-PyPI endpoints."""
+    """Non-PyPI endpoints don't get access from a PyPI distribution's content guard. After
+    PULP-2120 (PulpServiceAccessPolicy) non-PyPI endpoints use standard object-level RBAC, so
+    an org with no access to the domain's repositories gets an empty, scoped list (200) rather
+    than the domain-level 403 the old DomainBasedPermission returned -- no repositories leak."""
     _, _, repos_url, _ = configure_guarded_pypi_distribution()
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-rest-user")}
 
     response = requests.get(repos_url, headers=headers, timeout=30)
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
 
 
 def test_unguarded_distribution_allows_unauthenticated_access(configure_pypi_distribution):
