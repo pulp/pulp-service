@@ -1,0 +1,1 @@
+Backfilled RBAC role assignments for domains created in the window between the initial PULP-1893 data migration and the PULP-2119 dual-write deploy.

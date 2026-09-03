@@ -7,12 +7,19 @@ from django.db.models import Prefetch
 _logger = logging.getLogger(__name__)
 
 
-def _ensure_service_roles(apps):
+def _ensure_service_roles(apps, set_permissions=True):
     """Create service.domain_admin / service.domain_viewer inline.
 
     Mirrors pulp_service.app._populate_service_roles. We cannot rely on that
     post_migrate handler here: post_migrate runs only after ALL migrations are
     complete, so roles do not exist while this data migration runs.
+
+    set_permissions=False returns the existing roles without calling
+    permissions.set(...). permissions.set replaces membership, so a re-run
+    (e.g. the 0021 backfill) would overwrite service-role permission changes
+    made since 0019. The backfill only needs the role objects to attach
+    DomainOrg assignments; the post_migrate handler keeps their permissions
+    authoritative.
     """
     Role = apps.get_model("core", "Role")
     Permission = apps.get_model("auth", "Permission")
@@ -31,13 +38,13 @@ def _ensure_service_roles(apps):
         name="service.domain_admin",
         defaults={"locked": False, "description": "Admin role for all domain-level plugin permissions."},
     )
-    admin_role.permissions.set(all_permissions)
-
     viewer_role, _ = Role.objects.get_or_create(
         name="service.domain_viewer",
         defaults={"locked": False, "description": "Viewer role for all domain-level view permissions."},
     )
-    viewer_role.permissions.set(all_permissions.filter(codename__startswith="view"))
+    if set_permissions:
+        admin_role.permissions.set(all_permissions)
+        viewer_role.permissions.set(all_permissions.filter(codename__startswith="view"))
 
     return admin_role, viewer_role
 
@@ -66,7 +73,7 @@ def _assign_pair(role_model, entity_kwargs, object_role, scoped_role, domain, do
     )
 
 
-def convert_domainorgs_to_roles(apps, schema_editor):  # noqa: ARG001
+def convert_domainorgs_to_roles(apps, schema_editor, set_permissions=True, include_readonly_policies=True):  # noqa: ARG001
     DomainOrg = apps.get_model("service", "DomainOrg")
     Role = apps.get_model("core", "Role")
     UserRole = apps.get_model("core", "UserRole")
@@ -75,7 +82,7 @@ def convert_domainorgs_to_roles(apps, schema_editor):  # noqa: ARG001
     Domain = apps.get_model("core", "Domain")
     ContentType = apps.get_model("contenttypes", "ContentType")
 
-    admin_role, viewer_role = _ensure_service_roles(apps)
+    admin_role, viewer_role = _ensure_service_roles(apps, set_permissions=set_permissions)
 
     # pulpcore locked roles: exist on upgraded DBs. get_or_create keeps the FK
     # safe on a fresh/edge DB. pulpcore's post_migrate populates their permissions after migrate-db.
@@ -129,6 +136,13 @@ def convert_domainorgs_to_roles(apps, schema_editor):  # noqa: ARG001
     # independent of DomainOrg rows (must still fire on a DB with no DomainOrg entries).
     # This is a one-time conversion of the CURRENT runtime state: it reflects the policy
     # config present at migration time and does not track later changes to DOMAIN_ACCESS_POLICIES.
+    #
+    # include_readonly_policies=False skips this loop. The 0021 backfill sets it: because this
+    # loop reads the CURRENT DOMAIN_ACCESS_POLICIES rather than DomainOrg rows, re-running it
+    # would grant readonly roles for policy changes made since 0019, which is outside the
+    # backfill's scope (missing DomainOrg assignments only).
+    if not include_readonly_policies:
+        return
     for domain_name, policy in getattr(settings, "DOMAIN_ACCESS_POLICIES", {}).items():
         readonly_group_name = policy.get("readonly_group")
         if not readonly_group_name:
