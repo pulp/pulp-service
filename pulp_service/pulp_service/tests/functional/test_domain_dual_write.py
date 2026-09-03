@@ -7,22 +7,22 @@ import pytest
 import requests
 
 # These tests exercise the RBAC dual-write in the post_create_domain signal
-# (pulp_service/app/signals.py) across both entry points:
-# - the generic DomainsApi, which runs in autocommit -- the path where a failed
-#   dual-write could orphan the Domain (domain_committed_standalone=True);
-# - the self-service create-domain endpoint (CreateDomainView), the real
-#   production path, which sets group_var and wraps the save in
-#   transaction.atomic() so the signal nests as a savepoint
-#   (domain_committed_standalone=False, the explicit_group branch).
+# (pulp_service/app/signals.py) via the self-service create-domain endpoint
+# (CreateDomainView) -- the supported production path after PULP-2120, which sets
+# group_var and wraps the save in transaction.atomic() so the signal nests as a
+# savepoint (domain_committed_standalone=False, the explicit_group branch).
 #
-# Domain listing works via the pre-existing DomainBasedPermission (org_id match)
-# regardless of RBAC, so it cannot prove the dual-write. Instead we introspect the
-# role assignments the signal writes. There is no DomainOrg API; since the role
-# writes and the DomainOrg insert share one transaction.atomic() in the signal,
-# asserting the roles committed transitively confirms the DomainOrg row too.
+# Before PULP-2120 these also drove the generic DomainsApi autocommit path
+# (domain_committed_standalone=True). With PulpServiceAccessPolicy a non-admin can no
+# longer create a domain via the generic DomainsApi (that needs core.add_domain), so
+# that entry point is unreachable through supported org-user flows and its
+# autocommit/rollback branch is left to unit tests with mocking.
 #
-# Not covered here: the delete-on-failure rollback path. It needs fault injection
-# that is brittle over black-box HTTP -- better suited to a unit test with mocking.
+# Domain listing works via object-level RBAC regardless of the dual-write, so it
+# cannot prove the dual-write. Instead we introspect the role assignments the signal
+# writes. There is no DomainOrg API; since the role writes and the DomainOrg insert
+# share one transaction.atomic() in the signal, asserting the roles committed
+# transitively confirms the DomainOrg row too.
 
 ORG_ID = 1
 
@@ -58,26 +58,18 @@ def _assert_owns_domain(assignments, domain_href):
     assert admin, f"missing domain-scoped service.domain_admin on {domain_href}"
 
 
-def _create_domain(pulpcore_bindings, gen_object_with_cleanup, anonymous_user, username):
-    with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = _auth_header(_identity(username))
-        domain = gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": str(uuid4()),
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
-    # Role introspection needs admin auth, not the creator's identity.
-    pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
-    return domain
+def _create_domain(create_service_domain, username, group_name=None):
+    # After PULP-2120 non-admins create domains via the self-service endpoint, which drives the
+    # same post_create_domain dual-write. Role introspection below uses admin auth (bindings
+    # default); create_service_domain talks to the endpoint over plain requests with the
+    # creator's identity header, so it leaves no auth header on the shared bindings client.
+    return create_service_domain(str(uuid4()), identity_header=_auth_header(_identity(username)), group_name=group_name)
 
 
-def test_dual_write_grants_creator_and_org_group(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
-    """Creator with no team group: creator gets direct roles, rh-org-<org_id> gets the pair."""
+def test_dual_write_grants_creator_and_org_group(pulpcore_bindings, create_service_domain):
+    """Creator with no explicit team group: creator gets direct roles, rh-org-<org_id> gets the pair."""
     username = str(uuid4())
-    domain = _create_domain(pulpcore_bindings, gen_object_with_cleanup, anonymous_user, username)
+    domain = _create_domain(create_service_domain, username)
 
     _assert_owns_domain(_user_role_assignments(pulpcore_bindings, username), domain.pulp_href)
 
@@ -86,7 +78,7 @@ def test_dual_write_grants_creator_and_org_group(pulpcore_bindings, anonymous_us
     _assert_owns_domain(_group_role_assignments(pulpcore_bindings, org_groups.results[0].pulp_href), domain.pulp_href)
 
 
-def test_dual_write_grants_team_group(pulpcore_bindings, anonymous_user, gen_group, gen_object_with_cleanup):
+def test_dual_write_grants_team_group(pulpcore_bindings, gen_group, gen_object_with_cleanup, create_service_domain):
     """Creator in a team group: the team group AND the org group get the pair, creator keeps direct roles."""
     team_group = gen_group(name=f"test-team-{uuid4()}")
 
@@ -101,7 +93,7 @@ def test_dual_write_grants_team_group(pulpcore_bindings, anonymous_user, gen_gro
         group_user={"username": f"{ORG_ID}|{username}"},
     )
 
-    domain = _create_domain(pulpcore_bindings, gen_object_with_cleanup, anonymous_user, username)
+    domain = _create_domain(create_service_domain, username, group_name=team_group.name)
 
     # Creator always gets direct roles, even when the domain is group-scoped (signals.py divergence).
     _assert_owns_domain(_user_role_assignments(pulpcore_bindings, username), domain.pulp_href)

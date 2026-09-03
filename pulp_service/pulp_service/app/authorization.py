@@ -24,6 +24,25 @@ user_id_var = ContextVar("user_id")
 group_var = ContextVar("group")
 
 
+def set_domain_create_context(request):
+    """
+    Populate the ContextVars the post_create_domain signal (signals.py) consumes for
+    the RBAC/DomainOrg dual-write.
+
+    DomainBasedPermission.has_permission used to set these for the domain_create action.
+    Now that CreateDomainView uses IsAuthenticated (PULP-2120), the view sets them
+    explicitly.
+    """
+    header = request.META.get("HTTP_X_RH_IDENTITY")
+    if header:
+        try:
+            org_id = org_id_json_path.input_value(json.loads(b64decode(header))).first()
+        except (Base64DecodeError, json.JSONDecodeError):
+            org_id = None
+        org_id_var.set(org_id)
+    user_id_var.set(request.user.pk)
+
+
 class IsAdminOrAdminReadOnly(BasePermission):
     """
     Full access for superusers/staff; GET/HEAD/OPTIONS-only for members of the

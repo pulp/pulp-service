@@ -17,7 +17,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException
 from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin
-from rest_framework.permissions import BasePermission, IsAdminUser
+from rest_framework.permissions import BasePermission, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -41,7 +41,7 @@ from pulpcore.plugin.viewsets import (
 from pulp_service.app.authentication import (
     RHTermsBasedRegistryAuthentication,
 )
-from pulp_service.app.authorization import DomainBasedPermission, IsAdminOrAdminReadOnly, group_var
+from pulp_service.app.authorization import IsAdminOrAdminReadOnly, group_var, set_domain_create_context
 from pulp_service.app.content_view_viewsets import (  # noqa: F401
     ContentViewFilter,
     ContentViewViewSet,
@@ -430,7 +430,6 @@ class PyPIYankMonitorViewSet(
     queryset = PyPIYankMonitor.objects.all()
     serializer_class = PyPIYankMonitorSerializer
     filterset_class = PyPIYankMonitorFilter
-    permission_classes = [DomainBasedPermission]
     queryset_filtering_required_permission = "service.view_pypiyankmonitor"
 
     DEFAULT_ACCESS_POLICY = {
@@ -2115,13 +2114,10 @@ class CreateDomainView(APIView):
     """
 
     action = "create"
-    permission_classes = [DomainBasedPermission]
-
-    DEFAULT_ACCESS_POLICY = {
-        "statements": [
-            {"action": ["create"], "principal": "authenticated", "effect": "allow"},
-        ],
-    }
+    # Authz is enforced by permission_classes below: any authenticated user may self-service
+    # create a domain. No DEFAULT_ACCESS_POLICY here on purpose -- this is a plain APIView, so
+    # AccessPolicyFromDB never runs and a policy dict would be inert (misleading) config.
+    permission_classes = [IsAuthenticated]
 
     @classmethod
     def urlpattern(cls):
@@ -2182,6 +2178,7 @@ class CreateDomainView(APIView):
             )
 
         group_var.set(group)
+        set_domain_create_context(request)
 
         # Prepare data with defaults from default domain if needed
         data = request.data.copy()
@@ -2226,17 +2223,12 @@ class MigrateDomainView(APIView):
     """
 
     action = "create"
-    permission_classes = [DomainBasedPermission]
-
-    DEFAULT_ACCESS_POLICY = {
-        "statements": [
-            {
-                "action": ["create"],
-                "principal": "authenticated",
-                "effect": "allow",
-            },
-        ],
-    }
+    # Object-level authz is enforced explicitly in post() via
+    # request.user.has_perm("core.change_domain", domain). No DEFAULT_ACCESS_POLICY here on
+    # purpose -- this is a plain APIView, so AccessPolicyFromDB never runs and a policy dict
+    # (e.g. a has_model_or_domain_or_obj_perms condition) would be inert config that could
+    # mislead a maintainer into removing the real guard.
+    permission_classes = [IsAuthenticated]
 
     @classmethod
     def urlpattern(cls):
@@ -2277,6 +2269,12 @@ class MigrateDomainView(APIView):
             return Response(
                 {"error": f"Domain '{domain_name}' not found."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not request.user.has_perm("core.change_domain", domain):
+            return Response(
+                {"error": "You do not have permission to migrate this domain."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if domain.name == "default":

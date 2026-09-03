@@ -5,7 +5,9 @@ from uuid import uuid4
 import pytest
 
 
-def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, gen_object_with_cleanup, anonymous_user):
+def test_group_domain_permission(
+    pulpcore_bindings, file_bindings, gen_group, gen_object_with_cleanup, anonymous_user, create_service_domain
+):
     """
     Tests that a user can access a domain created by another user in the same group.
     """
@@ -27,16 +29,9 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
     user_a_identity = {"identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": user_a_name}}}
     auth_header_a = b64encode(json.dumps(user_a_identity).encode("ascii"))
 
-    with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header_a
-        gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+    # After PULP-2120 non-admins create domains via the self-service endpoint, not DomainsApi.
+    # Pass the team group so the dual-write grants it the domain-scoped role (the point of this test).
+    create_service_domain(domain_name, identity_header=auth_header_a, group_name=test_group.name)
 
     # 4. Create user_b and associate with the same group
     user_b_name = f"user-b-in-team-{uuid4()}"
@@ -77,7 +72,7 @@ def test_group_domain_permission(pulpcore_bindings, file_bindings, gen_group, ge
 
 
 def test_domain_permission_for_user_without_group(
-    pulpcore_bindings, file_bindings, gen_object_with_cleanup, anonymous_user
+    pulpcore_bindings, file_bindings, gen_object_with_cleanup, anonymous_user, create_service_domain
 ):
     """
     Tests that a user without a group can manage their own domain,
@@ -94,16 +89,8 @@ def test_domain_permission_for_user_without_group(
     user_a_identity = {"identity": {"org_id": 1, "internal": {"org_id": 1}, "user": {"username": user_a_name}}}
     auth_header_a = b64encode(json.dumps(user_a_identity).encode("ascii"))
 
-    with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header_a
-        gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+    # After PULP-2120 non-admins create domains via the self-service endpoint, not DomainsApi.
+    create_service_domain(domain_name, identity_header=auth_header_a)
 
     # 3. Verify user_a can create a repository in their own domain
     with anonymous_user:
