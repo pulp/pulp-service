@@ -1,15 +1,18 @@
 """
-Functional tests for the hardcoded LIGHTWELL_READONLY_GROUP_NAME group enforced by
-DomainBasedPermission, scoped specifically to the "lightwell" domain's non-PyPI endpoints
-(Pulp REST API: repository listing, etc.).
+Functional tests for the hardcoded lightwell read-only group's access to the "lightwell"
+domain's non-PyPI endpoints (Pulp REST API: repository listing, etc.).
 
-Unlike normal groups (created through CreateDomainView's group_name flow and linked to a
-domain via DomainOrg, which grant unrestricted read+write access), membership in this
-hardcoded group grants read-only (SAFE_METHODS) access to the lightwell domain, independent
-of any DomainOrg association. It does not grant write access, and it does not apply to the
-lightwell domain's PyPI views, which remain gated exclusively by the lightwell-network
-feature check (see test_content_guard_permission.py) -- group membership must not bypass
-that check.
+After PULP-2120 the default permission class is PulpServiceAccessPolicy (RBAC). The read-only
+group gets read access to the lightwell domain from two RBAC roles migration 0019 assigns it
+on that domain: object-level core.domain_viewer (the domain is visible in listings) and
+domain-scoped service.domain_viewer (its content is readable). These are view-only roles, so
+the group still has no write access, and they do not apply to the lightwell domain's PyPI
+views, which remain gated by the lightwell-network feature check (see
+test_content_guard_permission.py) -- group membership must not bypass that check.
+
+Because the RBAC roles are assigned by migration 0019 against a domain that already exists,
+and these tests create the lightwell domain per-run, the configure_lightwell_domain fixture
+assigns the same two roles explicitly (mirroring the migration).
 
 These follow the pattern used in test_group_based_permissions.py (group setup via gen_group
 / UsersApi / GroupsUsersApi) and test_content_guard_permission.py (the "lightwell"
@@ -76,26 +79,32 @@ def configure_lightwell_domain(
     python_bindings,
     service_content_guards_api_client,
     bindings_cfg,
+    create_service_domain,
+    lightwell_readonly_group,
 ):
     """
     Creates the "lightwell" domain (owned by DOMAIN_OWNER_ORG_ID, no relation to the
     read-only group), with a File repository and a PyPI-distributed Python repository.
+
+    After PULP-2120 the read-only group grants access via RBAC roles rather than a
+    DomainBasedPermission special case: this fixture assigns the group the same roles
+    migration 0019 grants it on the lightwell domain -- object-level core.domain_viewer
+    (so the domain is visible in listings) and domain-scoped service.domain_viewer (so
+    members can read content inside the domain). Real deployments get these at migrate
+    time; here the domain is created per-test, so the fixture assigns them explicitly.
 
     Returns (repos_url, pypi_url, owner_header).
     """
     owner_header = _identity_header(DOMAIN_OWNER_ORG_ID, "lightwell-readonly-test-owner")
 
     with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = owner_header
+        # After PULP-2120 non-admins create domains via the self-service endpoint, not DomainsApi.
+        domain = create_service_domain(LIGHTWELL_DOMAIN_NAME, identity_header=owner_header)
 
-        gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": LIGHTWELL_DOMAIN_NAME,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+        # monitor_task (used by gen_object_with_cleanup for the async PyPI distribution create
+        # below) reads via pulpcore_bindings.TasksApi, which shares this client and needs the
+        # identity header while inside anonymous_user (basic auth is stripped there).
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = owner_header
 
         file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = owner_header
         gen_object_with_cleanup(
@@ -134,6 +143,22 @@ def configure_lightwell_domain(
             pulp_domain=LIGHTWELL_DOMAIN_NAME,
         )
 
+    # Assign the read-only group the same two roles migration 0019 grants it on the lightwell
+    # domain: object-level core.domain_viewer (so the domain shows up in listings) and
+    # domain-scoped service.domain_viewer (so members can read content inside the domain).
+    # Done as admin, so drop the owner identity header the async creates above left on the
+    # shared pulpcore client. The unused key of each pair must be an explicit None (the API
+    # rejects it being omitted), matching pulpcore's own gen_user role helpers.
+    pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+    pulpcore_bindings.GroupsRolesApi.create(
+        lightwell_readonly_group.pulp_href,
+        group_role={"role": "core.domain_viewer", "domain": None, "content_object": domain.pulp_href},
+    )
+    pulpcore_bindings.GroupsRolesApi.create(
+        lightwell_readonly_group.pulp_href,
+        group_role={"role": "service.domain_viewer", "domain": domain.pulp_href, "content_object": None},
+    )
+
     repos_url = urljoin(bindings_cfg.host, f"/api/pulp/{LIGHTWELL_DOMAIN_NAME}/api/v3/repositories/file/file/")
     pypi_url = urljoin(bindings_cfg.host, f"/api/pypi/{LIGHTWELL_DOMAIN_NAME}/{pypi_base_path}/simple/")
 
@@ -169,21 +194,24 @@ def gen_readonly_group_member(pulpcore_bindings, gen_object_with_cleanup, lightw
 
 
 def test_readonly_group_member_can_read_lightwell_repositories(configure_lightwell_domain, gen_readonly_group_member):
-    """A user with no DomainOrg association, whose only access path is membership in the
-    hardcoded read-only group, can list repositories in the lightwell domain."""
+    """A user with no DomainOrg association, whose only access path is the read-only group's
+    RBAC roles on the lightwell domain, can list repositories in the lightwell domain and
+    actually sees them (the domain-scoped service.domain_viewer role scopes them in)."""
     repos_url, _, _ = configure_lightwell_domain
     headers = {"x-rh-identity": gen_readonly_group_member("read")}
 
     response = requests.get(repos_url, headers=headers, timeout=30)
 
     assert response.status_code == 200
+    assert response.json()["count"] >= 1
 
 
 def test_non_member_denied_reading_lightwell_repositories(
     configure_lightwell_domain, gen_object_with_cleanup, pulpcore_bindings
 ):
-    """A user with no DomainOrg association and no read-only group membership gets 403 when
-    listing repositories in the lightwell domain."""
+    """A user with no DomainOrg association and no read-only group membership has no RBAC
+    role granting content access. Under the RBAC default the request is not denied outright;
+    it returns 200 with an empty, scoped list (no repositories leak)."""
     repos_url, _, _ = configure_lightwell_domain
     username = f"non-member-{uuid4()}"
     combined_username = _combined_username(GROUP_MEMBER_ORG_ID, username)
@@ -192,7 +220,8 @@ def test_non_member_denied_reading_lightwell_repositories(
 
     response = requests.get(repos_url, headers=headers, timeout=30)
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
 
 
 def test_readonly_group_member_write_denied(configure_lightwell_domain, gen_readonly_group_member):
@@ -219,23 +248,22 @@ def test_readonly_group_member_pypi_still_requires_feature(configure_lightwell_d
 
 
 def test_readonly_group_member_denied_on_other_domains(
-    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_readonly_group_member, bindings_cfg
+    pulpcore_bindings,
+    anonymous_user,
+    gen_object_with_cleanup,
+    gen_readonly_group_member,
+    bindings_cfg,
+    create_service_domain,
 ):
-    """Membership in the lightwell read-only group grants no access to domains other than
-    lightwell."""
+    """The read-only group's RBAC roles are scoped to the lightwell domain, so they grant no
+    access to other domains. Listing another domain's repositories returns 200 with an empty,
+    scoped list (no repositories leak)."""
     other_domain_owner_header = _identity_header("777777777", "other-domain-owner")
     domain_name = f"not-lightwell-{uuid4()}"
 
     with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = other_domain_owner_header
-        gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+        # After PULP-2120 non-admins create domains via the self-service endpoint, not DomainsApi.
+        create_service_domain(domain_name, identity_header=other_domain_owner_header)
         pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
 
     repos_url = urljoin(bindings_cfg.host, f"/api/pulp/{domain_name}/api/v3/repositories/file/file/")
@@ -243,14 +271,16 @@ def test_readonly_group_member_denied_on_other_domains(
 
     response = requests.get(repos_url, headers=headers, timeout=30)
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
 
 
 def test_readonly_group_member_sees_lightwell_domain_in_listing(
     configure_lightwell_domain, gen_readonly_group_member, pulpcore_bindings, anonymous_user
 ):
-    """The lightwell domain shows up in GET /domains/ for read-only group members, via
-    DomainBasedPermission.scope_queryset()."""
+    """The lightwell domain shows up in GET /domains/ for read-only group members, via the
+    object-level core.domain_viewer role the group holds on the domain (scoped in by
+    PulpServiceAccessPolicy.scope_queryset())."""
     del configure_lightwell_domain  # ensure the "lightwell" domain exists
     member_header = gen_readonly_group_member("domain-list")
 

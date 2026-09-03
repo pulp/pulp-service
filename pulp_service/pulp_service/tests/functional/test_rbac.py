@@ -35,16 +35,18 @@ class TestRBACAccessPoliciesRegistered:
         assert policy.creation_hooks is not None
         assert policy.queryset_scoping is not None
 
-    def test_domain_create_access_policy_exists(self, pulpcore_bindings):
+    def test_domain_create_has_no_access_policy(self, pulpcore_bindings):
+        # PULP-2120: CreateDomainView is a plain APIView guarded by IsAuthenticated, so no
+        # DEFAULT_ACCESS_POLICY is registered (AccessPolicyFromDB never runs on an APIView).
+        # Assert it stays absent so nobody re-adds inert, misleading policy config.
         policies = pulpcore_bindings.AccessPoliciesApi.list(viewset_name="domains/create")
-        assert policies.count == 1
+        assert policies.count == 0
 
-    def test_domain_migrate_access_policy_exists(self, pulpcore_bindings):
+    def test_domain_migrate_has_no_access_policy(self, pulpcore_bindings):
+        # PULP-2120: MigrateDomainView authz is enforced by an explicit has_perm check, not a
+        # policy dict. Assert no access policy is registered for it.
         policies = pulpcore_bindings.AccessPoliciesApi.list(viewset_name="domains/migrate")
-        assert policies.count == 1
-        policy = policies.results[0]
-        actions = [s["action"] for s in policy.statements]
-        assert ["create"] in actions
+        assert policies.count == 0
 
 
 @pytest.mark.parallel
