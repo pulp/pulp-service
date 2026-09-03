@@ -73,7 +73,7 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/content/__init__.py`
 - **Description:** Converts the content app heartbeat from an async coroutine to a synchronous thread with a shutdown event. Replaces `asyncio.sleep` with `threading.Event.wait` and async ORM calls with synchronous ones.
 
-### 0047 — Improve repair_metadata log with repo and package names
+
 
 - **Package:** pulp_python
 - **Files:** `pulp_python/app/tasks/repair.py`
