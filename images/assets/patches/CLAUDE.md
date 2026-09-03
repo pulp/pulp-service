@@ -73,12 +73,6 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/content/__init__.py`
 - **Description:** Converts the content app heartbeat from an async coroutine to a synchronous thread with a shutdown event. Replaces `asyncio.sleep` with `threading.Event.wait` and async ORM calls with synchronous ones.
 
-
-
-- **Package:** pulp_python
-- **Files:** `pulp_python/app/tasks/repair.py`
-- **Description:** Enhances the repair metadata task log message to include the repository name and resolved package names (name-version) instead of raw PKs, making repair logs actionable.
-
 ### 0048 — Re-enable attestation verification with vendored Konflux key
 
 - **Package:** pulp_python
