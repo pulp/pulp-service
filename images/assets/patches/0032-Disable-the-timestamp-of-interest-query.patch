@@ -4,19 +4,20 @@ Date: Fri, 5 Dec 2025 09:06:15 -0300
 Subject: [PATCH] Disable the timestamp of interest query
 
 ---
- pulpcore/app/models/content.py | 24 +++---------------------
- 1 file changed, 3 insertions(+), 21 deletions(-)
+ pulpcore/app/models/content.py | 21 +++------------------
+ 1 file changed, 3 insertions(+), 18 deletions(-)
 
 diff --git a/pulpcore/app/models/content.py b/pulpcore/app/models/content.py
 index 4a6cf2bc3..8e8aedeb4 100644
 --- a/pulpcore/app/models/content.py
 +++ b/pulpcore/app/models/content.py
-@@ -105,27 +105,9 @@ class BulkTouchQuerySet(models.QuerySet):
- 
+@@ -105,26 +105,9 @@
+
      def touch(self):
          """
--        Update the ``timestamp_of_interest`` on all objects of the query.
--        """
+-        Update the `timestamp_of_interest` on all objects of the query.
++        ref: https://issues.redhat.com/browse/PULP-1001
+         """
 -
 -        # Postgres' UPDATE call doesn't support order-by. This can (and does) result in deadlocks in
 -        # high-concurrency environments, when using touch() on overlapping data sets. In order to
@@ -35,13 +36,10 @@ index 4a6cf2bc3..8e8aedeb4 100644
 -                .select_for_update(skip_locked=True, no_key=True)
 -            )
 -            self.filter(pk__in=sub_q).update(timestamp_of_interest=now())
--
-+        ref: https://issues.redhat.com/browse/PULP-1001
-+        """
 +        return 1
- 
+
+
  class QueryMixin:
-     """
--- 
+--
 2.46.2
 
