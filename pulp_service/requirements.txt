@@ -2,7 +2,7 @@ pulpcore==3.117.0
 pulp-rpm==3.38.5
 solv>=0.7.21,<0.7.38
 pulp-python==3.36.0
-pulp-npm==0.10.0
+pulp-npm==0.10.1
 pulp-container==2.29.0
 pulp-maven==0.26.0
 pulp-cli
