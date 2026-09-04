@@ -7,7 +7,7 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.112.0             |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.117.1             |
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.36.0              |
@@ -30,12 +30,6 @@ The custom OCI storage backend (`OCIStorage`, ORAS client, Quay.io blob storage)
 The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
-
-### 0014 — Add Content Sources periodic telemetry task
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/tasking/_util.py`
-- **Description:** Imports and registers `content_sources_periodic_telemetry` and `rhel_ai_repos_periodic_telemetry` tasks from pulp-service so they run on worker startup.
 
 ### 0018 — Re-root the registry API at /api/pulp/v2/
 
@@ -85,8 +79,26 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/app/serializers/repository.py`
 - **Description:** Skips the content unit existence check and timestamp-of-interest update when adding more than 10,000 content units to a repository version, avoiding client request timeouts on large batch operations.
 
-### 0056 — Repository publication delete
+### 0058 — Fix migrate backend task
 
 - **Package:** pulpcore
-- **Files:** `pulpcore/app/models/repository.py`
-- **Description:** Optimizes repository deletion by materializing publication PKs before deleting published artifacts and switching to batched deletes (500 per batch) to limit WAL size in PostgreSQL.
+- **Files:** `pulpcore/app/tasks/migrate.py`
+- **Description:** Fixes the storage backend migration task to handle artifacts that fail to migrate gracefully, collecting skipped items instead of raising a `ValidationError` on first failure.
+
+### 0059 — Add content negotiation and JSON listing to the content app
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/models/publication.py`, `pulpcore/cache/__init__.py`, `pulpcore/cache/cache.py`, `pulpcore/content/handler.py`
+- **Description:** Adds content negotiation to the content app so clients requesting `application/json` receive a JSON directory listing instead of a file download. Extends the cache layer to handle the new response type.
+
+### 0060 — Add content_handler_json to PythonDistribution
+
+- **Package:** pulp_python
+- **Files:** `pulp_python/app/models.py`, `pulp_python/app/utils.py`
+- **Description:** Implements `content_handler_json` on `PythonDistribution` to serve JSON-formatted package metadata responses when clients request `application/json` via the content app.
+
+### 0062 — Add If-Modified-Since header support
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/cache/cache.py`, `pulpcore/content/handler.py`
+- **Description:** Adds `If-Modified-Since` request header handling to the content app so clients receive `304 Not Modified` responses when cached content has not changed, reducing unnecessary data transfer.
