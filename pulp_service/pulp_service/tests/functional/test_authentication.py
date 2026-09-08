@@ -120,9 +120,10 @@ def test_get_requests_without_auth_to_simple_api(
     python_bindings,
     gen_object_with_cleanup,
 ):
-    """Test that all domains (other than "lightwell") allow GET requests without
-    authentication but block other methods. The "lightwell" domain is excluded from this
-    behavior -- see test_content_guard_permission.py.
+    """Test that public domains allow GET requests without authentication but block other methods.
+
+    Private domains receive a default identity content guard and are covered by
+    ``test_content_guard_permission.py``.
     """
     # Create a user with credentials to set up the domain
     setup_user = {
@@ -135,8 +136,8 @@ def test_get_requests_without_auth_to_simple_api(
 
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
 
-        # Create a domain (any domain, not necessarily public-)
-        domain_name = str(uuid4())
+        # Create a public domain.
+        domain_name = f"public-{uuid4()}"
         gen_object_with_cleanup(
             pulpcore_bindings.DomainsApi,
             {
