@@ -270,7 +270,8 @@ class DebugAuthenticationHeadersView(APIView):
         else:
             response_data["x_rh_identity"] = None
 
-        response_data["x_pulp_vpn_access"] = request.headers.get("X-Pulp-VPN-Access")
+        response_data["x_pulp_vpn_verified"] = request.headers.get("X-Pulp-VPN-Verified")
+        response_data["x_pulp_vpn_access_present"] = "X-Pulp-VPN-Access" in request.headers
 
         response_data["client_ip_headers"] = {
             "true_client_ip": request.headers.get("True-Client-IP"),

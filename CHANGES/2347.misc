@@ -1,0 +1,1 @@
+* Report the trusted VPN assertion in the stage-only authentication debug endpoint without exposing the VPN access secret.
