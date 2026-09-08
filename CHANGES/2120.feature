@@ -1,0 +1,1 @@
+Switched the default DRF permission class from ``DomainBasedPermission`` to ``PulpServiceAccessPolicy`` (RBAC). ``CreateDomainView`` and ``MigrateDomainView`` now require authentication and enforce object-level ``core.change_domain`` for migration.
