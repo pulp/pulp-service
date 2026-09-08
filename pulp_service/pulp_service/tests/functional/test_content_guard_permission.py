@@ -193,15 +193,14 @@ def test_non_pypi_endpoints_unaffected_by_content_guard(configure_guarded_pypi_d
     assert response.status_code == 403
 
 
-def test_unguarded_distribution_allows_unauthenticated_access(configure_pypi_distribution):
-    """Distributions without content guards allow any SAFE_METHOD request, included
-    unauthenticated -- the pre-existing behavior."""
-    domain_name = f"unguarded-{uuid4()}"
+def test_non_public_distribution_denies_unauthenticated_access(configure_pypi_distribution):
+    """New non-public distributions inherit the domain's identity content guard."""
+    domain_name = f"private-{uuid4()}"
     _, pypi_url, _, _ = configure_pypi_distribution(domain_name)
 
     response = requests.get(pypi_url, timeout=30)
 
-    assert response.status_code == 200
+    assert response.status_code in (401, 403)
 
 
 def test_public_domain_allows_unauthenticated_pypi_access(configure_pypi_distribution):
