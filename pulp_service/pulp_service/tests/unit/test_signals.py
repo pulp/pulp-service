@@ -32,21 +32,20 @@ def domain_creation_context():
 
 
 @patch("pulp_service.app.signals.transaction.atomic", return_value=nullcontext())
-@patch("pulp_service.app.signals._assign_domain_roles")
+@patch("pulp_service.app.signals._assign_domain_roles", new=MagicMock())
 @patch("pulp_service.app.signals.Group.objects.get_or_create")
 @patch("pulp_service.app.signals.Group.objects.filter")
 @patch("pulp_service.app.signals.DomainOrg.objects.create")
 @patch("pulp_service.app.signals.get_user_model")
 @patch("pulp_service.app.signals.HeaderContentGuard.objects.create")
+@pytest.mark.usefixtures("domain_creation_context")
 def test_domain_creation_provisions_identity_header_guard(
     create,
     get_user_model,
     domain_org_create,
     group_filter,
     group_get_or_create,
-    assign_domain_roles,
     _atomic,
-    domain_creation_context,
 ):
     domain = SimpleNamespace(name="tenant", save=MagicMock())
     user = SimpleNamespace(groups=MagicMock())
@@ -73,21 +72,20 @@ def test_domain_creation_provisions_identity_header_guard(
 
 
 @patch("pulp_service.app.signals.transaction.atomic", return_value=nullcontext())
-@patch("pulp_service.app.signals._assign_domain_roles")
+@patch("pulp_service.app.signals._assign_domain_roles", new=MagicMock())
 @patch("pulp_service.app.signals.Group.objects.get_or_create")
 @patch("pulp_service.app.signals.Group.objects.filter")
 @patch("pulp_service.app.signals.DomainOrg.objects.create")
 @patch("pulp_service.app.signals.get_user_model")
 @patch("pulp_service.app.signals.HeaderContentGuard.objects.create")
+@pytest.mark.usefixtures("domain_creation_context")
 def test_public_domain_creation_skips_identity_header_guard(
     create,
     get_user_model,
     domain_org_create,
     group_filter,
     group_get_or_create,
-    assign_domain_roles,
     _atomic,
-    domain_creation_context,
 ):
     domain = SimpleNamespace(name="public-tenant", save=MagicMock())
     user = SimpleNamespace(groups=MagicMock())
