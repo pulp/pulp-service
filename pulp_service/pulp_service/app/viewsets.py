@@ -17,7 +17,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException
 from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin
-from rest_framework.permissions import BasePermission, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -41,13 +41,7 @@ from pulpcore.plugin.viewsets import (
 from pulp_service.app.authentication import (
     RHTermsBasedRegistryAuthentication,
 )
-from pulp_service.app.authorization import (
-    IsAdminOrAdminReadOnly,
-    group_var,
-    org_id_var,
-    set_domain_create_context,
-    user_id_var,
-)
+from pulp_service.app.authorization import DomainBasedPermission, IsAdminOrAdminReadOnly, group_var
 from pulp_service.app.content_view_viewsets import (  # noqa: F401
     ContentViewFilter,
     ContentViewViewSet,
@@ -437,6 +431,7 @@ class PyPIYankMonitorViewSet(
     queryset = PyPIYankMonitor.objects.all()
     serializer_class = PyPIYankMonitorSerializer
     filterset_class = PyPIYankMonitorFilter
+    permission_classes = [DomainBasedPermission]
     queryset_filtering_required_permission = "service.view_pypiyankmonitor"
 
     DEFAULT_ACCESS_POLICY = {
@@ -2121,10 +2116,13 @@ class CreateDomainView(APIView):
     """
 
     action = "create"
-    # Authz is enforced by permission_classes below: any authenticated user may self-service
-    # create a domain. No DEFAULT_ACCESS_POLICY here on purpose -- this is a plain APIView, so
-    # AccessPolicyFromDB never runs and a policy dict would be inert (misleading) config.
-    permission_classes = [IsAuthenticated]
+    permission_classes = [DomainBasedPermission]
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["create"], "principal": "authenticated", "effect": "allow"},
+        ],
+    }
 
     @classmethod
     def urlpattern(cls):
@@ -2184,50 +2182,39 @@ class CreateDomainView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # The post_create_domain signal consumes group_var/org_id_var/user_id_var and resets
-        # them, but it only fires on a successful Domain INSERT. If anything below fails first,
-        # the values would linger in this (sync WSGI) worker's context and be misread by the
-        # next domain-create request that doesn't set them itself. Reset in finally so a
-        # failure can't leak this request's principal/org into another.
+        group_var.set(group)
+
+        # Prepare data with defaults from default domain if needed
+        data = request.data.copy()
+
+        # Always get storage settings from model domain (ignore user input)
         try:
-            group_var.set(group)
-            set_domain_create_context(request)
+            model_domain = Domain.objects.get(name="template-domain-s3")
+            data["storage_settings"] = model_domain.storage_settings
+            data["storage_class"] = model_domain.storage_class
+            data["pulp_labels"] = model_domain.pulp_labels
+        except Domain.DoesNotExist:
+            _logger.exception("Model domain 'template-domain-s3' not found")
+            return Response(
+                {
+                    "error": (
+                        "Model domain 'template-domain-s3' not found. "
+                        "Please create it first with correct storage settings."
+                    )
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
-            # Prepare data with defaults from default domain if needed
-            data = request.data.copy()
+        serializer = DomainSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
 
-            # Always get storage settings from model domain (ignore user input)
-            try:
-                model_domain = Domain.objects.get(name="template-domain-s3")
-                data["storage_settings"] = model_domain.storage_settings
-                data["storage_class"] = model_domain.storage_class
-                data["pulp_labels"] = model_domain.pulp_labels
-            except Domain.DoesNotExist:
-                _logger.exception("Model domain 'template-domain-s3' not found")
-                return Response(
-                    {
-                        "error": (
-                            "Model domain 'template-domain-s3' not found. "
-                            "Please create it first with correct storage settings."
-                        )
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
+        # Perform the creation with validated data
+        with transaction.atomic():
+            domain = serializer.save()
 
-            serializer = DomainSerializer(data=data)
-            serializer.is_valid(raise_exception=True)
+        response_data = DomainSerializer(domain, context={"request": request}).data
 
-            # Perform the creation with validated data
-            with transaction.atomic():
-                domain = serializer.save()
-
-            response_data = DomainSerializer(domain, context={"request": request}).data
-
-            return Response(response_data, status=status.HTTP_201_CREATED)
-        finally:
-            group_var.set(None)
-            org_id_var.set(None)
-            user_id_var.set(None)
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class MigrateDomainView(APIView):
@@ -2240,12 +2227,17 @@ class MigrateDomainView(APIView):
     """
 
     action = "create"
-    # Object-level authz is enforced explicitly in post() via
-    # request.user.has_perm("core.change_domain", domain). No DEFAULT_ACCESS_POLICY here on
-    # purpose -- this is a plain APIView, so AccessPolicyFromDB never runs and a policy dict
-    # (e.g. a has_model_or_domain_or_obj_perms condition) would be inert config that could
-    # mislead a maintainer into removing the real guard.
-    permission_classes = [IsAuthenticated]
+    permission_classes = [DomainBasedPermission]
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+            },
+        ],
+    }
 
     @classmethod
     def urlpattern(cls):
@@ -2286,12 +2278,6 @@ class MigrateDomainView(APIView):
             return Response(
                 {"error": f"Domain '{domain_name}' not found."},
                 status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if not request.user.has_perm("core.change_domain", domain):
-            return Response(
-                {"error": "You do not have permission to migrate this domain."},
-                status=status.HTTP_403_FORBIDDEN,
             )
 
         if domain.name == "default":
