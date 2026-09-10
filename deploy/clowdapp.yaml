@@ -444,7 +444,7 @@ objects:
         triggers:
           - type: prometheus
             metadata:
-              serverAddress: http://prometheus-app-sre.openshift-customer-monitoring.svc.cluster.local:9090
+              serverAddress: ${KEDA_PROMETHEUS_SERVER_ADDRESS}
               metricName: pulp_api_active_connections
               query: avg(sum by (pod) (pulp_api_active_connections))
               threshold: '4'         # target ~4 concurrent requests per pod
@@ -711,7 +711,7 @@ objects:
         triggers:
           - type: prometheus
             metadata:
-              serverAddress: http://prometheus-app-sre.openshift-customer-monitoring.svc.cluster.local:9090
+              serverAddress: ${KEDA_PROMETHEUS_SERVER_ADDRESS}
               metricName: pulp_waiting_tasks
               query: clamp_min(pulp_waiting_tasks and on(pod) topk(1, max(timestamp(pulp_waiting_tasks)) by (pod)), 0)
               threshold: '1'
@@ -1568,6 +1568,9 @@ parameters:
   - name: PULP_API_REPLICAS
     description: Number of pulp api replicas
     value: "1"
+  - name: KEDA_PROMETHEUS_SERVER_ADDRESS
+    description: Prometheus server address for KEDA ScaledObject triggers
+    value: "http://app-sre-prometheus.app-sre-observability-per-cluster.svc.cluster.local:9090"
   - name: PULP_API_MIN_REPLICA_COUNT
     description: Minimal number of pulp api replicas
     value: "1"
