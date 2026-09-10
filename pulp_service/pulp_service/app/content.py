@@ -3,8 +3,11 @@ import json
 from base64 import b64decode
 
 from aiohttp import web
+from django.conf import settings
 from frozenlist import FrozenList
 
+from pulpcore.app.util import get_worker_name
+from pulpcore.metrics import init_otel_meter
 from pulpcore.plugin.content import app
 
 
@@ -127,4 +130,38 @@ async def add_rh_org_id_resp_header(request, handler):
     return response
 
 
-app._middlewares = FrozenList([add_true_client_ip_to_forwarded_for, add_rh_org_id_resp_header, *app.middlewares])
+def track_active_connections(counter):
+    """Return aiohttp middleware that tracks in-flight HTTP connections."""
+
+    @web.middleware
+    async def middleware(request, handler):
+        worker_attributes = {"worker.name": get_worker_name()}
+        counter.add(1, attributes=worker_attributes)
+        try:
+            return await handler(request)
+        finally:
+            counter.add(-1, attributes=worker_attributes)
+
+    return middleware
+
+
+if settings.OTEL_ENABLED:
+    _content_meter = init_otel_meter("pulp-content")
+    _active_connections_counter = _content_meter.create_up_down_counter(
+        name="content.active_connections",
+        description="Tracks the number of active/concurrent HTTP connections",
+        unit="1",
+    )
+    _active_connections_middlewares = [track_active_connections(_active_connections_counter)]
+else:
+    _active_connections_middlewares = []
+
+
+app._middlewares = FrozenList(
+    [
+        add_true_client_ip_to_forwarded_for,
+        add_rh_org_id_resp_header,
+        *_active_connections_middlewares,
+        *app.middlewares,
+    ]
+)
