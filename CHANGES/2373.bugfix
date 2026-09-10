@@ -1,0 +1,1 @@
+Large artifacts are redirected to object storage for domains that have object-storage redirects disabled.
