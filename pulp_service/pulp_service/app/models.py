@@ -39,6 +39,14 @@ class DomainOrg(models.Model):
         null=True,
     )
 
+    class Meta:
+        permissions = [
+            (
+                "view_orphan_content",
+                "Can view repository-less (orphan) content in a domain",
+            ),
+        ]
+
     def __str__(self):
         return f"DomainOrg(org_id={self.org_id})"
 
