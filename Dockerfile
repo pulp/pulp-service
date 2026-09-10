@@ -154,6 +154,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0062-Add-if-modified-since-header-support.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0062-Add-if-modified-since-header-support.patch
 
+COPY images/assets/patches/0063-Redirect-large-artifacts-to-object-storage.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0063-Redirect-large-artifacts-to-object-storage.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
