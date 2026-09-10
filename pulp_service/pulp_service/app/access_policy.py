@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS
 
-from pulpcore.app.access_policy import AccessPolicyFromDB
+from pulpcore.app.access_policy import AccessPolicyFromSettings
 from pulpcore.plugin.models import Domain
 from pulpcore.plugin.util import get_domain_pk
 
@@ -18,10 +18,16 @@ _logger = logging.getLogger(__name__)
 _org_id_json_path = jq.compile(".identity.internal.org_id")
 
 
-class PulpServiceAccessPolicy(AccessPolicyFromDB):
+class PulpServiceAccessPolicy(AccessPolicyFromSettings):
     """
     Access policy for pulp-service that layers cross-cutting permission checks
-    on top of pulpcore's standard RBAC evaluation.
+    on top of pulpcore's settings-based RBAC evaluation.
+
+    Inheriting from AccessPolicyFromSettings makes get_access_policy read each
+    viewset's policy from settings.ACCESS_POLICIES[<urlpattern>], falling back to
+    the viewset's DEFAULT_ACCESS_POLICY. The content list-all endpoint (urlpattern
+    "content") is overridden in settings to gate reads on core.view_content and drop
+    repository-based queryset scoping.
 
     Pre-check order:
         1. Superuser bypass
