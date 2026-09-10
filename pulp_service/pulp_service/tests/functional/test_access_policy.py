@@ -149,7 +149,7 @@ class TestPyPIContentGuardDelegation:
         assert result is None
 
     def test_pypi_view_no_content_guard_allowed(self):
-        """PyPI view with no content guard - allow."""
+        """A distribution with no effective content guard allows SAFE_METHOD access."""
         from pulp_python.app.pypi.views import PyPIMixin
 
         policy = PulpServiceAccessPolicy()

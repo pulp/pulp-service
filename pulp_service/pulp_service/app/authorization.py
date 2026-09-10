@@ -73,8 +73,9 @@ class DomainBasedPermission(BasePermission):
 
         If the distribution has a content guard, access is gated by guard.cast().permit():
         users with a DomainOrg association bypass the guard (domain owner privilege);
-        everyone else must satisfy the guard. Distributions without a content guard allow
-        all SAFE_METHOD access (the pre-existing default behavior).
+        everyone else must satisfy the guard. Newly created distributions without an
+        explicit content guard can inherit their domain's default content guard; a
+        distribution with no effective guard allows all SAFE_METHOD access.
         """
         from pulp_python.app.pypi.views import PyPIMixin
 
