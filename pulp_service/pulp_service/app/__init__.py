@@ -56,11 +56,17 @@ def _populate_domain_view_access_policies(sender, apps, **kwargs):  # noqa: ARG0
 
 def _populate_service_roles(sender, apps, **kwargs):  # noqa: ARG001
     """Create/update service.domain_admin and service.domain_viewer roles with plugin permissions."""
-    # Only run for the service app's own migration. pulp_service depends on all plugins, so by the
-    # time it migrates every plugin's permissions exist. Running once (instead of once per plugin)
-    # avoids repeated permissions.set() DELETE+INSERT windows that cause 403s during rolling upgrades.
-    if sender.label != "service":
-        return
+    # Runs on every plugin's post_migrate (not just service's). Django emits post_migrate in
+    # app-registry order, and each app's permissions are created by its own post_migrate; plugins
+    # that emit after service (e.g. file, certguard) would otherwise not yet exist when service
+    # migrates, leaving service.domain_admin missing their permissions (e.g. file.add_filerepository)
+    # on a fresh single migrate. Re-running for each plugin guarantees the roles hold the complete
+    # permission set once the last plugin has migrated. Each rebuild is wrapped in a transaction so
+    # readers never observe a partially-populated role during a rolling upgrade.
+    from django.apps import apps as django_apps
+    from django.db import transaction
+
+    from pulpcore.plugin import PulpPluginAppConfig
 
     try:
         Role = apps.get_model("core", "Role")
@@ -68,22 +74,19 @@ def _populate_service_roles(sender, apps, **kwargs):  # noqa: ARG001
     except LookupError:
         return
 
-    from django.apps import apps as django_apps
-
-    from pulpcore.plugin import PulpPluginAppConfig
-
     plugin_labels = {ac.label for ac in django_apps.get_app_configs() if isinstance(ac, PulpPluginAppConfig)}
     all_permissions = Permission.objects.filter(content_type__app_label__in=plugin_labels)
 
-    admin_role, _ = Role.objects.update_or_create(
-        name="service.domain_admin",
-        defaults={"locked": False, "description": "Admin role for all domain-level plugin permissions."},
-    )
-    admin_role.permissions.set(all_permissions)
+    with transaction.atomic():
+        admin_role, _ = Role.objects.update_or_create(
+            name="service.domain_admin",
+            defaults={"locked": False, "description": "Admin role for all domain-level plugin permissions."},
+        )
+        admin_role.permissions.set(all_permissions)
 
-    view_permissions = all_permissions.filter(codename__startswith="view")
-    viewer_role, _ = Role.objects.update_or_create(
-        name="service.domain_viewer",
-        defaults={"locked": False, "description": "Viewer role for all domain-level view permissions."},
-    )
-    viewer_role.permissions.set(view_permissions)
+        view_permissions = all_permissions.filter(codename__startswith="view")
+        viewer_role, _ = Role.objects.update_or_create(
+            name="service.domain_viewer",
+            defaults={"locked": False, "description": "Viewer role for all domain-level view permissions."},
+        )
+        viewer_role.permissions.set(view_permissions)
