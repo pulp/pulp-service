@@ -46,3 +46,24 @@ DRF_ACCESS_POLICY = {
     "dynaconf_merge_unique": True,
     "reusable_conditions": ["pulp_service.app.access_conditions"],
 }
+
+# Settings-based access policy read by PulpServiceAccessPolicy (which inherits from
+# pulpcore's AccessPolicyFromSettings). Each key is a viewset urlpattern; "content" is
+# pulpcore's ListContentViewSet (the list-all content endpoint). Only takes effect under
+# RBAC (when PulpServiceAccessPolicy is the active permission class). Gating the list
+# action on the domain-scoped core.view_content permission and dropping queryset_scoping
+# lets a domain member see all content in their domain (including orphan content they
+# pushed) while non-members get 403.
+ACCESS_POLICIES = {
+    "content": {
+        "statements": [
+            {
+                "action": ["list"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_domain_perms:core.view_content",
+            },
+        ],
+        "queryset_scoping": None,
+    },
+}
