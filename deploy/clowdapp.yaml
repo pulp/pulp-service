@@ -122,6 +122,7 @@ objects:
       DB_NAME=$(cat /cdapp/cdappconfig.json | jq -r '.database.name')
       DB_USER=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminUsername')
       DB_PASSWORD=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminPassword')
+      DB_REPLICA_HOST=${PULP_DB_REPLICA_HOST:-}
       
       ENV_NAME=$(cat /cdapp/cdappconfig.json | ./jq -r '.metadata.envName')
 
@@ -189,7 +190,15 @@ objects:
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
       EOF
-      
+      if [ -n "$DB_REPLICA_HOST" ]; then
+        cat <<EOF >> /tmp/settings.py
+      DATABASES["replica"] = {
+          **DATABASES["default"],
+          "HOST": "$DB_REPLICA_HOST",
+      }
+      EOF
+      fi
+
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
       oc apply -f-<<EOF
       ---
@@ -581,6 +590,8 @@ objects:
             value: ${PULP_DOMAIN_ENABLED}
           - name: PULP_ALLOWED_CONTENT_CHECKSUMS
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
+          - name: PULP_DATABASE_ROUTERS
+            value: "['pulp_service.app.database_router.ContentReplicaRouter']"
           - name: PULP_FEATURE_SERVICE_API_CERT_PATH
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_FEATURE_SERVICE_API_URL
@@ -798,6 +809,13 @@ objects:
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ 'bash', '-x', '/tmp/config.sh' ]
+          env:
+            - name: PULP_DB_REPLICA_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: pulp-stage-db-readonly
+                  key: db.host
+                  optional: true
           volumes:
             - name: config-sh
               configMap:
