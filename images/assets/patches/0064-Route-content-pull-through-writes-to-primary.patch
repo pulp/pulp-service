@@ -1,0 +1,75 @@
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index ad64138..e34454d 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -5,6 +5,7 @@ import os
+ import re
+ import socket
+ import struct
++from contextlib import nullcontext
+ from datetime import datetime, timedelta
+ from datetime import timezone as dt_timezone
+ from gettext import gettext as _
+@@ -67,6 +68,8 @@ from pulpcore.exceptions import (  # noqa: E402
+ )
+ from pulpcore.metrics import artifacts_size_counter  # noqa: E402
+ 
++from pulp_service.app.database_router import use_primary_database  # noqa: E402
++
+ log = logging.getLogger(__name__)
+ 
+ LARGE_FILE_REDIRECT_THRESHOLD = 1_700_000_000
+@@ -1186,13 +1189,18 @@ class Handler:
+                     ca = ContentArtifact(relative_path=original_rel_path)
+                     ra = RemoteArtifact(remote=remote, url=url, content_artifact=ca)
+                     try:
+-                        return await self._stream_remote_artifact(
+-                            request,
+-                            StreamResponse(headers=headers),
+-                            ra,
+-                            save_artifact=save_artifact,
+-                            repository=repository,
+-                        )
++                        with (
++                            use_primary_database()
++                            if save_artifact
++                            else nullcontext()
++                        ):
++                            return await self._stream_remote_artifact(
++                                request,
++                                StreamResponse(headers=headers),
++                                ra,
++                                save_artifact=save_artifact,
++                                repository=repository,
++                            )
+                     except ClientResponseError as ce:
+ 
+                         class Error(HTTPError):
+@@ -1251,9 +1259,14 @@ class Handler:
+         async for remote_artifact in remote_artifacts:
+             try:
+                 save_artifact = remote_artifact.remote.policy != Remote.STREAMED
+-                response = await self._stream_remote_artifact(
+-                    request, response, remote_artifact, save_artifact=save_artifact
+-                )
++                with (
++                    use_primary_database()
++                    if save_artifact
++                    else nullcontext()
++                ):
++                    response = await self._stream_remote_artifact(
++                        request, response, remote_artifact, save_artifact=save_artifact
++                    )
+                 return response
+             except SKIPPABLE_EXCEPTIONS as e:
+                 log.warning(
+@@ -1597,7 +1610,8 @@ class Handler:
+             )
+         except DigestValidationError:
+             remote_artifact.failed_at = timezone.now()
+-            await remote_artifact.asave()
++            with use_primary_database():
++                await remote_artifact.asave()
+             close_tcp_connection(request.transport._sock)
+             REMOTE_CONTENT_FETCH_FAILURE_COOLDOWN = settings.REMOTE_CONTENT_FETCH_FAILURE_COOLDOWN
+             raise RuntimeError(

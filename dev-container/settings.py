@@ -17,6 +17,8 @@ DATABASES = {
     }
 }
 
+DATABASE_ROUTERS = ["pulp_service.app.database_router.ContentReplicaRouter"]
+
 REDIS_URL = "redis://localhost:6379/0"
 CACHE_ENABLED = True
 WORKER_TYPE = "redis"
