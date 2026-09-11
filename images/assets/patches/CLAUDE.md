@@ -108,3 +108,9 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Adds a `LARGE_FILE_REDIRECT_THRESHOLD` (1.7 GB) so that artifacts exceeding the threshold are always redirected to object storage, even when `domain.redirect_to_object_storage` is False. Prevents large file downloads from being served directly through the content app.
+
+### 0064 — Allow viewing orphan content with view_orphan_content permission
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/viewsets/content.py`
+- **Description:** Extends `BaseContentViewSet.scope_queryset` so a non-superuser holding the domain-scoped `service.view_orphan_content` permission can also see repository-less (orphan) content in their domain — e.g. a package they just uploaded but have not yet added to a repository. Without this, RBAC queryset scoping (which is repository-membership based) hides just-uploaded content and read-after-upload returns 404. The `service.view_orphan_content` permission is defined in pulp-service and granted domain-scoped via the `service.domain_admin` / `service.domain_viewer` roles.

@@ -1,0 +1,26 @@
+diff --git a/pulpcore/app/viewsets/content.py b/pulpcore/app/viewsets/content.py
+index a23ad0e13..3f14fe4a1 100644
+--- a/pulpcore/app/viewsets/content.py
++++ b/pulpcore/app/viewsets/content.py
+@@ -174,11 +174,20 @@ class BaseContentViewSet(NamedModelViewSet):
+                 setattr(repo_viewset, "request", self.request)
+                 scoped_repos.extend(repo_viewset.get_queryset().values_list("pk", flat=True))
+ 
++            scoped = models.Q(repositories__in=scoped_repos)
++            # pulp-service: users holding the domain-scoped "service.view_orphan_content"
++            # permission may also see repository-less (orphan) content in their domain,
++            # e.g. a package they just uploaded but have not yet added to a repository.
++            if self.request.user.has_perm(
++                "service.view_orphan_content", obj=self.request.pulp_domain
++            ):
++                scoped |= models.Q(repositories__isnull=True)
++
+             # calling the distinct clause at end of the query ensures that no duplicates from
+             # joined tables will be returned to the end-user; this behaviour is documented at
+             # https://docs.djangoproject.com/en/3.2/topics/db/queries, in the section Spanning
+             # multi-valued relationships
+-            return qs.filter(repositories__in=scoped_repos).distinct()
++            return qs.filter(scoped).distinct()
+         return qs
+ 
+ 
