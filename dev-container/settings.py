@@ -44,7 +44,7 @@ REST_FRAMEWORK__DEFAULT_AUTHENTICATION_CLASSES = (
 )
 
 REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES = (
-    "pulp_service.app.authorization.DomainBasedPermission",
+    "pulp_service.app.access_policy.PulpServiceAccessPolicy",
 )
 
 AUTHENTICATION_JSON_HEADER = "HTTP_X_RH_IDENTITY"

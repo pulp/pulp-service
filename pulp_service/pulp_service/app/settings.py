@@ -48,22 +48,27 @@ DRF_ACCESS_POLICY = {
 }
 
 # Settings-based access policy read by PulpServiceAccessPolicy (which inherits from
-# pulpcore's AccessPolicyFromSettings). Each key is a viewset urlpattern; "content" is
-# pulpcore's ListContentViewSet (the list-all content endpoint). Only takes effect under
-# RBAC (when PulpServiceAccessPolicy is the active permission class). Gating the list
-# action on the domain-scoped core.view_content permission and dropping queryset_scoping
-# lets a domain member see all content in their domain (including orphan content they
-# pushed) while non-members get 403.
+# pulpcore's AccessPolicyFromSettings). Each key is a viewset urlpattern: "content" is
+# pulpcore's generic ListContentViewSet (the list-all content endpoint) and
+# "content/file/files" is the typed FileContentViewSet. Only takes effect under RBAC (when
+# PulpServiceAccessPolicy is the active permission class). Gating the list action on the
+# domain-scoped core.view_content permission and dropping queryset_scoping lets a domain
+# member see all content in their domain (including orphan content they pushed) while
+# non-members get 403. Both the generic and typed endpoints need the override: the typed
+# viewset otherwise keeps pulpcore's repository-based queryset_scoping, which hides orphan
+# (not-in-a-repo) content and breaks read-after-upload on /content/file/files/.
+_CONTENT_LIST_POLICY = {
+    "statements": [
+        {
+            "action": ["list"],
+            "principal": "authenticated",
+            "effect": "allow",
+            "condition": "has_domain_perms:core.view_content",
+        },
+    ],
+    "queryset_scoping": None,
+}
 ACCESS_POLICIES = {
-    "content": {
-        "statements": [
-            {
-                "action": ["list"],
-                "principal": "authenticated",
-                "effect": "allow",
-                "condition": "has_domain_perms:core.view_content",
-            },
-        ],
-        "queryset_scoping": None,
-    },
+    "content": _CONTENT_LIST_POLICY,
+    "content/file/files": _CONTENT_LIST_POLICY,
 }
