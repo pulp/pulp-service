@@ -1,9 +1,24 @@
-Switched the default REST framework permission class from ``DomainBasedPermission`` to
-``PulpServiceAccessPolicy``, enabling RBAC as the default authorization backend. Users
-can now upload content into their domain and view it immediately via the content
-endpoints even when it is not in any repository (orphan content), because domain members
-hold the domain-scoped ``core.view_content`` permission through ``service.domain_admin``.
+Made RBAC the default authorization model by switching the default permission class from
+``DomainBasedPermission`` to ``PulpServiceAccessPolicy`` (in both the dev container and the
+production ClowdApp). Domain members can now upload content and view it immediately through
+the content endpoints -- including orphan content not yet in any repository -- because they
+hold ``core.view_content`` via ``service.domain_admin``.
 
-Fixed a read regression under RBAC where a caller with no role on a ``public-*`` domain
-received 404 when retrieving or listing its repositories/content. ``PulpServiceAccessPolicy``
-now honours the public-domain read bypass in ``scope_queryset`` as well as ``has_permission``.
+Turning RBAC on surfaced three issues, all fixed here:
+
+* The ``service.domain_admin`` / ``service.domain_viewer`` roles were seeded on the service
+  app's ``post_migrate`` alone, before later plugins (file, certguard) had created their
+  permissions, so a fresh migrate left the roles incomplete and domain owners got 403 creating
+  a repository. The roles are now rebuilt on every plugin's ``post_migrate``, each rebuild in a
+  transaction, so the full permission set is present once the last plugin has migrated.
+
+* Reads of a ``public-*`` domain by a caller with no role returned 404: ``has_permission``
+  allowed the read but ``scope_queryset`` filtered the object out. ``scope_queryset`` now
+  honours the public-domain read bypass too, returning 200 without exposing other domains.
+
+* Members of an org that owns a domain were locked out (404 on reads, 400 on uploads) when the
+  domain's ``rh-org-<org_id>`` group held no roles. This happens when the ``DomainOrg`` has a
+  null ``org_id`` (its create request carried no ``internal.org_id``), which skips the org
+  group's role grant while the team group still gets it. A data migration backfills these
+  domains, deriving the org from the team group's members and granting ``rh-org-<org_id>`` the
+  missing roles.
