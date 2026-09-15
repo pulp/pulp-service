@@ -108,3 +108,10 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Adds a `LARGE_FILE_REDIRECT_THRESHOLD` (1.7 GB) so that artifacts exceeding the threshold are always redirected to object storage, even when `domain.redirect_to_object_storage` is False. Prevents large file downloads from being served directly through the content app.
+
+### 0064 — Add ETag header support to content app
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** Adds `ETag` (sha256-based) and `Cache-Control: public, max-age=0, must-revalidate` headers to content app file responses, and handles `If-None-Match` requests with `304 Not Modified` to enable browser/CDN cache validation.
+- **Upstream:** Not upstreamed yet — candidate for pulpcore contribution (no upstream PR).
