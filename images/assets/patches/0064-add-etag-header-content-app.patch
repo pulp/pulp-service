@@ -1,0 +1,32 @@
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index 77c5cfea4..8cb4d00d2 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -17,6 +17,7 @@ from aiohttp.web_exceptions import (
+     HTTPFound,
+     HTTPMovedPermanently,
+     HTTPNotFound,
++    HTTPNotModified,
+     HTTPRequestRangeNotSatisfiable,
+ )
+ from asgiref.sync import sync_to_async
+@@ -1159,9 +1160,18 @@ class Handler:
+         Returns:
+             The [aiohttp.web.FileResponse][] for the file.
+         """
+-        artifact_file = content_artifact.artifact.file
++        artifact = content_artifact.artifact
++        artifact_file = artifact.file
+         content_length = artifact_file.size
+ 
++        etag = f'"{artifact.sha256}"'
++        headers["ETag"] = etag
++        headers["Cache-Control"] = "public, max-age=0, must-revalidate"
++
++        if_none_match = request.headers.get("If-None-Match")
++        if if_none_match and etag in {v.strip() for v in if_none_match.split(",")}:
++            raise HTTPNotModified(headers=headers)
++
+         try:
+             range_start, range_stop = request.http_range.start, request.http_range.stop
+             if range_start or range_stop:
