@@ -55,6 +55,7 @@ objects:
             set $upstream https://${UPSTREAM_HOST}:${UPSTREAM_PORT};
             proxy_pass $upstream;
             proxy_ssl_server_name on;
+            proxy_ssl_name ${PROXY_SERVER_NAME};
             proxy_set_header Host ${PROXY_SERVER_NAME};
             proxy_set_header X-Forwarded-Proto https;
             proxy_set_header X-Pulp-VPN-Access VPN_ACCESS_SECRET;
