@@ -40,6 +40,18 @@ objects:
           }
 
           location / {
+            return 404;
+          }
+        }
+
+        server {
+          listen 8443 ssl;
+          server_name ${PROXY_SERVER_NAME};
+
+          ssl_certificate /etc/nginx/tls/tls.crt;
+          ssl_certificate_key /etc/nginx/tls/tls.key;
+
+          location / {
             set $upstream https://${UPSTREAM_HOST}:${UPSTREAM_PORT};
             proxy_pass $upstream;
             proxy_ssl_server_name on;
@@ -100,13 +112,16 @@ objects:
               echo "ERROR: No nameserver found in /etc/resolv.conf" >&2
               exit 1
             fi
-            VPN_SECRET_B64=$(echo -n "${VPN_ACCESS_SECRET}" | base64 -w0)
             sed -e "s|NAMESERVER|${NAMESERVER}|g" \
-                -e "s|VPN_ACCESS_SECRET|${VPN_SECRET_B64}|g" \
+                -e "s|VPN_ACCESS_SECRET|${VPN_ACCESS_SECRET}|g" \
                 /opt/nginx-template/nginx.conf.tpl > /opt/nginx-rendered/nginx.conf
             exec nginx -c /opt/nginx-rendered/nginx.conf -g 'daemon off;'
           ports:
           - containerPort: 8080
+            name: http
+            protocol: TCP
+          - containerPort: 8443
+            name: https
             protocol: TCP
           resources:
             requests:
@@ -131,6 +146,9 @@ objects:
             mountPath: /opt/nginx-template
           - name: nginx-rendered
             mountPath: /opt/nginx-rendered
+          - name: nginx-tls
+            mountPath: /etc/nginx/tls
+            readOnly: true
           - name: nginx-cache
             mountPath: /var/cache/nginx
           - name: nginx-run
@@ -141,6 +159,9 @@ objects:
             name: pulp-vpn-proxy
         - name: nginx-rendered
           emptyDir: {}
+        - name: nginx-tls
+          secret:
+            secretName: ${TLS_SECRET_NAME}
         - name: nginx-cache
           emptyDir: {}
         - name: nginx-run
@@ -153,8 +174,9 @@ objects:
       app: pulp-vpn-proxy
   spec:
     ports:
-    - port: 8080
-      targetPort: 8080
+    - name: https
+      port: 8443
+      targetPort: https
       protocol: TCP
     selector:
       app: pulp-vpn-proxy
@@ -167,14 +189,13 @@ objects:
   spec:
     host: ${PROXY_SERVER_NAME}
     port:
-      targetPort: 8080
+      targetPort: https
     to:
       kind: Service
       name: pulp-vpn-proxy
       weight: 100
     tls:
-      termination: edge
-      insecureEdgeTerminationPolicy: Redirect
+      termination: passthrough
 parameters:
 - name: UPSTREAM_HOST
   description: Upstream hostname (Akamai CDN or direct cluster endpoint)
@@ -194,6 +215,9 @@ parameters:
 - name: NGINX_IMAGE_TAG
   description: Nginx container image tag
   value: "1"
+- name: TLS_SECRET_NAME
+  description: Secret containing the RHCS server certificate for nginx TLS termination
+  value: pulp-vpn-proxy-tls
 - name: CPU_REQUEST
   description: CPU request
   value: 100m

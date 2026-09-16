@@ -1,0 +1,1 @@
+Updated stage-only vpn proxy deployment to serve packages.stage.redhat.com over nginx TLS passthrough with a dedicated RHCS server certificate.
