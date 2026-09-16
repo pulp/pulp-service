@@ -1197,14 +1197,19 @@ spec:
                   fail("PR_AMBIGUOUS", f"merge_sha={merge_sha}; associated_prs={numbers}")
 
               pull = pulls[0]
-              pr_number = pull.get("number") if isinstance(pull, dict) else None
-              head = pull.get("head") if isinstance(pull, dict) else None
+              if not isinstance(pull, dict):
+                  fail("PR_PAYLOAD_INVALID", f"merge_sha={merge_sha}; expected PR object")
+              pr_number = pull.get("number")
+              head = pull.get("head")
+              merged_at = pull.get("merged_at")
               commit_sha = head.get("sha") if isinstance(head, dict) else None
               if (
-                  not isinstance(pr_number, int)
+                  isinstance(pr_number, bool)
+                  or not isinstance(pr_number, int)
                   or not isinstance(commit_sha, str)
                   or not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha)
-                  or not pull.get("merged_at")
+                  or not isinstance(merged_at, str)
+                  or not merged_at
               ):
                   fail(
                       "PR_PAYLOAD_INVALID",
@@ -1229,6 +1234,7 @@ spec:
               #!/usr/bin/env python3
               import json
               import os
+              import re
               import sys
               from datetime import datetime
 
@@ -1344,6 +1350,10 @@ spec:
                 response.raise_for_status()
                 payload = response.json()
                 latest_version = payload["info"]["version"]
+                if not isinstance(latest_version, str) or not re.fullmatch(
+                    r"\d{8}\.(?:0|[1-9]\d*)", latest_version
+                ):
+                  raise ValueError(f"invalid version {latest_version!r}")
               except requests.exceptions.RequestException as err:
                 print(f"ERROR[PyPI request]: {err}", file=sys.stderr)
                 sys.exit(1)
