@@ -28,7 +28,7 @@ objects:
       http {
         access_log /dev/stdout;
 
-        resolver NAMESERVER valid=10s;
+        resolver NAMESERVER valid=10s ipv6=off;
 
         server {
           listen 8080;
