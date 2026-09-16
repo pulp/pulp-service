@@ -19,6 +19,8 @@ Turning RBAC on surfaced three issues, all fixed here:
 * Members of an org that owns a domain were locked out (404 on reads, 400 on uploads) when the
   domain's ``rh-org-<org_id>`` group held no roles. This happens when the ``DomainOrg`` has a
   null ``org_id`` (its create request carried no ``internal.org_id``), which skips the org
-  group's role grant while the team group still gets it. A data migration backfills these
+  group's role grant while the team group still gets it. A data migration backfills existing
   domains, deriving the org from the team group's members and granting ``rh-org-<org_id>`` the
-  missing roles.
+  missing roles. Domain creation now also derives ``org_id`` from the creating user's
+  ``rh-org-<org_id>`` membership when the request omits ``internal.org_id``, so no new
+  null-``org_id`` domains are produced.
