@@ -900,9 +900,10 @@ spec:
               - name: COMPONENT_NAME
                 value: $(params.COMPONENT_NAME)
             script: |
-              python3 <<'EOF' | tee /workspace/commit_sha
+              python3 <<'EOF'
               import json
               import os
+              import re
               import sys
 
               def fail(message):
@@ -933,9 +934,12 @@ spec:
               if not isinstance(revision, str):
                   fail(f"invalid git revision for component {component_name!r}")
               commit_sha = revision.removeprefix("sha256:")
-              if len(commit_sha) < 7:
+              if not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
                   fail(f"invalid git revision for component {component_name!r}")
-              print(commit_sha[:7])
+              short_sha = commit_sha[:7]
+              print(short_sha)
+              with open("/workspace/commit_sha", "w") as file:
+                  file.write(short_sha + "\n")
               EOF
           - name: push-api-json-files-to-pulp
             image: "$(params.BONFIRE_IMAGE)"
@@ -1097,6 +1101,7 @@ spec:
               #!/usr/bin/env python3
               import json
               import os
+              import re
               import sys
               import time
 
@@ -1180,7 +1185,7 @@ spec:
                   fail("SNAPSHOT_INVALID", f"component={component_name!r}; error={exc}")
 
               merge_sha = revision.removeprefix("sha256:") if isinstance(revision, str) else ""
-              if len(merge_sha) < 7:
+              if not re.fullmatch(r"[0-9a-fA-F]{40}", merge_sha):
                   fail("REVISION_INVALID", f"component={component_name!r}; revision is unusable")
 
               pulls_url = f"https://api.github.com/repos/pulp/pulp-service/commits/{merge_sha}/pulls?per_page=100"
@@ -1195,8 +1200,16 @@ spec:
               pr_number = pull.get("number") if isinstance(pull, dict) else None
               head = pull.get("head") if isinstance(pull, dict) else None
               commit_sha = head.get("sha") if isinstance(head, dict) else None
-              if not isinstance(pr_number, int) or not isinstance(commit_sha, str) or len(commit_sha) < 7:
-                  fail("PR_PAYLOAD_INVALID", f"merge_sha={merge_sha}; expected PR number and head.sha")
+              if (
+                  not isinstance(pr_number, int)
+                  or not isinstance(commit_sha, str)
+                  or not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha)
+                  or not pull.get("merged_at")
+              ):
+                  fail(
+                      "PR_PAYLOAD_INVALID",
+                      f"merge_sha={merge_sha}; expected merged PR number and 40-character head.sha",
+                  )
 
               short_sha = commit_sha[:7]
               print(f"INFO[get-commit-hash] component={component_name} merge_sha={merge_sha} pr={pr_number} schema_sha={short_sha}")
