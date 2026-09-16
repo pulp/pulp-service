@@ -115,3 +115,9 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Adds `ETag` (sha256-based) and `Cache-Control: public, max-age=0, must-revalidate` headers to content app file responses, and handles `If-None-Match` requests with `304 Not Modified` to enable browser/CDN cache validation.
 - **Upstream:** Not upstreamed yet — candidate for pulpcore contribution (no upstream PR).
+
+### 0065 — Route content pull-through writes to primary
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** Routes pull-through caching operations and failed-download updates to the primary database while content reads use the replica.
