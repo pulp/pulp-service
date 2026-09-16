@@ -840,6 +840,8 @@ spec:
           value: "$(params.EPHEMERAL_ENV_PROVIDER_SECRET)"
         - name: SNAPSHOT
           value: "$(params.SNAPSHOT)"
+        - name: COMPONENT_NAME
+          value: "$(tasks.test-metadata.results.component-name)"
       runAfter:
         - pulp-functional-tests
       taskSpec:
@@ -863,6 +865,9 @@ spec:
           - name: PULP_FILE_REPO_NAME
             type: string
             default: python-bindings
+          - name: COMPONENT_NAME
+            type: string
+            description: Konflux component name selected by test-metadata
         steps:
           - name: get-file-repo
             image: "$(params.BONFIRE_IMAGE)"
@@ -892,13 +897,49 @@ spec:
             env:
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
+              - name: COMPONENT_NAME
+                value: $(params.COMPONENT_NAME)
             script: |
-              python3 <<EOF | tee /workspace/commit_sha
-              import json,os
-              snapshot=os.getenv("SNAPSHOT", "")
-              snapshotComponent=json.loads(snapshot)['components'][0]
-              commit_sha=snapshotComponent['source']['git']['revision'].removeprefix('sha256:')
-              print(commit_sha[:7])
+              python3 <<'EOF'
+              import json
+              import os
+              import re
+              import sys
+
+              def fail(message):
+                  print(f"ERROR[get-commit-hash]: {message}", file=sys.stderr)
+                  sys.exit(1)
+
+              snapshot_text = os.getenv("SNAPSHOT", "")
+              component_name = os.getenv("COMPONENT_NAME", "")
+              if not snapshot_text:
+                  fail("SNAPSHOT is empty")
+              if not component_name:
+                  fail("COMPONENT_NAME is empty")
+
+              try:
+                  snapshot = json.loads(snapshot_text)
+                  components = snapshot["components"]
+                  matches = [
+                      component
+                      for component in components
+                      if isinstance(component, dict) and component.get("name") == component_name
+                  ]
+                  if len(matches) != 1:
+                      fail(f"expected one component named {component_name!r}, found {len(matches)}")
+                  revision = matches[0]["source"]["git"]["revision"]
+              except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as exc:
+                  fail(f"invalid SNAPSHOT for component {component_name!r}: {exc}")
+
+              if not isinstance(revision, str):
+                  fail(f"invalid git revision for component {component_name!r}")
+              commit_sha = revision.removeprefix("sha256:")
+              if not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
+                  fail(f"invalid git revision for component {component_name!r}")
+              short_sha = commit_sha[:7]
+              print(short_sha)
+              with open("/workspace/commit_sha", "w") as file:
+                  file.write(short_sha + "\n")
               EOF
           - name: push-api-json-files-to-pulp
             image: "$(params.BONFIRE_IMAGE)"
@@ -1011,6 +1052,8 @@ spec:
           value: "$(params.BONFIRE_IMAGE)"
         - name: SNAPSHOT
           value: "$(params.SNAPSHOT)"
+        - name: COMPONENT_NAME
+          value: "$(tasks.test-metadata.results.component-name)"
       runAfter:
         - test-metadata
       taskSpec:
@@ -1028,6 +1071,9 @@ spec:
           - name: TASK_RESULT_NOT_FOUND_NOTE
             type: string
             default: "OpenAPI schema not found! Maybe it was not pushed to Pulp yet. Skipping the next steps."
+          - name: COMPONENT_NAME
+            type: string
+            description: Konflux component name selected by test-metadata
         results:
           - name: TEST_OUTPUT
             description: The output of the step
@@ -1049,27 +1095,131 @@ spec:
             env:
               - name: SNAPSHOT
                 value: $(params.SNAPSHOT)
+              - name: COMPONENT_NAME
+                value: $(params.COMPONENT_NAME)
             script: |
               #!/usr/bin/env python3
-              import json,os,requests
+              import json
+              import os
+              import re
+              import sys
+              import time
 
-              # get the PR of the commit
-              snapshot=os.getenv("SNAPSHOT", "")
-              snapshot_component=json.loads(snapshot)['components'][0]
-              commit_hash_after_merge=snapshot_component['source']['git']['revision'].removeprefix('sha256:')
-              gh_pulls_url=f"https://api.github.com/repos/pulp/pulp-service/commits/{commit_hash_after_merge}/pulls"
-              response = requests.get(gh_pulls_url)
-              pr=response.json()[-1]['number']
+              import requests
+              from requests.exceptions import RequestException
 
-              # get the "original" (before merge) commit - this is the commit also used in api.json file name
-              gh_commit_from_pr_url=f"https://api.github.com/repos/pulp/pulp-service/pulls/{pr}/commits"
-              response = requests.get(gh_commit_from_pr_url)
-              if response.status_code != 200:
-                sys.exit(1)
+              GITHUB_HEADERS = {
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "pulp-service-bindings-publisher",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              if github_token := os.getenv("GITHUB_TOKEN"):
+                  GITHUB_HEADERS["Authorization"] = f"Bearer {github_token}"
+
+              def fail(code, detail):
+                  print(f"ERROR[get-commit-hash] {code}: {detail}", file=sys.stderr)
+                  sys.exit(1)
+
+              def github_json(url):
+                  for attempt in range(3):
+                      try:
+                          response = requests.get(url, headers=GITHUB_HEADERS, timeout=(5, 20))
+                      except RequestException as exc:
+                          if attempt == 2:
+                              fail("GITHUB_REQUEST_FAILED", f"url={url}; error={exc}")
+                          time.sleep(2**attempt)
+                          continue
+
+                      if response.status_code == 200:
+                          try:
+                              return response.json()
+                          except ValueError:
+                              fail(
+                                  "GITHUB_NON_JSON",
+                                  f"url={url}; content_type={response.headers.get('content-type')}",
+                              )
+
+                      retryable = response.status_code in {429, 500, 502, 503, 504}
+                      rate_limited = (
+                          response.status_code == 403
+                          and response.headers.get("X-RateLimit-Remaining") == "0"
+                      )
+                      if (retryable or rate_limited) and attempt < 2:
+                          try:
+                              delay = int(response.headers.get("Retry-After", 2**attempt))
+                          except (TypeError, ValueError):
+                              delay = 2**attempt
+                          time.sleep(min(delay, 30))
+                          continue
+
+                      fail(
+                          "GITHUB_HTTP_ERROR",
+                          "url={url}; status={status}; request_id={request_id}; "
+                          "rate_remaining={rate_remaining}; body={body!r}".format(
+                              url=url,
+                              status=response.status_code,
+                              request_id=response.headers.get("X-GitHub-Request-Id"),
+                              rate_remaining=response.headers.get("X-RateLimit-Remaining"),
+                              body=response.text[:300],
+                          ),
+                      )
+
+              snapshot_text = os.getenv("SNAPSHOT", "")
+              component_name = os.getenv("COMPONENT_NAME", "")
+              if not snapshot_text:
+                  fail("SNAPSHOT_MISSING", "SNAPSHOT is empty")
+              if not component_name:
+                  fail("COMPONENT_MISSING", "COMPONENT_NAME is empty")
+              try:
+                  snapshot = json.loads(snapshot_text)
+                  components = snapshot["components"]
+                  matches = [
+                      component
+                      for component in components
+                      if isinstance(component, dict) and component.get("name") == component_name
+                  ]
+                  if len(matches) != 1:
+                      fail(f"COMPONENT_AMBIGUOUS", f"expected one component named {component_name!r}, found {len(matches)}")
+                  revision = matches[0]["source"]["git"]["revision"]
+              except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as exc:
+                  fail("SNAPSHOT_INVALID", f"component={component_name!r}; error={exc}")
+
+              merge_sha = revision.removeprefix("sha256:") if isinstance(revision, str) else ""
+              if not re.fullmatch(r"[0-9a-fA-F]{40}", merge_sha):
+                  fail("REVISION_INVALID", f"component={component_name!r}; revision is unusable")
+
+              pulls_url = f"https://api.github.com/repos/pulp/pulp-service/commits/{merge_sha}/pulls?per_page=100"
+              pulls = github_json(pulls_url)
+              if not isinstance(pulls, list) or not pulls:
+                  fail("PR_NOT_FOUND", f"merge_sha={merge_sha}; no associated PR")
+              if len(pulls) != 1:
+                  numbers = [pull.get("number") for pull in pulls if isinstance(pull, dict)]
+                  fail("PR_AMBIGUOUS", f"merge_sha={merge_sha}; associated_prs={numbers}")
+
+              pull = pulls[0]
+              if not isinstance(pull, dict):
+                  fail("PR_PAYLOAD_INVALID", f"merge_sha={merge_sha}; expected PR object")
+              pr_number = pull.get("number")
+              head = pull.get("head")
+              merged_at = pull.get("merged_at")
+              commit_sha = head.get("sha") if isinstance(head, dict) else None
+              if (
+                  isinstance(pr_number, bool)
+                  or not isinstance(pr_number, int)
+                  or not isinstance(commit_sha, str)
+                  or not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha)
+                  or not isinstance(merged_at, str)
+                  or not merged_at
+              ):
+                  fail(
+                      "PR_PAYLOAD_INVALID",
+                      f"merge_sha={merge_sha}; expected merged PR number and 40-character head.sha",
+                  )
+
+              short_sha = commit_sha[:7]
+              print(f"INFO[get-commit-hash] component={component_name} merge_sha={merge_sha} pr={pr_number} schema_sha={short_sha}")
               with open("/workspace/commit_sha", "w") as file:
-                commit_sha = response.json()[-1]['sha'][:7] 
-                print(commit_sha)
-                file.write(commit_sha + "\n")
+                  file.write(short_sha + "\n")
 
           - name: get-the-list-of-files-to-download-from-pulp
             image: "$(params.BONFIRE_IMAGE)"
@@ -1082,8 +1232,13 @@ spec:
                 value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
               #!/usr/bin/env python3
-              import json, requests, os, sys
+              import json
+              import os
+              import sys
               from datetime import datetime
+
+              import requests
+
               with open("/workspace/commit_sha") as file:
                 commit_sha = file.read().strip()
                 print(commit_sha)
@@ -1095,13 +1250,20 @@ spec:
                 for component in components.split(" "):
                   files_url = f'https://mtls.internal.console.redhat.com/api/pulp/{pulp_domain}/api/v3/content/file/files/?relative_path__regex={component}-.*{commit_sha}'
                   try:
-                    response = requests.get(url=files_url,cert=pulp_cert_file)
+                    response = requests.get(url=files_url, cert=pulp_cert_file, timeout=(5, 30))
                     response.raise_for_status()
-                  except requests.exceptions.HTTPError as err:
-                    print(err)
+                    payload = response.json()
+                  except requests.exceptions.RequestException as err:
+                    print(f"ERROR[Pulp request]: component={component}; error={err}", file=sys.stderr)
                     sys.exit(1)
-                  results = response.json()['results']
-                  print(results)
+                  except ValueError as err:
+                    print(f"ERROR[Pulp response]: component={component}; invalid JSON: {err}", file=sys.stderr)
+                    sys.exit(1)
+                  results = payload.get("results") if isinstance(payload, dict) else None
+                  if not isinstance(results, list):
+                    print(f"ERROR[Pulp response]: component={component}; missing results list", file=sys.stderr)
+                    sys.exit(1)
+                  print(f"Pulp results for {component}: {len(results)}")
 
                   # exit step if openapi-schema is not found
                   if not results:
@@ -1113,7 +1275,16 @@ spec:
                       f.write(json.dumps(task_results))
                     sys.exit(0)
 
-                  relative_path = results[0]['relative_path']
+                  if len(results) != 1 or not isinstance(results[0], dict):
+                    print(
+                      f"ERROR[Pulp response]: component={component}; expected one matching schema, found {len(results)}",
+                      file=sys.stderr,
+                    )
+                    sys.exit(1)
+                  relative_path = results[0].get("relative_path")
+                  if not isinstance(relative_path, str) or not relative_path:
+                    print(f"ERROR[Pulp response]: component={component}; result has no relative_path", file=sys.stderr)
+                    sys.exit(1)
                   print(relative_path)
                   file.write(relative_path + "\n")
 
@@ -1136,7 +1307,10 @@ spec:
 
               mkdir -p /workspace/api-json-files ; cd $_
               while read FILE ; do
-                curl -sLO --cert /workspace/pulp-sa-cert.pem https://mtls.internal.console.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
+                 curl --fail --show-error --location --retry-all-errors --retry 3 --retry-delay 5 \
+                   --connect-timeout 10 --max-time 120 --remote-name \
+                   --cert /workspace/pulp-sa-cert.pem \
+                   https://mtls.internal.console.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
                 if [ $? -ne 0 ]; then
                   echo "Error: Failed to download ${FILE} from Pulp"
                   exit 1
@@ -1152,7 +1326,12 @@ spec:
                 value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
             script: |
               #!/usr/bin/env python3
-              import json, os, requests, sys
+              import json
+              import os
+              import re
+              import sys
+
+              import requests
 
               # skip step if openapi-schema is not found
               test_output_file="$(results.TEST_OUTPUT.path)"
@@ -1166,9 +1345,22 @@ spec:
 
               # get the latest pypi client version based on crc.pulpcore.client package
               pypi_url = f"https://pypi.org/pypi/crc.pulpcore.client/json"
-              response = requests.get(pypi_url)
+              try:
+                response = requests.get(pypi_url, timeout=(5, 20))
+                response.raise_for_status()
+                payload = response.json()
+                latest_version = payload["info"]["version"]
+                if not isinstance(latest_version, str) or not re.fullmatch(
+                    r"\d{8}\.(?:0|[1-9]\d*)", latest_version
+                ):
+                  raise ValueError(f"invalid version {latest_version!r}")
+              except requests.exceptions.RequestException as err:
+                print(f"ERROR[PyPI request]: {err}", file=sys.stderr)
+                sys.exit(1)
+              except (ValueError, KeyError, TypeError) as err:
+                print(f"ERROR[PyPI response]: invalid version payload: {err}", file=sys.stderr)
+                sys.exit(1)
               with open("/workspace/latest-version-from-pypi","w") as file:
-                latest_version = response.json()['info']['version']
                 print(latest_version)
                 file.write(latest_version + "\n")
 
@@ -1195,7 +1387,9 @@ spec:
 
               mkdir -p /workspace/templates ; cd $_
               for TEMPLATE in $BINDINGS_TEMPLATES ; do
-                curl -s -LO https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/${TEMPLATE_LANG}/${TEMPLATE_VERSION}/${TEMPLATE}.mustache
+                curl --fail --show-error --location --retry-all-errors --retry 3 --retry-delay 5 \
+                  --connect-timeout 10 --max-time 120 --remote-name \
+                  https://raw.githubusercontent.com/pulp/pulp-openapi-generator/refs/heads/main/templates/${TEMPLATE_LANG}/${TEMPLATE_VERSION}/${TEMPLATE}.mustache
                 if [ $? -ne 0 ]; then
                   echo "Error: Failed to download template ${TEMPLATE}.mustache"
                   exit 1
