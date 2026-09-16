@@ -1,0 +1,1 @@
+Harden Konflux API binding publication against malformed and transient external API responses.
