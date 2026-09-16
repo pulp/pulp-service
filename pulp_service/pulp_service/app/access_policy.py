@@ -52,7 +52,27 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
 
         return super().has_permission(request, view)
 
+    @staticmethod
+    def _is_public_domain_read(request):
+        """
+        True for a safe-method read against a public-* domain (world-readable).
+
+        Mirrors the has_permission public-* bypass so all read layers agree: without this,
+        has_permission allows the read but scope_queryset filters the object out of the
+        queryset, and get_object_or_404 raises 404.
+        """
+        if request is None or getattr(request, "method", None) not in SAFE_METHODS:
+            return False
+        domain = getattr(request, "pulp_domain", None)
+        return bool(domain and domain.name.startswith("public-"))
+
     def scope_queryset(self, view, qs):
+        # Public domains are world-readable on safe methods. base.py has already filtered qs
+        # to request.pulp_domain, so returning it unscoped exposes only this domain's objects
+        # (no cross-domain leak) and lets detail reads resolve instead of 404ing.
+        if self._is_public_domain_read(getattr(view, "request", None)):
+            return qs
+
         qs = super().scope_queryset(view, qs)
         if qs.model is Domain:
             public_domains = Domain.objects.filter(name__startswith="public-")

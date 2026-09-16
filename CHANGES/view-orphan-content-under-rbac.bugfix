@@ -1,0 +1,16 @@
+Fixed content visibility under RBAC: content uploaded into a domain but not yet in any
+repository (orphan content) was hidden from the domain's own members. The content access
+policy now lists content by the domain-scoped ``core.view_content`` permission (held by
+domain members via ``service.domain_admin``) instead of scoping by repository, so members
+can view their orphan content on both the generic and typed content endpoints.
+
+Also fixed a related read regression where a caller with no role on a ``public-*`` domain
+received 404 when retrieving or listing its repositories or content; the public-domain read
+bypass is now honoured in ``scope_queryset`` as well as ``has_permission``.
+
+Hardened authorization for the domain create and migrate endpoints. Both are plain
+``APIView`` s, so their ``DEFAULT_ACCESS_POLICY`` never ran and was misleading dead config.
+They now use ``IsAuthenticated``, and domain migration additionally enforces an explicit
+``core.change_domain`` object-level check. Domain-create request context (principal and org
+id) is now reset after each request so a failed create can no longer leak into the next
+request handled by the same worker.
