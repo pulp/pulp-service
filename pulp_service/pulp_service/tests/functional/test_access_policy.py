@@ -4,11 +4,10 @@ import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, PropertyMock, patch
 
-from django.conf import settings
 from django.contrib.auth.models import Group as AuthGroup
 from django.http import Http404
 
-from pulpcore.app.access_policy import AccessPolicyFromSettings
+from pulpcore.app.access_policy import AccessPolicyFromDB
 
 from pulp_service.app.access_policy import PulpServiceAccessPolicy
 
@@ -20,11 +19,10 @@ class TestPulpServiceAccessPolicyLoads:
         policy = PulpServiceAccessPolicy()
         assert policy is not None
 
-    def test_inherits_from_access_policy_from_settings(self):
-        # Reads each viewset's policy from settings.ACCESS_POLICIES (falling back to the
-        # viewset's DEFAULT_ACCESS_POLICY) instead of the DB, so the content override in
-        # settings is authoritative.
-        assert issubclass(PulpServiceAccessPolicy, AccessPolicyFromSettings)
+    def test_inherits_from_access_policy_from_db(self):
+        # This branch uses DB-backed RBAC (PULP-2120 alignment): each viewset's policy is
+        # read from the DB, layered with PulpServiceAccessPolicy's cross-cutting pre-checks.
+        assert issubclass(PulpServiceAccessPolicy, AccessPolicyFromDB)
 
 
 class TestSuperuserBypass:
@@ -320,13 +318,3 @@ class TestScopeQueryset:
             result = policy.scope_queryset(view, group_qs)
 
         assert result is group_qs
-
-
-def test_content_access_policy_setting_is_defined():
-    policy = settings.ACCESS_POLICIES["content"]
-    # queryset_scoping dropped so a domain member sees all content, not just repo-scoped.
-    assert policy["queryset_scoping"] is None
-    read = policy["statements"][0]
-    assert set(read["action"]) == {"list"}
-    assert read["effect"] == "allow"
-    assert read["condition"] == "has_domain_perms:core.view_content"
