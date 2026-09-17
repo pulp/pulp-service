@@ -52,6 +52,9 @@ objects:
           ssl_certificate_key /etc/nginx/tls/tls.key;
 
           location / {
+            client_max_body_size 0;
+            client_body_timeout 60s;
+            proxy_request_buffering off;
             set $upstream https://${UPSTREAM_HOST}:${UPSTREAM_PORT};
             proxy_pass $upstream;
             proxy_ssl_server_name on;
