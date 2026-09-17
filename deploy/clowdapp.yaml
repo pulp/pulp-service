@@ -122,7 +122,6 @@ objects:
       DB_NAME=$(cat /cdapp/cdappconfig.json | jq -r '.database.name')
       DB_USER=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminUsername')
       DB_PASSWORD=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminPassword')
-      DB_REPLICA_HOST=${PULP_DB_REPLICA_HOST:-}
       
       ENV_NAME=$(cat /cdapp/cdappconfig.json | ./jq -r '.metadata.envName')
 
@@ -141,7 +140,8 @@ objects:
       openssl rand -base64 32 | tr -d '\n' > /tmp/password
       kubectl create secret generic pulp-content-sources-password --from-file /tmp/password
 
-      # Create settings.py
+      # This generated settings file is mainly used by ephemeral and test environments.
+      # Stage and production use the App Interface-managed pulp-settings.secret.yaml resource.
       cat <<EOF > /tmp/settings.py
       # Auto-generated settings file
       import secrets
@@ -190,14 +190,6 @@ objects:
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
       EOF
-      if [ -n "$DB_REPLICA_HOST" ]; then
-        cat <<EOF >> /tmp/settings.py
-      DATABASES["replica"] = {
-          **DATABASES["default"],
-          "HOST": "$DB_REPLICA_HOST",
-      }
-      EOF
-      fi
 
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
       oc apply -f-<<EOF
@@ -836,13 +828,6 @@ objects:
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ 'bash', '-x', '/tmp/config.sh' ]
-          env:
-            - name: PULP_DB_REPLICA_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-stage-db-readonly
-                  key: db.host
-                  optional: true
           volumes:
             - name: config-sh
               configMap:
