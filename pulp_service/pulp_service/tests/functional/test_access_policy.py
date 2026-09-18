@@ -322,6 +322,70 @@ class TestScopeQueryset:
         assert result is group_qs
 
 
+class TestPublicDomainReadScoping:
+    """Fix A: scope_queryset must not filter reads inside a public-* domain.
+
+    Only relevant when PulpServiceAccessPolicy is the active permission class (RBAC). Mirrors
+    the has_permission public-* bypass so detail reads resolve to 200 instead of 404.
+    """
+
+    def _view(self, method, domain_name):
+        request = SimpleNamespace(
+            method=method,
+            pulp_domain=SimpleNamespace(name=domain_name) if domain_name else None,
+        )
+        return SimpleNamespace(request=request)
+
+    def test_public_domain_safe_read_returns_qs_unscoped(self):
+        """A safe read on a public-* domain returns qs untouched; super() is not consulted."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("GET", "public-trusted-libraries")
+        qs = MagicMock(name="qs")
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset") as super_scope:
+            result = policy.scope_queryset(view, qs)
+
+        super_scope.assert_not_called()
+        assert result is qs
+
+    def test_non_public_domain_still_scoped(self):
+        """A read on a non-public domain still defers to super().scope_queryset."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("GET", "private-domain")
+        qs = MagicMock(name="qs")
+        qs.model = object  # not Domain
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset", return_value=qs) as super_scope:
+            policy.scope_queryset(view, qs)
+
+        super_scope.assert_called_once()
+
+    def test_public_domain_write_is_still_scoped(self):
+        """A write (non-safe) on a public-* domain must NOT bypass scoping."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("POST", "public-trusted-libraries")
+        qs = MagicMock(name="qs")
+        qs.model = object
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset", return_value=qs) as super_scope:
+            policy.scope_queryset(view, qs)
+
+        super_scope.assert_called_once()
+
+    def test_is_public_domain_read_helper(self):
+        policy = PulpServiceAccessPolicy()
+        pub = SimpleNamespace(method="GET", pulp_domain=SimpleNamespace(name="public-x"))
+        priv = SimpleNamespace(method="GET", pulp_domain=SimpleNamespace(name="x"))
+        write = SimpleNamespace(method="POST", pulp_domain=SimpleNamespace(name="public-x"))
+        no_domain = SimpleNamespace(method="GET", pulp_domain=None)
+
+        assert policy._is_public_domain_read(pub) is True
+        assert policy._is_public_domain_read(priv) is False
+        assert policy._is_public_domain_read(write) is False
+        assert policy._is_public_domain_read(no_domain) is False
+        assert policy._is_public_domain_read(None) is False
+
+
 def test_content_access_policy_setting_is_defined():
     policy = settings.ACCESS_POLICIES["content"]
     # queryset_scoping dropped so a domain member sees all content, not just repo-scoped.
