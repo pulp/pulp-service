@@ -1,34 +1,10 @@
-From 65dfb06f202c269c8e864e2f7b939b7c905c674d Mon Sep 17 00:00:00 2001
-From: Yasen <yasen@trahnov.eu>
-Date: Fri, 24 Jul 2026 12:03:32 +0200
-Subject: [PATCH] Add content negotiation and JSON listing to the content app
-
-Adds Accept-header based content negotiation to the content app's
-Handler. Requests with Accept: application/json now receive a
-generic, recursive, paginated JSON listing of every package under
-the requested distribution path instead of the default HTML
-directory listing.
-
-Also adds Distribution.content_handler_json(path), a JSON
-counterpart to content_handler(path), letting plugins return a
-type-specific JSON representation for a path instead of the
-generic recursive listing.
-
-Co-authored-by: Cursor <cursoragent@cursor.com>
----
- pulpcore/app/models/publication.py |  25 +++
- pulpcore/cache/__init__.py         |   1 +
- pulpcore/cache/cache.py            |  55 ++++-
- pulpcore/content/handler.py        | 335 +++++++++++++++++++++++++----
- 4 files changed, 370 insertions(+), 46 deletions(-)
-
 diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
-index b953be30d..1cb9275b4 100644
+index 734fbb4..82bd38f 100644
 --- a/pulpcore/app/models/publication.py
 +++ b/pulpcore/app/models/publication.py
-@@ -731,6 +731,31 @@ class Distribution(MasterModel):
+@@ -779,6 +779,31 @@ class Distribution(MasterModel):
          """
-         return set()
+         return None
  
 +    def content_handler_json(self, path):
 +        """
@@ -59,7 +35,7 @@ index b953be30d..1cb9275b4 100644
          """
          Opportunity for Distribution to specify response-headers for a specific path
 diff --git a/pulpcore/cache/__init__.py b/pulpcore/cache/__init__.py
-index a5a4b9d01..54f1f0589 100644
+index a5a4b9d..54f1f05 100644
 --- a/pulpcore/cache/__init__.py
 +++ b/pulpcore/cache/__init__.py
 @@ -6,4 +6,5 @@ from .cache import (
@@ -69,10 +45,10 @@ index a5a4b9d01..54f1f0589 100644
 +    accept_prefers_json,
  )
 diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
-index 6fcf470e1..91db28b43 100644
+index 04a7506..1865d40 100644
 --- a/pulpcore/cache/cache.py
 +++ b/pulpcore/cache/cache.py
-@@ -29,6 +29,54 @@ class CacheKeys(enum.Enum):
+@@ -30,6 +30,54 @@ class CacheKeys(enum.Enum):
      path = "path"
      host = "host"
      method = "method"
@@ -127,7 +103,7 @@ index 6fcf470e1..91db28b43 100644
  
  
  def connection_error_wrapper(func):
-@@ -323,7 +371,9 @@ class AsyncContentCache(AsyncCache):
+@@ -325,7 +373,9 @@ class AsyncContentCache(AsyncCache):
                        can be a callable taking the request and cache instance as arguments
              expires_ttl: length in seconds entries should live in the cache, EXPIRES_TTL is default
              keys: a list of CacheKeys to use for key creation upon entry placement,
@@ -138,7 +114,7 @@ index 6fcf470e1..91db28b43 100644
              auth: a callable to check authorization of the request; takes the request, cache
                    instance, and base_key as arguments.
          """
-@@ -448,6 +498,9 @@ class AsyncContentCache(AsyncCache):
+@@ -461,6 +511,9 @@ class AsyncContentCache(AsyncCache):
              CacheKeys.path: request.path,
              CacheKeys.method: request.method,
              CacheKeys.host: request.url.host,
@@ -149,7 +125,7 @@ index 6fcf470e1..91db28b43 100644
          key = ":".join(all_keys[k] for k in self.keys)
          return key
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 671ab72c8..585f6f375 100644
+index f1cb2b5..00f92d1 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
 @@ -1,4 +1,5 @@
@@ -158,7 +134,7 @@ index 671ab72c8..585f6f375 100644
  import logging
  import os
  import re
-@@ -58,7 +59,7 @@ from pulpcore.app.util import (  # noqa: E402
+@@ -59,7 +60,7 @@ from pulpcore.app.util import (  # noqa: E402
      cache_key,
      get_domain,
  )
@@ -167,7 +143,7 @@ index 671ab72c8..585f6f375 100644
  from pulpcore.exceptions import (  # noqa: E402
      DigestValidationError,
      UnsupportedDigestValidationError,
-@@ -185,6 +186,10 @@ class Handler:
+@@ -188,6 +189,10 @@ class Handler:
  
      distribution_model = None
  
@@ -178,7 +154,7 @@ index 671ab72c8..585f6f375 100644
      @staticmethod
      def _reset_db_connection():
          """
-@@ -272,6 +277,11 @@ class Handler:
+@@ -279,6 +284,11 @@ class Handler:
      @AsyncContentCache(
          base_key=lambda req, cac: Handler.find_base_path_cached(req, cac),
          auth=lambda req, cac, bk: Handler.auth_cached(req, cac, bk),
@@ -190,7 +166,7 @@ index 671ab72c8..585f6f375 100644
      )
      async def stream_content(self, request):
          """
-@@ -582,6 +592,198 @@ class Handler:
+@@ -594,6 +604,198 @@ class Handler:
              sizes=sizes,
          )
  
@@ -389,7 +365,7 @@ index 671ab72c8..585f6f375 100644
      async def list_directory(self, repo_version, publication, path):
          """
          Generate a set with directory listing of the path.
-@@ -683,6 +885,13 @@ class Handler:
+@@ -695,6 +897,13 @@ class Handler:
          Finally, when nothing is served to client yet, we check if there is a remote for the
          Distribution. If so, the Artifact is pulled from the remote and streamed to the client.
  
@@ -403,7 +379,7 @@ index 671ab72c8..585f6f375 100644
          Args:
              path (str): The path component of the URL.
              request(aiohttp.web.Request) The request to prepare a response for.
-@@ -717,6 +926,11 @@ class Handler:
+@@ -731,6 +940,11 @@ class Handler:
  
          headers = self.response_headers(original_rel_path, distro)
  
@@ -415,7 +391,7 @@ index 671ab72c8..585f6f375 100644
          content_handler_result = await sync_to_async(distro.content_handler)(original_rel_path)
          if content_handler_result is not None:
              if isinstance(content_handler_result, ContentArtifact):
-@@ -732,6 +946,13 @@ class Handler:
+@@ -746,6 +960,13 @@ class Handler:
                  # the result is a response so just return it
                  return content_handler_result
  
@@ -429,7 +405,7 @@ index 671ab72c8..585f6f375 100644
          if distro.checkpoint:
              repository = repo_version = None
              publication = await sync_to_async(self._select_checkpoint_publication)(
-@@ -746,30 +967,42 @@ class Handler:
+@@ -760,30 +981,42 @@ class Handler:
              )()
  
          if publication:
@@ -494,7 +470,7 @@ index 671ab72c8..585f6f375 100644
  
              # published artifact
              try:
-@@ -832,30 +1065,42 @@ class Handler:
+@@ -846,30 +1079,42 @@ class Handler:
                      )
  
          if repo_version and not publication and not distro.SERVE_FROM_PUBLICATION:
@@ -559,6 +535,3 @@ index 671ab72c8..585f6f375 100644
  
              try:
                  ca = await ContentArtifact.objects.select_related(
--- 
-2.53.0
-
