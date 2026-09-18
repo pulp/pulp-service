@@ -532,9 +532,11 @@ objects:
           requests:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
             memory: ${{PULP_CONTENT_MEMORY_REQUEST}}
+            ephemeral-storage: 3Gi
           limits:
             cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
+            ephemeral-storage: 3Gi
         env:
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
@@ -673,9 +675,11 @@ objects:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
             memory: ${{PULP_WORKER_MEMORY_REQUEST}}
+            ephemeral-storage: 3Gi
           limits:
             cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
+            ephemeral-storage: 3Gi
         env:
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
