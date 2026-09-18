@@ -1,0 +1,12 @@
+Restored org-member access to org-owned domains under RBAC. Members of an org that
+owns a domain were locked out (404 on reads, 400 on uploads) when the domain's
+``rh-org-<org_id>`` group held no roles -- the result of a ``DomainOrg`` row with a
+null ``org_id`` (its create request carried no ``internal.org_id``), which skipped the
+org group's role grant. A data migration backfills existing domains, deriving the org
+from the team group's members and granting ``rh-org-<org_id>`` the missing roles.
+Domain creation now also derives ``org_id`` from the creating user's ``rh-org-<org_id>``
+membership when the request omits ``internal.org_id``, so no new null-``org_id`` domains
+are produced.
+The read-only ``domainorg_backfill_report`` management command previews which domains the
+backfill will repair or skip (with the reason) before it runs, so the skip-set can be
+reviewed and remediated ahead of enabling RBAC.
