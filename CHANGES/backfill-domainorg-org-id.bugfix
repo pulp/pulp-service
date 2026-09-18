@@ -7,3 +7,6 @@ from the team group's members and granting ``rh-org-<org_id>`` the missing roles
 Domain creation now also derives ``org_id`` from the creating user's ``rh-org-<org_id>``
 membership when the request omits ``internal.org_id``, so no new null-``org_id`` domains
 are produced.
+The read-only ``domainorg_backfill_report`` management command previews which domains the
+backfill will repair or skip (with the reason) before it runs, so the skip-set can be
+reviewed and remediated ahead of enabling RBAC.

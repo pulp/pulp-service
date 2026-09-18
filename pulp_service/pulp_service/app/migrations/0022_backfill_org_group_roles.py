@@ -4,6 +4,7 @@ from importlib import import_module
 from django.db import migrations
 
 from pulp_service.app.constants import ORG_GROUP_PREFIX
+from pulp_service.app.domainorg_backfill import derive_org_id
 
 _logger = logging.getLogger(__name__)
 
@@ -11,29 +12,6 @@ _logger = logging.getLogger(__name__)
 # writes are byte-identical to the ones 0019/0021 write. Migration module names start with
 # a digit, so load it by dotted string (same pattern as 0021).
 _migration_0019 = import_module("pulp_service.app.migrations.0019_convert_domainorg_to_roles")
-
-
-def _derive_org_id(domain_org):
-    """Return the org_id whose rh-org-<org_id> group owns this DomainOrg, or None.
-
-    A DomainOrg whose create request carried no identity.internal.org_id has a null
-    org_id, so 0019/0021 (gated on `if domain_org.org_id:`) granted the team group its
-    roles but skipped the rh-org-<org_id> group -- leaving org members (service accounts
-    in rh-org-<org_id> only) with no role on the domain (404/400 under RBAC).
-
-    Use the stored org_id when present; otherwise derive it from the team group's members,
-    who are all auto-added to rh-org-<org_id>. Accept the derived value only when every
-    member shares exactly one org -- never guess for a mixed-org or empty team.
-    """
-    if domain_org.org_id:
-        return str(domain_org.org_id).strip() or None
-    if domain_org.group_id is None:
-        return None
-    org_ids = set()
-    for user in domain_org.group.user_set.all():
-        for name in user.groups.filter(name__startswith=ORG_GROUP_PREFIX).values_list("name", flat=True):
-            org_ids.add(name[len(ORG_GROUP_PREFIX) :])
-    return next(iter(org_ids)) if len(org_ids) == 1 else None
 
 
 def backfill_org_group_roles(apps, schema_editor):  # noqa: ARG001
@@ -54,7 +32,7 @@ def backfill_org_group_roles(apps, schema_editor):  # noqa: ARG001
         domains = list(domain_org.domains.all())
         if not domains:
             continue
-        org_id = _derive_org_id(domain_org)
+        org_id = derive_org_id(domain_org)
         if not org_id:
             skipped += 1
             _logger.warning(
