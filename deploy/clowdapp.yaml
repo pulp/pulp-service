@@ -487,6 +487,8 @@ objects:
           - name: subscription-api-cert-volume
             mountPath: "/etc/pulp/certs"
             readOnly: true
+          - name: pulp-data
+            mountPath: "/var/lib/pulp"
         volumes:
           - name: secret-volume
             secret:
@@ -500,6 +502,8 @@ objects:
               items:
               - key: ${{PULP_FEATURE_SERVICE_API_CERT}}
                 path: ${{PULP_FEATURE_SERVICE_API_CERT}}
+          - name: pulp-data
+            emptyDir: {}
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -532,7 +536,7 @@ objects:
           requests:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
             memory: ${{PULP_CONTENT_MEMORY_REQUEST}}
-            ephemeral-storage: 3Gi
+            ephemeral-storage: 100Mi
           limits:
             cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
@@ -642,6 +646,8 @@ objects:
           - name: pulp-settings
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
+          - name: pulp-data
+            mountPath: "/var/lib/pulp"
         volumes:
           - name: secret-volume
             secret:
@@ -649,6 +655,8 @@ objects:
           - name: pulp-settings
             secret:
               secretName: pulp-settings
+          - name: pulp-data
+            emptyDir: {}
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -675,7 +683,7 @@ objects:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
             memory: ${{PULP_WORKER_MEMORY_REQUEST}}
-            ephemeral-storage: 3Gi
+            ephemeral-storage: 100Mi
           limits:
             cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
