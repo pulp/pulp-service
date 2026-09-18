@@ -487,8 +487,6 @@ objects:
           - name: subscription-api-cert-volume
             mountPath: "/etc/pulp/certs"
             readOnly: true
-          - name: pulp-data
-            mountPath: "/var/lib/pulp"
         volumes:
           - name: secret-volume
             secret:
@@ -502,8 +500,6 @@ objects:
               items:
               - key: ${{PULP_FEATURE_SERVICE_API_CERT}}
                 path: ${{PULP_FEATURE_SERVICE_API_CERT}}
-          - name: pulp-data
-            emptyDir: {}
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -536,12 +532,12 @@ objects:
           requests:
             cpu: ${{PULP_CONTENT_CPU_REQUEST}}
             memory: ${{PULP_CONTENT_MEMORY_REQUEST}}
-            ephemeral-storage: 100Mi
           limits:
             cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
-            ephemeral-storage: 3Gi
         env:
+          - name: PULP_MAVEN_PATH_INDEX_CACHE_DIR
+            value: "/var/lib/pulp/tmp/path-index-cache"
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -646,8 +642,6 @@ objects:
           - name: pulp-settings
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
-          - name: pulp-data
-            mountPath: "/var/lib/pulp"
         volumes:
           - name: secret-volume
             secret:
@@ -655,8 +649,6 @@ objects:
           - name: pulp-settings
             secret:
               secretName: pulp-settings
-          - name: pulp-data
-            emptyDir: {}
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -683,12 +675,12 @@ objects:
           requests:
             cpu: ${{PULP_WORKER_CPU_REQUEST}}
             memory: ${{PULP_WORKER_MEMORY_REQUEST}}
-            ephemeral-storage: 100Mi
           limits:
             cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
-            ephemeral-storage: 3Gi
         env:
+          - name: PULP_MAVEN_PATH_INDEX_CACHE_DIR
+            value: "/var/lib/pulp/tmp/path-index-cache"
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
