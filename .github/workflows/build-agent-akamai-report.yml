@@ -24,7 +24,7 @@ jobs:
         working-directory: tools/agents/agent-akamai-report
         run: CGO_ENABLED=0 go build -ldflags="-s -w" -o agent-akamai-report .
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: agent-akamai-report
           path: tools/agents/agent-akamai-report/agent-akamai-report
@@ -45,7 +45,7 @@ jobs:
           fi
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Download binary artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: agent-akamai-report
           path: .
