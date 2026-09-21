@@ -57,6 +57,7 @@ from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     ContentScanSerializer,
     FeatureContentGuardSerializer,
+    PublicDebugAuthenticationHeadersSerializer,
     PyPIYankMonitorSerializer,
     VulnerabilityReportSerializer,
     YankedPackageReportSerializer,
@@ -281,6 +282,34 @@ class DebugAuthenticationHeadersView(APIView):
         }
 
         return Response(data=response_data)
+
+
+class PublicDebugAuthenticationHeadersView(APIView):
+    """Return safe diagnostics about headers received from the edge."""
+
+    authentication_classes = []
+    permission_classes = []
+    trusted_vpn_assertion = "dHJ1ZQ=="
+
+    @extend_schema(
+        operation_id="public_debug_auth_header",
+        responses=PublicDebugAuthenticationHeadersSerializer,
+    )
+    def get(self, request=None, path=None, pk=None):
+        if not settings.AUTHENTICATION_HEADER_DEBUG:
+            response = Response(status=status.HTTP_404_NOT_FOUND)
+            response["Cache-Control"] = "private, no-store"
+            return response
+
+        response_data = {
+            "x_rh_identity_present": "X-RH-IDENTITY" in request.headers,
+            "x_pulp_vpn_verified_present": "X-Pulp-VPN-Verified" in request.headers,
+            "x_pulp_vpn_verified": request.headers.get("X-Pulp-VPN-Verified") == self.trusted_vpn_assertion,
+            "x_pulp_vpn_access_present": "X-Pulp-VPN-Access" in request.headers,
+        }
+        response = Response(data=PublicDebugAuthenticationHeadersSerializer(response_data).data)
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 @extend_schema_view(
