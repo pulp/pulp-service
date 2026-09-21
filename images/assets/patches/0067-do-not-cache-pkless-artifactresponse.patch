@@ -1,0 +1,44 @@
+From 465928d6376bb6b509c586662c3240e490cfd315 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Mon, 21 Sep 2026 18:27:10 -0400
+Subject: [PATCH] Do not cache ArtifactResponse backed by an unsaved (pk=None)
+ Artifact
+
+AsyncContentCache.make_entry serialized every ArtifactResponse as
+artifact_pk=str(response._artifact.pk). When the response wraps an
+in-memory Artifact with no primary key (e.g. pulp_maven's path_index
+IndexedArtifactResponse, built from a digest), this stored
+artifact_pk="None". On a cache HIT make_response rebuilt
+ArtifactResponse(artifact_pk="None") whose prepare() runs
+Artifact.objects.aget(pk="None") -> Artifact.DoesNotExist, raised after
+the response is committed -> the worker drops the connection and the
+gateway returns a silent 502.
+
+Skip caching such responses; serve them live.
+---
+ pulpcore/cache/cache.py | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 04a7506..350a43d 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -425,6 +425,15 @@ class AsyncContentCache(AsyncCache):
+             entry["path"] = str(response._path)
+             entry["type"] = "FileResponse"
+         elif isinstance(response, ArtifactResponse):
++            if response._artifact.pk is None:
++                # The response is backed by an unsaved, in-memory Artifact (e.g. an
++                # index-served response built from a digest without a DB row). It has
++                # no primary key to serialize, so caching it would persist
++                # artifact_pk="None" and every cache HIT would rebuild
++                # ArtifactResponse(artifact_pk="None") -> Artifact.DoesNotExist raised
++                # after the response is committed -> a silent connection drop (502).
++                # Serve it live and do not cache.
++                return response
+             entry["artifact_pk"] = str(response._artifact.pk)
+             entry["type"] = "ArtifactResponse"
+         elif isinstance(response, HTTPNotFound):
+-- 
+2.55.0
+
