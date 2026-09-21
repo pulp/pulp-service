@@ -322,6 +322,175 @@ class TestScopeQueryset:
         assert result is group_qs
 
 
+class TestPublicDomainReadScoping:
+    """Fix A: scope_queryset must not filter reads inside a public-* domain.
+
+    Only relevant when PulpServiceAccessPolicy is the active permission class (RBAC). Mirrors
+    the has_permission public-* bypass so detail reads resolve to 200 instead of 404.
+    """
+
+    def _view(self, method, domain_name):
+        request = SimpleNamespace(
+            method=method,
+            pulp_domain=SimpleNamespace(name=domain_name) if domain_name else None,
+        )
+        return SimpleNamespace(request=request)
+
+    def test_public_domain_safe_read_returns_qs_unscoped(self):
+        """A safe read on a public-* domain returns qs untouched; super() is not consulted."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("GET", "public-trusted-libraries")
+        qs = MagicMock(name="qs")
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset") as super_scope:
+            result = policy.scope_queryset(view, qs)
+
+        super_scope.assert_not_called()
+        assert result is qs
+
+    def test_non_public_domain_still_scoped(self):
+        """A read on a non-public domain still defers to super().scope_queryset."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("GET", "private-domain")
+        qs = MagicMock(name="qs")
+        qs.model = object  # not Domain
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset", return_value=qs) as super_scope:
+            policy.scope_queryset(view, qs)
+
+        super_scope.assert_called_once()
+
+    def test_public_domain_write_is_still_scoped(self):
+        """A write (non-safe) on a public-* domain must NOT bypass scoping."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("POST", "public-trusted-libraries")
+        qs = MagicMock(name="qs")
+        qs.model = object
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset", return_value=qs) as super_scope:
+            policy.scope_queryset(view, qs)
+
+        super_scope.assert_called_once()
+
+    def test_is_public_domain_read_helper(self):
+        policy = PulpServiceAccessPolicy()
+        pub = SimpleNamespace(method="GET", pulp_domain=SimpleNamespace(name="public-x"))
+        priv = SimpleNamespace(method="GET", pulp_domain=SimpleNamespace(name="x"))
+        write = SimpleNamespace(method="POST", pulp_domain=SimpleNamespace(name="public-x"))
+        no_domain = SimpleNamespace(method="GET", pulp_domain=None)
+
+        assert policy._is_public_domain_read(pub) is True
+        assert policy._is_public_domain_read(priv) is False
+        assert policy._is_public_domain_read(write) is False
+        assert policy._is_public_domain_read(no_domain) is False
+        assert policy._is_public_domain_read(None) is False
+
+
+class TestDomainContentReadScoping:
+    """Fix B: a domain member with core.view_content can read orphan content (content in no
+    repository) on ANY content viewset, not just the file/list endpoints wired in settings.
+
+    Without this, pulpcore's repository-based scope_queryset filters out not-yet-in-a-repo
+    content for typed viewsets (rpm/python/container/...), so a detail read 404s.
+    """
+
+    def _content_qs(self):
+        from pulpcore.plugin.models import Content
+
+        qs = MagicMock(name="qs")
+        qs.model = Content
+        return qs
+
+    def _view(self, method, domain_name, has_perm):
+        user = SimpleNamespace(has_perm=lambda *_a, **_k: has_perm)
+        request = SimpleNamespace(
+            method=method,
+            pulp_domain=SimpleNamespace(name=domain_name) if domain_name else None,
+            user=user,
+        )
+        return SimpleNamespace(request=request)
+
+    def test_content_read_with_perm_returns_qs_unscoped(self):
+        """Safe read of content with core.view_content returns qs untouched; super() not consulted."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("GET", "private-domain", has_perm=True)
+        qs = self._content_qs()
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset") as super_scope:
+            result = policy.scope_queryset(view, qs)
+
+        super_scope.assert_not_called()
+        assert result is qs
+
+    def test_content_read_without_perm_still_scoped(self):
+        """Without core.view_content the read still defers to super().scope_queryset."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("GET", "private-domain", has_perm=False)
+        qs = self._content_qs()
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset", return_value=qs) as super_scope:
+            policy.scope_queryset(view, qs)
+
+        super_scope.assert_called_once()
+
+    def test_content_write_still_scoped(self):
+        """A write (non-safe) on content must NOT bypass scoping even with the perm."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("POST", "private-domain", has_perm=True)
+        qs = self._content_qs()
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset", return_value=qs) as super_scope:
+            policy.scope_queryset(view, qs)
+
+        super_scope.assert_called_once()
+
+    def test_non_content_model_still_scoped(self):
+        """A non-Content queryset (e.g. repositories) is never unscoped by this rule."""
+        policy = PulpServiceAccessPolicy()
+        view = self._view("GET", "private-domain", has_perm=True)
+        qs = MagicMock(name="qs")
+        qs.model = AuthGroup  # not a Content subclass
+
+        with patch.object(PulpServiceAccessPolicy.__bases__[0], "scope_queryset", return_value=qs) as super_scope:
+            policy.scope_queryset(view, qs)
+
+        super_scope.assert_called_once()
+
+    def test_is_domain_content_read_helper(self):
+        from pulpcore.plugin.models import Content
+
+        policy = PulpServiceAccessPolicy()
+        domain = SimpleNamespace(name="d")
+
+        def mkview(method, dom, model, has_perm, with_user=True):
+            user = SimpleNamespace(has_perm=lambda *_a, **_k: has_perm) if with_user else None
+            request = SimpleNamespace(method=method, pulp_domain=dom, user=user)
+            qs = MagicMock()
+            qs.model = model
+            return SimpleNamespace(request=request), qs
+
+        view, qs = mkview("GET", domain, Content, True)
+        assert policy._is_domain_content_read(view, qs) is True
+
+        view, qs = mkview("GET", domain, Content, False)
+        assert policy._is_domain_content_read(view, qs) is False
+
+        view, qs = mkview("POST", domain, Content, True)
+        assert policy._is_domain_content_read(view, qs) is False
+
+        view, qs = mkview("GET", domain, AuthGroup, True)
+        assert policy._is_domain_content_read(view, qs) is False
+
+        view, qs = mkview("GET", None, Content, True)
+        assert policy._is_domain_content_read(view, qs) is False
+
+        view, qs = mkview("GET", domain, Content, True, with_user=False)
+        assert policy._is_domain_content_read(view, qs) is False
+
+        _, qs = mkview("GET", domain, Content, True)
+        assert policy._is_domain_content_read(SimpleNamespace(), qs) is False
+
+
 def test_content_access_policy_setting_is_defined():
     policy = settings.ACCESS_POLICIES["content"]
     # queryset_scoping dropped so a domain member sees all content, not just repo-scoped.

@@ -1,0 +1,13 @@
+Fixed content visibility under RBAC: a domain member can now view content they uploaded but
+have not yet added to any repository (orphan content), on the generic ``/content/`` endpoint
+and every typed content viewset (rpm, python, container, file, ...). The content list policy
+gates on the domain-scoped ``core.view_content`` permission instead of scoping by repository,
+and ``scope_queryset`` grants that same domain-wide read to any content viewset so typed
+detail reads of orphan content resolve instead of 404ing.
+
+Also fixed a related read regression where a caller with no role on a ``public-*`` domain got
+a 404 listing or retrieving its repositories or content; the public-domain read bypass is now
+honoured in ``scope_queryset`` as well as ``has_permission``.
+
+Both changes take effect only when RBAC (``PulpServiceAccessPolicy``) is the active permission
+class, and are inert under the current default.
