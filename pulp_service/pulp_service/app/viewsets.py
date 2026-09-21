@@ -2110,6 +2110,54 @@ class StaleLockCleanupDispatcherView(APIView):
         )
 
 
+class DomainOrgBackfillReportDispatcherView(APIView):
+    """
+    Admin-only endpoint to dispatch the DomainOrg backfill report task.
+
+    POST dispatches a background task that builds the JSON report of DomainOrg rows with a
+    missing org_id (what migration 0022 can/cannot backfill) and attaches it to itself as a
+    ProfileArtifact named ``domainorg_backfill_report``. When the returned task completes,
+    download the report via ``GET /pulp/api/v3/tasks/<uuid>/profile_artifacts/``.
+
+    GET returns usage documentation.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        request=None,
+        description=(
+            "Dispatch a background task that generates the DomainOrg backfill report as a "
+            "downloadable JSON artifact attached to the task."
+        ),
+        summary="Dispatch DomainOrg backfill report",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        task = dispatch("pulp_service.app.tasks.domainorg_backfill_report.generate_backfill_report")
+        return OperationPostponedResponse(task, request)
+
+    def get(self, request):
+        """Return endpoint documentation."""
+        return Response(
+            {
+                "description": (
+                    "POST to dispatch a background task that generates the DomainOrg org_id "
+                    "backfill report. The report is a JSON list of the missing-org_id rows and "
+                    "whether migration 0022 can backfill each. When the returned task completes, "
+                    "GET /pulp/api/v3/tasks/<uuid>/profile_artifacts/ and download the "
+                    "'domainorg_backfill_report' URL."
+                ),
+                "task_name": "pulp_service.app.tasks.domainorg_backfill_report.generate_backfill_report",
+                "usage": {
+                    "endpoint": "/api/pulp/debug/domainorg-backfill-report/",
+                    "method": "POST",
+                    "authentication": "Admin user required",
+                },
+            }
+        )
+
+
 class CreateDomainView(APIView):
     """
     Custom endpoint to create domains with service-specific logic.
