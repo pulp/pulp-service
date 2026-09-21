@@ -1,0 +1,188 @@
+From 6a56d9566cf1afa18f652fe9b99f119ccca0edba Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Mon, 21 Sep 2026 17:45:48 -0400
+Subject: [PATCH] Elevate path-index serving diagnostics to INFO
+
+Surface why the path-index view fails to load and whether each request is
+served from the index or falls back to normal serving. _load view-load
+failures were previously swallowed at DEBUG, hiding CacheFull / InvalidIndex /
+IndexUnavailable / S3 causes. Adds per-decision INFO logging in
+indexed_response() and the content_handler fallback.
+
+Diagnostic only.
+---
+ pulp_maven/app/models.py             | 21 +++++++++++++++++++++
+ pulp_maven/app/path_index/cache.py   | 26 +++++++++++++++++++++++++-
+ pulp_maven/app/path_index/content.py | 27 +++++++++++++++++++++++++++
+ 3 files changed, 73 insertions(+), 1 deletion(-)
+
+diff --git a/pulp_maven/app/models.py b/pulp_maven/app/models.py
+index f263c41..4c74ac0 100644
+--- a/pulp_maven/app/models.py
++++ b/pulp_maven/app/models.py
+@@ -392,6 +392,13 @@ class MavenDistribution(Distribution, AutoAddObjPermsMixin):
+         if response is not None:
+             return response
+ 
++        logger.info(
++            "path_index[content_handler]: fallback path for distribution=%s path=%r "
++            "(index did not serve)",
++            self.pk,
++            path,
++        )
++
+         # Resolve the live repository version for this distribution.
+         if self.repository_version_id:
+             version = self.repository_version
+@@ -448,8 +455,22 @@ class MavenDistribution(Distribution, AutoAddObjPermsMixin):
+         )
+ 
+         if ca is None or ca.artifact is None:
++            logger.info(
++                "path_index[content_handler]: no servable index-page ContentArtifact for "
++                "path=%r (ca=%s, artifact=%s) -> returning None to normal handler",
++                index_rel_path,
++                None if ca is None else ca.pk,
++                None if ca is None else ca.artifact,
++            )
+             return None
+ 
++        logger.info(
++            "path_index[content_handler]: reading index-page HTML from storage "
++            "path=%r sha256=%s size=%s",
++            index_rel_path,
++            ca.artifact.sha256,
++            ca.artifact.size,
++        )
+         with ca.artifact.file.open("rb") as fh:
+             html_bytes = fh.read()
+ 
+diff --git a/pulp_maven/app/path_index/cache.py b/pulp_maven/app/path_index/cache.py
+index 6ae579d..a53ca6f 100644
+--- a/pulp_maven/app/path_index/cache.py
++++ b/pulp_maven/app/path_index/cache.py
+@@ -47,7 +47,9 @@ class ViewCache:
+         from pulp_maven.app.models import MavenRepository
+ 
+         close_old_connections()
++        log.info("path_index[_load]: starting view load for key=%s", key)
+         view = None
++        loaded = False
+         try:
+             repository = MavenRepository.objects.select_related("pulp_domain").get(pk=key[0])
+             set_domain(repository.pulp_domain)
+@@ -63,6 +65,12 @@ class ViewCache:
+                 # Cached views hold file pins even without active lookup leases.
+                 # Release this worker's unused mappings before retrying a fill;
+                 # otherwise old versions could keep every future version cold.
++                log.info(
++                    "path_index[_load]: CacheFull on first fill for key=%s; "
++                    "evicting idle views (currently cached=%d) and retrying",
++                    key,
++                    len(self.views),
++                )
+                 with self.lock:
+                     for old_key in list(self.views):
+                         if self.views[old_key][1] == 0:
+@@ -76,8 +84,17 @@ class ViewCache:
+                     self.views.pop(victim)[0].close()
+                 self.views[key] = [view, 0]
+                 view = None
++            loaded = True
++            log.info(
++                "path_index[_load]: view ready for key=%s (cached views=%d)",
++                key,
++                len(self.views),
++            )
+         except Exception:
+-            log.debug("Path index view unavailable", exc_info=True)
++            # Elevated from debug: this is the failure that silently forces the
++            # request to fall back to normal serving. exc_info shows the cause
++            # (CacheFull, InvalidIndex, IndexUnavailable, S3/segment errors, ...).
++            log.info("path_index[_load]: view UNAVAILABLE for key=%s", key, exc_info=True)
+         finally:
+             if view is not None:
+                 view.close()
+@@ -87,6 +104,13 @@ class ViewCache:
+                 self.retry[key] = time.monotonic() + settings.MAVEN_PATH_INDEX_REFRESH_SECONDS
+                 if len(self.retry) > 1024:
+                     self.retry.pop(next(iter(self.retry)))
++            if not loaded:
++                log.info(
++                    "path_index[_load]: load did not populate a view for key=%s; "
++                    "requests will fall back until retry after %ss",
++                    key,
++                    settings.MAVEN_PATH_INDEX_REFRESH_SECONDS,
++                )
+ 
+     @contextmanager
+     def lease(self, key):
+diff --git a/pulp_maven/app/path_index/content.py b/pulp_maven/app/path_index/content.py
+index 3550ab8..4a439d1 100644
+--- a/pulp_maven/app/path_index/content.py
++++ b/pulp_maven/app/path_index/content.py
+@@ -1,5 +1,6 @@
+ """Optional content hook. Core still authorizes every request before this hook."""
+ 
++import logging
+ import threading
+ import time
+ from collections import OrderedDict
+@@ -18,6 +19,8 @@ from .format import InvalidIndex
+ from .http import SUPPORTED_BACKENDS, IndexedArtifactResponse
+ from .state import descriptor as version_descriptor
+ 
++log = logging.getLogger(__name__)
++
+ _descriptors = OrderedDict()
+ _lock = threading.Lock()
+ 
+@@ -91,21 +94,45 @@ def indexed_response(distribution, path):
+         return None
+     key = descriptor(distribution)
+     if key is None:
++        log.info(
++            "path_index[serve]: no descriptor (index disabled or not built) "
++            "distribution=%s path=%r -> fallback",
++            distribution.pk,
++            path,
++        )
+         return None
+     with cache().lease(key) as view:
+         if view is None:
++            log.info(
++                "path_index[serve]: view UNAVAILABLE (lease returned None) "
++                "key=%s path=%r -> fallback to normal serving",
++                key,
++                path,
++            )
+             return None
+         entry = view.lookup(path)
+         if entry is None and path and not path.endswith("/") and view.lookup(path + "/"):
+             raise web.HTTPMovedPermanently(path.rsplit("/", 1)[-1] + "/")
+         if entry is None:
++            log.info("path_index[serve]: miss key=%s path=%r -> 404", key, path)
+             raise web.HTTPNotFound()
+         inline_html = (
+             not path or path.endswith("/") or path == "index.html" or path.endswith("/index.html")
+         )
+         domain = get_domain()
+         if not inline_html and domain.storage_class not in SUPPORTED_BACKENDS:
++            log.info(
++                "path_index[serve]: unsupported backend %s for non-inline path=%r -> fallback",
++                domain.storage_class,
++                path,
++            )
+             return None
++        log.info(
++            "path_index[serve]: HIT key=%s path=%r inline_html=%s -> serving from index",
++            key,
++            path,
++            inline_html,
++        )
+         return IndexedArtifactResponse(
+             artifact(entry, domain),
+             entry,
+-- 
+2.55.0
+
