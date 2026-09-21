@@ -47,8 +47,9 @@ class PublicDebugAuthenticationHeadersSerializer(serializers.Serializer):
     """Safe, non-sensitive diagnostics returned by the public auth debug endpoint."""
 
     x_rh_identity_present = serializers.BooleanField()
-    x_pulp_vpn_verified_present = serializers.BooleanField()
-    x_pulp_vpn_verified = serializers.BooleanField()
+    x_pulp_vpn_verified = serializers.BooleanField(
+        help_text="Whether the trusted X-Pulp-VPN-Verified assertion reached Pulp."
+    )
     x_pulp_vpn_access_present = serializers.BooleanField()
 
 

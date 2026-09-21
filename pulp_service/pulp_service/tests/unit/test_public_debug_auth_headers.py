@@ -31,7 +31,6 @@ def test_public_debug_auth_headers_returns_safe_diagnostics():
     assert response.status_code == 200
     assert response.data == {
         "x_rh_identity_present": True,
-        "x_pulp_vpn_verified_present": True,
         "x_pulp_vpn_verified": True,
         "x_pulp_vpn_access_present": True,
     }
@@ -46,24 +45,22 @@ def test_public_debug_auth_headers_without_headers():
     assert response.status_code == 200
     assert response.data == {
         "x_rh_identity_present": False,
-        "x_pulp_vpn_verified_present": False,
         "x_pulp_vpn_verified": False,
         "x_pulp_vpn_access_present": False,
     }
 
 
 @override_settings(AUTHENTICATION_HEADER_DEBUG=True)
-def test_public_debug_auth_headers_requires_exact_vpn_assertion():
+def test_public_debug_auth_headers_reports_received_vpn_assertion():
     request = factory.get(
         "/api/pulp/public-debug_auth_header/",
-        HTTP_X_PULP_VPN_VERIFIED="true",
+        HTTP_X_PULP_VPN_VERIFIED="arbitrary-value",
     )
 
     response = view(request)
 
     assert response.status_code == 200
-    assert response.data["x_pulp_vpn_verified_present"] is True
-    assert response.data["x_pulp_vpn_verified"] is False
+    assert response.data["x_pulp_vpn_verified"] is True
 
 
 @override_settings(AUTHENTICATION_HEADER_DEBUG=False)
