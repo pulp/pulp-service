@@ -1,0 +1,44 @@
+From cb15b49225d2c65dd78d2dd9c2b81eaa95bb2163 Mon Sep 17 00:00:00 2001
+From: Dennis Kliban <dkliban@redhat.com>
+Date: Mon, 21 Sep 2026 19:06:26 -0400
+Subject: [PATCH] Do not cache ArtifactResponse backed by an unsaved
+ (in-memory) Artifact
+
+Corrects the previous guard (pk is None), which never triggered: pulp models
+use pulp_id = UUIDField(primary_key=True, default=pulp_uuid), so a freshly
+constructed in-memory Artifact() already has a random UUID pk. The response
+was still cached with a bogus artifact_pk, and cache HITs rebuilt
+ArtifactResponse(artifact_pk=<missing>) -> aget -> Artifact.DoesNotExist
+post-commit -> silent 502.
+
+Use Django's _state.adding, which is True only for unsaved instances, to
+detect the in-memory (index-served) case and skip caching it.
+---
+ pulpcore/cache/cache.py | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 04a7506..d36e8dc 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -425,6 +425,17 @@ class AsyncContentCache(AsyncCache):
+             entry["path"] = str(response._path)
+             entry["type"] = "FileResponse"
+         elif isinstance(response, ArtifactResponse):
++            if response._artifact._state.adding:
++                # The response is backed by an unsaved, in-memory Artifact (e.g. an
++                # index-served response built from a digest, with no DB row). Its pk
++                # is a freshly generated default UUID that does not exist in the
++                # database, so caching it would persist an artifact_pk that no row
++                # matches; every cache HIT would then rebuild
++                # ArtifactResponse(artifact_pk=<missing>) whose prepare() runs
++                # Artifact.objects.aget(pk=<missing>) -> Artifact.DoesNotExist, raised
++                # after the response is committed -> a silent connection drop (502).
++                # Serve it live and do not cache.
++                return response
+             entry["artifact_pk"] = str(response._artifact.pk)
+             entry["type"] = "ArtifactResponse"
+         elif isinstance(response, HTTPNotFound):
+-- 
+2.55.0
+
