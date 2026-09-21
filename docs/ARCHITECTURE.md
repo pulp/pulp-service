@@ -443,7 +443,11 @@ Background tasks dispatched via pulpcore's RedisWorker (in `pulp_service/pulp_se
 *🔧 Plugin-specific OpenShift deployment configuration (see deploy/clowdapp.yaml)*
 
 - 🔧 `PULP_API_REPLICAS=1` - Number of API replicas (default, can be overridden)
+- 🔧 `PULP_API_MIN_REPLICA_COUNT=1` - Minimum API replicas for auto-scaling
+- 🔧 `PULP_API_MAX_REPLICA_COUNT=10` - Maximum API replicas for auto-scaling
 - 🔧 `PULP_CONTENT_REPLICAS=1` - Number of content replicas (default, can be overridden)
+- 🔧 `PULP_CONTENT_MIN_REPLICA_COUNT=2` - Minimum content replicas for auto-scaling
+- 🔧 `PULP_CONTENT_MAX_REPLICA_COUNT=10` - Maximum content replicas for auto-scaling
 - 🔧 `PULP_WORKER_REPLICAS=3` - Number of worker replicas (default, can be overridden)
 - 🔧 `PULP_WORKER_MIN_REPLICA_COUNT=3` - Minimum worker replicas for auto-scaling
 - 🔧 `PULP_WORKER_MAX_REPLICA_COUNT=20` - Maximum worker replicas for auto-scaling
@@ -538,6 +542,12 @@ Stage mirrors this with `crcs02ue1` + `pulps01ue1` (dedicated stage worker clust
 - **Health Checks**:
   - Readiness: GET `/api/pulp/api/v3/livez/` (delay: 5s, period: 60s)
   - Liveness: GET `/api/pulp/api/v3/livez/` (delay: 10s, period: 120s)
+- **Auto-scaling**:
+  - Min replicas: 1 (configurable via `PULP_API_MIN_REPLICA_COUNT`; production: 50 on `crcp01ue1`, 10 on `pulpp01ue1`)
+  - Max replicas: 10 (configurable via `PULP_API_MAX_REPLICA_COUNT`; production: 50 on `crcp01ue1`, 10 on `pulpp01ue1`)
+  - Trigger: Prometheus metric `pulp_api_active_connections` (scales on average concurrent requests per pod; threshold tuned in `deploy/clowdapp.yaml`)
+  - Scale up: 5 pods per 30s
+  - Scale down: 2 pods per 60s (with 300s stabilization window)
 - **Sidecars**: OpenTelemetry collector
 - **Init Containers**: wait-on-migrations
 
@@ -557,6 +567,13 @@ Stage mirrors this with `crcs02ue1` + `pulps01ue1` (dedicated stage worker clust
 - **Health Checks**:
   - Readiness: GET `/api/pulp-content/default/` (delay: 60s, period: 60s)
   - Liveness: GET `/api/pulp-content/default/` (delay: 60s, period: 120s)
+- **Auto-scaling**:
+  - Min replicas: 2 (configurable via `PULP_CONTENT_MIN_REPLICA_COUNT`)
+  - Max replicas: 10 (configurable via `PULP_CONTENT_MAX_REPLICA_COUNT`)
+  - Trigger: Prometheus metric `pulp_content_active_connections` (scales on average concurrent connections per pod; content is memory-bound, so the threshold is tuned in `deploy/clowdapp.yaml`)
+  - Scale up: 5 pods per 30s
+  - Scale down: 2 pods per 60s (with 300s stabilization window)
+  - Note: `PULP_CONTENT_MIN/MAX_REPLICA_COUNT` are not currently overridden in app-interface, so content uses these defaults (2–10) in all environments
 - **Sidecars**: OpenTelemetry collector
 - **Init Containers**: wait-on-migrations
 
