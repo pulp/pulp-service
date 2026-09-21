@@ -121,3 +121,10 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Routes pull-through caching operations and failed-download updates to the primary database while content reads use the replica.
+
+### 0066 — Path index serving diagnostics (INFO logging)
+
+- **Package:** pulp_maven
+- **Files:** `pulp_maven/app/path_index/cache.py`, `pulp_maven/app/path_index/content.py`, `pulp_maven/app/models.py`
+- **Description:** Diagnostic-only. Elevates the previously DEBUG-swallowed `ViewCache._load` failure to INFO (with `exc_info`) so the real cause of a failed index-view load is visible (`CacheFull`, `InvalidIndex`, `IndexUnavailable`, S3/segment errors), and adds per-decision INFO logging in `indexed_response()` (descriptor missing, lease returned None → fallback, lookup miss, index HIT) and in `MavenDistribution.content_handler` (fallback taken, inline index-page HTML read, no servable index-page artifact). Purpose: diagnose intermittent 502s on Lightwell Maven repos when `path_index` is enabled (PULP-2447). Remove once the root cause is understood.
+- **Upstream:** Not upstreamed — temporary diagnostic patch.
