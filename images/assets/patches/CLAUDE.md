@@ -122,9 +122,9 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Routes pull-through caching operations and failed-download updates to the primary database while content reads use the replica.
 
-### 0066 — Path index serving diagnostics (INFO logging)
+### 0067 — Do not cache ArtifactResponse backed by an unsaved (pk=None) Artifact
 
-- **Package:** pulp_maven
-- **Files:** `pulp_maven/app/path_index/cache.py`, `pulp_maven/app/path_index/content.py`, `pulp_maven/app/models.py`
-- **Description:** Diagnostic-only. Elevates the previously DEBUG-swallowed `ViewCache._load` failure to INFO (with `exc_info`) so the real cause of a failed index-view load is visible (`CacheFull`, `InvalidIndex`, `IndexUnavailable`, S3/segment errors), and adds per-decision INFO logging in `indexed_response()` (descriptor missing, lease returned None → fallback, lookup miss, index HIT) and in `MavenDistribution.content_handler` (fallback taken, inline index-page HTML read, no servable index-page artifact). Purpose: diagnose intermittent 502s on Lightwell Maven repos when `path_index` is enabled (PULP-2447). Remove once the root cause is understood.
-- **Upstream:** Not upstreamed — temporary diagnostic patch.
+- **Package:** pulpcore
+- **Files:** `pulpcore/cache/cache.py`
+- **Description:** Fixes silent 502s on Maven repos with `path_index` enabled. `AsyncContentCache.make_entry` serialized every `ArtifactResponse` as `artifact_pk=str(response._artifact.pk)`. pulp_maven's path_index serves `IndexedArtifactResponse` built from an in-memory `Artifact` with no pk, so this stored `artifact_pk="None"`; on a cache HIT `make_response` rebuilt `ArtifactResponse(artifact_pk="None")` whose `prepare()` runs `Artifact.objects.aget(pk="None")` → `Artifact.DoesNotExist`, raised after the response is committed → the worker drops the connection → gateway 502. The patch skips caching any `ArtifactResponse` whose `_artifact.pk is None` (served live instead). See PULP-2447 and pulp/pulp_maven#506.
+- **Upstream:** Candidate for a pulpcore fix (defensive cache guard).
