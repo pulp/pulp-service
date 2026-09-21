@@ -122,9 +122,9 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Routes pull-through caching operations and failed-download updates to the primary database while content reads use the replica.
 
-### 0067 — Do not cache ArtifactResponse backed by an unsaved (pk=None) Artifact
+### 0067 — Do not cache ArtifactResponse backed by an unsaved (in-memory) Artifact
 
 - **Package:** pulpcore
 - **Files:** `pulpcore/cache/cache.py`
-- **Description:** Fixes silent 502s on Maven repos with `path_index` enabled. `AsyncContentCache.make_entry` serialized every `ArtifactResponse` as `artifact_pk=str(response._artifact.pk)`. pulp_maven's path_index serves `IndexedArtifactResponse` built from an in-memory `Artifact` with no pk, so this stored `artifact_pk="None"`; on a cache HIT `make_response` rebuilt `ArtifactResponse(artifact_pk="None")` whose `prepare()` runs `Artifact.objects.aget(pk="None")` → `Artifact.DoesNotExist`, raised after the response is committed → the worker drops the connection → gateway 502. The patch skips caching any `ArtifactResponse` whose `_artifact.pk is None` (served live instead). See PULP-2447 and pulp/pulp_maven#506.
+- **Description:** Fixes silent 502s on Maven repos with `path_index` enabled. `AsyncContentCache.make_entry` serialized every `ArtifactResponse` as `artifact_pk=str(response._artifact.pk)`. pulp_maven's path_index serves `IndexedArtifactResponse` built from an in-memory `Artifact` that was never saved; because `pulp_id` is a `UUIDField(primary_key=True, default=pulp_uuid)`, that instance already has a **random** pk that matches **no DB row** (an earlier `pk is None` guard therefore never triggered). Caching it stored an `artifact_pk` with no matching row; on a cache HIT `make_response` rebuilt `ArtifactResponse(artifact_pk=<missing>)` whose `prepare()` runs `Artifact.objects.aget(pk=<missing>)` → `Artifact.DoesNotExist`, raised after the response is committed → the worker drops the connection → gateway 502. The patch skips caching any `ArtifactResponse` whose `_artifact._state.adding` is True (unsaved/in-memory instance); it is served live instead. See PULP-2447 and pulp/pulp_maven#506.
 - **Upstream:** Candidate for a pulpcore fix (defensive cache guard).
