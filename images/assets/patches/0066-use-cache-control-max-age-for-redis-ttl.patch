@@ -1,19 +1,8 @@
 diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
 --- a/pulpcore/cache/cache.py
 +++ b/pulpcore/cache/cache.py
-@@ -413,6 +413,10 @@ class AsyncContentCache(AsyncCache):
-
-         entry = {"headers": dict(response.headers), "status": response.status}
-
-+        max_age = self._parse_max_age(response)
-+        if max_age is not None and max_age > 0:
-+            expires = max_age
-+
-         if expires is not None:
-             # Redis TTL is not sufficient: https://github.com/pulp/pulpcore/issues/4845
-             entry["expires"] = expires + time.time()
-@@ -440,6 +444,19 @@ class AsyncContentCache(AsyncCache):
-             headers["X-PULP-CACHE"] = "HIT"
+@@ -444,6 +444,19 @@ class AsyncContentCache(AsyncCache):
+         if lm_epoch is not None and lm_epoch <= ims_epoch:
              raise HTTPNotModified(headers=headers)
 
 +    @staticmethod
@@ -32,10 +21,21 @@ diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
      def get_request_from_args(self, args):
          """Finds the request object from list of args"""
          for arg in args:
+@@ -491,6 +504,10 @@ class AsyncContentCache(AsyncCache):
+
+         entry = {"headers": dict(response.headers), "status": response.status}
+
++        max_age = self._parse_max_age(response)
++        if max_age is not None and max_age > 0:
++            expires = max_age
++
+         if expires is not None:
+             # Redis TTL is not sufficient: https://github.com/pulp/pulpcore/issues/4845
+             entry["expires"] = expires + time.time()
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -527,7 +527,7 @@ class Handler:
+@@ -548,7 +548,7 @@ class Handler:
          if content_type:
              headers["Content-Type"] = content_type
 
@@ -44,12 +44,12 @@ diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
 
          # Let plugin-Distribution set headers for this path if it wants.
          if distribution:
-@@ -1179,7 +1179,7 @@ class Handler:
+@@ -1459,7 +1459,7 @@ class Handler:
 
          etag = f'"{artifact.sha256}"'
          headers["ETag"] = etag
 -        headers["Cache-Control"] = "public, max-age=0, must-revalidate"
 +        headers["Cache-Control"] = "public, max-age=86400, must-revalidate"
 
-         if_none_match = request.headers.get("If-None-Match")
-         if if_none_match and etag in {v.strip() for v in if_none_match.split(",")}:
+         try:
+             range_start, range_stop = request.http_range.start, request.http_range.stop

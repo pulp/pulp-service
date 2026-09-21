@@ -112,8 +112,8 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 ### 0064 — Add ETag header support to content app
 
 - **Package:** pulpcore
-- **Files:** `pulpcore/content/handler.py`
-- **Description:** Adds `ETag` (sha256-based) and `Cache-Control: public, max-age=0, must-revalidate` headers to content app file responses, and handles `If-None-Match` requests with `304 Not Modified` to enable browser/CDN cache validation.
+- **Files:** `pulpcore/content/handler.py`, `pulpcore/cache/cache.py`
+- **Description:** Adds `ETag` (sha256-based) and `Cache-Control: public, max-age=0, must-revalidate` headers to content app file responses. Extends the cache layer's `_check_not_modified()` to handle `If-None-Match` requests alongside `If-Modified-Since`, and calls it on both cache HIT and MISS paths so ETag-matched 304 responses are properly cached in Redis.
 - **Upstream:** Not upstreamed yet — candidate for pulpcore contribution (no upstream PR).
 
 ### 0065 — Route content pull-through writes to primary
