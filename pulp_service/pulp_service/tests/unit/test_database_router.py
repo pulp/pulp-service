@@ -64,3 +64,9 @@ class TestContentReplicaRouter:
     @pytest.mark.parametrize("database", ["default", "replica", "other"])
     def test_only_default_allows_migrations(self, database):
         assert ContentReplicaRouter().allow_migrate(database, "content") is (database == "default")
+
+    @pytest.mark.parametrize("db1,db2", [("replica", None), ("replica", "default"), (None, None)])
+    def test_allow_relation_always_true(self, db1, db2):
+        obj1 = SimpleNamespace(_state=SimpleNamespace(db=db1))
+        obj2 = SimpleNamespace(_state=SimpleNamespace(db=db2))
+        assert ContentReplicaRouter().allow_relation(obj1, obj2) is True
