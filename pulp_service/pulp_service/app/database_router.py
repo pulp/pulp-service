@@ -29,5 +29,13 @@ class ContentReplicaRouter:
     def db_for_write(self, model, **hints):
         return "default"
 
+    def allow_relation(self, obj1, obj2, **hints):
+        # "replica" mirrors "default", so relations between objects loaded from
+        # either database (or not yet assigned to one) are always safe. Without
+        # this, Django's default same-db check rejects assigning a replica-read
+        # object (e.g. a Domain) to a new, unsaved instance (db=None), such as
+        # when pulp_maven builds an Artifact during a content-app read.
+        return True
+
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         return db == "default"
