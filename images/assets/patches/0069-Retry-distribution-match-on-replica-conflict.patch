@@ -1,0 +1,41 @@
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index f9ac45952..e4c5f62a5 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -39,6 +39,7 @@ from django.core.exceptions import (  # noqa: E402
+ from django.db import (  # noqa: E402
+     DatabaseError,
+     IntegrityError,
++    InterfaceError,
+     connections,
+     models,
+     transaction,
+@@ -343,8 +344,9 @@ class Handler:
+         base_paths = cls._base_paths(path)
+         distro_model = cls.distribution_model or Distribution
+         domain = get_domain()
+-        try:
+-            distro_object = (
++
++        def _get_distro_object():
++            return (
+                 distro_model.objects.filter(pulp_domain=domain)
+                 .select_related(
+                     "repository",
+@@ -363,7 +365,15 @@ class Handler:
+                 .get(base_path__in=base_paths)
+                 .cast()
+             )
+-            return distro_object
++
++        try:
++            try:
++                return _get_distro_object()
++            except (InterfaceError, DatabaseError):
++                # A read replica connection can be killed mid-query, e.g. by a
++                # standby recovery conflict. Reset and retry once on a fresh connection.
++                cls._reset_db_connection()
++                return _get_distro_object()
+         except ObjectDoesNotExist:
+             if path.rstrip("/") in base_paths:
+                 distros = distro_model.objects.filter(

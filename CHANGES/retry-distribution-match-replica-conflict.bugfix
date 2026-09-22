@@ -1,0 +1,1 @@
+Fixed content app requests failing with `OperationalError: terminating connection due to conflict with recovery` when a read-replica query was interrupted by a Postgres standby recovery conflict, by retrying the distribution lookup once on a fresh connection.
