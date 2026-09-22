@@ -128,3 +128,15 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/cache/cache.py`
 - **Description:** Fixes silent 502s on Maven repos with `path_index` enabled. `AsyncContentCache.make_entry` serialized every `ArtifactResponse` as `artifact_pk=str(response._artifact.pk)`. pulp_maven's path_index serves `IndexedArtifactResponse` built from an in-memory `Artifact` that was never saved; because `pulp_id` is a `UUIDField(primary_key=True, default=pulp_uuid)`, that instance already has a **random** pk that matches **no DB row** (an earlier `pk is None` guard therefore never triggered). Caching it stored an `artifact_pk` with no matching row; on a cache HIT `make_response` rebuilt `ArtifactResponse(artifact_pk=<missing>)` whose `prepare()` runs `Artifact.objects.aget(pk=<missing>)` → `Artifact.DoesNotExist`, raised after the response is committed → the worker drops the connection → gateway 502. The patch skips caching any `ArtifactResponse` whose `_artifact._state.adding` is True (unsaved/in-memory instance); it is served live instead. See PULP-2447 and pulp/pulp_maven#506.
 - **Upstream:** Candidate for a pulpcore fix (defensive cache guard).
+
+### 0068 — Reset all DB connections on stale connection retry
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `Handler._reset_db_connection()` only reset the `default` database alias, so when the content app's `ContentReplicaRouter` sent a read to the `replica` alias and that connection went stale (`OperationalError: the connection is closed`), the authentication retry in `pulpcore/content/authentication.py` kept hitting the same dead connection and failing. Resets every configured alias via `django.db.connections.all()` instead of just `default`.
+
+### 0069 — Retry distribution match on replica conflict
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `Handler._match_distribution()` had no retry logic around its `Distribution` lookup, so a Postgres hot-standby recovery conflict on the read replica (`OperationalError: terminating connection due to conflict with recovery`) surfaced as an unhandled 500 on every content-app request. Catches `InterfaceError`/`DatabaseError` around the query, resets connections via `_reset_db_connection()` (patch 0068), and retries once.

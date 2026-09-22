@@ -1,0 +1,1 @@
+Fixed the content app's stale-connection retry to reset every configured database alias, not just `default`, so requests routed to the read replica no longer keep failing with `OperationalError: the connection is closed` after the replica connection goes stale.
