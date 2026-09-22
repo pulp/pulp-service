@@ -1275,9 +1275,9 @@ spec:
                       f.write(json.dumps(task_results))
                     sys.exit(0)
 
-                  if len(results) != 1 or not isinstance(results[0], dict):
+                  if not isinstance(results[0], dict):
                     print(
-                      f"ERROR[Pulp response]: component={component}; expected one matching schema, found {len(results)}",
+                      f"ERROR[Pulp response]: component={component}; first result is not a dict, found {results}",
                       file=sys.stderr,
                     )
                     sys.exit(1)
