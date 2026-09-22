@@ -1,6 +1,7 @@
 from django.urls import include, path
 
 from .admin import admin_site
+from .cache_viewsets import FlushContentCacheView
 from .viewsets import (
     CreateDomainView,
     DatabaseTriggersView,
@@ -37,6 +38,7 @@ urlpatterns = [
     path("api/pulp/debug/task-debug/", TaskDebugView.as_view()),
     path("api/pulp/debug/task-queue/", TaskQueueView.as_view()),
     path("api/pulp/debug/stale-locks/", StaleLockScanView.as_view()),
+    path("api/pulp/debug/flush-content-cache/", FlushContentCacheView.as_view()),
     path("api/pulp/debug/cleanup-stale-locks/", StaleLockCleanupDispatcherView.as_view()),
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
     path("api/pulp/test/tasks/", TaskIngestionDispatcherView.as_view()),
