@@ -163,9 +163,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0065-Route-content-pull-through-writes-to-primary.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0065-Route-content-pull-through-writes-to-primary.patch
 
-COPY images/assets/patches/0066-use-cache-control-max-age-for-redis-ttl.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0066-use-cache-control-max-age-for-redis-ttl.patch
-
 COPY images/assets/patches/0067-do-not-cache-unsaved-artifactresponse.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0067-do-not-cache-unsaved-artifactresponse.patch
 
