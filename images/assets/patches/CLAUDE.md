@@ -122,6 +122,12 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Routes pull-through caching operations and failed-download updates to the primary database while content reads use the replica.
 
+### 0066 — Use Cache-Control max-age for Redis TTL (non-redirect domains only)
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/cache/cache.py`, `pulpcore/content/handler.py`
+- **Description:** Sets `Cache-Control: max-age=86400` on content app responses and uses that value as the Redis cache entry TTL, but only when the domain has `redirect_to_object_storage=False` (content streamed through the app). When `redirect_to_object_storage=True`, responses are redirects to signed S3/CloudFront URLs with limited lifetimes, so the Redis TTL is left at the default to avoid serving expired signed URLs from cache.
+
 ### 0067 — Do not cache ArtifactResponse backed by an unsaved (in-memory) Artifact
 
 - **Package:** pulpcore
