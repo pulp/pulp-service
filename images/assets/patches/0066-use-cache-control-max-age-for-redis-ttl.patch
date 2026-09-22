@@ -1,7 +1,15 @@
 diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
 --- a/pulpcore/cache/cache.py
 +++ b/pulpcore/cache/cache.py
-@@ -444,6 +444,19 @@ class AsyncContentCache(AsyncCache):
+@@ -17,6 +17,7 @@ from pulpcore.app.redis_connection import (
+     get_async_redis_connection,
+     get_redis_connection,
+ )
++from pulpcore.app.util import get_domain
+ from pulpcore.metrics import artifacts_size_counter
+ from pulpcore.responses import ArtifactResponse
+
+@@ -444,6 +445,19 @@ class AsyncContentCache(AsyncCache):
          if lm_epoch is not None and lm_epoch <= ims_epoch:
              raise HTTPNotModified(headers=headers)
 
@@ -21,12 +29,13 @@ diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
      def get_request_from_args(self, args):
          """Finds the request object from list of args"""
          for arg in args:
-@@ -491,6 +504,10 @@ class AsyncContentCache(AsyncCache):
+@@ -491,6 +505,11 @@ class AsyncContentCache(AsyncCache):
 
          entry = {"headers": dict(response.headers), "status": response.status}
 
++        domain = get_domain()
 +        max_age = self._parse_max_age(response)
-+        if max_age is not None and max_age > 0:
++        if not domain.redirect_to_object_storage and max_age is not None and max_age > 0:
 +            expires = max_age
 +
          if expires is not None:
