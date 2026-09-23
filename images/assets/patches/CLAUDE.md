@@ -146,3 +146,9 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** `Handler._match_distribution()` had no retry logic around its `Distribution` lookup, so a Postgres hot-standby recovery conflict on the read replica (`OperationalError: terminating connection due to conflict with recovery`) surfaced as an unhandled 500 on every content-app request. Catches `InterfaceError`/`DatabaseError` around the query, resets connections via `_reset_db_connection()` (patch 0068), and retries once.
+
+### 0070 — Retry publication lookup on replica conflict
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `_match_and_stream()` calls `distro.get_repository_publication_and_version()` (in `pulpcore/app/models/publication.py`), which runs `self.publication.cast()` — an unguarded multi-table query. This call site was missed by patch 0069, so it still surfaced raw `OperationalError: terminating connection due to conflict with recovery` 500s from the content app when the read replica killed the query mid-flight (seen in production for `rpm_rpmpublication` lookups). Adds `Handler._get_repository_publication_and_version()`, wrapping the call with the same catch-reset-retry pattern as patch 0069.

@@ -1,0 +1,1 @@
+Fixed content app requests failing with `OperationalError: terminating connection due to conflict with recovery` when resolving a distribution's publication on a read replica, by retrying the lookup once on a fresh connection.
