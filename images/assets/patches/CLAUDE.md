@@ -152,3 +152,9 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** `_match_and_stream()` calls `distro.get_repository_publication_and_version()` (in `pulpcore/app/models/publication.py`), which runs `self.publication.cast()` — an unguarded multi-table query. This call site was missed by patch 0069, so it still surfaced raw `OperationalError: terminating connection due to conflict with recovery` 500s from the content app when the read replica killed the query mid-flight (seen in production for `rpm_rpmpublication` lookups). Adds `Handler._get_repository_publication_and_version()`, wrapping the call with the same catch-reset-retry pattern as patch 0069.
+
+### 0071 — Retry content guard lookup on replica conflict
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `Handler._permit()` accesses `distribution.content_guard`, a lazily-loaded FK not covered by `_match_distribution()`'s `select_related()`, so it issues its own unguarded query. Seen in production as `OperationalError: the connection is closed` from the content app (a stale replica connection, distinct from the recovery-conflict variant fixed by patches 0069/0070) when resolving a `MavenDistribution`'s content guard. Wraps the `distribution.content_guard` access with the same catch-reset-retry pattern, calling `Handler._reset_db_connection()` (patch 0068) before retrying once.

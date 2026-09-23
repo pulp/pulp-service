@@ -1,0 +1,1 @@
+Fixed content app requests failing with `OperationalError: the connection is closed` when resolving a distribution's content guard on a read replica, by retrying the lookup once on a fresh connection.

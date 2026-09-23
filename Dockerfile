@@ -178,6 +178,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0070-Retry-publication-lookup-on-replica-conflict.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0070-Retry-publication-lookup-on-replica-conflict.patch
 
+COPY images/assets/patches/0071-Retry-content-guard-lookup-on-replica-conflict.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0071-Retry-content-guard-lookup-on-replica-conflict.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
