@@ -1,0 +1,32 @@
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -198,6 +198,18 @@
+         for conn in connections.all():
+             conn.close_if_unusable_or_obsolete()
+ 
++    @classmethod
++    def _get_repository_publication_and_version(cls, distro):
++        """
++        Wraps ``distro.get_repository_publication_and_version()`` with a retry on
++        a replica connection conflict, mirroring ``_match_distribution``'s retry.
++        """
++        try:
++            return distro.get_repository_publication_and_version()
++        except (InterfaceError, DatabaseError):
++            cls._reset_db_connection()
++            return distro.get_repository_publication_and_version()
++
+     async def list_distributions(self, request):
+         """
+         The handler for an HTML listing all distributions
+@@ -757,8 +769,8 @@
+             original_rel_path = original_rel_path.split("/", 1)[1]
+         else:
+             repository, repo_version, publication = await sync_to_async(
+-                distro.get_repository_publication_and_version
+-            )()
++                self._get_repository_publication_and_version
++            )(distro)
+ 
+         if publication:
+             try:
