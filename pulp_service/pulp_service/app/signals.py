@@ -5,12 +5,14 @@ from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
+from django_lifecycle import BEFORE_DELETE, hook
 
+from pulpcore.app.models import Distribution, HeaderContentGuard
 from pulpcore.plugin.models import Domain, Group
 from pulpcore.plugin.util import assign_role
 
 from pulp_service.app.authorization import group_var
-from pulp_service.app.constants import ORG_GROUP_PREFIX
+from pulp_service.app.constants import DEFAULT_IDENTITY_CONTENT_GUARD_NAME, ORG_GROUP_PREFIX
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -68,6 +70,54 @@ def _assign_domain_roles(entity, domain):
     assign_role("service.domain_admin", entity, domain=domain)
 
 
+def _assign_default_content_guard(domain):
+    if domain.name.startswith("public-"):
+        return
+
+    guard = HeaderContentGuard.objects.create(
+        name=DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+        header_name="x-rh-identity",
+        header_value="",
+        jq_filter='""',
+        pulp_domain=domain,
+    )
+    domain.default_content_guard = guard
+    domain.save(update_fields=["default_content_guard"])
+
+
+@hook(BEFORE_DELETE, when="name", is_not="default")
+def remove_default_identity_content_guard(domain):
+    """Delete the reserved service default guard before Django checks protected FKs."""
+    default_guard = domain.default_content_guard
+    if default_guard is None:
+        return
+
+    guard = default_guard.cast()
+    if not (
+        isinstance(guard, HeaderContentGuard)
+        and guard.pulp_domain_id == domain.pk
+        and guard.name == DEFAULT_IDENTITY_CONTENT_GUARD_NAME
+        and guard.header_name == "x-rh-identity"
+        and guard.header_value == ""
+        and guard.jq_filter == '""'
+    ):
+        return
+
+    # Do not detach a distribution from its guard during domain deletion.
+    if Distribution.objects.filter(content_guard=guard).exists():
+        return
+
+    guard.delete()
+
+
+_DOMAIN_DELETE_HOOK_NAME = "_pulp_service_remove_default_identity_content_guard"
+if not hasattr(Domain, _DOMAIN_DELETE_HOOK_NAME):
+    # django-lifecycle discovers decorated methods via a cached private method list.
+    # Pulpcore constrains its version; attach during plugin startup and clear the cache.
+    setattr(Domain, _DOMAIN_DELETE_HOOK_NAME, remove_default_identity_content_guard)
+    Domain._potentially_hooked_methods.cache_clear()
+
+
 @receiver(post_save, sender=Domain)
 def post_create_domain(sender, **kwargs):  # noqa: ARG001
     if kwargs["created"]:
@@ -81,16 +131,16 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
         group_var.set(None)
 
         domain = kwargs["instance"]
-        if user_id:
-            # post_save fires after the Domain INSERT. When the creating request already
-            # wraps the save in a transaction (self-service CreateDomainView), the block
-            # below nests as a savepoint and a failure rolls the Domain back with it. When
-            # the caller is in autocommit (generic DomainViewSet), the Domain row is already
-            # committed on its own, so on failure we delete it to avoid leaving a domain
-            # without its RBAC/DomainOrg dual-write state.
-            domain_committed_standalone = not connection.in_atomic_block
-            try:
-                with transaction.atomic():
+        # post_save fires after the Domain INSERT. When the creating request already
+        # wraps the save in a transaction (self-service CreateDomainView), the block
+        # below nests as a savepoint and a failure rolls the Domain back with it. When
+        # the caller is in autocommit (generic DomainViewSet), the Domain row is already
+        # committed on its own, so on failure we delete it to avoid leaving a domain
+        # without its RBAC/DomainOrg or default content guard state.
+        domain_committed_standalone = not connection.in_atomic_block
+        try:
+            with transaction.atomic():
+                if user_id:
                     user = get_user_model().objects.get(pk=user_id)
                     # When the create request carried no identity.internal.org_id, org_id_var
                     # is None -- the calunga null-org_id shape that leaves the rh-org-<org_id>
@@ -111,7 +161,7 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                     # explicit "team" group should scope domain visibility to a group.
                     # Query through the pulpcore Group proxy (not user.groups, which yields
                     # base auth.Group instances) so assign_role classifies it as a Group.
-                    elif group := Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first():
+                    elif group := (Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first()):
                         do = DomainOrg.objects.create(org_id=org_id, group=group)
                     else:
                         do = DomainOrg.objects.create(org_id=org_id, user=user)
@@ -124,7 +174,9 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                             _assign_domain_roles(org_group, domain)
 
                     do.domains.add(domain)
-            except Exception:
-                if domain_committed_standalone:
-                    domain.delete()
-                raise
+
+                _assign_default_content_guard(domain)
+        except Exception:
+            if domain_committed_standalone:
+                domain.delete()
+            raise
