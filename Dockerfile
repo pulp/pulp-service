@@ -187,6 +187,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0073-never-decrease-redis-hash-ttl.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0073-never-decrease-redis-hash-ttl.patch
 
+COPY images/assets/patches/0074-no-store-cache-control-on-302-redirects.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0074-no-store-cache-control-on-302-redirects.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

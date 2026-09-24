@@ -1,0 +1,9 @@
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -1272,6 +1272,7 @@
+         response = self._build_response_from_content_artifact(content_artifact, headers, request)
+         if isinstance(response, HTTPFound):
++            response.headers["Cache-Control"] = "private, no-store"
+             raise response
+         else:
+             return response
