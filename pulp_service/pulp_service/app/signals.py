@@ -7,12 +7,19 @@ from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
 from django_lifecycle import BEFORE_DELETE, hook
 
-from pulpcore.app.models import Distribution, HeaderContentGuard
+from pulpcore.app.models import CompositeContentGuard, Distribution, HeaderContentGuard
 from pulpcore.plugin.models import Domain, Group
 from pulpcore.plugin.util import assign_role
 
 from pulp_service.app.authorization import group_var
-from pulp_service.app.constants import DEFAULT_IDENTITY_CONTENT_GUARD_NAME, ORG_GROUP_PREFIX
+from pulp_service.app.constants import (
+    DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+    DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+    DEFAULT_VPN_CONTENT_GUARD_NAME,
+    LEGACY_DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+    ORG_GROUP_PREFIX,
+    VPN_VERIFIED_HEADER_NAME,
+)
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -70,51 +77,91 @@ def _assign_domain_roles(entity, domain):
     assign_role("service.domain_admin", entity, domain=domain)
 
 
-def _assign_default_content_guard(domain):
+def _provision_domain_content_guards(domain):
     if domain.name.startswith("public-"):
         return
 
-    guard = HeaderContentGuard.objects.create(
+    identity_guard = HeaderContentGuard.objects.create(
         name=DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
         header_name="x-rh-identity",
         header_value="",
         jq_filter='""',
         pulp_domain=domain,
     )
-    domain.default_content_guard = guard
+    vpn_guard = HeaderContentGuard.objects.create(
+        name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+        header_name=VPN_VERIFIED_HEADER_NAME,
+        header_value="true",
+        jq_filter=None,
+        pulp_domain=domain,
+    )
+    composite_guard = CompositeContentGuard.objects.create(
+        name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+        pulp_domain=domain,
+    )
+    composite_guard.guards.add(identity_guard, vpn_guard)
+
+    domain.default_content_guard = identity_guard
     domain.save(update_fields=["default_content_guard"])
 
 
 @hook(BEFORE_DELETE, when="name", is_not="default")
-def remove_default_identity_content_guard(domain):
-    """Delete the reserved service default guard before Django checks protected FKs."""
-    default_guard = domain.default_content_guard
-    if default_guard is None:
-        return
+def remove_service_content_guards_before_domain_delete(domain):
+    """Remove unused service guards before Django checks protected domain FKs."""
+    identity_guards = list(
+        HeaderContentGuard.objects.filter(
+            pulp_domain=domain,
+            name__in=(DEFAULT_IDENTITY_CONTENT_GUARD_NAME, LEGACY_DEFAULT_IDENTITY_CONTENT_GUARD_NAME),
+            header_name="x-rh-identity",
+            header_value="",
+            jq_filter='""',
+        )
+    )
+    vpn_guards = list(
+        HeaderContentGuard.objects.filter(
+            pulp_domain=domain,
+            name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+            header_name=VPN_VERIFIED_HEADER_NAME,
+            header_value="true",
+            jq_filter__isnull=True,
+        )
+    )
+    identity_guard_ids = {guard.pk for guard in identity_guards}
+    vpn_guard_ids = {guard.pk for guard in vpn_guards}
 
-    guard = default_guard.cast()
-    if not (
-        isinstance(guard, HeaderContentGuard)
-        and guard.pulp_domain_id == domain.pk
-        and guard.name == DEFAULT_IDENTITY_CONTENT_GUARD_NAME
-        and guard.header_name == "x-rh-identity"
-        and guard.header_value == ""
-        and guard.jq_filter == '""'
+    for composite_guard in CompositeContentGuard.objects.filter(
+        pulp_domain=domain,
+        name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
     ):
-        return
+        child_guard_ids = set(composite_guard.guards.values_list("pk", flat=True))
+        is_service_composite = any(
+            child_guard_ids == {identity_guard_id, vpn_guard_id}
+            for identity_guard_id in identity_guard_ids
+            for vpn_guard_id in vpn_guard_ids
+        )
+        if is_service_composite:
+            _delete_guard_if_unreferenced(composite_guard)
 
-    # Do not detach a distribution from its guard during domain deletion.
+    for guard in (*vpn_guards, *identity_guards):
+        cast_guard = guard.cast()
+        if isinstance(cast_guard, HeaderContentGuard) and cast_guard.pulp_domain_id == domain.pk:
+            _delete_guard_if_unreferenced(cast_guard)
+
+
+def _delete_guard_if_unreferenced(guard):
+    """Keep guards referenced by distributions or composites to avoid detaching authorization."""
     if Distribution.objects.filter(content_guard=guard).exists():
         return
-
+    if CompositeContentGuard.objects.filter(guards=guard).exists():
+        return
     guard.delete()
 
 
-_DOMAIN_DELETE_HOOK_NAME = "_pulp_service_remove_default_identity_content_guard"
+_DOMAIN_DELETE_HOOK_NAME = "_pulp_service_remove_content_guards_before_domain_delete"
 if not hasattr(Domain, _DOMAIN_DELETE_HOOK_NAME):
     # django-lifecycle discovers decorated methods via a cached private method list.
     # Pulpcore constrains its version; attach during plugin startup and clear the cache.
-    setattr(Domain, _DOMAIN_DELETE_HOOK_NAME, remove_default_identity_content_guard)
+    setattr(Domain, _DOMAIN_DELETE_HOOK_NAME, remove_service_content_guards_before_domain_delete)
     Domain._potentially_hooked_methods.cache_clear()
 
 
@@ -175,7 +222,7 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
 
                     do.domains.add(domain)
 
-                _assign_default_content_guard(domain)
+                _provision_domain_content_guards(domain)
         except Exception:
             if domain_committed_standalone:
                 domain.delete()
