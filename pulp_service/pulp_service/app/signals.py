@@ -42,6 +42,22 @@ def log_new_user(sender, instance, created, **kwargs):  # noqa: ARG001
         _logger.info("New user created: username=%s, route=%s", instance.username, request_path or "unknown")
 
 
+def _derive_org_id_from_user(user):
+    """Derive an org_id from the user's rh-org-<org_id> group membership, or None.
+
+    Fallback for a domain create whose request carried no identity.internal.org_id
+    (the calunga null-org_id shape). Users are auto-added to rh-org-<org_id> at auth
+    time, so a user in exactly one such group unambiguously identifies their org.
+    Return None for zero or multiple org groups -- never guess for a mixed-org user.
+    Single-user analogue of migration 0022's _derive_org_id.
+    """
+    org_ids = {
+        name[len(ORG_GROUP_PREFIX) :]
+        for name in user.groups.filter(name__startswith=ORG_GROUP_PREFIX).values_list("name", flat=True)
+    }
+    return next(iter(org_ids)) if len(org_ids) == 1 else None
+
+
 def _assign_domain_roles(entity, domain):
     """
     Assign the following RBAC roles for the passed entity:
@@ -76,6 +92,12 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
             try:
                 with transaction.atomic():
                     user = get_user_model().objects.get(pk=user_id)
+                    # When the create request carried no identity.internal.org_id, org_id_var
+                    # is None -- the calunga null-org_id shape that leaves the rh-org-<org_id>
+                    # group role-less. Recover it from the creator's own rh-org membership so
+                    # the DomainOrg row and the rh-org role grant below still happen. `or`
+                    # (not an `if`) keeps this function under the branch-count lint ceiling.
+                    org_id = org_id or _derive_org_id_from_user(user)
                     # The creator always gets direct roles, even when the domain is group-scoped.
                     # This diverges from migration 0019 (which assigns to user OR group per
                     # DomainOrg row); on a rollback+re-migrate the creator would lose this
