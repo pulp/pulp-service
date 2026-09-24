@@ -12,6 +12,7 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.36.2              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.32.0              |
+| `pulp_rpm/`      | [pulp/pulp_rpm](https://github.com/pulp/pulp_rpm)          | pulp-rpm         | 3.38.5              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
 
 Versions are pinned in `pulp_service/requirements.txt`. Django-storages is a
@@ -158,3 +159,9 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** `Handler._permit()` accesses `distribution.content_guard`, a lazily-loaded FK not covered by `_match_distribution()`'s `select_related()`, so it issues its own unguarded query. Seen in production as `OperationalError: the connection is closed` from the content app (a stale replica connection, distinct from the recovery-conflict variant fixed by patches 0069/0070) when resolving a `MavenDistribution`'s content guard. Wraps the `distribution.content_guard` access with the same catch-reset-retry pattern, calling `Handler._reset_db_connection()` (patch 0068) before retrying once.
+
+### 0072 — Fix worker crash on invalid UTF-8 RPM changelogs
+
+- **Package:** pulp_rpm
+- **Files:** `pulp_rpm/app/models/package.py`, `pulp_rpm/app/serializers/package.py`, `pulp_rpm/app/shared_utils.py`, `pulp_rpm/app/tasks/signing.py`
+- **Description:** `createrepo_c`'s changelog decoding crashes the whole worker process with a SIGSEGV when a changelog entry contains bytes that aren't valid UTF-8 (seen in production on a legacy Copr-built package with a Latin-1-encoded author name; reproduced with a `PyEval_EvalFrameEx returned a result with an error set` task failure on Python 3.8 and an outright SIGSEGV on Python 3.11, matching production). Adds `shared_utils.read_changelogs()`, which reads changelog entries via `rpm_rs` instead — already a pulp_rpm dependency for signature extraction — decoding the same data leniently (replacing invalid bytes with U+FFFD) instead of crashing. `Package.createrepo_to_dict()` now accepts a `changelogs` override used by every call site that has a local copy of the RPM file; the repodata-XML sync path (which has no local file to re-read) is unaffected and still uses `package.changelogs` directly.
