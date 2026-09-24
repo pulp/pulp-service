@@ -46,16 +46,7 @@ def _identity_header(org_id, username):
 
 
 @pytest.fixture
-def configure_pypi_distribution(
-    anonymous_user,
-    gen_object_with_cleanup,
-    add_to_cleanup,
-    create_service_domain,
-    pulpcore_bindings,
-    python_bindings,
-    service_content_guards_api_client,
-    bindings_cfg,
-):
+def configure_pypi_distribution(request):  # noqa: PLR0915 - fixture orchestrates multi-step API setup and cleanup
     """
     Creates a domain owned by DOMAIN_OWNER_ORG_ID, with a Python repository and a PyPI
     distribution.
@@ -64,7 +55,52 @@ def configure_pypi_distribution(
 
     Returns a (domain_name, pypi_simple_url, repos_url, owner_header) tuple.
     """
+    anonymous_user = request.getfixturevalue("anonymous_user")
+    gen_object_with_cleanup = request.getfixturevalue("gen_object_with_cleanup")
+    add_to_cleanup = request.getfixturevalue("add_to_cleanup")
+    create_service_domain = request.getfixturevalue("create_service_domain")
+    pulpcore_bindings = request.getfixturevalue("pulpcore_bindings")
+    python_bindings = request.getfixturevalue("python_bindings")
+    service_content_guards_api_client = request.getfixturevalue("service_content_guards_api_client")
+    bindings_cfg = request.getfixturevalue("bindings_cfg")
+    monitor_task = request.getfixturevalue("monitor_task")
     owner_header = _identity_header(DOMAIN_OWNER_ORG_ID, "lightwell-test-owner")
+
+    def _create_distribution(domain_name, distro_params, features):
+        with anonymous_user:
+            python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = owner_header
+            if features is not None:
+                from pulpcore.client.pulp_service import ServiceFeatureContentGuard
+
+                service_content_guards_api_client.api_client.default_headers["x-rh-identity"] = owner_header
+                guard = service_content_guards_api_client.create(
+                    service_feature_content_guard=ServiceFeatureContentGuard(
+                        name=f"guard-{uuid4()}",
+                        header_name="x-rh-identity",
+                        features=features,
+                        jq_filter=".identity.org_id",
+                    ),
+                    pulp_domain=domain_name,
+                )
+                add_to_cleanup(service_content_guards_api_client, guard.pulp_href)
+                distro_params["content_guard"] = guard.pulp_href
+
+            try:
+                response = python_bindings.DistributionsPypiApi.create(
+                    distro_params,
+                    pulp_domain=domain_name,
+                )
+            finally:
+                python_bindings.DistributionsPypiApi.api_client.default_headers.pop("x-rh-identity", None)
+
+        if hasattr(response, "task"):
+            monitor_task(response.task)
+        distributions = python_bindings.DistributionsPypiApi.list(
+            name=distro_params["name"],
+            pulp_domain=domain_name,
+        )
+        assert distributions.count == 1
+        add_to_cleanup(python_bindings.DistributionsPypiApi, distributions.results[0].pulp_href)
 
     def _configure(domain_name, features=None, use_vpn_composite=False):
         create_service_domain(domain_name, identity_header=owner_header)
@@ -90,29 +126,7 @@ def configure_pypi_distribution(
         if composite_href:
             distro_params["content_guard"] = composite_href
 
-        with anonymous_user:
-            python_bindings.DistributionsPypiApi.api_client.default_headers["x-rh-identity"] = owner_header
-            if features is not None:
-                from pulpcore.client.pulp_service import ServiceFeatureContentGuard
-
-                service_content_guards_api_client.api_client.default_headers["x-rh-identity"] = owner_header
-                guard = service_content_guards_api_client.create(
-                    service_feature_content_guard=ServiceFeatureContentGuard(
-                        name=f"guard-{uuid4()}",
-                        header_name="x-rh-identity",
-                        features=features,
-                        jq_filter=".identity.org_id",
-                    ),
-                    pulp_domain=domain_name,
-                )
-                add_to_cleanup(service_content_guards_api_client, guard.pulp_href)
-                distro_params["content_guard"] = guard.pulp_href
-
-            gen_object_with_cleanup(
-                python_bindings.DistributionsPypiApi,
-                distro_params,
-                pulp_domain=domain_name,
-            )
+        _create_distribution(domain_name, distro_params, features)
 
         base_path = distro_params["base_path"]
         pypi_url = urljoin(bindings_cfg.host, f"/api/pypi/{domain_name}/{base_path}/simple/")
