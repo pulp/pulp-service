@@ -47,3 +47,6 @@ RHEL_AI_DOMAIN_NAME = "rhel-ai"
 
 # Prefix for the per-org groups users are auto-assigned to on authentication.
 ORG_GROUP_PREFIX = "rh-org-"
+
+# Reserved name for the HeaderContentGuard assigned automatically to private domains.
+DEFAULT_IDENTITY_CONTENT_GUARD_NAME = "pulp-service-default-x-rh-identity"

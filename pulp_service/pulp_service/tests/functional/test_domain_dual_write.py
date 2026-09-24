@@ -5,6 +5,10 @@ from uuid import uuid4
 
 import pytest
 import requests
+from django.db.models.deletion import ProtectedError
+
+from pulpcore.app.models import HeaderContentGuard
+from pulpcore.plugin.models import Domain
 
 # These tests exercise the RBAC dual-write in the post_create_domain signal
 # (pulp_service/app/signals.py) across both entry points:
@@ -167,3 +171,55 @@ def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, 
     org_groups = pulpcore_bindings.GroupsApi.list(name=f"rh-org-{ORG_ID}")
     assert org_groups.count == 1
     _assert_owns_domain(_group_role_assignments(pulpcore_bindings, org_groups.results[0].pulp_href), domain_href)
+
+
+def test_domain_with_automatic_identity_guard_can_be_deleted(
+    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, monitor_task
+):
+    """Deleting a domain also removes its service-managed default identity guard."""
+    domain_name = str(uuid4())
+    auth_header = _auth_header(_identity(str(uuid4())))
+
+    with anonymous_user:
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+        try:
+            domain = gen_object_with_cleanup(
+                pulpcore_bindings.DomainsApi,
+                {
+                    "name": domain_name,
+                    "storage_class": "pulpcore.app.models.storage.FileSystem",
+                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+                },
+            )
+            assert "/contentguards/core/header/" in domain.default_content_guard
+
+            delete_task = pulpcore_bindings.DomainsApi.delete(domain.pulp_href).task
+            result = monitor_task(delete_task)
+
+            assert result.state == "completed"
+        finally:
+            pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+
+
+@pytest.mark.django_db
+def test_customer_guard_protects_domain_and_rolls_back_default_guard_cleanup():
+    """Failed domain deletion preserves both customer and automatic guards."""
+    domain = Domain.objects.create(
+        name=f"delete-{uuid4()}",
+        storage_class="pulpcore.app.models.storage.FileSystem",
+        storage_settings={"MEDIA_ROOT": "/var/lib/pulp/media/"},
+    )
+    auto_guard_id = domain.default_content_guard_id
+    customer_guard = HeaderContentGuard.objects.create(
+        name="customer-managed",
+        header_name="x-customer-token",
+        header_value="expected",
+        pulp_domain=domain,
+    )
+
+    with pytest.raises(ProtectedError):
+        domain.delete()
+
+    assert Domain.objects.filter(pk=domain.pk).exists()
+    assert HeaderContentGuard.objects.filter(pk=auto_guard_id).exists()
+    assert HeaderContentGuard.objects.filter(pk=customer_guard.pk).exists()

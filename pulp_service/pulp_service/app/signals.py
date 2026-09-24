@@ -5,13 +5,14 @@ from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
+from django_lifecycle import BEFORE_DELETE, hook
 
-from pulpcore.app.models import HeaderContentGuard
+from pulpcore.app.models import Distribution, HeaderContentGuard
 from pulpcore.plugin.models import Domain, Group
 from pulpcore.plugin.util import assign_role
 
 from pulp_service.app.authorization import group_var
-from pulp_service.app.constants import ORG_GROUP_PREFIX
+from pulp_service.app.constants import DEFAULT_IDENTITY_CONTENT_GUARD_NAME, ORG_GROUP_PREFIX
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -73,14 +74,48 @@ def _assign_default_content_guard(domain):
     if domain.name.startswith("public-"):
         return
 
-    domain.default_content_guard = HeaderContentGuard.objects.create(
-        name="x-rh-identity",
+    guard = HeaderContentGuard.objects.create(
+        name=DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
         header_name="x-rh-identity",
         header_value="",
         jq_filter='""',
         pulp_domain=domain,
     )
+    domain.default_content_guard = guard
     domain.save(update_fields=["default_content_guard"])
+
+
+@hook(BEFORE_DELETE, when="name", is_not="default")
+def remove_default_identity_content_guard(domain):
+    """Delete the reserved service default guard before Django checks protected FKs."""
+    default_guard = domain.default_content_guard
+    if default_guard is None:
+        return
+
+    guard = default_guard.cast()
+    if not (
+        isinstance(guard, HeaderContentGuard)
+        and guard.pulp_domain_id == domain.pk
+        and guard.name == DEFAULT_IDENTITY_CONTENT_GUARD_NAME
+        and guard.header_name == "x-rh-identity"
+        and guard.header_value == ""
+        and guard.jq_filter == '""'
+    ):
+        return
+
+    # Do not detach a distribution from its guard during domain deletion.
+    if Distribution.objects.filter(content_guard=guard).exists():
+        return
+
+    guard.delete()
+
+
+_DOMAIN_DELETE_HOOK_NAME = "_pulp_service_remove_default_identity_content_guard"
+if not hasattr(Domain, _DOMAIN_DELETE_HOOK_NAME):
+    # django-lifecycle discovers decorated methods via a cached private method list.
+    # Pin 1.3.0 and test hook discovery; attach during plugin startup, then clear the cache.
+    setattr(Domain, _DOMAIN_DELETE_HOOK_NAME, remove_default_identity_content_guard)
+    Domain._potentially_hooked_methods.cache_clear()
 
 
 @receiver(post_save, sender=Domain)
