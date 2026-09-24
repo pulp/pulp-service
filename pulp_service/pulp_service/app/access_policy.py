@@ -9,7 +9,7 @@ from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS
 
 from pulpcore.app.access_policy import AccessPolicyFromSettings
-from pulpcore.plugin.models import Domain
+from pulpcore.plugin.models import Content, Domain
 from pulpcore.plugin.util import get_domain_pk
 
 from pulp_service.app.models import DomainOrg
@@ -52,7 +52,57 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
 
         return super().has_permission(request, view)
 
+    @staticmethod
+    def _is_public_domain_read(request):
+        """
+        True for a safe-method read against a public-* domain (world-readable).
+
+        Mirrors the has_permission public-* bypass so all read layers agree: without this,
+        has_permission allows the read but scope_queryset filters the object out of the
+        queryset, and get_object_or_404 raises 404.
+        """
+        if request is None or getattr(request, "method", None) not in SAFE_METHODS:
+            return False
+        domain = getattr(request, "pulp_domain", None)
+        return bool(domain and domain.name.startswith("public-"))
+
+    @staticmethod
+    def _is_domain_content_read(view, qs):
+        """
+        True for a safe-method read of a Content queryset by a caller holding domain-scoped
+        core.view_content.
+
+        pulpcore's default content scope_queryset filters to content in a viewable repository,
+        which hides orphan content (uploaded, not yet added to any repository) and 404s the read.
+        The settings-based content-list policy drops that scoping only for the generic/file
+        endpoints; this generalizes it to every typed content viewset (rpm/python/container/...)
+        so a domain member can read their own not-yet-in-a-repo content.
+        """
+        request = getattr(view, "request", None)
+        if request is None or getattr(request, "method", None) not in SAFE_METHODS:
+            return False
+        model = getattr(qs, "model", None)
+        if model is None or not issubclass(model, Content):
+            return False
+        domain = getattr(request, "pulp_domain", None)
+        user = getattr(request, "user", None)
+        if domain is None or user is None:
+            return False
+        return bool(user.has_perm("core.view_content", obj=domain))
+
     def scope_queryset(self, view, qs):
+        # Public domains are world-readable on safe methods. base.py has already filtered qs
+        # to request.pulp_domain, so returning it unscoped exposes only this domain's objects
+        # (no cross-domain leak) and lets detail reads resolve instead of 404ing.
+        if self._is_public_domain_read(getattr(view, "request", None)):
+            return qs
+
+        # Domain members with core.view_content can read all content in their domain, including
+        # orphan content not yet in a repository. base.py has already scoped qs to the request
+        # domain, so returning it unscoped stays within the caller's domain (no cross-domain leak).
+        if self._is_domain_content_read(view, qs):
+            return qs
+
         qs = super().scope_queryset(view, qs)
         if qs.model is Domain:
             public_domains = Domain.objects.filter(name__startswith="public-")
