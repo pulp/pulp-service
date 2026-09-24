@@ -179,6 +179,7 @@ def test_domain_with_automatic_identity_guard_can_be_deleted(
     """Deleting a domain also removes its service-managed default identity guard."""
     domain_name = str(uuid4())
     auth_header = _auth_header(_identity(str(uuid4())))
+    delete_task = None
 
     with anonymous_user:
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
@@ -194,11 +195,11 @@ def test_domain_with_automatic_identity_guard_can_be_deleted(
             assert "/contentguards/core/header/" in domain.default_content_guard
 
             delete_task = pulpcore_bindings.DomainsApi.delete(domain.pulp_href).task
-            result = monitor_task(delete_task)
-
-            assert result.state == "completed"
         finally:
             pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+
+    result = monitor_task(delete_task)
+    assert result.state == "completed"
 
 
 @pytest.mark.django_db
