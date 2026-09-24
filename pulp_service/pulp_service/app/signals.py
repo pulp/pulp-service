@@ -113,7 +113,7 @@ def remove_default_identity_content_guard(domain):
 _DOMAIN_DELETE_HOOK_NAME = "_pulp_service_remove_default_identity_content_guard"
 if not hasattr(Domain, _DOMAIN_DELETE_HOOK_NAME):
     # django-lifecycle discovers decorated methods via a cached private method list.
-    # Pin 1.3.0 and test hook discovery; attach during plugin startup, then clear the cache.
+    # Pulpcore constrains its version; attach during plugin startup and clear the cache.
     setattr(Domain, _DOMAIN_DELETE_HOOK_NAME, remove_default_identity_content_guard)
     Domain._potentially_hooked_methods.cache_clear()
 
