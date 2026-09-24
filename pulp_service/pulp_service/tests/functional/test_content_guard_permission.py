@@ -20,12 +20,9 @@ from uuid import uuid4
 import pytest
 import requests
 
-from pulpcore.app.models import CompositeContentGuard, Distribution, HeaderContentGuard
-from pulpcore.plugin.models import Domain
 from pulpcore.tests.functional.utils import PulpTaskError
 
-from pulp_service.app.constants import DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME
-from pulp_service.app.signals import remove_service_content_guards_before_domain_delete
+from pulp_service.app.constants import DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME, DEFAULT_VPN_CONTENT_GUARD_NAME
 from pulp_service.tests.functional.constants import (
     LIGHTWELL_ENTITLED_ORG_ID,
     LIGHTWELL_NETWORK_FEATURE,
@@ -53,6 +50,7 @@ def configure_pypi_distribution(
     anonymous_user,
     gen_object_with_cleanup,
     add_to_cleanup,
+    create_service_domain,
     pulpcore_bindings,
     python_bindings,
     service_content_guards_api_client,
@@ -69,36 +67,26 @@ def configure_pypi_distribution(
     owner_header = _identity_header(DOMAIN_OWNER_ORG_ID, "lightwell-test-owner")
 
     def _configure(domain_name, features=None, use_vpn_composite=False):
+        create_service_domain(domain_name, identity_header=owner_header)
         composite_href = None
         with anonymous_user:
-            pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = owner_header
-
-            gen_object_with_cleanup(
-                pulpcore_bindings.DomainsApi,
-                {
-                    "name": domain_name,
-                    "storage_class": "pulpcore.app.models.storage.FileSystem",
-                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-                },
-            )
             python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = owner_header
             repo = gen_object_with_cleanup(
                 python_bindings.RepositoriesPythonApi, {"name": str(uuid4())}, pulp_domain=domain_name
             )
-            if use_vpn_composite:
-                pulpcore_bindings.ContentguardsCompositeApi.api_client.default_headers["x-rh-identity"] = owner_header
-                composites = pulpcore_bindings.ContentguardsCompositeApi.list(
-                    name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
-                    pulp_domain=domain_name,
-                )
-                assert composites.count == 1
-                composite_href = composites.results[0].pulp_href
 
+        python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
         pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
         pulpcore_bindings.ContentguardsCompositeApi.api_client.default_headers.pop("x-rh-identity", None)
-        python_bindings.RepositoriesPythonApi.api_client.default_headers.pop("x-rh-identity", None)
 
         distro_params = {"name": str(uuid4()), "base_path": str(uuid4()), "repository": repo.pulp_href}
+        if use_vpn_composite:
+            composites = pulpcore_bindings.ContentguardsCompositeApi.list(
+                name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+                pulp_domain=domain_name,
+            )
+            assert composites.count == 1
+            composite_href = composites.results[0].pulp_href
         if composite_href:
             distro_params["content_guard"] = composite_href
 
@@ -217,14 +205,10 @@ def test_non_pypi_endpoints_unaffected_by_content_guard(configure_guarded_pypi_d
     assert response.status_code == 403
 
 
-@pytest.mark.django_db
 def test_non_public_distribution_denies_unauthenticated_access(configure_pypi_distribution):
     """New non-public distributions inherit the domain's identity content guard."""
     domain_name = f"private-{uuid4()}"
     _, pypi_url, _, _ = configure_pypi_distribution(domain_name)
-    domain = Domain.objects.get(name=domain_name)
-    distribution = Distribution.objects.get(pulp_domain=domain)
-    assert distribution.content_guard_id == domain.default_content_guard_id
 
     response = requests.get(pypi_url, timeout=30)
 
@@ -253,42 +237,53 @@ def test_identity_or_vpn_composite_accepts_either_assertion(configure_pypi_distr
     assert denied_response.status_code in (401, 403)
 
 
-@pytest.mark.django_db
 def test_domain_delete_is_blocked_while_distribution_uses_composite(
-    configure_pypi_distribution, pulpcore_bindings, monitor_task
+    configure_pypi_distribution, pulpcore_bindings, python_bindings, monitor_task
 ):
-    domain_name = f"vpn-composite-delete-{uuid4()}"
+    domain_name = f"vpn-delete-{uuid4().hex}"
     configure_pypi_distribution(domain_name, use_vpn_composite=True)
     pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
     pulpcore_bindings.ContentguardsCompositeApi.api_client.default_headers.pop("x-rh-identity", None)
+    pulpcore_bindings.TasksApi.api_client.default_headers.pop("x-rh-identity", None)
 
-    domain = Domain.objects.get(name=domain_name)
-    identity_guard = domain.default_content_guard.cast()
-    vpn_guard = HeaderContentGuard.objects.get(pulp_domain=domain, name="hosted-pulp-default-vpn-check")
-    composite_guard = CompositeContentGuard.objects.get(
-        pulp_domain=domain,
+    domain = pulpcore_bindings.DomainsApi.list(name=domain_name).results[0]
+    vpn_guards = pulpcore_bindings.ContentguardsHeaderApi.list(
+        name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+        pulp_domain=domain_name,
+    )
+    composites = pulpcore_bindings.ContentguardsCompositeApi.list(
+        pulp_domain=domain_name,
         name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
     )
-    assert Distribution.objects.filter(pulp_domain=domain, content_guard=composite_guard).exists()
-    composite_children = set(composite_guard.guards.values_list("pk", flat=True))
+    distributions = python_bindings.DistributionsPypiApi.list(pulp_domain=domain_name)
+    assert vpn_guards.count == composites.count == distributions.count == 1
+    distribution = distributions.results[0]
+    composite = composites.results[0]
+    assert domain.default_content_guard is not None
+    assert distribution.content_guard == composite.pulp_href
 
-    remove_service_content_guards_before_domain_delete(domain)
-
-    composite_guard.refresh_from_db()
-    assert set(composite_guard.guards.values_list("pk", flat=True)) == composite_children
-    assert HeaderContentGuard.objects.filter(pk=identity_guard.pk).exists()
-    assert HeaderContentGuard.objects.filter(pk=vpn_guard.pk).exists()
-
-    domain_binding = pulpcore_bindings.DomainsApi.list(name=domain_name).results[0]
-    delete_task = pulpcore_bindings.DomainsApi.delete(domain_binding.pulp_href).task
+    delete_task = pulpcore_bindings.DomainsApi.delete(domain.pulp_href).task
     with pytest.raises(PulpTaskError):
         monitor_task(delete_task)
 
-    domain.refresh_from_db()
-    assert domain.default_content_guard_id == identity_guard.pk
-    assert HeaderContentGuard.objects.filter(pk=vpn_guard.pk).exists()
-    assert CompositeContentGuard.objects.filter(pk=composite_guard.pk).exists()
-    assert Distribution.objects.filter(pulp_domain=domain, content_guard=composite_guard).exists()
+    domain_after = pulpcore_bindings.DomainsApi.list(name=domain_name).results[0]
+    distribution_after = python_bindings.DistributionsPypiApi.read(distribution.pulp_href)
+    assert domain_after.default_content_guard == domain.default_content_guard
+    assert distribution_after.content_guard == composite.pulp_href
+    assert (
+        pulpcore_bindings.ContentguardsHeaderApi.list(
+            name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+            pulp_domain=domain_name,
+        ).count
+        == 1
+    )
+    assert (
+        pulpcore_bindings.ContentguardsCompositeApi.list(
+            name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+            pulp_domain=domain_name,
+        ).count
+        == 1
+    )
 
 
 def test_public_domain_allows_unauthenticated_pypi_access(configure_pypi_distribution):

@@ -59,7 +59,7 @@ def _group_role_assignments(pulpcore_bindings, group_href):
     return pulpcore_bindings.GroupsRolesApi.list(group_href).results
 
 
-def _assert_domain_guard_bundle(domain_name):
+def _assert_domain_guard_bundle_model(domain_name):
     domain = Domain.objects.get(name=domain_name)
     identity_guard = domain.default_content_guard.cast()
     assert identity_guard.name == DEFAULT_IDENTITY_CONTENT_GUARD_NAME
@@ -78,6 +78,34 @@ def _assert_domain_guard_bundle(domain_name):
     )
     assert set(composite_guard.guards.values_list("pk", flat=True)) == {identity_guard.pk, vpn_guard.pk}
     return domain, identity_guard, vpn_guard, composite_guard
+
+
+def _assert_domain_guard_bundle_api(pulpcore_bindings, domain_href, domain_name):
+    domain = pulpcore_bindings.DomainsApi.read(domain_href)
+    assert "/contentguards/core/header/" in domain.default_content_guard
+
+    identity_guards = pulpcore_bindings.ContentguardsHeaderApi.list(
+        name=DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+        pulp_domain=domain_name,
+    )
+    vpn_guards = pulpcore_bindings.ContentguardsHeaderApi.list(
+        name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+        pulp_domain=domain_name,
+    )
+    composites = pulpcore_bindings.ContentguardsCompositeApi.list(
+        name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+        pulp_domain=domain_name,
+    )
+    assert identity_guards.count == vpn_guards.count == composites.count == 1
+    identity_guard = identity_guards.results[0]
+    vpn_guard = vpn_guards.results[0]
+    composite_guard = composites.results[0]
+    assert domain.default_content_guard == identity_guard.pulp_href
+    assert vpn_guard.header_name == VPN_VERIFIED_HEADER_NAME
+    assert vpn_guard.header_value == "true"
+    assert vpn_guard.jq_filter is None
+    assert set(composite_guard.guards) == {identity_guard.pulp_href, vpn_guard.pulp_href}
+    return identity_guard, vpn_guard, composite_guard
 
 
 def _assert_owns_domain(assignments, domain_href):
@@ -168,7 +196,6 @@ def template_domain_s3(pulpcore_bindings, gen_object_with_cleanup):
     )
 
 
-@pytest.mark.django_db
 @pytest.mark.usefixtures("template_domain_s3")
 def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, request):
     """Self-service create-domain endpoint: creator, the group_name group, and the org group get the pair.
@@ -189,10 +216,10 @@ def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, 
     )
     assert resp.status_code == 201, f"create-domain failed: {resp.status_code} {resp.text}"
     domain_href = resp.json()["pulp_href"]
-    _assert_domain_guard_bundle(domain_name)
 
     # No binding created this domain/group, so register admin-auth cleanup ourselves.
     pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+    _assert_domain_guard_bundle_api(pulpcore_bindings, domain_href, domain_name)
     request.addfinalizer(lambda: pulpcore_bindings.DomainsApi.delete(domain_href))
     team_group = pulpcore_bindings.GroupsApi.list(name=team_name).results[0]
     request.addfinalizer(lambda: pulpcore_bindings.GroupsApi.delete(team_group.pulp_href))
@@ -205,32 +232,22 @@ def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, 
     _assert_owns_domain(_group_role_assignments(pulpcore_bindings, org_groups.results[0].pulp_href), domain_href)
 
 
-@pytest.mark.django_db
 def test_domain_with_automatic_identity_guard_bundle_can_be_deleted(
-    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, monitor_task
+    pulpcore_bindings, gen_object_with_cleanup, monitor_task
 ):
     """A new domain gets the guard bundle and can be deleted with no content references."""
     domain_name = str(uuid4())
-    auth_header = _auth_header(_identity(str(uuid4())))
-    delete_task = None
+    domain = gen_object_with_cleanup(
+        pulpcore_bindings.DomainsApi,
+        {
+            "name": domain_name,
+            "storage_class": "pulpcore.app.models.storage.FileSystem",
+            "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+        },
+    )
+    _assert_domain_guard_bundle_api(pulpcore_bindings, domain.pulp_href, domain_name)
 
-    with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
-        try:
-            domain = gen_object_with_cleanup(
-                pulpcore_bindings.DomainsApi,
-                {
-                    "name": domain_name,
-                    "storage_class": "pulpcore.app.models.storage.FileSystem",
-                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-                },
-            )
-            _assert_domain_guard_bundle(domain_name)
-
-            delete_task = pulpcore_bindings.DomainsApi.delete(domain.pulp_href).task
-        finally:
-            pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
-
+    delete_task = pulpcore_bindings.DomainsApi.delete(domain.pulp_href).task
     result = monitor_task(delete_task)
     assert result.state == "completed"
 
@@ -282,7 +299,7 @@ def test_composite_allows_identity_or_verified_vpn():
         storage_class="pulpcore.app.models.storage.FileSystem",
         storage_settings={"MEDIA_ROOT": "/var/lib/pulp/media/"},
     )
-    _, _, _, composite_guard = _assert_domain_guard_bundle(domain.name)
+    _, _, _, composite_guard = _assert_domain_guard_bundle_model(domain.name)
 
     try:
         composite_guard.permit(SimpleNamespace(headers={VPN_VERIFIED_HEADER_NAME: "dHJ1ZQ=="}))
@@ -310,7 +327,7 @@ def test_customer_guard_protects_domain_and_rolls_back_default_guard_cleanup():
         storage_class="pulpcore.app.models.storage.FileSystem",
         storage_settings={"MEDIA_ROOT": "/var/lib/pulp/media/"},
     )
-    _, identity_guard, vpn_guard, composite_guard = _assert_domain_guard_bundle(domain.name)
+    _, identity_guard, vpn_guard, composite_guard = _assert_domain_guard_bundle_model(domain.name)
     customer_guard = HeaderContentGuard.objects.create(
         name="customer-managed",
         header_name="x-customer-token",
