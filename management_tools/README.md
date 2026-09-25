@@ -49,7 +49,8 @@ the content-guard audit. It uses the `hosted-pulp` CLI to create or reuse the
 canonical `hosted-pulp-default-identity-check` HeaderContentGuard in each
 affected domain. Its API-compatible presence-check values are
 `header_value=identity-present` and `jq_filter='"identity-present"'`. The tool
-then applies it to unguarded distributions. It also
+sets it as the domain `default_content_guard` when no conflicting default
+exists, then applies it to unguarded distributions. It also
 provisions/reuses `hosted-pulp-default-vpn-check` (`X-Pulp-VPN-Verified: true`)
 and the `hosted-pulp-default-identity-or-vpn` OR composite containing both
 guards. The composite is not assigned to distributions by this tool.

@@ -749,6 +749,79 @@ def ensure_composite_guard(
     return href
 
 
+def ensure_domain_default(
+    client: HostedPulp,
+    domain: str,
+    domain_data: dict[str, Any],
+    identity_href: str | None,
+    apply: bool,
+    domain_results: dict[str, Any],
+    assignment_timeout: float,
+    poll_max_interval: float,
+) -> dict[str, Any]:
+    domain_href = domain_data["pulp_href"]
+    current_default = guard_href(domain_data.get("default_content_guard"))
+    default_state = domain_results.setdefault("default_content_guard", {})
+    default_state.update(
+        {
+            "prior": current_default,
+            "assigned": identity_href,
+            "distribution_assignment_target": identity_href,
+        }
+    )
+
+    if current_default:
+        if not identity_href or current_default != identity_href:
+            raise ToolError(
+                f"domain {domain} has conflicting default_content_guard {current_default}"
+            )
+        default_state["action"] = "reused"
+        return domain_data
+
+    if not identity_href:
+        default_state["action"] = "create_after_identity_guard"
+        return domain_data
+
+    if not apply:
+        default_state["action"] = "set"
+        return domain_data
+
+    dispatch_result = client.run(
+        "default",
+        [
+            "api",
+            "domains",
+            "partial-update",
+            "--domain-href",
+            domain_href,
+            "--default-content-guard",
+            identity_href,
+        ],
+        wait=False,
+    )
+    default_state.update(
+        {
+            "action": "dispatched_pending",
+            "dispatch_result": dispatch_result,
+            "task_href": (
+                dispatch_result.get("task")
+                if isinstance(dispatch_result, dict)
+                else None
+            ),
+        }
+    )
+    updated = wait_for_domain_default(
+        client,
+        domain_href,
+        domain,
+        identity_href,
+        assignment_timeout,
+        poll_max_interval,
+    )
+    default_state["action"] = "set"
+    return updated
+
+
 def live_distribution(
     client: HostedPulp, distribution: dict[str, Any]
 ) -> dict[str, Any]:
@@ -811,20 +884,55 @@ def live_domain(client: HostedPulp, distribution: dict[str, Any]) -> dict[str, A
         raise ToolError(
             f"distribution {distribution['pulp_href']} has no domain_href for live validation"
         )
+    return live_domain_href(client, domain_href, distribution["domain"])
+
+
+def live_domain_href(
+    client: HostedPulp, domain_href: str, domain_name: str
+) -> dict[str, Any]:
     result = client.run(
         "default",
         ["api", "domains", "read", "--domain-href", domain_href],
     )
     if not isinstance(result, dict):
         raise ToolError(f"domain read returned invalid data for {domain_href}")
-    if result.get("name") != distribution["domain"]:
+    if result.get("name") != domain_name:
         raise ToolError(
-            f"distribution {distribution['pulp_href']} changed domains: "
-            f"report={distribution['domain']} live={result.get('name')}"
+            f"domain {domain_href} changed names: "
+            f"report={domain_name} live={result.get('name')}"
         )
     if not same_href(result.get("pulp_href"), domain_href):
         raise ToolError(f"domain read returned the wrong resource for {domain_href}")
     return result
+
+
+def wait_for_domain_default(
+    client: HostedPulp,
+    domain_href: str,
+    domain_name: str,
+    expected_guard: str,
+    timeout: float,
+    max_interval: float,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    deadline = started + timeout
+    interval = 1.0
+    while True:
+        live = live_domain_href(client, domain_href, domain_name)
+        if guard_href(live.get("default_content_guard")) == expected_guard:
+            return live
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ToolError(
+                f"timed out waiting for domain {domain_name} default_content_guard "
+                f"to become {expected_guard}"
+            )
+        progress(
+            f"waiting for domain {domain_name} default_content_guard "
+            f"(next check in {min(interval, max_interval):.1f}s)"
+        )
+        time.sleep(min(interval, max_interval, remaining))
+        interval = min(interval * 2, max_interval)
 
 
 def validate_live_distribution(
@@ -1171,12 +1279,30 @@ def main() -> int:
                     args.apply,
                     domain_state,
                 )
+                domain_state["default_content_guard"] = {
+                    "prior": guard_href(domain_data.get("default_content_guard")),
+                    "assigned": guard,
+                    "distribution_assignment_target": guard,
+                }
+                write_state(output, rollback, state)
+                domain_data = ensure_domain_default(
+                    client,
+                    domain,
+                    domain_data,
+                    guard,
+                    args.apply,
+                    domain_state,
+                    args.assignment_timeout,
+                    args.poll_max_interval,
+                )
+                write_state(output, rollback, state)
                 guard_actions = domain_state.get("guards", {})
                 progress(
                     f"domain {domain}: identity guard="
                     f"{guard_actions.get(IDENTITY_GUARD.name, {}).get('action', 'unknown')}; "
                     f"vpn guard={guard_actions.get(VPN_GUARD.name, {}).get('action', 'unknown')}; "
-                    f"composite={guard_actions.get(COMPOSITE_GUARD_NAME, {}).get('action', 'unknown')}"
+                    f"composite={guard_actions.get(COMPOSITE_GUARD_NAME, {}).get('action', 'unknown')}; "
+                    f"domain default={domain_state.get('default_content_guard', {}).get('action', 'unknown')}"
                 )
             except ToolError as error:
                 progress(f"domain {domain}: guard preparation failed: {error}")
@@ -1210,11 +1336,14 @@ def main() -> int:
                     else:
                         live_domain_data, live = validated[distribution["pulp_href"]]
                     prior_explicit_guard = guard_href(live.get("content_guard"))
+                    baseline_domain_data, baseline_live = validated[
+                        distribution["pulp_href"]
+                    ]
                     prior_effective_guard = guard_href(
-                        prior_explicit_guard
-                        or live_domain_data.get("default_content_guard")
+                        guard_href(baseline_live.get("content_guard"))
+                        or baseline_domain_data.get("default_content_guard")
                     )
-                    if prior_effective_guard:
+                    if prior_effective_guard or prior_explicit_guard:
                         change.update(
                             state="skipped_already_guarded",
                             prior_explicit_content_guard=prior_explicit_guard,

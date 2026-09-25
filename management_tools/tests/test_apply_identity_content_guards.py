@@ -304,6 +304,7 @@ class FakeHostedPulp:
         self.profile = profile
         self.calls = []
         self.assigned_guard = None
+        self.default_guard = None
         self.__class__.instances.append(self)
 
     def run(self, domain, arguments, *, wait=False):
@@ -312,8 +313,13 @@ class FakeHostedPulp:
             return {
                 "name": self.domain_name,
                 "pulp_href": self.domain_href,
-                "default_content_guard": None,
+                "default_content_guard": self.default_guard,
             }
+        if arguments[:3] == ["api", "domains", "partial-update"]:
+            self.default_guard = arguments[
+                arguments.index("--default-content-guard") + 1
+            ]
+            return {"task": "/api/pulp/default/api/v3/tasks/domain-task/"}
         if arguments[:2] == ["api", "contentguards"]:
             if arguments[2] == "core-header":
                 if arguments[3] == "list":
@@ -434,6 +440,7 @@ def test_apply_preflights_before_creating_guard_and_verifies_patch(
         ]
         == "created"
     )
+    assert state["domains"]["tenant-a"]["default_content_guard"]["action"] == "set"
     patch_calls = [
         call for call in client.calls if call[1][0:2] == ["api", "distributions"]
     ]

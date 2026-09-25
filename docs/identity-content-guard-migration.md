@@ -14,7 +14,11 @@ For every affected domain, the tool provisions or reuses the following guards:
 
 The identity sentinel is used because the REST API requires a non-empty header value. The JQ filter accepts any valid JSON identity header without binding the guard to a specific organization or user.
 
-The tool does not replace an existing content guard, assign the VPN guard, or assign the composite guard. It excludes public-prefixed domains and distributions that already have effective or explicit protection.
+The tool sets `hosted-pulp-default-identity-check` as the domain
+`default_content_guard` when the domain has no default. It does not replace a
+conflicting domain default, assign the VPN guard, or assign the composite
+guard. It excludes public-prefixed domains and distributions that already have
+effective or explicit protection.
 
 ## Prerequisites
 
@@ -73,7 +77,12 @@ uv run management_tools/apply-identity-content-guards.py \
   --output stage-update.json
 ```
 
-The tool performs live checks before each domain and distribution update. It waits for the distribution to show the expected identity guard and records the dispatch response, task reference, and final state.
+The tool performs live checks before each domain and distribution update. It
+sets and verifies the domain default before assigning the identity guard to
+existing distributions. It waits for the distribution to show the expected
+identity guard and records the dispatch response, task reference, and final
+state. A conflicting existing domain default stops that domain without
+overwriting it.
 
 ## Apply a partial migration
 
