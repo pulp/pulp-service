@@ -1,0 +1,65 @@
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -222,6 +222,21 @@
+             cls._reset_db_connection()
+             return distro.get_repository_publication_and_version()
+
++    @classmethod
++    async def _retry_content_artifact_query(cls, query):
++        """
++        Await a ``ContentArtifact`` queryset call (e.g. ``.aget()``/``.aexists()``),
++        retrying once on a fresh connection if the read replica connection was
++        killed mid-query, e.g. by a standby recovery conflict.
++
++        ``MultipleObjectsReturned``/``ObjectDoesNotExist`` are left to the caller.
++        """
++        try:
++            return await query()
++        except (InterfaceError, DatabaseError):
++            cls._reset_db_connection()
++            return await query()
++
+     async def list_distributions(self, request):
+         """
+         The handler for an HTML listing all distributions
+@@ -1102,8 +1117,8 @@
+             # pass-through
+             if publication.pass_through:
+                 try:
+-                    ca = (
+-                        await ContentArtifact.objects.select_related(
++                    ca = await self._retry_content_artifact_query(
++                        lambda: ContentArtifact.objects.select_related(
+                             "artifact", "artifact__pulp_domain"
+                         )
+                         .filter(
+@@ -1158,9 +1173,11 @@
+                 # Look for index.html or list the directory
+                 index_path = "{}index.html".format(rel_path)
+
+-                contentartifact_exists = await ContentArtifact.objects.filter(
+-                    content__in=repo_version.content, relative_path=index_path
+-                ).aexists()
++                contentartifact_exists = await self._retry_content_artifact_query(
++                    lambda: ContentArtifact.objects.filter(
++                        content__in=repo_version.content, relative_path=index_path
++                    ).aexists()
++                )
+                 if contentartifact_exists:
+                     original_rel_path = index_path
+                     headers = self.response_headers(original_rel_path, distro)
+@@ -1181,9 +1198,11 @@
+                         )
+
+             try:
+-                ca = await ContentArtifact.objects.select_related(
+-                    "artifact", "artifact__pulp_domain"
+-                ).aget(content__in=repo_version.content, relative_path=original_rel_path)
++                ca = await self._retry_content_artifact_query(
++                    lambda: ContentArtifact.objects.select_related(
++                        "artifact", "artifact__pulp_domain"
++                    ).aget(content__in=repo_version.content, relative_path=original_rel_path)
++                )
+
+             except MultipleObjectsReturned:
+                 log.error(
