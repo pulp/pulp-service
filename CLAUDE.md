@@ -215,6 +215,7 @@ The repository includes an automated post-merge release pipeline using Alcove wo
 
 ### Workflow
 
+
 The main workflow (`.alcove/workflows/post-merge-release-pipeline.yml`) coordinates these agents:
 
 1. **await-konflux-release** — Polls commit check runs until Konflux build/release pipelines complete successfully

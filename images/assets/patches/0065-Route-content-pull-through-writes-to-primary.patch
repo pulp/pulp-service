@@ -7,6 +7,7 @@ index 8e68200..0ff40a7 100644
  import socket
  import struct
 +from contextlib import nullcontext
+ from contextvars import ContextVar
  from datetime import datetime, timedelta
  from datetime import timezone as dt_timezone
  from gettext import gettext as _

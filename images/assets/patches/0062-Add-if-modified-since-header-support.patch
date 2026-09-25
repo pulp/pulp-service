@@ -6,16 +6,16 @@ index 6fcf470e1..795e8a29b 100644
  from functools import wraps
  
  from aiohttp.web import FileResponse, HTTPSuccessful, Request, Response, StreamResponse
--from aiohttp.web_exceptions import HTTPFound
-+from aiohttp.web_exceptions import HTTPFound, HTTPNotModified
+-from aiohttp.web_exceptions import HTTPException, HTTPFound, HTTPNotFound
++from aiohttp.web_exceptions import HTTPException, HTTPFound, HTTPNotFound, HTTPNotModified
  from django.conf import settings
  from django.http import FileResponse as ApiFileResponse
  from django.http import HttpResponse, HttpResponseRedirect
 +from django.utils.http import parse_http_date_safe
  from redis import ConnectionError
  from redis.asyncio import ConnectionError as AConnectionError
- from rest_framework.request import Request as ApiRequest
-@@ -356,13 +357,33 @@ class AsyncContentCache(AsyncCache):
+ from redis.exceptions import RedisError
+@@ -408,8 +409,10 @@ class AsyncContentCache(AsyncCache):
                  response = await self.make_entry(
                      key, bk, func, args, kwargs, self.default_expires_ttl
                  )
@@ -26,7 +26,9 @@ index 6fcf470e1..795e8a29b 100644
 +                    artifacts_size_counter.add(size)
 +                self._check_not_modified(request, response)
  
-             return response
+             if isinstance(response, HTTPException):
+                 raise response
+@@ -417,6 +420,24 @@ class AsyncContentCache(AsyncCache):
  
          return cached_function
  

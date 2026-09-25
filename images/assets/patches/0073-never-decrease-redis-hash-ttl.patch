@@ -1,0 +1,39 @@
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 04a7506c1..b205f75cc 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -86,7 +86,9 @@ class Cache:
+         base_key = base_key or self.default_base_key
+         ret = self.redis.hset(base_key, key, value)
+         if expires:
+-            self.redis.expire(base_key, expires)
++            current_ttl = self.redis.ttl(base_key)
++            if current_ttl < 0 or current_ttl < expires:
++                self.redis.expire(base_key, expires)
+         return ret
+
+     @connection_error_wrapper
+@@ -269,7 +271,9 @@ class AsyncCache:
+         base_key = base_key or self.default_base_key
+         ret = await self.redis.hset(base_key, key, value)
+         if expires:
+-            await self.redis.expire(base_key, expires)
++            current_ttl = await self.redis.ttl(base_key)
++            if current_ttl < 0 or current_ttl < expires:
++                await self.redis.expire(base_key, expires)
+         return ret
+
+     @aconnection_error_wrapper
+@@ -437,6 +441,9 @@ class AsyncContentCache(AsyncCache):
+             entry.pop("status")
+             entry["location"] = str(response.location)
+             entry["type"] = "Redirect"
++            if expires is not None and expires > DEFAULT_EXPIRES_TTL:
++                expires = DEFAULT_EXPIRES_TTL
++                entry["expires"] = expires + time.time()
+         elif isinstance(response, (Response, HTTPSuccessful)):
+             body = response.body
+             if isinstance(body, bytes):
+--
+2.55.0
+

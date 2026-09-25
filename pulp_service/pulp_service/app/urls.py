@@ -1,16 +1,19 @@
 from django.urls import include, path
 
 from .admin import admin_site
+from .cache_viewsets import FlushContentCacheView
 from .viewsets import (
     CreateDomainView,
     DatabaseTriggersView,
     DataRepair7465View,
     DebugAuthenticationHeadersView,
+    DomainOrgBackfillReportDispatcherView,
     InternalServerErrorCheck,
     InternalServerErrorCheckWithException,
     MigrateDomainView,
     OOMKillTriggerView,
     PagerDutyAlertTestView,
+    PublicDebugAuthenticationHeadersView,
     RDSConnectionTestDispatcherView,
     RedirectCheck,
     ReleaseTaskLocksView,
@@ -30,12 +33,15 @@ urlpatterns = [
     path("api/pulp/internal-server-error-check/", InternalServerErrorCheck.as_view()),
     path("api/pulp/raise-exception-check/", InternalServerErrorCheckWithException.as_view()),
     path("api/pulp/debug_auth_header/", DebugAuthenticationHeadersView.as_view()),
+    path("api/pulp/public-debug_auth_header/", PublicDebugAuthenticationHeadersView.as_view()),
     path("api/pulp/debug/database-triggers/", DatabaseTriggersView.as_view()),
     path("api/pulp/debug/release-task-locks/", ReleaseTaskLocksView.as_view()),
     path("api/pulp/debug/task-debug/", TaskDebugView.as_view()),
     path("api/pulp/debug/task-queue/", TaskQueueView.as_view()),
     path("api/pulp/debug/stale-locks/", StaleLockScanView.as_view()),
+    path("api/pulp/debug/flush-content-cache/", FlushContentCacheView.as_view()),
     path("api/pulp/debug/cleanup-stale-locks/", StaleLockCleanupDispatcherView.as_view()),
+    path("api/pulp/debug/domainorg-backfill-report/", DomainOrgBackfillReportDispatcherView.as_view()),
     path("api/pulp/admin/tasks/", TaskViewSet.as_view({"get": "list"})),
     path("api/pulp/test/tasks/", TaskIngestionDispatcherView.as_view()),
     path("api/pulp/test/random_lock_tasks/", TaskIngestionRandomResourceLockDispatcherView.as_view()),

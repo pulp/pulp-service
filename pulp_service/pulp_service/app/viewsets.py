@@ -57,6 +57,7 @@ from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     ContentScanSerializer,
     FeatureContentGuardSerializer,
+    PublicDebugAuthenticationHeadersSerializer,
     PyPIYankMonitorSerializer,
     VulnerabilityReportSerializer,
     YankedPackageReportSerializer,
@@ -281,6 +282,32 @@ class DebugAuthenticationHeadersView(APIView):
         }
 
         return Response(data=response_data)
+
+
+class PublicDebugAuthenticationHeadersView(APIView):
+    """Return safe diagnostics about headers received from the edge."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    @extend_schema(
+        operation_id="public_debug_auth_header",
+        responses=PublicDebugAuthenticationHeadersSerializer,
+    )
+    def get(self, request=None, path=None, pk=None):
+        if not settings.AUTHENTICATION_HEADER_DEBUG:
+            response = Response(status=status.HTTP_404_NOT_FOUND)
+            response["Cache-Control"] = "private, no-store"
+            return response
+
+        response_data = {
+            "x_rh_identity_present": "X-RH-IDENTITY" in request.headers,
+            "x_pulp_vpn_verified": "X-Pulp-VPN-Verified" in request.headers,
+            "x_pulp_vpn_access_present": "X-Pulp-VPN-Access" in request.headers,
+        }
+        response = Response(data=PublicDebugAuthenticationHeadersSerializer(response_data).data)
+        response["Cache-Control"] = "private, no-store"
+        return response
 
 
 @extend_schema_view(
@@ -2103,6 +2130,54 @@ class StaleLockCleanupDispatcherView(APIView):
                 "schedule": "Runs automatically every 6 hours",
                 "usage": {
                     "endpoint": "/api/pulp/debug/cleanup-stale-locks/",
+                    "method": "POST",
+                    "authentication": "Admin user required",
+                },
+            }
+        )
+
+
+class DomainOrgBackfillReportDispatcherView(APIView):
+    """
+    Admin-only endpoint to dispatch the DomainOrg backfill report task.
+
+    POST dispatches a background task that builds the JSON report of DomainOrg rows with a
+    missing org_id (what migration 0022 can/cannot backfill) and attaches it to itself as a
+    ProfileArtifact named ``domainorg_backfill_report``. When the returned task completes,
+    download the report via ``GET /pulp/api/v3/tasks/<uuid>/profile_artifacts/``.
+
+    GET returns usage documentation.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        request=None,
+        description=(
+            "Dispatch a background task that generates the DomainOrg backfill report as a "
+            "downloadable JSON artifact attached to the task."
+        ),
+        summary="Dispatch DomainOrg backfill report",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        task = dispatch("pulp_service.app.tasks.domainorg_backfill_report.generate_backfill_report")
+        return OperationPostponedResponse(task, request)
+
+    def get(self, request):
+        """Return endpoint documentation."""
+        return Response(
+            {
+                "description": (
+                    "POST to dispatch a background task that generates the DomainOrg org_id "
+                    "backfill report. The report is a JSON list of the missing-org_id rows and "
+                    "whether migration 0022 can backfill each. When the returned task completes, "
+                    "GET /pulp/api/v3/tasks/<uuid>/profile_artifacts/ and download the "
+                    "'domainorg_backfill_report' URL."
+                ),
+                "task_name": "pulp_service.app.tasks.domainorg_backfill_report.generate_backfill_report",
+                "usage": {
+                    "endpoint": "/api/pulp/debug/domainorg-backfill-report/",
                     "method": "POST",
                     "authentication": "Admin user required",
                 },

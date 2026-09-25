@@ -1,0 +1,18 @@
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -518,7 +518,14 @@
+         Raises:
+             [aiohttp.web_exceptions.HTTPForbidden][]: When not permitted.
+         """
+-        guard = distribution.content_guard
++        try:
++            guard = distribution.content_guard
++        except (InterfaceError, DatabaseError):
++            # The distribution's content_guard FK is lazily loaded; a replica
++            # connection can be killed mid-query, e.g. by a standby recovery
++            # conflict. Reset and retry once on a fresh connection.
++            Handler._reset_db_connection()
++            guard = distribution.content_guard
+         if not guard:
+             return False
+         try:

@@ -5,12 +5,21 @@ from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from django.db.models.signals import post_migrate, post_save
 from django.dispatch import receiver
+from django_lifecycle import BEFORE_DELETE, hook
 
+from pulpcore.app.models import CompositeContentGuard, Distribution, HeaderContentGuard
 from pulpcore.plugin.models import Domain, Group
 from pulpcore.plugin.util import assign_role
 
 from pulp_service.app.authorization import group_var
-from pulp_service.app.constants import ORG_GROUP_PREFIX
+from pulp_service.app.constants import (
+    DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+    DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+    DEFAULT_VPN_CONTENT_GUARD_NAME,
+    LEGACY_DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+    ORG_GROUP_PREFIX,
+    VPN_VERIFIED_HEADER_NAME,
+)
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -42,6 +51,22 @@ def log_new_user(sender, instance, created, **kwargs):  # noqa: ARG001
         _logger.info("New user created: username=%s, route=%s", instance.username, request_path or "unknown")
 
 
+def _derive_org_id_from_user(user):
+    """Derive an org_id from the user's rh-org-<org_id> group membership, or None.
+
+    Fallback for a domain create whose request carried no identity.internal.org_id
+    (the calunga null-org_id shape). Users are auto-added to rh-org-<org_id> at auth
+    time, so a user in exactly one such group unambiguously identifies their org.
+    Return None for zero or multiple org groups -- never guess for a mixed-org user.
+    Single-user analogue of migration 0022's _derive_org_id.
+    """
+    org_ids = {
+        name[len(ORG_GROUP_PREFIX) :]
+        for name in user.groups.filter(name__startswith=ORG_GROUP_PREFIX).values_list("name", flat=True)
+    }
+    return next(iter(org_ids)) if len(org_ids) == 1 else None
+
+
 def _assign_domain_roles(entity, domain):
     """
     Assign the following RBAC roles for the passed entity:
@@ -50,6 +75,94 @@ def _assign_domain_roles(entity, domain):
     """
     assign_role("core.domain_owner", entity, obj=domain)
     assign_role("service.domain_admin", entity, domain=domain)
+
+
+def _provision_domain_content_guards(domain):
+    if domain.name.startswith("public-"):
+        return
+
+    identity_guard = HeaderContentGuard.objects.create(
+        name=DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+        header_name="x-rh-identity",
+        header_value="",
+        jq_filter='""',
+        pulp_domain=domain,
+    )
+    vpn_guard = HeaderContentGuard.objects.create(
+        name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+        header_name=VPN_VERIFIED_HEADER_NAME,
+        header_value="true",
+        jq_filter=None,
+        pulp_domain=domain,
+    )
+    composite_guard = CompositeContentGuard.objects.create(
+        name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+        pulp_domain=domain,
+    )
+    composite_guard.guards.add(identity_guard, vpn_guard)
+
+    domain.default_content_guard = identity_guard
+    domain.save(update_fields=["default_content_guard"])
+
+
+@hook(BEFORE_DELETE, when="name", is_not="default")
+def remove_service_content_guards_before_domain_delete(domain):
+    """Remove unused service guards before Django checks protected domain FKs."""
+    identity_guards = list(
+        HeaderContentGuard.objects.filter(
+            pulp_domain=domain,
+            name__in=(DEFAULT_IDENTITY_CONTENT_GUARD_NAME, LEGACY_DEFAULT_IDENTITY_CONTENT_GUARD_NAME),
+            header_name="x-rh-identity",
+            header_value="",
+            jq_filter='""',
+        )
+    )
+    vpn_guards = list(
+        HeaderContentGuard.objects.filter(
+            pulp_domain=domain,
+            name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+            header_name=VPN_VERIFIED_HEADER_NAME,
+            header_value="true",
+            jq_filter__isnull=True,
+        )
+    )
+    identity_guard_ids = {guard.pk for guard in identity_guards}
+    vpn_guard_ids = {guard.pk for guard in vpn_guards}
+
+    for composite_guard in CompositeContentGuard.objects.filter(
+        pulp_domain=domain,
+        name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+    ):
+        child_guard_ids = set(composite_guard.guards.values_list("pk", flat=True))
+        is_service_composite = any(
+            child_guard_ids == {identity_guard_id, vpn_guard_id}
+            for identity_guard_id in identity_guard_ids
+            for vpn_guard_id in vpn_guard_ids
+        )
+        if is_service_composite:
+            _delete_guard_if_unreferenced(composite_guard)
+
+    for guard in (*vpn_guards, *identity_guards):
+        cast_guard = guard.cast()
+        if isinstance(cast_guard, HeaderContentGuard) and cast_guard.pulp_domain_id == domain.pk:
+            _delete_guard_if_unreferenced(cast_guard)
+
+
+def _delete_guard_if_unreferenced(guard):
+    """Keep guards referenced by distributions or composites to avoid detaching authorization."""
+    if Distribution.objects.filter(content_guard=guard).exists():
+        return
+    if CompositeContentGuard.objects.filter(guards=guard).exists():
+        return
+    guard.delete()
+
+
+_DOMAIN_DELETE_HOOK_NAME = "_pulp_service_remove_content_guards_before_domain_delete"
+if not hasattr(Domain, _DOMAIN_DELETE_HOOK_NAME):
+    # django-lifecycle discovers decorated methods via a cached private method list.
+    # Pulpcore constrains its version; attach during plugin startup and clear the cache.
+    setattr(Domain, _DOMAIN_DELETE_HOOK_NAME, remove_service_content_guards_before_domain_delete)
+    Domain._potentially_hooked_methods.cache_clear()
 
 
 @receiver(post_save, sender=Domain)
@@ -65,17 +178,23 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
         group_var.set(None)
 
         domain = kwargs["instance"]
-        if user_id:
-            # post_save fires after the Domain INSERT. When the creating request already
-            # wraps the save in a transaction (self-service CreateDomainView), the block
-            # below nests as a savepoint and a failure rolls the Domain back with it. When
-            # the caller is in autocommit (generic DomainViewSet), the Domain row is already
-            # committed on its own, so on failure we delete it to avoid leaving a domain
-            # without its RBAC/DomainOrg dual-write state.
-            domain_committed_standalone = not connection.in_atomic_block
-            try:
-                with transaction.atomic():
+        # post_save fires after the Domain INSERT. When the creating request already
+        # wraps the save in a transaction (self-service CreateDomainView), the block
+        # below nests as a savepoint and a failure rolls the Domain back with it. When
+        # the caller is in autocommit (generic DomainViewSet), the Domain row is already
+        # committed on its own, so on failure we delete it to avoid leaving a domain
+        # without its RBAC/DomainOrg or default content guard state.
+        domain_committed_standalone = not connection.in_atomic_block
+        try:
+            with transaction.atomic():
+                if user_id:
                     user = get_user_model().objects.get(pk=user_id)
+                    # When the create request carried no identity.internal.org_id, org_id_var
+                    # is None -- the calunga null-org_id shape that leaves the rh-org-<org_id>
+                    # group role-less. Recover it from the creator's own rh-org membership so
+                    # the DomainOrg row and the rh-org role grant below still happen. `or`
+                    # (not an `if`) keeps this function under the branch-count lint ceiling.
+                    org_id = org_id or _derive_org_id_from_user(user)
                     # The creator always gets direct roles, even when the domain is group-scoped.
                     # This diverges from migration 0019 (which assigns to user OR group per
                     # DomainOrg row); on a rollback+re-migrate the creator would lose this
@@ -89,7 +208,7 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                     # explicit "team" group should scope domain visibility to a group.
                     # Query through the pulpcore Group proxy (not user.groups, which yields
                     # base auth.Group instances) so assign_role classifies it as a Group.
-                    elif group := Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first():
+                    elif group := (Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first()):
                         do = DomainOrg.objects.create(org_id=org_id, group=group)
                     else:
                         do = DomainOrg.objects.create(org_id=org_id, user=user)
@@ -102,7 +221,9 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                             _assign_domain_roles(org_group, domain)
 
                     do.domains.add(domain)
-            except Exception:
-                if domain_committed_standalone:
-                    domain.delete()
-                raise
+
+                _provision_domain_content_guards(domain)
+        except Exception:
+            if domain_committed_standalone:
+                domain.delete()
+            raise

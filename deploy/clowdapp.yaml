@@ -122,7 +122,6 @@ objects:
       DB_NAME=$(cat /cdapp/cdappconfig.json | jq -r '.database.name')
       DB_USER=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminUsername')
       DB_PASSWORD=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminPassword')
-      DB_REPLICA_HOST=${PULP_DB_REPLICA_HOST:-}
       
       ENV_NAME=$(cat /cdapp/cdappconfig.json | ./jq -r '.metadata.envName')
 
@@ -141,7 +140,8 @@ objects:
       openssl rand -base64 32 | tr -d '\n' > /tmp/password
       kubectl create secret generic pulp-content-sources-password --from-file /tmp/password
 
-      # Create settings.py
+      # This generated settings file is mainly used by ephemeral and test environments.
+      # Stage and production use the App Interface-managed pulp-settings.secret.yaml resource.
       cat <<EOF > /tmp/settings.py
       # Auto-generated settings file
       import secrets
@@ -190,14 +190,6 @@ objects:
       DOMAIN_ENABLED = True
       REDIS_DB = "1"
       EOF
-      if [ -n "$DB_REPLICA_HOST" ]; then
-        cat <<EOF >> /tmp/settings.py
-      DATABASES["replica"] = {
-          **DATABASES["default"],
-          "HOST": "$DB_REPLICA_HOST",
-      }
-      EOF
-      fi
 
       kubectl create secret generic pulp-settings --from-file /tmp/settings.py
       oc apply -f-<<EOF
@@ -544,6 +536,8 @@ objects:
             cpu: ${{PULP_CONTENT_CPU_LIMIT}}
             memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
         env:
+          - name: PULP_MAVEN_PATH_INDEX_CACHE_DIR
+            value: "/var/lib/pulp/tmp/path-index-cache"
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -613,13 +607,23 @@ objects:
         minReplicaCount: ${{PULP_CONTENT_MIN_REPLICA_COUNT}}
         maxReplicaCount: ${{PULP_CONTENT_MAX_REPLICA_COUNT}}
         pollingInterval: 10
+        # Two triggers: KEDA scales to the MAX the two ask for (scales up if either crosses its
+        # threshold; scales down only when both are below). Connections handle request load;
+        # memory handles streaming load, which the connection count alone misses.
         triggers:
           - type: prometheus
             metadata:
               serverAddress: ${KEDA_PROMETHEUS_SERVER_ADDRESS}
               metricName: pulp_content_active_connections
               query: avg(sum by (pod) (pulp_content_active_connections))
-              threshold: '7'         # target ~7 concurrent connections per pod (prod is memory-bound; ~530 MiB/conn keeps a pod under its 7Gi limit)
+              threshold: '7'
+            metricType: Value
+          - type: prometheus
+            metadata:
+              serverAddress: ${KEDA_PROMETHEUS_SERVER_ADDRESS}
+              metricName: pulp_content_memory_working_set
+              query: avg(container_memory_working_set_bytes{namespace=~"${PULP_NAMESPACE}", pod=~"pulp-content-.*", container="pulp-content"})
+              threshold: '${PULP_CONTENT_MEMORY_SCALE_THRESHOLD}'
             metricType: Value
         advanced:
           horizontalPodAutoscalerConfig:
@@ -685,6 +689,8 @@ objects:
             cpu: ${{PULP_WORKER_CPU_LIMIT}}
             memory: ${{PULP_WORKER_MEMORY_LIMIT}}
         env:
+          - name: PULP_MAVEN_PATH_INDEX_CACHE_DIR
+            value: "/var/lib/pulp/tmp/path-index-cache"
           - name: PULP_OTEL_ENABLED
             value: ${TELEMETRY_ENABLED}
           - name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -751,7 +757,7 @@ objects:
             metadata:
               serverAddress: ${KEDA_PROMETHEUS_SERVER_ADDRESS}
               metricName: pulp_waiting_tasks
-              query: clamp_min(pulp_waiting_tasks and on(pod) topk(1, max(timestamp(pulp_waiting_tasks)) by (pod)), 0)
+              query: clamp_min(max(pulp_waiting_tasks and on(pod) topk(1, max(timestamp(pulp_waiting_tasks)) by (pod))), 0)
               threshold: '1'
             metricType: Value
         advanced:
@@ -836,13 +842,6 @@ objects:
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ 'bash', '-x', '/tmp/config.sh' ]
-          env:
-            - name: PULP_DB_REPLICA_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: pulp-stage-db-readonly
-                  key: db.host
-                  optional: true
           volumes:
             - name: config-sh
               configMap:
@@ -1610,6 +1609,9 @@ parameters:
   - name: DOMAIN_ENABLED
     description: Pulp setting that determines if domains are enabled.
     value: "false"
+  - name: PULP_NAMESPACE
+    description: Regex namespace selector for the pulp-content memory autoscaler query. Default ".*" matches all namespaces (unscoped); set per environment (e.g. pulp-prod / pulp-stage) to scope to this deployment's own pods.
+    value: ".*"
   - name: PULP_API_REPLICAS
     description: Number of pulp api replicas
     value: "1"
@@ -1643,6 +1645,9 @@ parameters:
   - name: PULP_CONTENT_MAX_REPLICA_COUNT
     description: Maximum number of pulp content replicas
     value: "10"
+  - name: PULP_CONTENT_MEMORY_SCALE_THRESHOLD
+    description: Average working-set bytes per pod that triggers pulp-content scale-up. Set it below the pod memory limit so pods scale out before nearing it. Default 1610612736 (~1.5 GiB) stays clear of the 7Gi prod limit; dormant on smaller-limit envs.
+    value: "1610612736"
   - name: PULP_MIGRATION_REPLICAS
     description: Number of pulp migration replicas. This is a workaround to be able to deploy the migration pods only in one of the clusters.
     value: "1"

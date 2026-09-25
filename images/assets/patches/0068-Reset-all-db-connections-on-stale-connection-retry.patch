@@ -1,0 +1,30 @@
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index f1cb2b5b9..f9ac45952 100644
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -39,7 +39,7 @@ from django.core.exceptions import (  # noqa: E402
+ from django.db import (  # noqa: E402
+     DatabaseError,
+     IntegrityError,
+-    connection,
++    connections,
+     models,
+     transaction,
+ )
+@@ -191,9 +191,14 @@ class Handler:
+     @staticmethod
+     def _reset_db_connection():
+         """
+-        Reset database connection if it's unusable or obselete to avoid "connection already closed".
++        Reset database connections if unusable or obsolete to avoid "connection already closed".
++
++        Resets every configured alias (not just "default") since a read-replica router
++        can send the failing query through a different connection than the one this
++        checks first.
+         """
+-        connection.close_if_unusable_or_obsolete()
++        for conn in connections.all():
++            conn.close_if_unusable_or_obsolete()
+ 
+     async def list_distributions(self, request):
+         """

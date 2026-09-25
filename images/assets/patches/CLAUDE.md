@@ -7,11 +7,12 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.117.1             |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.119.0             |
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.36.2              |
-| `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.30.1              |
+| `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.32.0              |
+| `pulp_rpm/`      | [pulp/pulp_rpm](https://github.com/pulp/pulp_rpm)          | pulp-rpm         | 3.38.5              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
 
 Versions are pinned in `pulp_service/requirements.txt`. Django-storages is a
@@ -112,8 +113,8 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 ### 0064 — Add ETag header support to content app
 
 - **Package:** pulpcore
-- **Files:** `pulpcore/content/handler.py`
-- **Description:** Adds `ETag` (sha256-based) and `Cache-Control: public, max-age=0, must-revalidate` headers to content app file responses, and handles `If-None-Match` requests with `304 Not Modified` to enable browser/CDN cache validation.
+- **Files:** `pulpcore/content/handler.py`, `pulpcore/cache/cache.py`
+- **Description:** Adds `ETag` (sha256-based) and `Cache-Control: public, max-age=0, must-revalidate` headers to content app file responses. Extends the cache layer's `_check_not_modified()` to handle `If-None-Match` requests alongside `If-Modified-Since`, and calls it on both cache HIT and MISS paths so ETag-matched 304 responses are properly cached in Redis.
 - **Upstream:** Not upstreamed yet — candidate for pulpcore contribution (no upstream PR).
 
 ### 0065 — Route content pull-through writes to primary
@@ -121,3 +122,60 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Routes pull-through caching operations and failed-download updates to the primary database while content reads use the replica.
+
+### 0066 — Use Cache-Control max-age for Redis TTL (non-redirect domains only)
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/cache/cache.py`, `pulpcore/content/handler.py`
+- **Description:** Sets `Cache-Control: max-age=86400` on content app responses and uses that value as the Redis cache entry TTL, but only when the domain has `redirect_to_object_storage=False` (content streamed through the app). When `redirect_to_object_storage=True`, responses are redirects to signed S3/CloudFront URLs with limited lifetimes, so the Redis TTL is left at the default to avoid serving expired signed URLs from cache.
+
+### 0067 — Do not cache ArtifactResponse backed by an unsaved (in-memory) Artifact
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/cache/cache.py`
+- **Description:** Fixes silent 502s on Maven repos with `path_index` enabled. `AsyncContentCache.make_entry` serialized every `ArtifactResponse` as `artifact_pk=str(response._artifact.pk)`. pulp_maven's path_index serves `IndexedArtifactResponse` built from an in-memory `Artifact` that was never saved; because `pulp_id` is a `UUIDField(primary_key=True, default=pulp_uuid)`, that instance already has a **random** pk that matches **no DB row** (an earlier `pk is None` guard therefore never triggered). Caching it stored an `artifact_pk` with no matching row; on a cache HIT `make_response` rebuilt `ArtifactResponse(artifact_pk=<missing>)` whose `prepare()` runs `Artifact.objects.aget(pk=<missing>)` → `Artifact.DoesNotExist`, raised after the response is committed → the worker drops the connection → gateway 502. The patch skips caching any `ArtifactResponse` whose `_artifact._state.adding` is True (unsaved/in-memory instance); it is served live instead. See PULP-2447 and pulp/pulp_maven#506.
+- **Upstream:** Candidate for a pulpcore fix (defensive cache guard).
+
+### 0068 — Reset all DB connections on stale connection retry
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `Handler._reset_db_connection()` only reset the `default` database alias, so when the content app's `ContentReplicaRouter` sent a read to the `replica` alias and that connection went stale (`OperationalError: the connection is closed`), the authentication retry in `pulpcore/content/authentication.py` kept hitting the same dead connection and failing. Resets every configured alias via `django.db.connections.all()` instead of just `default`.
+
+### 0069 — Retry distribution match on replica conflict
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `Handler._match_distribution()` had no retry logic around its `Distribution` lookup, so a Postgres hot-standby recovery conflict on the read replica (`OperationalError: terminating connection due to conflict with recovery`) surfaced as an unhandled 500 on every content-app request. Catches `InterfaceError`/`DatabaseError` around the query, resets connections via `_reset_db_connection()` (patch 0068), and retries once.
+
+### 0070 — Retry publication lookup on replica conflict
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `_match_and_stream()` calls `distro.get_repository_publication_and_version()` (in `pulpcore/app/models/publication.py`), which runs `self.publication.cast()` — an unguarded multi-table query. This call site was missed by patch 0069, so it still surfaced raw `OperationalError: terminating connection due to conflict with recovery` 500s from the content app when the read replica killed the query mid-flight (seen in production for `rpm_rpmpublication` lookups). Adds `Handler._get_repository_publication_and_version()`, wrapping the call with the same catch-reset-retry pattern as patch 0069.
+
+### 0071 — Retry content guard lookup on replica conflict
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `Handler._permit()` accesses `distribution.content_guard`, a lazily-loaded FK not covered by `_match_distribution()`'s `select_related()`, so it issues its own unguarded query. Seen in production as `OperationalError: the connection is closed` from the content app (a stale replica connection, distinct from the recovery-conflict variant fixed by patches 0069/0070) when resolving a `MavenDistribution`'s content guard. Wraps the `distribution.content_guard` access with the same catch-reset-retry pattern, calling `Handler._reset_db_connection()` (patch 0068) before retrying once.
+
+### 0072 — Fix worker crash on invalid UTF-8 RPM changelogs
+
+- **Package:** pulp_rpm
+- **Files:** `pulp_rpm/app/models/package.py`, `pulp_rpm/app/serializers/package.py`, `pulp_rpm/app/shared_utils.py`, `pulp_rpm/app/tasks/signing.py`
+- **Description:** `createrepo_c`'s changelog decoding crashes the whole worker process with a SIGSEGV when a changelog entry contains bytes that aren't valid UTF-8 (seen in production on a legacy Copr-built package with a Latin-1-encoded author name; reproduced with a `PyEval_EvalFrameEx returned a result with an error set` task failure on Python 3.8 and an outright SIGSEGV on Python 3.11, matching production). Adds `shared_utils.read_changelogs()`, which reads changelog entries via `rpm_rs` instead — already a pulp_rpm dependency for signature extraction — decoding the same data leniently (replacing invalid bytes with U+FFFD) instead of crashing, and slicing the result to `KEEP_CHANGELOG_LIMIT * 10` entries. `Package.createrepo_to_dict()` now accepts a `changelogs` override used by every call site that has a local copy of the RPM file; the repodata-XML sync path (which has no local file to re-read) is unaffected and still uses `package.changelogs` directly.
+- **Note:** the slice happens after `rpm_rs` has already decoded every entry, so it bounds the size of the stored/returned changelog but not decode cost on packages with pathologically long changelogs. A raw-header-parsing version that genuinely bounds decode cost (verified against 20 real packages including all 5 `kernel-*` subpackages) was prototyped but reverted in favor of matching what's already live in prod; revisit if decode cost on huge changelogs becomes a real problem.
+
+### 0073 — Never decrease Redis hash TTL when caching a new entry
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/cache/cache.py`
+- **Description:** Pulp's content cache stores all entries for one distribution in a single Redis hash. Every `set()` call ran `EXPIRE` on the hash key, resetting the TTL for **all** entries. When a cacheable 404 (no `Cache-Control` header) was stored with the default `EXPIRES_TTL` of 600 s, it reset the hash TTL from 86400 s (set by artifact entries via patch 0066) back to 600 s. After 10 minutes Redis evicted the entire hash — including artifact entries that should have lived for 24 hours. This caused perpetual `X-PULP-CACHE: MISS` on every request because the cache never survived long enough to serve a HIT. Fix: check the current TTL before calling `EXPIRE` and only increase it, never decrease. Additionally, caps the in-entry `expires` for `HTTPFound` (redirect) entries at `DEFAULT_EXPIRES_TTL` (600 s) as defense-in-depth. Patch 0066 already skips the max-age TTL override for domains with `redirect_to_object_storage=True`, but patch 0063 forces large files (>1.7 GB) through redirect even on non-redirect domains — without this cap, those redirect entries would cache expired pre-signed S3/CloudFront URLs for up to 23 hours.
+- **Upstream:** Candidate for a pulpcore fix (defense against mixed-TTL hash entries).
+
+### 0075 — Retry content artifact lookups on replica conflict
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** `_match_and_stream()` runs three more unguarded `ContentArtifact` queries that patches 0069-0071 didn't cover: the pass-through publication lookup, and (for repository versions served without a publication) the `index.html` existence check and the final content-artifact lookup. Seen in production as `OperationalError: canceling statement due to conflict with recovery` from the content app (a `core_contentartifact` lookup by `relative_path` scoped to a repository version's content, e.g. for a Maven repo) when the read replica killed the query mid-flight during hot-standby recovery. Adds `Handler._retry_content_artifact_query()`, a reusable async wrapper around the same catch-reset-retry pattern as patches 0069/0070, and applies it at all three call sites.

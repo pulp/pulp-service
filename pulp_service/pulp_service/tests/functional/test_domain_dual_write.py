@@ -1,10 +1,23 @@
 import json
 from base64 import b64encode
+from types import SimpleNamespace
 from urllib.parse import urljoin
 from uuid import uuid4
 
 import pytest
 import requests
+from django.db.models.deletion import ProtectedError
+
+from pulpcore.app.models import CompositeContentGuard, HeaderContentGuard
+from pulpcore.plugin.models import Domain
+
+from pulp_service.app.constants import (
+    DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+    DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+    DEFAULT_VPN_CONTENT_GUARD_NAME,
+    LEGACY_DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+    VPN_VERIFIED_HEADER_NAME,
+)
 
 # These tests exercise the RBAC dual-write in the post_create_domain signal
 # (pulp_service/app/signals.py) across both entry points:
@@ -44,6 +57,55 @@ def _user_role_assignments(pulpcore_bindings, username, org_id=ORG_ID):
 
 def _group_role_assignments(pulpcore_bindings, group_href):
     return pulpcore_bindings.GroupsRolesApi.list(group_href).results
+
+
+def _assert_domain_guard_bundle_model(domain_name):
+    domain = Domain.objects.get(name=domain_name)
+    identity_guard = domain.default_content_guard.cast()
+    assert identity_guard.name == DEFAULT_IDENTITY_CONTENT_GUARD_NAME
+    assert identity_guard.header_name == "x-rh-identity"
+    assert identity_guard.header_value == ""
+    assert identity_guard.jq_filter == '""'
+
+    vpn_guard = HeaderContentGuard.objects.get(pulp_domain=domain, name=DEFAULT_VPN_CONTENT_GUARD_NAME)
+    assert vpn_guard.header_name == VPN_VERIFIED_HEADER_NAME
+    assert vpn_guard.header_value == "true"
+    assert vpn_guard.jq_filter is None
+
+    composite_guard = CompositeContentGuard.objects.get(
+        pulp_domain=domain,
+        name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+    )
+    assert set(composite_guard.guards.values_list("pk", flat=True)) == {identity_guard.pk, vpn_guard.pk}
+    return domain, identity_guard, vpn_guard, composite_guard
+
+
+def _assert_domain_guard_bundle_api(pulpcore_bindings, domain_href, domain_name):
+    domain = pulpcore_bindings.DomainsApi.read(domain_href)
+    assert "/contentguards/core/header/" in domain.default_content_guard
+
+    identity_guards = pulpcore_bindings.ContentguardsHeaderApi.list(
+        name=DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+        pulp_domain=domain_name,
+    )
+    vpn_guards = pulpcore_bindings.ContentguardsHeaderApi.list(
+        name=DEFAULT_VPN_CONTENT_GUARD_NAME,
+        pulp_domain=domain_name,
+    )
+    composites = pulpcore_bindings.ContentguardsCompositeApi.list(
+        name=DEFAULT_IDENTITY_OR_VPN_CONTENT_GUARD_NAME,
+        pulp_domain=domain_name,
+    )
+    assert identity_guards.count == vpn_guards.count == composites.count == 1
+    identity_guard = identity_guards.results[0]
+    vpn_guard = vpn_guards.results[0]
+    composite_guard = composites.results[0]
+    assert domain.default_content_guard == identity_guard.pulp_href
+    assert vpn_guard.header_name == VPN_VERIFIED_HEADER_NAME
+    assert vpn_guard.header_value == "true"
+    assert vpn_guard.jq_filter is None
+    assert set(composite_guard.guards) == {identity_guard.pulp_href, vpn_guard.pulp_href}
+    return identity_guard, vpn_guard, composite_guard
 
 
 def _assert_owns_domain(assignments, domain_href):
@@ -157,6 +219,7 @@ def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, 
 
     # No binding created this domain/group, so register admin-auth cleanup ourselves.
     pulpcore_bindings.DomainsApi.api_client.default_headers.pop("x-rh-identity", None)
+    _assert_domain_guard_bundle_api(pulpcore_bindings, domain_href, domain_name)
     request.addfinalizer(lambda: pulpcore_bindings.DomainsApi.delete(domain_href))
     team_group = pulpcore_bindings.GroupsApi.list(name=team_name).results[0]
     request.addfinalizer(lambda: pulpcore_bindings.GroupsApi.delete(team_group.pulp_href))
@@ -167,3 +230,120 @@ def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, 
     org_groups = pulpcore_bindings.GroupsApi.list(name=f"rh-org-{ORG_ID}")
     assert org_groups.count == 1
     _assert_owns_domain(_group_role_assignments(pulpcore_bindings, org_groups.results[0].pulp_href), domain_href)
+
+
+def test_domain_with_automatic_identity_guard_bundle_can_be_deleted(
+    pulpcore_bindings, gen_object_with_cleanup, monitor_task
+):
+    """A new domain gets the guard bundle and can be deleted with no content references."""
+    domain_name = str(uuid4())
+    domain = gen_object_with_cleanup(
+        pulpcore_bindings.DomainsApi,
+        {
+            "name": domain_name,
+            "storage_class": "pulpcore.app.models.storage.FileSystem",
+            "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+        },
+    )
+    _assert_domain_guard_bundle_api(pulpcore_bindings, domain.pulp_href, domain_name)
+
+    delete_task = pulpcore_bindings.DomainsApi.delete(domain.pulp_href).task
+    result = monitor_task(delete_task)
+    assert result.state == "completed"
+
+
+@pytest.mark.django_db
+def test_legacy_identity_guard_is_cleaned_up_on_domain_delete():
+    domain = Domain.objects.create(
+        name=f"legacy-{uuid4()}",
+        storage_class="pulpcore.app.models.storage.FileSystem",
+        storage_settings={"MEDIA_ROOT": "/var/lib/pulp/media/"},
+    )
+    legacy_guard = HeaderContentGuard.objects.create(
+        name=LEGACY_DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
+        header_name="x-rh-identity",
+        header_value="",
+        jq_filter='""',
+        pulp_domain=domain,
+    )
+    domain.default_content_guard = legacy_guard
+    domain.save(update_fields=["default_content_guard"])
+
+    domain.delete()
+
+    assert not Domain.objects.filter(pk=domain.pk).exists()
+    assert not HeaderContentGuard.objects.filter(pulp_domain_id=domain.pk).exists()
+    assert not CompositeContentGuard.objects.filter(pulp_domain_id=domain.pk).exists()
+
+
+@pytest.mark.django_db
+def test_public_domain_has_no_automatic_content_guards():
+    domain = Domain.objects.create(
+        name=f"public-{uuid4()}",
+        storage_class="pulpcore.app.models.storage.FileSystem",
+        storage_settings={"MEDIA_ROOT": "/var/lib/pulp/media/"},
+    )
+
+    try:
+        assert domain.default_content_guard_id is None
+        assert not HeaderContentGuard.objects.filter(pulp_domain=domain).exists()
+        assert not CompositeContentGuard.objects.filter(pulp_domain=domain).exists()
+    finally:
+        domain.delete()
+
+
+@pytest.mark.django_db
+def test_composite_allows_identity_or_verified_vpn():
+    domain = Domain.objects.create(
+        name=f"composite-{uuid4()}",
+        storage_class="pulpcore.app.models.storage.FileSystem",
+        storage_settings={"MEDIA_ROOT": "/var/lib/pulp/media/"},
+    )
+    _, _, _, composite_guard = _assert_domain_guard_bundle_model(domain.name)
+
+    try:
+        composite_guard.permit(SimpleNamespace(headers={VPN_VERIFIED_HEADER_NAME: "dHJ1ZQ=="}))
+        composite_guard.permit(
+            SimpleNamespace(
+                headers={
+                    "x-rh-identity": _auth_header({"identity": {"org_id": "1"}}).decode(),
+                }
+            )
+        )
+
+        with pytest.raises(PermissionError):
+            composite_guard.permit(SimpleNamespace(headers={}))
+        with pytest.raises(PermissionError):
+            composite_guard.permit(SimpleNamespace(headers={VPN_VERIFIED_HEADER_NAME: "ZmFsc2U="}))
+    finally:
+        domain.delete()
+
+
+@pytest.mark.django_db
+def test_customer_guard_protects_domain_and_rolls_back_default_guard_cleanup():
+    """Failed domain deletion preserves both customer and automatic guards."""
+    domain = Domain.objects.create(
+        name=f"delete-{uuid4()}",
+        storage_class="pulpcore.app.models.storage.FileSystem",
+        storage_settings={"MEDIA_ROOT": "/var/lib/pulp/media/"},
+    )
+    _, identity_guard, vpn_guard, composite_guard = _assert_domain_guard_bundle_model(domain.name)
+    customer_guard = HeaderContentGuard.objects.create(
+        name="customer-managed",
+        header_name="x-customer-token",
+        header_value="expected",
+        pulp_domain=domain,
+    )
+
+    try:
+        with pytest.raises(ProtectedError):
+            domain.delete()
+
+        assert Domain.objects.filter(pk=domain.pk).exists()
+        assert HeaderContentGuard.objects.filter(pk=identity_guard.pk).exists()
+        assert HeaderContentGuard.objects.filter(pk=vpn_guard.pk).exists()
+        assert CompositeContentGuard.objects.filter(pk=composite_guard.pk).exists()
+        assert HeaderContentGuard.objects.filter(pk=customer_guard.pk).exists()
+    finally:
+        customer_guard.delete()
+        domain.delete()
