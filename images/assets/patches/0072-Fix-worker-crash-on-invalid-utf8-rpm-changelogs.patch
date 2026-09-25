@@ -1,4 +1,4 @@
-From 5aa19bd21ae785e4c4e0fc02cc6587a3f2007de0 Mon Sep 17 00:00:00 2001
+From ae0e1b9c3a641954ea5a08db189def32de871886 Mon Sep 17 00:00:00 2001
 From: Yasen <yasen@trahnov.eu>
 Date: Thu, 24 Sep 2026 11:52:33 +0200
 Subject: [PATCH] Fix worker crash on RPM changelog entries with invalid UTF-8
@@ -14,9 +14,9 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 ---
  pulp_rpm/app/models/package.py      |  9 +++++++--
  pulp_rpm/app/serializers/package.py | 23 +++++++++++++++++------
- pulp_rpm/app/shared_utils.py        | 11 +++++++++--
+ pulp_rpm/app/shared_utils.py        | 14 ++++++++++++--
  pulp_rpm/app/tasks/signing.py       |  7 +++++--
- 4 files changed, 38 insertions(+), 12 deletions(-)
+ 4 files changed, 41 insertions(+), 12 deletions(-)
 
 diff --git a/pulp_rpm/app/models/package.py b/pulp_rpm/app/models/package.py
 index b025d3557..9f85e3382 100644
@@ -114,23 +114,26 @@ index ba3b52021..8a88cebf2 100644
              log.info(traceback.format_exc())
              raise NotAcceptable(detail="RPM file cannot be parsed for metadata") from e
 diff --git a/pulp_rpm/app/shared_utils.py b/pulp_rpm/app/shared_utils.py
-index ab963342d..11aa36a74 100644
+index ab963342d..53d349914 100644
 --- a/pulp_rpm/app/shared_utils.py
 +++ b/pulp_rpm/app/shared_utils.py
-@@ -68,6 +68,12 @@ def extract_signing_keys(path):
+@@ -68,6 +68,15 @@ def extract_signing_keys(path):
      return format_signing_keys(pkg.signatures())
  
  
 +def read_changelogs(path):
 +    """Read an RPM's changelog entries using rpm_rs instead of createrepo_c."""
 +    pkg = rpm_rs.PackageMetadata.open(path)
-+    return [(entry.name, entry.timestamp, entry.description) for entry in pkg.changelog_entries()]
++    entries = pkg.changelog_entries()
++    if settings.KEEP_CHANGELOG_LIMIT is not None:
++        entries = entries[: settings.KEEP_CHANGELOG_LIMIT * 10]
++    return [(entry.name, entry.timestamp, entry.description) for entry in entries]
 +
 +
  def _split_key_identifier(identifier):
      """Split a key identifier into (prefix, uppercase hex); a bare hex is assumed to be v4."""
      prefix, sep, hex_part = identifier.partition(":")
-@@ -118,7 +124,7 @@ def read_crpackage_from_artifact(artifact, working_dir="."):
+@@ -118,7 +127,7 @@ def read_crpackage_from_artifact(artifact, working_dir="."):
  
      Copy file to a temp directory and parse it.
  
@@ -139,7 +142,7 @@ index ab963342d..11aa36a74 100644
  
      Args:
          artifact: inited and validated artifact to save
-@@ -134,9 +140,10 @@ def read_crpackage_from_artifact(artifact, working_dir="."):
+@@ -134,9 +143,10 @@ def read_crpackage_from_artifact(artifact, working_dir="."):
              header_reading_flags=CR_HEADER_FLAGS,
          )
          signing_keys = extract_signing_keys(temp_file.name)
