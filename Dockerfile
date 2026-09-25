@@ -190,6 +190,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0074-no-store-cache-control-on-302-redirects.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0074-no-store-cache-control-on-302-redirects.patch
 
+COPY images/assets/patches/0075-Retry-content-artifact-lookups-on-replica-conflict.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0075-Retry-content-artifact-lookups-on-replica-conflict.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

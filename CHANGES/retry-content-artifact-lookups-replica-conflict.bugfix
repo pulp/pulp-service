@@ -1,0 +1,1 @@
+Fixed content app requests failing with `OperationalError: canceling statement due to conflict with recovery` when resolving a `ContentArtifact` by path against a repository version (pass-through publications and unpublished repository versions), by retrying the lookup once on a fresh connection.
