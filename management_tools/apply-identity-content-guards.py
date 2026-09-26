@@ -91,6 +91,7 @@ class Report:
     complete: bool
     errors: list[Any]
     distributions: list[dict[str, Any]]
+    domains: list[dict[str, Any]]
     metadata: dict[str, Any]
 
     @property
@@ -221,6 +222,16 @@ def load_report(path: str) -> Report:
             if not isinstance(distribution.get(field), str) or not distribution[field]:
                 raise ToolError(f"report {path} distribution {index} has no {field}")
 
+    domains = payload.get("domains", [])
+    if not isinstance(domains, list):
+        raise ToolError(f"report {path} has no domains list")
+    for index, domain in enumerate(domains):
+        if not isinstance(domain, dict):
+            raise ToolError(f"report {path} domain {index} is not an object")
+        for field in ("name", "pulp_href"):
+            if not isinstance(domain.get(field), str) or not domain[field]:
+                raise ToolError(f"report {path} domain {index} has no {field}")
+
     errors = payload.get("errors", [])
     if not isinstance(errors, list):
         raise ToolError(f"report {path} errors must be a list")
@@ -236,6 +247,7 @@ def load_report(path: str) -> Report:
         complete=payload.get("complete") is True,
         errors=errors,
         distributions=distributions,
+        domains=domains,
         metadata=metadata,
     )
 
@@ -385,6 +397,20 @@ def merge_reports(
             ):
                 raise ToolError(f"conflicting records for distribution {href}")
 
+    return list(merged.values())
+
+
+def merge_domains(reports: list[Report]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for report in reports:
+        for domain in report.domains:
+            href = domain["pulp_href"]
+            existing = merged.get(href)
+            if existing is not None and existing.get("name") != domain.get("name"):
+                raise ToolError(f"conflicting records for domain {href}")
+            merged[href] = domain
+    if not merged:
+        raise ToolError("reports contain no domain inventory")
     return list(merged.values())
 
 
@@ -977,6 +1003,158 @@ def write_state(output: Path, rollback: Path, state: dict[str, Any]) -> None:
     atomic_write_json(rollback, state["rollback"])
 
 
+def reconcile_domain_defaults(
+    args: argparse.Namespace,
+    reports: list[Report],
+    output: Path,
+    rollback: Path,
+) -> int:
+    if any(not report.complete or report.errors for report in reports):
+        raise ToolError(
+            "--domain-defaults-only requires complete, error-free audit reports"
+        )
+    scopes = {report_scope(report) for report in reports}
+    if len(scopes) != 1:
+        raise ToolError("all domain-default reports must have matching audit scope")
+
+    domains = merge_domains(reports)
+    selected = []
+    excluded = []
+    requested_domains = set(args.domain) if args.domain else None
+    for domain in domains:
+        name = domain["name"]
+        reason = None
+        if requested_domains and name not in requested_domains:
+            reason = "outside_domain_filter"
+        elif name.lower().startswith("public-"):
+            reason = "public_domain"
+        elif name == "default":
+            reason = "system_default_domain"
+        if reason:
+            excluded.append({"domain": domain, "reason": reason})
+        else:
+            selected.append(domain)
+
+    client = HostedPulp(args.hosted_pulp_bin, args.profile)
+    state: dict[str, Any] = {
+        "profile": args.profile,
+        "mode": "domain-defaults-only",
+        "completion": "in_progress",
+        "reports": [
+            {
+                "path": report.path,
+                "sha256": report.sha256,
+                "complete": report.complete,
+                "error_count": len(report.errors),
+            }
+            for report in reports
+        ],
+        "guards": {
+            IDENTITY_GUARD.name: {
+                "header_name": IDENTITY_GUARD.header_name,
+                "header_value": IDENTITY_GUARD.header_value,
+                "jq_filter": IDENTITY_GUARD.jq_filter,
+            },
+            VPN_GUARD.name: {
+                "header_name": VPN_GUARD.header_name,
+                "header_value": VPN_GUARD.header_value,
+                "jq_filter": VPN_GUARD.jq_filter,
+            },
+            COMPOSITE_GUARD_NAME: {
+                "members": [IDENTITY_GUARD.name, VPN_GUARD.name],
+                "assigned_to_distributions": False,
+            },
+        },
+        "counts": {
+            "input_domains": len(domains),
+            "selected_domains": len(selected),
+            "excluded_domains": len(excluded),
+            "changed": 0,
+            "skipped": 0,
+            "failed": 0,
+        },
+        "excluded_domains": excluded,
+        "domains": {},
+        "rollback": [],
+        "errors": [],
+    }
+    write_state(output, rollback, state)
+
+    for index, domain in enumerate(selected, start=1):
+        name = domain["name"]
+        domain_state: dict[str, Any] = {}
+        state["domains"][name] = domain_state
+        progress(f"domain defaults {index}/{len(selected)}: {name}")
+        try:
+            domain_data = live_domain_href(client, domain["pulp_href"], name)
+            identity = ensure_guard(
+                client, name, IDENTITY_GUARD, args.apply, domain_state
+            )
+            vpn = ensure_guard(client, name, VPN_GUARD, args.apply, domain_state)
+            ensure_composite_guard(
+                client, name, identity, vpn, args.apply, domain_state
+            )
+            domain_state["default_content_guard"] = {
+                "prior": guard_href(domain_data.get("default_content_guard")),
+                "assigned": identity,
+            }
+            write_state(output, rollback, state)
+
+            prior_default = guard_href(domain_data.get("default_content_guard"))
+            if args.apply and identity and prior_default != identity:
+                state["rollback"].append(
+                    {
+                        "domain": name,
+                        "domain_href": domain["pulp_href"],
+                        "prior_default_content_guard": prior_default,
+                        "assigned_default_content_guard": identity,
+                        "state": "pending",
+                    }
+                )
+                write_state(output, rollback, state)
+            updated_domain = ensure_domain_default(
+                client,
+                name,
+                domain_data,
+                identity,
+                args.apply,
+                domain_state,
+                args.assignment_timeout,
+                args.poll_max_interval,
+            )
+            resulting_default = guard_href(updated_domain.get("default_content_guard"))
+            if args.apply and state["rollback"]:
+                entry = state["rollback"][-1]
+                if entry["domain"] == name and entry["state"] == "pending":
+                    entry["state"] = "changed"
+                    entry["after_default_content_guard"] = resulting_default
+            if domain_state.get("default_content_guard", {}).get("action") in {
+                "set",
+                "reused",
+            }:
+                state["counts"]["changed"] += 1
+            else:
+                state["counts"]["skipped"] += 1
+            write_state(output, rollback, state)
+            progress(f"domain defaults {index}/{len(selected)}: {name} complete")
+        except ToolError as error:
+            domain_state["error"] = str(error)
+            state["errors"].append({"domain": name, "error": str(error)})
+            state["counts"]["failed"] += 1
+            write_state(output, rollback, state)
+            progress(f"domain defaults {name} failed: {error}")
+
+    if state["counts"]["failed"]:
+        state["completion"] = "failed"
+    elif args.apply:
+        state["completion"] = "complete"
+    else:
+        state["completion"] = "plan"
+    write_state(output, rollback, state)
+    print(json.dumps({"output": str(output), "counts": state["counts"]}, indent=2))
+    return 1 if state["counts"]["failed"] else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1034,6 +1212,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="apply only successfully audited candidates and leave failed domains pending",
     )
     parser.add_argument(
+        "--domain-defaults-only",
+        action="store_true",
+        help="reconcile domain defaults without reading or changing distributions",
+    )
+    parser.add_argument(
         "--yes", action="store_true", help="confirm the requested mutation"
     )
     return parser
@@ -1052,12 +1235,18 @@ def main() -> int:
         parser.error("--apply requires --yes")
     if args.partial_apply and not args.apply:
         parser.error("--partial-apply requires --apply --yes")
+    if args.domain_defaults_only and args.partial_apply:
+        parser.error("--domain-defaults-only cannot be combined with --partial-apply")
+    if args.domain_defaults_only and args.max_changes:
+        parser.error("--max-changes cannot be used with --domain-defaults-only")
 
     output = Path(args.output)
     rollback = Path(args.rollback_output or f"{args.output}.rollback.json")
 
     try:
         reports = [load_report(path) for path in args.report]
+        if args.domain_defaults_only:
+            return reconcile_domain_defaults(args, reports, output, rollback)
         unresolved_audit_domains = set()
         if args.partial_apply:
             unresolved_audit_domains = validate_partial_apply_reports(reports)

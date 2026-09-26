@@ -20,6 +20,38 @@ conflicting domain default, assign the VPN guard, or assign the composite
 guard. It excludes public-prefixed domains and distributions that already have
 effective or explicit protection.
 
+## Reconcile domain defaults
+
+Use `--domain-defaults-only` to process the report's top-level domain inventory
+without reading or changing distributions. This mode includes domains with no
+distributions and excludes public-prefixed domains and the system `default`
+domain.
+
+Plan the reconciliation:
+
+```bash
+uv run management_tools/apply-identity-content-guards.py \
+  --report /path/content-guards-stage-report.json \
+  --profile stage-tbr \
+  --domain-defaults-only \
+  --output domain-defaults-plan.json
+```
+
+Apply after reviewing the plan:
+
+```bash
+uv run management_tools/apply-identity-content-guards.py \
+  --report /path/content-guards-stage-report.json \
+  --profile stage-tbr \
+  --domain-defaults-only \
+  --apply --yes \
+  --output domain-defaults-result.json
+```
+
+The mode sets `default_content_guard` only when it is empty. It fails closed on
+a conflicting default and records the prior domain default for rollback. Do
+not combine it with `--partial-apply` or `--max-changes`.
+
 ## Prerequisites
 
 Before running the tool, verify that:

@@ -561,3 +561,50 @@ def test_partial_apply_defers_candidates_in_unresolved_audit_domains(
     assert state["counts"]["changed"] == 0
     assert state["counts"]["audit_deferred"] == 1
     assert state["audit_deferred"][0]["reason"] == "unresolved_audit_domain"
+
+
+def test_domain_defaults_only_uses_domain_inventory_without_distributions(
+    monkeypatch, tmp_path
+):
+    report_path = tmp_path / "domains.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "complete": True,
+                "errors": [],
+                "metadata": {
+                    "environment": "stage",
+                    "base_url": "https://packages.stage.redhat.com",
+                    "public_domains_included": False,
+                    "distribution_endpoints": ["distributions/rpm/rpm"],
+                },
+                "domains": [
+                    {"name": "tenant-a", "pulp_href": FakeHostedPulp.domain_href},
+                    {"name": "public-copr", "pulp_href": "/public/"},
+                    {"name": "default", "pulp_href": "/default/"},
+                ],
+                "distributions": [],
+            }
+        )
+    )
+    FakeHostedPulp.instances.clear()
+    monkeypatch.setattr(tool, "HostedPulp", FakeHostedPulp)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "apply-identity-content-guards.py",
+            "--report",
+            str(report_path),
+            "--domain-defaults-only",
+            "--output",
+            str(tmp_path / "result.json"),
+        ],
+    )
+
+    assert tool.main() == 0
+    client = FakeHostedPulp.instances[-1]
+    assert not any(call[1][0:2] == ["api", "distributions"] for call in client.calls)
+    state = json.loads((tmp_path / "result.json").read_text())
+    assert state["counts"]["selected_domains"] == 1
+    assert state["counts"]["excluded_domains"] == 2
