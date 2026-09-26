@@ -49,7 +49,7 @@ diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
              headers["Content-Type"] = content_type
 
 -        headers["Cache-Control"] = "public, max-age=0, must-revalidate"
-+        headers["Cache-Control"] = "public, max-age=86400, must-revalidate"
++        headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
 
          # Let plugin-Distribution set headers for this path if it wants.
          if distribution:
@@ -58,7 +58,7 @@ diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
          etag = f'"{artifact.sha256}"'
          headers["ETag"] = etag
 -        headers["Cache-Control"] = "public, max-age=0, must-revalidate"
-+        headers["Cache-Control"] = "public, max-age=86400, must-revalidate"
++        headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
 
          try:
              range_start, range_stop = request.http_range.start, request.http_range.stop
