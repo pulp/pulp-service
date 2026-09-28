@@ -32,12 +32,6 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
 
-### 0018 — Re-root the registry API at /api/pulp/v2/
-
-- **Package:** pulp_container
-- **Files:** `pulp_container/app/content.py`, `pulp_container/app/redirects.py`, `pulp_container/app/token_verification.py`, `pulp_container/app/urls.py`
-- **Description:** Moves all container registry URL routes from `/v2/` to `/api/pulp/v2/` and the content app prefix from `/pulp/container/` to `/api/pulp-container/`. Replaces `RegistryPermission` with `DomainBasedPermission`.
-
 ### 0022 — Adds authentication to the mvn deploy api
 
 - **Package:** pulp_maven

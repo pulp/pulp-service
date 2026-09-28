@@ -55,13 +55,20 @@ def _populate_domain_view_access_policies(sender, apps, **kwargs):  # noqa: ARG0
 
 
 def _populate_service_roles(sender, apps, **kwargs):  # noqa: ARG001
-    """Create/update service.domain_admin and service.domain_viewer roles with plugin permissions."""
-    # Only run for the service app's own migration. pulp_service depends on all plugins, so by the
-    # time it migrates every plugin's permissions exist. Running once (instead of once per plugin)
-    # avoids repeated permissions.set() DELETE+INSERT windows that cause 403s during rolling upgrades.
-    if sender.label != "service":
-        return
+    """Create/update service.domain_admin and service.domain_viewer roles with plugin permissions.
 
+    Connected to every plugin's post_migrate (see ready()). It must fire on each one:
+    Django creates a plugin's permissions during that plugin's own post_migrate, so a
+    receiver only sees the permissions of plugins whose post_migrate already ran. Running
+    once on pulp_service's own post_migrate silently dropped any plugin whose permissions
+    were created afterwards (e.g. pulp_file), so domain owners got 403s creating file repos
+    despite holding service.domain_admin. Firing on every plugin guarantees the last one
+    assembles the complete set. permissions.set() only DELETE+INSERTs the diff on the
+    role_permissions m2m, so a firing whose set is unchanged writes nothing to it. And since
+    Django's create_permissions is purely additive (it never deletes existing rows), an early
+    firing during an upgrade can only grow the role -- no rolling-upgrade window where a domain
+    owner loses a permission they already held.
+    """
     try:
         Role = apps.get_model("core", "Role")
         Permission = apps.get_model("auth", "Permission")

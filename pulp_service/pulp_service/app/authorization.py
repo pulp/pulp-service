@@ -24,6 +24,28 @@ user_id_var = ContextVar("user_id")
 group_var = ContextVar("group")
 
 
+def set_domain_create_context(request):
+    """
+    Populate the ContextVars the post_create_domain signal (signals.py) consumes for
+    the RBAC/DomainOrg dual-write.
+
+    Called for both domain-create paths: CreateDomainView (self-service) and the generic
+    pulpcore DomainViewSet create (from PulpServiceAccessPolicy.has_permission). The former
+    DomainBasedPermission default used to set these for the domain_create action.
+    """
+    header = request.META.get("HTTP_X_RH_IDENTITY")
+    org_id = None
+    if header:
+        try:
+            org_id = org_id_json_path.input_value(json.loads(b64decode(header))).first()
+        except (Base64DecodeError, json.JSONDecodeError):
+            org_id = None
+    # Set unconditionally: a basic-auth create with no X-RH-IDENTITY must clear org_id_var, not
+    # inherit a stale value left in this worker's context by an earlier request.
+    org_id_var.set(org_id)
+    user_id_var.set(request.user.pk)
+
+
 class IsAdminOrAdminReadOnly(BasePermission):
     """
     Full access for superusers/staff; GET/HEAD/OPTIONS-only for members of the
@@ -48,17 +70,16 @@ class IsAdminOrAdminReadOnly(BasePermission):
 class DomainBasedPermission(BasePermission):
     """
     A Permission Class that grants permission to users who's org_id matches the requested Domain's org_id.
+
+    Retained only for the container registry auth path: the ``0018-Re-root-the-registry-API``
+    patch derives ``RegistryPermission`` from this class. The general REST API now defaults to
+    ``PulpServiceAccessPolicy``. TODO: repoint patch 0018 at the RBAC policy and remove this.
     """
 
     def _is_admin_readonly(self, user):
         """True if user is an authenticated member of the ADMIN_READONLY_GROUP."""
         group_name = settings.ADMIN_READONLY_GROUP
-        return bool(
-            group_name
-            and user
-            and user.is_authenticated
-            and user.groups.filter(name=group_name).exists()
-        )
+        return bool(group_name and user and user.is_authenticated and user.groups.filter(name=group_name).exists())
 
     def _has_domain_access(self, domain_pk, org_id, user):
         """
