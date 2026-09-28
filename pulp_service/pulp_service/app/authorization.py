@@ -50,6 +50,16 @@ class DomainBasedPermission(BasePermission):
     A Permission Class that grants permission to users who's org_id matches the requested Domain's org_id.
     """
 
+    def _is_admin_readonly(self, user):
+        """True if user is an authenticated member of the ADMIN_READONLY_GROUP."""
+        group_name = settings.ADMIN_READONLY_GROUP
+        return bool(
+            group_name
+            and user
+            and user.is_authenticated
+            and user.groups.filter(name=group_name).exists()
+        )
+
     def _has_domain_access(self, domain_pk, org_id, user):
         """
         Checks if a user has access to a domain based on user, group membership, or org_id.
@@ -202,6 +212,11 @@ class DomainBasedPermission(BasePermission):
             safe_method_access = self._check_safe_method_access(request, view, domain, user)
             if safe_method_access is not None:
                 return safe_method_access
+            # Admin read-only members can read any endpoint that the safe method
+            # checks above did not already decide. Content guards still win,
+            # because a guarded PyPI view returns an explicit allow or deny above.
+            if self._is_admin_readonly(user):
+                return True
 
         if not user.is_authenticated:
             return False
@@ -286,6 +301,9 @@ class DomainBasedPermission(BasePermission):
         user = request.user
 
         if user.is_superuser:
+            return qs
+
+        if self._is_admin_readonly(user):
             return qs
 
         if not user.is_authenticated:
