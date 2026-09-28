@@ -56,6 +56,7 @@ from pulp_service.app.models import FeatureContentGuard, PyPIYankMonitor, Yanked
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     ContentScanSerializer,
+    DomainOrgRemediateRolesSerializer,
     FeatureContentGuardSerializer,
     PublicDebugAuthenticationHeadersSerializer,
     PyPIYankMonitorSerializer,
@@ -2178,6 +2179,87 @@ class DomainOrgBackfillReportDispatcherView(APIView):
                 "task_name": "pulp_service.app.tasks.domainorg_backfill_report.generate_backfill_report",
                 "usage": {
                     "endpoint": "/api/pulp/debug/domainorg-backfill-report/",
+                    "method": "POST",
+                    "authentication": "Admin user required",
+                },
+            }
+        )
+
+
+class DomainOrgRemediateRolesDispatcherView(APIView):
+    """
+    Admin-only endpoint to remediate DomainOrg rows migration 0022 could not backfill.
+
+    POST an explicit list of {domain_org_pk, org_id} assignments (plus optional dry_run). It
+    dispatches a background task that, per row, sets org_id, ensures the rh-org-<org_id> group,
+    and assigns the domain roles that grant GET/PUSH -- attaching a JSON result as a
+    ProfileArtifact named ``domainorg_remediate_roles``. Download it via the completed task's
+    ``profile_artifacts/`` action. dry_run=true reports intended actions and writes nothing.
+
+    GET returns usage documentation.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def _validate(self, data):
+        """Return a validated (assignments, dry_run) tuple, or raise ValueError with a message."""
+        if not isinstance(data, dict):
+            raise ValueError("request body must be a JSON object.")  # noqa: TRY004
+        assignments = data.get("assignments")
+        if not isinstance(assignments, list) or not assignments:
+            raise ValueError("'assignments' must be a non-empty list.")
+        cleaned = []
+        seen_pks = set()
+        for item in assignments:
+            if not isinstance(item, dict) or "domain_org_pk" not in item or "org_id" not in item:
+                raise ValueError("each assignment needs 'domain_org_pk' and 'org_id'.")
+            try:
+                pk = int(item["domain_org_pk"])
+            except (TypeError, ValueError):
+                raise ValueError("'domain_org_pk' must be an integer.") from None
+            if pk in seen_pks:
+                raise ValueError("'domain_org_pk' entries must be unique.")
+            seen_pks.add(pk)
+            cleaned.append({"domain_org_pk": pk, "org_id": str(item["org_id"])})
+        dry_run = data.get("dry_run", False)
+        if not isinstance(dry_run, bool):
+            raise ValueError("'dry_run' must be a boolean.")  # noqa: TRY004
+        return cleaned, dry_run
+
+    @extend_schema(
+        request=DomainOrgRemediateRolesSerializer,
+        description=(
+            "Dispatch a background task that sets org_id and assigns domain roles for the given "
+            "DomainOrg rows. Returns a downloadable JSON result artifact attached to the task."
+        ),
+        summary="Remediate DomainOrg roles",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        try:
+            assignments, dry_run = self._validate(request.data)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        task = dispatch(
+            "pulp_service.app.tasks.domainorg_remediate_roles.generate_remediation_report",
+            kwargs={"assignments": assignments, "dry_run": dry_run},
+        )
+        return OperationPostponedResponse(task, request)
+
+    def get(self, request):
+        """Return endpoint documentation."""
+        return Response(
+            {
+                "description": (
+                    "POST {'assignments': [{'domain_org_pk': int, 'org_id': str}], 'dry_run': bool} "
+                    "to dispatch a background task that sets org_id, ensures the rh-org-<org_id> "
+                    "group, and assigns domain roles for each row. When the returned task completes, "
+                    "GET /pulp/api/v3/tasks/<uuid>/profile_artifacts/ and download the "
+                    "'domainorg_remediate_roles' URL. dry_run=true reports intended actions only."
+                ),
+                "task_name": ("pulp_service.app.tasks.domainorg_remediate_roles.generate_remediation_report"),
+                "usage": {
+                    "endpoint": "/api/pulp/debug/domainorg-remediate-roles/",
                     "method": "POST",
                     "authentication": "Admin user required",
                 },

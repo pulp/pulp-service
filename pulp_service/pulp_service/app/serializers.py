@@ -197,3 +197,21 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             raise serializers.ValidationError(_("Invalid JSON format.")) from exc
 
         return temp_file.pk
+
+
+class DomainOrgRoleAssignmentSerializer(serializers.Serializer):
+    """A single DomainOrg role remediation assignment."""
+
+    domain_org_pk = serializers.IntegerField(help_text=_("Primary key of the DomainOrg row to remediate."))
+    org_id = serializers.CharField(
+        help_text=_("Organization id to set on the row and to build the rh-org-<org_id> group.")
+    )
+
+
+class DomainOrgRemediateRolesSerializer(serializers.Serializer):
+    """Request body for the DomainOrg role remediation endpoint."""
+
+    assignments = DomainOrgRoleAssignmentSerializer(many=True, help_text=_("DomainOrg rows to remediate."))
+    dry_run = serializers.BooleanField(
+        required=False, default=False, help_text=_("Report intended actions without writing.")
+    )
