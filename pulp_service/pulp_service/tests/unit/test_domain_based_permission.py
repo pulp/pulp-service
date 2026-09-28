@@ -13,6 +13,7 @@ from base64 import b64encode
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from django.conf import settings
 from django.test import override_settings
 
 from pulpcore.plugin.models import Domain
@@ -54,12 +55,32 @@ def _make_anonymous_user():
     return user
 
 
-def _make_authenticated_user(in_readonly_group=False):
+# Source the group name from the setting so the literal is not duplicated here.
+ADMIN_READONLY_GROUP_NAME = settings.ADMIN_READONLY_GROUP
+
+
+def _make_authenticated_user(in_readonly_group=False, in_admin_readonly_group=False):
+    """Build a mock authenticated user.
+
+    ``in_readonly_group`` controls membership in any policy readonly group (e.g.
+    "Lightwell-ReadOnly"); ``in_admin_readonly_group`` controls membership in the
+    global ADMIN_READONLY_GROUP. The two are tracked separately so a single mock can
+    represent a policy readonly member who is NOT a global admin-readonly member.
+    """
     user = MagicMock()
     user.is_authenticated = True
     user.is_superuser = False
     user.groups.values_list.return_value = []
-    user.groups.filter.return_value.exists.return_value = in_readonly_group
+
+    def _filter(name=None, **kwargs):
+        result = MagicMock()
+        if name == ADMIN_READONLY_GROUP_NAME:
+            result.exists.return_value = in_admin_readonly_group
+        else:
+            result.exists.return_value = in_readonly_group
+        return result
+
+    user.groups.filter.side_effect = _filter
     return user
 
 
@@ -863,6 +884,81 @@ class TestGenericDomainAccessPolicies:
         view = _make_regular_view()
 
         assert permission.has_permission(request, view) is True
+
+
+class TestAdminReadonlyGlobalRead:
+    """Verify members of ADMIN_READONLY_GROUP get read access to every endpoint governed
+    by DomainBasedPermission, without any DomainOrg association, and never get write access."""
+
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_admin_readonly_get_no_domain_access_allowed(self, mock_domain_org, mock_get_domain_pk):
+        """An admin-readonly member gets read access to a private domain operation even with
+        no DomainOrg association (would otherwise be 403)."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("my-private-domain")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(in_admin_readonly_group=True),
+            domain=domain,
+            view_name="repositories-list",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is True
+
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_admin_readonly_write_denied(self, mock_domain_org, mock_get_domain_pk):
+        """Admin-readonly membership must not grant write access; POST/PATCH/DELETE still go
+        through the standard DomainOrg-based checks."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("my-private-domain")
+        for method in ("POST", "PATCH", "DELETE"):
+            request = _make_request(
+                method=method,
+                user=_make_authenticated_user(in_admin_readonly_group=True),
+                domain=domain,
+                view_name="repositories-list",
+            )
+
+            assert permission.has_permission(request, _make_regular_view()) is False
+
+    @patch("pulp_service.app.authorization.get_domain_pk", return_value=42)
+    @patch("pulp_service.app.authorization.DomainOrg.objects")
+    def test_non_member_get_no_domain_access_denied(self, mock_domain_org, mock_get_domain_pk):
+        """A user not in admin-readonly keeps existing behavior: a GET with no DomainOrg
+        access is denied."""
+        mock_domain_org.filter.return_value.exists.return_value = False
+        permission = DomainBasedPermission()
+        domain = _make_domain("my-private-domain")
+        request = _make_request(
+            method="GET",
+            user=_make_authenticated_user(in_readonly_group=False),
+            domain=domain,
+            view_name="repositories-list",
+        )
+        view = _make_regular_view()
+
+        assert permission.has_permission(request, view) is False
+
+    def test_scope_queryset_returns_full_qs_for_admin_readonly(self):
+        """scope_queryset returns the unfiltered Domain queryset for an admin-readonly user."""
+        permission = DomainBasedPermission()
+        user = _make_authenticated_user(in_admin_readonly_group=True)
+        request = _make_request(method="GET", user=user)
+
+        view = MagicMock()
+        view.request = request
+        qs = MagicMock()
+        qs.model = Domain
+
+        result = permission.scope_queryset(view, qs)
+
+        assert result is qs
+        qs.filter.assert_not_called()
 
 
 class TestScopeQueryset:
