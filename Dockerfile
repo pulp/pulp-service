@@ -151,29 +151,15 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0060-Add-content_handler_json-to-PythonDistribution.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0060-Add-content_handler_json-to-PythonDistribution.patch
 
-COPY images/assets/patches/0062-Add-if-modified-since-header-support.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0062-Add-if-modified-since-header-support.patch
 
-COPY images/assets/patches/0063-Redirect-large-artifacts-to-object-storage.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0063-Redirect-large-artifacts-to-object-storage.patch
 
-COPY images/assets/patches/0064-add-etag-header-content-app.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0064-add-etag-header-content-app.patch
 
-COPY images/assets/patches/0065-Route-content-pull-through-writes-to-primary.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0065-Route-content-pull-through-writes-to-primary.patch
 
 COPY images/assets/patches/0066-use-cache-control-max-age-for-redis-ttl.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0066-use-cache-control-max-age-for-redis-ttl.patch
 
-COPY images/assets/patches/0067-do-not-cache-unsaved-artifactresponse.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0067-do-not-cache-unsaved-artifactresponse.patch
 
-COPY images/assets/patches/0068-Reset-all-db-connections-on-stale-connection-retry.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0068-Reset-all-db-connections-on-stale-connection-retry.patch
 
-COPY images/assets/patches/0069-Retry-distribution-match-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0069-Retry-distribution-match-on-replica-conflict.patch
 
 COPY images/assets/patches/0070-Retry-publication-lookup-on-replica-conflict.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0070-Retry-publication-lookup-on-replica-conflict.patch
@@ -184,8 +170,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0072-Fix-worker-crash-on-invalid-utf8-rpm-changelogs.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0072-Fix-worker-crash-on-invalid-utf8-rpm-changelogs.patch
 
-COPY images/assets/patches/0073-never-decrease-redis-hash-ttl.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0073-never-decrease-redis-hash-ttl.patch
 
 COPY images/assets/patches/0074-no-store-cache-control-on-302-redirects.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0074-no-store-cache-control-on-302-redirects.patch

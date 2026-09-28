@@ -1,8 +1,8 @@
 diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
-index 734fbb4..82bd38f 100644
+index dd28ed8de..6992b7d0d 100644
 --- a/pulpcore/app/models/publication.py
 +++ b/pulpcore/app/models/publication.py
-@@ -779,6 +779,31 @@ class Distribution(MasterModel):
+@@ -854,6 +854,31 @@ class Distribution(MasterModel):
          """
          return None
  
@@ -35,7 +35,7 @@ index 734fbb4..82bd38f 100644
          """
          Opportunity for Distribution to specify response-headers for a specific path
 diff --git a/pulpcore/cache/__init__.py b/pulpcore/cache/__init__.py
-index a5a4b9d..54f1f05 100644
+index a5a4b9d01..54f1f0589 100644
 --- a/pulpcore/cache/__init__.py
 +++ b/pulpcore/cache/__init__.py
 @@ -6,4 +6,5 @@ from .cache import (
@@ -45,10 +45,23 @@ index a5a4b9d..54f1f05 100644
 +    accept_prefers_json,
  )
 diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
-index 04a7506..1865d40 100644
+index 04a7506c1..fee1460e6 100644
 --- a/pulpcore/cache/cache.py
 +++ b/pulpcore/cache/cache.py
-@@ -30,6 +30,54 @@ class CacheKeys(enum.Enum):
+@@ -4,10 +4,11 @@ import time
+ from functools import wraps
+ 
+ from aiohttp.web import FileResponse, HTTPSuccessful, Request, Response, StreamResponse
+-from aiohttp.web_exceptions import HTTPException, HTTPFound, HTTPNotFound
++from aiohttp.web_exceptions import HTTPException, HTTPFound, HTTPNotFound, HTTPNotModified
+ from django.conf import settings
+ from django.http import FileResponse as ApiFileResponse
+ from django.http import HttpResponse, HttpResponseRedirect
++from django.utils.http import parse_http_date_safe
+ from redis import ConnectionError
+ from redis.asyncio import ConnectionError as AConnectionError
+ from redis.exceptions import RedisError
+@@ -30,6 +31,54 @@ class CacheKeys(enum.Enum):
      path = "path"
      host = "host"
      method = "method"
@@ -103,7 +116,29 @@ index 04a7506..1865d40 100644
  
  
  def connection_error_wrapper(func):
-@@ -325,7 +373,9 @@ class AsyncContentCache(AsyncCache):
+@@ -86,7 +135,9 @@ class Cache:
+         base_key = base_key or self.default_base_key
+         ret = self.redis.hset(base_key, key, value)
+         if expires:
+-            self.redis.expire(base_key, expires)
++            current_ttl = self.redis.ttl(base_key)
++            if current_ttl < 0 or current_ttl < expires:
++                self.redis.expire(base_key, expires)
+         return ret
+ 
+     @connection_error_wrapper
+@@ -269,7 +320,9 @@ class AsyncCache:
+         base_key = base_key or self.default_base_key
+         ret = await self.redis.hset(base_key, key, value)
+         if expires:
+-            await self.redis.expire(base_key, expires)
++            current_ttl = await self.redis.ttl(base_key)
++            if current_ttl < 0 or current_ttl < expires:
++                await self.redis.expire(base_key, expires)
+         return ret
+ 
+     @aconnection_error_wrapper
+@@ -325,7 +378,9 @@ class AsyncContentCache(AsyncCache):
                        can be a callable taking the request and cache instance as arguments
              expires_ttl: length in seconds entries should live in the cache, EXPIRES_TTL is default
              keys: a list of CacheKeys to use for key creation upon entry placement,
@@ -114,7 +149,79 @@ index 04a7506..1865d40 100644
              auth: a callable to check authorization of the request; takes the request, cache
                    instance, and base_key as arguments.
          """
-@@ -461,6 +511,9 @@ class AsyncContentCache(AsyncCache):
+@@ -358,8 +413,10 @@ class AsyncContentCache(AsyncCache):
+                 response = await self.make_entry(
+                     key, bk, func, args, kwargs, self.default_expires_ttl
+                 )
+-            elif size := response.headers.get("X-PULP-ARTIFACT-SIZE"):
+-                artifacts_size_counter.add(size)
++            else:
++                if size := response.headers.get("X-PULP-ARTIFACT-SIZE"):
++                    artifacts_size_counter.add(size)
++            self._check_not_modified(request, response)
+ 
+             if isinstance(response, HTTPException):
+                 raise response
+@@ -367,6 +424,30 @@ class AsyncContentCache(AsyncCache):
+ 
+         return cached_function
+ 
++    @staticmethod
++    def _check_not_modified(request, response):
++        """Raise HTTPNotModified if the response satisfies conditional request headers."""
++        headers = dict(response.headers)
++
++        etag = headers.get("ETag")
++        if etag:
++            if_none_match = request.headers.get("If-None-Match")
++            if if_none_match and etag in {v.strip() for v in if_none_match.split(",")}:
++                raise HTTPNotModified(headers=headers)
++
++        last_modified = headers.get("Last-Modified")
++        if not last_modified:
++            return
++        ims_header = request.headers.get("If-Modified-Since")
++        if not ims_header:
++            return
++        ims_epoch = parse_http_date_safe(ims_header)
++        if ims_epoch is None:
++            return
++        lm_epoch = parse_http_date_safe(last_modified)
++        if lm_epoch is not None and lm_epoch <= ims_epoch:
++            raise HTTPNotModified(headers=headers)
++
+     def get_request_from_args(self, args):
+         """Finds the request object from list of args"""
+         for arg in args:
+@@ -425,6 +506,17 @@ class AsyncContentCache(AsyncCache):
+             entry["path"] = str(response._path)
+             entry["type"] = "FileResponse"
+         elif isinstance(response, ArtifactResponse):
++            if response._artifact._state.adding:
++                # The response is backed by an unsaved, in-memory Artifact (e.g. an
++                # index-served response built from a digest, with no DB row). Its pk
++                # is a freshly generated default UUID that does not exist in the
++                # database, so caching it would persist an artifact_pk that no row
++                # matches; every cache HIT would then rebuild
++                # ArtifactResponse(artifact_pk=<missing>) whose prepare() runs
++                # Artifact.objects.aget(pk=<missing>) -> Artifact.DoesNotExist, raised
++                # after the response is committed -> a silent connection drop (502).
++                # Serve it live and do not cache.
++                return response
+             entry["artifact_pk"] = str(response._artifact.pk)
+             entry["type"] = "ArtifactResponse"
+         elif isinstance(response, HTTPNotFound):
+@@ -437,6 +529,9 @@ class AsyncContentCache(AsyncCache):
+             entry.pop("status")
+             entry["location"] = str(response.location)
+             entry["type"] = "Redirect"
++            if expires is not None and expires > DEFAULT_EXPIRES_TTL:
++                expires = DEFAULT_EXPIRES_TTL
++                entry["expires"] = expires + time.time()
+         elif isinstance(response, (Response, HTTPSuccessful)):
+             body = response.body
+             if isinstance(body, bytes):
+@@ -461,6 +556,9 @@ class AsyncContentCache(AsyncCache):
              CacheKeys.path: request.path,
              CacheKeys.method: request.method,
              CacheKeys.host: request.url.host,
@@ -125,16 +232,36 @@ index 04a7506..1865d40 100644
          key = ":".join(all_keys[k] for k in self.keys)
          return key
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index f1cb2b5..00f92d1 100644
+index f1cb2b5b9..0963cf5a3 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -1,4 +1,5 @@
+@@ -1,9 +1,11 @@
  import asyncio
 +import json
  import logging
  import os
  import re
-@@ -59,7 +60,7 @@ from pulpcore.app.util import (  # noqa: E402
+ import socket
+ import struct
++from contextlib import nullcontext
+ from contextvars import ContextVar
+ from datetime import datetime, timedelta
+ from datetime import timezone as dt_timezone
+@@ -39,10 +41,12 @@ from django.core.exceptions import (  # noqa: E402
+ from django.db import (  # noqa: E402
+     DatabaseError,
+     IntegrityError,
+-    connection,
++    InterfaceError,
++    connections,
+     models,
+     transaction,
+ )
++from django.utils.http import http_date  # noqa: E402
+ from jinja2 import Template  # noqa: E402
+ 
+ from pulpcore.app import mime_types  # noqa: E402
+@@ -59,7 +63,7 @@ from pulpcore.app.util import (  # noqa: E402
      cache_key,
      get_domain,
  )
@@ -143,7 +270,16 @@ index f1cb2b5..00f92d1 100644
  from pulpcore.exceptions import (  # noqa: E402
      DigestValidationError,
      UnsupportedDigestValidationError,
-@@ -188,6 +189,10 @@ class Handler:
+@@ -69,6 +73,8 @@ from pulpcore.metrics import artifacts_size_counter  # noqa: E402
+ log = logging.getLogger(__name__)
+ _current_distribution = ContextVar("current_distribution", default=None)
+ 
++LARGE_FILE_REDIRECT_THRESHOLD = 1_700_000_000
++
+ 
+ class PathNotResolved(HTTPNotFound):
+     """
+@@ -188,12 +194,21 @@ class Handler:
  
      distribution_model = None
  
@@ -154,7 +290,20 @@ index f1cb2b5..00f92d1 100644
      @staticmethod
      def _reset_db_connection():
          """
-@@ -279,6 +284,11 @@ class Handler:
+-        Reset database connection if it's unusable or obselete to avoid "connection already closed".
++        Reset database connections if unusable or obsolete to avoid "connection already closed".
++
++        Resets every configured alias (not just "default") since a read-replica router
++        can send the failing query through a different connection than the one this
++        checks first.
+         """
+-        connection.close_if_unusable_or_obsolete()
++        for conn in connections.all():
++            conn.close_if_unusable_or_obsolete()
+ 
+     async def list_distributions(self, request):
+         """
+@@ -279,6 +294,11 @@ class Handler:
      @AsyncContentCache(
          base_key=lambda req, cac: Handler.find_base_path_cached(req, cac),
          auth=lambda req, cac, bk: Handler.auth_cached(req, cac, bk),
@@ -166,7 +315,69 @@ index f1cb2b5..00f92d1 100644
      )
      async def stream_content(self, request):
          """
-@@ -594,6 +604,198 @@ class Handler:
+@@ -338,8 +358,9 @@ class Handler:
+         base_paths = cls._base_paths(path)
+         distro_model = cls.distribution_model or Distribution
+         domain = get_domain()
+-        try:
+-            distro_object = (
++
++        def _get_distro_object():
++            return (
+                 distro_model.objects.filter(pulp_domain=domain)
+                 .select_related(
+                     "repository",
+@@ -358,7 +379,15 @@ class Handler:
+                 .get(base_path__in=base_paths)
+                 .cast()
+             )
+-            return distro_object
++
++        try:
++            try:
++                return _get_distro_object()
++            except (InterfaceError, DatabaseError):
++                # A read replica connection can be killed mid-query, e.g. by a
++                # standby recovery conflict. Reset and retry once on a fresh connection.
++                cls._reset_db_connection()
++                return _get_distro_object()
+         except ObjectDoesNotExist:
+             if path.rstrip("/") in base_paths:
+                 distros = distro_model.objects.filter(
+@@ -536,12 +565,32 @@ class Handler:
+         if content_type:
+             headers["Content-Type"] = content_type
+ 
++        headers["Cache-Control"] = "public, max-age=0, must-revalidate"
++
+         # Let plugin-Distribution set headers for this path if it wants.
+         if distribution:
+             headers.update(distribution.content_headers_for(path))
+ 
+         return headers
+ 
++    @staticmethod
++    def _get_content_modified_time(content_id, repo_version):
++        """Get the RepositoryContent.pulp_created for content in a repository version."""
++        return (
++            repo_version._content_relationships()
++            .filter(content_id=content_id)
++            .values_list("pulp_created", flat=True)
++            .first()
++        )
++
++    async def _set_last_modified(self, headers, content_id, repo_version):
++        """Set Last-Modified header from RepositoryContent.pulp_created."""
++        last_modified = await sync_to_async(self._get_content_modified_time)(
++            content_id, repo_version
++        )
++        if last_modified:
++            headers["Last-Modified"] = http_date(last_modified.timestamp())
++
+     @staticmethod
+     def render_html(directory_list, path="", dates=None, sizes=None):
+         """
+@@ -594,6 +643,198 @@ class Handler:
              sizes=sizes,
          )
  
@@ -365,7 +576,7 @@ index f1cb2b5..00f92d1 100644
      async def list_directory(self, repo_version, publication, path):
          """
          Generate a set with directory listing of the path.
-@@ -695,6 +897,13 @@ class Handler:
+@@ -695,6 +936,13 @@ class Handler:
          Finally, when nothing is served to client yet, we check if there is a remote for the
          Distribution. If so, the Artifact is pulled from the remote and streamed to the client.
  
@@ -379,7 +590,7 @@ index f1cb2b5..00f92d1 100644
          Args:
              path (str): The path component of the URL.
              request(aiohttp.web.Request) The request to prepare a response for.
-@@ -731,6 +940,11 @@ class Handler:
+@@ -731,6 +979,11 @@ class Handler:
  
          headers = self.response_headers(original_rel_path, distro)
  
@@ -391,7 +602,7 @@ index f1cb2b5..00f92d1 100644
          content_handler_result = await sync_to_async(distro.content_handler)(original_rel_path)
          if content_handler_result is not None:
              if isinstance(content_handler_result, ContentArtifact):
-@@ -746,6 +960,13 @@ class Handler:
+@@ -746,6 +999,13 @@ class Handler:
                  # the result is a response so just return it
                  return content_handler_result
  
@@ -405,7 +616,7 @@ index f1cb2b5..00f92d1 100644
          if distro.checkpoint:
              repository = repo_version = None
              publication = await sync_to_async(self._select_checkpoint_publication)(
-@@ -760,30 +981,42 @@ class Handler:
+@@ -760,30 +1020,42 @@ class Handler:
              )()
  
          if publication:
@@ -441,7 +652,7 @@ index f1cb2b5..00f92d1 100644
 +                        raise HTTPMovedPermanently(f"{request.path}/")
 +                    return self._json_listing_response(
 +                        request.path, entries, total, json_limit, json_offset
-                     )
++                    )
 +            else:
 +                try:
 +                    index_path = "{}index.html".format(rel_path)
@@ -456,7 +667,7 @@ index f1cb2b5..00f92d1 100644
 +                    dir_list, dates, sizes = await self.list_directory(None, publication, rel_path)
 +                    dir_list.update(
 +                        await sync_to_async(distro.content_handler_list_directory)(rel_path)
-+                    )
+                     )
 +                    if dir_list and not ends_in_slash:
 +                        # Directory can be listed, but user did not specify trailing slash
 +                        raise HTTPMovedPermanently(f"{request.path}/")
@@ -470,7 +681,27 @@ index f1cb2b5..00f92d1 100644
  
              # published artifact
              try:
-@@ -846,30 +1079,42 @@ class Handler:
+@@ -798,6 +1070,9 @@ class Handler:
+             except ObjectDoesNotExist:
+                 pass
+             else:
++                await self._set_last_modified(
++                    headers, ca.content_id, publication.repository_version
++                )
+                 if ca.artifact:
+                     return await self._serve_content_artifact(ca, headers, request)
+                 else:
+@@ -827,6 +1102,9 @@ class Handler:
+                 except ObjectDoesNotExist:
+                     pass
+                 else:
++                    await self._set_last_modified(
++                        headers, ca.content_id, publication.repository_version
++                    )
+                     if ca.artifact:
+                         return await self._serve_content_artifact(ca, headers, request)
+                     else:
+@@ -846,30 +1124,42 @@ class Handler:
                      )
  
          if repo_version and not publication and not distro.SERVE_FROM_PUBLICATION:
@@ -535,3 +766,41 @@ index f1cb2b5..00f92d1 100644
  
              try:
                  ca = await ContentArtifact.objects.select_related(
+@@ -885,6 +1175,9 @@ class Handler:
+             except ObjectDoesNotExist:
+                 pass
+             else:
++                await self._set_last_modified(
++                    headers, ca.content_id, repo_version
++                )
+                 if ca.artifact:
+                     return await self._serve_content_artifact(ca, headers, request)
+                 else:
+@@ -1141,7 +1434,10 @@ class Handler:
+             if not os.path.exists(path):
+                 raise Exception(_("Expected path '{}' is not found").format(path))
+             return FileResponse(path, headers=headers)
+-        elif not domain.redirect_to_object_storage:
++        elif (
++            not domain.redirect_to_object_storage
++            and artifact_file.size <= LARGE_FILE_REDIRECT_THRESHOLD
++        ):
+             return ArtifactResponse(content_artifact.artifact, headers=headers)
+         elif domain.storage_class in (
+             "storages.backends.s3boto3.S3Boto3Storage",
+@@ -1177,9 +1473,14 @@ class Handler:
+         Returns:
+             The [aiohttp.web.FileResponse][] for the file.
+         """
+-        artifact_file = content_artifact.artifact.file
++        artifact = content_artifact.artifact
++        artifact_file = artifact.file
+         content_length = artifact_file.size
+ 
++        etag = f'"{artifact.sha256}"'
++        headers["ETag"] = etag
++        headers["Cache-Control"] = "public, max-age=0, must-revalidate"
++
+         try:
+             range_start, range_stop = request.http_range.start, request.http_range.stop
+             if range_start or range_stop:
