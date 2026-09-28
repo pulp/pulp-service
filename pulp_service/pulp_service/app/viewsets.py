@@ -2185,6 +2185,55 @@ class DomainOrgBackfillReportDispatcherView(APIView):
         )
 
 
+class DomainOrgRbacReportDispatcherView(APIView):
+    """
+    Admin-only endpoint to dispatch the DomainOrg RBAC access report task.
+
+    POST dispatches a background task that builds the JSON report of whether each DomainOrg's
+    principals (its user, its team group, and its derived ``rh-org-<org_id>`` group) hold the
+    roles needed to GET and PUSH content on the domains they own, and attaches it to itself as a
+    ProfileArtifact named ``domainorg_rbac_report``. When the returned task completes, download
+    the report via ``GET /pulp/api/v3/tasks/<uuid>/profile_artifacts/``.
+
+    GET returns usage documentation.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        request=None,
+        description=(
+            "Dispatch a background task that generates the DomainOrg RBAC access report as a "
+            "downloadable JSON artifact attached to the task."
+        ),
+        summary="Dispatch DomainOrg RBAC report",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request):
+        task = dispatch("pulp_service.app.tasks.domainorg_rbac_report.generate_rbac_report")
+        return OperationPostponedResponse(task, request)
+
+    def get(self, request):
+        """Return endpoint documentation."""
+        return Response(
+            {
+                "description": (
+                    "POST to dispatch a background task that generates the DomainOrg RBAC access "
+                    "report. The report is a JSON list of each DomainOrg principal/domain pair and "
+                    "whether it can GET/PUSH content (tier FULL/VIEWER/NONE). When the returned task "
+                    "completes, GET /pulp/api/v3/tasks/<uuid>/profile_artifacts/ and download the "
+                    "'domainorg_rbac_report' URL."
+                ),
+                "task_name": "pulp_service.app.tasks.domainorg_rbac_report.generate_rbac_report",
+                "usage": {
+                    "endpoint": "/api/pulp/debug/domainorg-rbac-report/",
+                    "method": "POST",
+                    "authentication": "Admin user required",
+                },
+            }
+        )
+
+
 class CreateDomainView(APIView):
     """
     Custom endpoint to create domains with service-specific logic.
