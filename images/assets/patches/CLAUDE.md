@@ -11,7 +11,7 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.36.2              |
-| `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.32.0              |
+| `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.33.2              |
 | `pulp_rpm/`      | [pulp/pulp_rpm](https://github.com/pulp/pulp_rpm)          | pulp-rpm         | 3.38.5              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
 
@@ -173,6 +173,13 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/cache/cache.py`
 - **Description:** Pulp's content cache stores all entries for one distribution in a single Redis hash. Every `set()` call ran `EXPIRE` on the hash key, resetting the TTL for **all** entries. When a cacheable 404 (no `Cache-Control` header) was stored with the default `EXPIRES_TTL` of 600 s, it reset the hash TTL from 86400 s (set by artifact entries via patch 0066) back to 600 s. After 10 minutes Redis evicted the entire hash — including artifact entries that should have lived for 24 hours. This caused perpetual `X-PULP-CACHE: MISS` on every request because the cache never survived long enough to serve a HIT. Fix: check the current TTL before calling `EXPIRE` and only increase it, never decrease. Additionally, caps the in-entry `expires` for `HTTPFound` (redirect) entries at `DEFAULT_EXPIRES_TTL` (600 s) as defense-in-depth. Patch 0066 already skips the max-age TTL override for domains with `redirect_to_object_storage=True`, but patch 0063 forces large files (>1.7 GB) through redirect even on non-redirect domains — without this cap, those redirect entries would cache expired pre-signed S3/CloudFront URLs for up to 23 hours.
 - **Upstream:** Candidate for a pulpcore fix (defense against mixed-TTL hash entries).
+
+### 0074 — No-store Cache-Control on 302 redirects
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** When a content-artifact response is a 302 redirect (`HTTPFound`) — e.g. large artifacts routed to object storage per patch 0063, or redirect-to-object-storage domains — the redirect carried no cache directives, so the short-lived pre-signed S3/CloudFront URL in the `Location` header could be cached by intermediaries and replayed after it expired. Fix: set `Cache-Control: private, no-store` on the `HTTPFound` response before raising it, so redirect responses (and their transient signed URLs) are never cached. Complements patch 0073, which caps the in-cache TTL for redirect entries; this patch stops the redirect itself from being cached downstream.
+- **Upstream:** Candidate for a pulpcore fix (redirect responses should not be cacheable).
 
 ### 0075 — Retry content artifact lookups on replica conflict
 
