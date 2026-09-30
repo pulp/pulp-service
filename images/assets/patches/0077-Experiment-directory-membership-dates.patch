@@ -1,0 +1,59 @@
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -48,6 +48,8 @@
+ )
+ from django.utils.http import http_date  # noqa: E402
+ from jinja2 import Template  # noqa: E402
++
++from pulp_service.app.experiments import directory_membership_dates  # noqa: E402
+
+ from pulpcore.app import mime_types  # noqa: E402
+ from pulpcore.app.models import (  # noqa: E402
+@@ -899,6 +901,7 @@
+             directory_list = set()
+             dates = {}
+             content_to_find = {}
++            content_sources = []
+             sizes = {}
+             artifacts_to_find = {}
+
+@@ -906,6 +909,7 @@
+                 pas = publication.published_artifact.select_related(
+                     "content_artifact__artifact"
+                 ).filter(relative_path__startswith=path)
++                content_sources.append((pas, "content_artifact__content_id"))
+                 for pa in pas:
+                     name = file_or_directory_name(path, pa.relative_path)
+                     directory_list.add(name)
+@@ -920,6 +924,7 @@
+                 cas = ContentArtifact.objects.select_related("artifact").filter(
+                     content__in=content_repo_ver.content, relative_path__startswith=path
+                 )
++                content_sources.append((cas, "content_id"))
+                 for ca in cas:
+                     name = file_or_directory_name(path, ca.relative_path)
+                     directory_list.add(name)
+@@ -933,11 +938,18 @@
+             if directory_list:
+                 # Find the dates the content got added to the repository
+                 dates.update(
+-                    {
+-                        content_to_find[rc.content_id]: rc.pulp_created
+-                        for rc in content_repo_ver._content_relationships()
+-                        if rc.content_id in content_to_find
+-                    }
++                    directory_membership_dates(
++                        content_repo_ver,
++                        content_to_find,
++                        content_sources,
++                        serving_mode=(
++                            "repository"
++                            if repo_version
++                            else "pass_through" if publication.pass_through else "publication"
++                        ),
++                        directory_count=len(directory_list),
++                        is_root=not path,
++                    )
+                 )
+                 # Find the sizes for on_demand artifacts
+                 r_artifacts = RemoteArtifact.objects.filter(
