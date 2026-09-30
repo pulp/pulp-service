@@ -1,9 +1,10 @@
 """
 Functional tests for the subscription-based content listing access check enforced by
-DomainBasedPermission on content listing APIs in the lightwell domain. When the
-authenticated user's org has the lightwell-network feature (verified via Features Service),
-SAFE_METHOD access is granted to content listing endpoints (/api/v3/content/...) even
-without a DomainOrg association or Lightwell-ReadOnly group membership.
+PulpServiceAccessPolicy (via DOMAIN_ACCESS_POLICIES) on content listing APIs in the
+lightwell domain. When the authenticated user's org has the lightwell-network feature
+(verified via Features Service), SAFE_METHOD access is granted to content listing endpoints
+(/api/v3/content/...) even without an RBAC role on the domain or Lightwell-ReadOnly group
+membership.
 
 These follow the pattern used in test_content_guard_permission.py: they exercise the real
 Features Service (no mocking) using known staging accounts. Org LIGHTWELL_ENTITLED_ORG_ID
@@ -59,6 +60,7 @@ def configure_lightwell_domain(
     pulpcore_bindings,
     file_bindings,
     bindings_cfg,
+    create_service_domain,
 ):
     """
     Creates the "lightwell" domain (owned by DOMAIN_OWNER_ORG_ID), with a File repository.
@@ -68,16 +70,8 @@ def configure_lightwell_domain(
     owner_header = _identity_header(DOMAIN_OWNER_ORG_ID, "lightwell-content-listing-test-owner")
 
     with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = owner_header
-
-        gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": LIGHTWELL_DOMAIN_NAME,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+        # Under RBAC non-admins create domains via the self-service endpoint, not DomainsApi.
+        create_service_domain(LIGHTWELL_DOMAIN_NAME, identity_header=owner_header)
 
         file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = owner_header
         gen_object_with_cleanup(
@@ -105,8 +99,10 @@ def test_entitled_org_can_list_content(configure_lightwell_domain):
 
 
 def test_non_entitled_org_denied_content_listing(configure_lightwell_domain):
-    """A user whose org does not have the lightwell-network feature and has no DomainOrg
-    association gets 403 on content listing in the lightwell domain."""
+    """A user whose org does not have the lightwell-network feature and holds no RBAC role gets
+    403 on content listing in the lightwell domain. Under RBAC the typed content-list policy
+    (ACCESS_POLICIES["content/file/files"]) gates list on has_domain_perms:core.view_content, so a
+    caller without that permission and without a subscription/group grant is denied outright."""
     content_url, _, _ = configure_lightwell_domain
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_NOT_ENTITLED_ORG_ID, "not-entitled-content-user")}
 
@@ -117,13 +113,16 @@ def test_non_entitled_org_denied_content_listing(configure_lightwell_domain):
 
 def test_entitled_org_denied_on_non_content_endpoints(configure_lightwell_domain):
     """The subscription check only applies to content listing endpoints -- an entitled org
-    with no DomainOrg association is still denied on repository listing."""
+    with no RBAC role on the domain gets no repositories. Under RBAC the repository list allows
+    any authenticated user and scopes results by role, so the entitled-but-unroled caller sees
+    an empty 200 (the subscription grant doesn't extend to repository listing), not a 403."""
     _, repos_url, _ = configure_lightwell_domain
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-repo-user")}
 
     response = requests.get(repos_url, headers=headers, timeout=30)
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
 
 
 def test_unauthenticated_denied_content_listing(configure_lightwell_domain):
@@ -194,24 +193,18 @@ def test_readonly_group_member_without_subscription_can_list_content(
 
 
 def test_entitled_org_denied_on_non_lightwell_domain(
-    pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup, bindings_cfg
+    pulpcore_bindings, file_bindings, anonymous_user, gen_object_with_cleanup, bindings_cfg, create_service_domain
 ):
-    """A subscribed user hitting /api/v3/content/ on a non-lightwell domain without a
-    DomainOrg association gets 403 -- the subscription check is scoped to the lightwell
-    domain name."""
+    """A subscribed user hitting /api/v3/content/ on a non-lightwell domain without an RBAC role
+    gets 403 -- the subscription check is scoped to the lightwell domain name, so off that domain
+    the caller falls through to the typed content-list policy, which gates list on
+    has_domain_perms:core.view_content; lacking that permission, the read is denied."""
     other_domain_owner_header = _identity_header("777777777", "other-domain-owner")
     domain_name = f"not-lightwell-{uuid4()}"
 
     with anonymous_user:
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = other_domain_owner_header
-        gen_object_with_cleanup(
-            pulpcore_bindings.DomainsApi,
-            {
-                "name": domain_name,
-                "storage_class": "pulpcore.app.models.storage.FileSystem",
-                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-            },
-        )
+        # Under RBAC non-admins create domains via the self-service endpoint, not DomainsApi.
+        create_service_domain(domain_name, identity_header=other_domain_owner_header)
 
         file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = other_domain_owner_header
         gen_object_with_cleanup(file_bindings.RepositoriesFileApi, {"name": str(uuid4())}, pulp_domain=domain_name)

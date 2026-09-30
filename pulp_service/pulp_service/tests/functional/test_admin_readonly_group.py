@@ -2,9 +2,9 @@
 Functional tests for the admin-readonly group.
 
 Members of the admin-readonly group (ADMIN_READONLY_GROUP setting) get read-only
-(GET/HEAD/OPTIONS) access to the admin tasks API and, through DomainBasedPermission,
-to any domain-scoped endpoint even for a domain they own no DomainOrg association
-for. Write methods are denied everywhere. Admin (superuser) users retain full access.
+(GET/HEAD/OPTIONS) access to the admin tasks API and, through PulpServiceAccessPolicy,
+to any domain-scoped endpoint even for a domain they hold no RBAC role on. Write
+methods are denied everywhere. Admin (superuser) users retain full access.
 """
 
 import json
@@ -78,26 +78,18 @@ def gen_admin_readonly_member(pulpcore_bindings, gen_object_with_cleanup, admin_
 
 
 @pytest.fixture
-def gen_owned_domain(pulpcore_bindings, anonymous_user, gen_object_with_cleanup):
+def gen_owned_domain(create_service_domain):
     """Create a domain owned by DOMAIN_OWNER_ORG_ID and return it.
 
-    The domain is created under the owner org's identity (with the admin basic
-    auth stripped via anonymous_user), so the DomainOrg association belongs to
-    DOMAIN_OWNER_ORG_ID. Teardown deletes it with the admin credentials.
+    The domain is created via the self-service create-domain endpoint under the owner
+    org's identity, so its RBAC roles belong to DOMAIN_OWNER_ORG_ID and an admin-readonly
+    member never gets access through an org/role match -- only through the admin-readonly
+    group grant. create_service_domain registers admin-auth teardown.
     """
 
     def _gen_domain():
         owner_header = _identity_header(DOMAIN_OWNER_ORG_ID, f"domain-owner-{uuid4()}")
-        with anonymous_user:
-            pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = owner_header
-            return gen_object_with_cleanup(
-                pulpcore_bindings.DomainsApi,
-                {
-                    "name": str(uuid4()),
-                    "storage_class": "pulpcore.app.models.storage.FileSystem",
-                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
-                },
-            )
+        return create_service_domain(identity_header=owner_header)
 
     return _gen_domain
 
@@ -166,11 +158,11 @@ class TestStatusEndpoint:
 
 
 class TestAdminReadonlyDomainScopedRead:
-    """DomainBasedPermission honors the admin-readonly group across every domain.
+    """PulpServiceAccessPolicy honors the admin-readonly group across every domain.
 
-    A member reads a domain owned by a different org (no DomainOrg association of
-    its own), while a plain org user in the same org is still denied, and writes
-    stay denied for the member.
+    A member reads a domain owned by a different org (holding no RBAC role of its
+    own), while a plain org user in the same org is still denied, and writes stay
+    denied for the member.
     """
 
     def _repos_url(self, bindings_cfg, domain_name):
@@ -179,9 +171,7 @@ class TestAdminReadonlyDomainScopedRead:
             f"/api/pulp/{domain_name}/api/v3/repositories/file/file/",
         )
 
-    def test_readonly_member_can_read_other_org_domain(
-        self, bindings_cfg, gen_owned_domain, gen_admin_readonly_member
-    ):
+    def test_readonly_member_can_read_other_org_domain(self, bindings_cfg, gen_owned_domain, gen_admin_readonly_member):
         domain = gen_owned_domain()
         url = self._repos_url(bindings_cfg, domain.name)
         headers = {"x-rh-identity": gen_admin_readonly_member("domain-read")}
@@ -198,7 +188,11 @@ class TestAdminReadonlyDomainScopedRead:
         gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": combined})
         headers = {"x-rh-identity": _identity_header(ADMIN_READONLY_ORG_ID, username)}
         resp = requests.get(url, headers=headers, timeout=30)
-        assert resp.status_code in (401, 403)
+        # Under RBAC the repository list allows any authenticated user and scopes results by
+        # role: a non-member with no role on this domain sees an empty 200 (no leak), not the
+        # 403 the old DomainBasedPermission returned.
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 0
 
     def test_readonly_member_write_denied_on_other_org_domain(
         self, bindings_cfg, gen_owned_domain, gen_admin_readonly_member
