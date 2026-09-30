@@ -147,13 +147,21 @@ def test_domain_owner_can_list_content(configure_lightwell_domain):
 
 def test_entitled_org_post_denied_on_content_endpoint(configure_lightwell_domain):
     """A subscribed user cannot POST to a content listing endpoint -- the subscription check
-    only applies to SAFE_METHODS (GET/HEAD/OPTIONS)."""
+    only applies to SAFE_METHODS (GET/HEAD/OPTIONS), so the POST falls through to the typed
+    content-create policy.
+
+    That policy never yields a clean 403 for this request: pulpcore's create conditions
+    (has_required_repo_perms_on_upload / has_upload_param_model_or_domain_or_obj_perms) call
+    serializer.is_valid(raise_exception=True) before deciding authorization, so the empty body
+    400s during permission evaluation. The assertion is therefore "POST is rejected, not
+    granted" -- a subscription grant would only ever turn a SAFE read into a 200, never a POST
+    into a 2xx."""
     content_url, _, _ = configure_lightwell_domain
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-post-user")}
 
     response = requests.post(content_url, headers=headers, json={}, timeout=30)
 
-    assert response.status_code in (401, 403)
+    assert response.status_code in (400, 401, 403)
 
 
 @pytest.fixture

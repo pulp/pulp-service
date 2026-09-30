@@ -48,15 +48,17 @@ DRF_ACCESS_POLICY = {
 }
 
 # Settings-based access policy read by PulpServiceAccessPolicy (which inherits from
-# pulpcore's AccessPolicyFromSettings). Each key is a viewset urlpattern: "content" is
-# pulpcore's generic ListContentViewSet (the list-all content endpoint) and
-# "content/file/files" is the typed FileContentViewSet. Only takes effect under RBAC (when
-# PulpServiceAccessPolicy is the active permission class). Gating the list action on the
-# domain-scoped core.view_content permission and dropping queryset_scoping lets a domain
+# pulpcore's AccessPolicyFromSettings). Each key is a viewset urlpattern. Only takes effect
+# under RBAC (when PulpServiceAccessPolicy is the active permission class).
+#
+# AccessPolicyFromSettings.get_access_policy REPLACES the viewset's DEFAULT_ACCESS_POLICY with
+# the entry here -- it does not merge. Any statement a viewset needs but this entry omits is
+# silently dropped, so a typed viewset's override must re-declare every action it needs.
+
+# Generic read-only /content/ list-all endpoint (pulpcore ListContentViewSet). Gating list on
+# the domain-scoped core.view_content permission and dropping queryset_scoping lets a domain
 # member see all content in their domain (including orphan content they pushed) while
-# non-members get 403. Both the generic and typed endpoints need the override: the typed
-# viewset otherwise keeps pulpcore's repository-based queryset_scoping, which hides orphan
-# (not-in-a-repo) content and breaks read-after-upload on /content/file/files/.
+# non-members get 403. The viewset is read-only, so a list-only override drops nothing.
 _CONTENT_LIST_POLICY = {
     "statements": [
         {
@@ -68,7 +70,70 @@ _CONTENT_LIST_POLICY = {
     ],
     "queryset_scoping": None,
 }
+
+# Typed FileContentViewSet (content/file/files). Because get_access_policy REPLACES the default,
+# this reproduces pulp_file's FileContentViewSet.DEFAULT_ACCESS_POLICY create/upload/label
+# statements verbatim -- sharing the list-only policy above silently dropped them and 403'd POST
+# content/file/files under RBAC (#1535). The list/retrieve gating on core.view_content plus
+# queryset_scoping=None layers the orphan-content read goal on top: base.py has already scoped
+# the queryset to request.pulp_domain, so None stays within the caller's domain.
+_FILE_CONTENT_POLICY = {
+    "statements": [
+        {
+            "action": ["list", "retrieve"],
+            "principal": "authenticated",
+            "effect": "allow",
+            "condition": "has_domain_perms:core.view_content",
+        },
+        {
+            "action": ["create"],
+            "principal": "authenticated",
+            "effect": "allow",
+            "condition": [
+                "has_required_repo_perms_on_upload:file.modify_filerepository",
+                "has_required_repo_perms_on_upload:file.view_filerepository",
+                "has_upload_param_model_or_domain_or_obj_perms:core.change_upload",
+            ],
+        },
+        {
+            "action": ["set_label", "unset_label"],
+            "principal": "authenticated",
+            "effect": "allow",
+            "condition": ["has_model_or_domain_perms:core.manage_content_labels"],
+        },
+        {
+            "action": ["upload"],
+            "principal": "authenticated",
+            "effect": "allow",
+            "condition": ["has_model_or_domain_perms:file.upload_files"],
+        },
+    ],
+    "queryset_scoping": None,
+}
+
+# pulpcore ArtifactViewSet.DEFAULT_ACCESS_POLICY is admin-only; pulp-service opens read+create
+# to domain admins. Artifact is domain-scoped (pulp_domain FK), so has_model_or_domain_perms
+# resolves against the request domain. destroy is intentionally omitted (stays admin-only,
+# pulpcore treats artifact deletion as risky).
+_ARTIFACT_POLICY = {
+    "statements": [
+        {
+            "action": ["list", "retrieve"],
+            "principal": "authenticated",
+            "effect": "allow",
+            "condition": "has_model_or_domain_perms:core.view_artifact",
+        },
+        {
+            "action": ["create"],
+            "principal": "authenticated",
+            "effect": "allow",
+            "condition": "has_model_or_domain_perms:core.add_artifact",
+        },
+    ],
+}
+
 ACCESS_POLICIES = {
     "content": _CONTENT_LIST_POLICY,
-    "content/file/files": _CONTENT_LIST_POLICY,
+    "content/file/files": _FILE_CONTENT_POLICY,
+    "artifacts": _ARTIFACT_POLICY,
 }
