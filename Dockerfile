@@ -193,6 +193,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0075-Retry-content-artifact-lookups-on-replica-conflict.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0075-Retry-content-artifact-lookups-on-replica-conflict.patch
 
+COPY images/assets/patches/0076-Fix-false-positive-artifact-storage-prefix-check.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0076-Fix-false-positive-artifact-storage-prefix-check.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
