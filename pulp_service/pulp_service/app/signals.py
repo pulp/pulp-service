@@ -203,8 +203,8 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                     group = explicit_group
                     if explicit_group:
                         do = DomainOrg.objects.create(org_id=org_id, group=explicit_group)
-                    # Skip the auto-assigned rh-org-<org_id> groups as the DomainOrg's group:
-                    # those are per-org and get their own role grant below (org_group). Only an
+                    # Skip the auto-assigned rh-org-<org_id> groups: those are per-org and
+                    # already covered by the org_id match in DomainBasedPermission. Only an
                     # explicit "team" group should scope domain visibility to a group.
                     # Query through the pulpcore Group proxy (not user.groups, which yields
                     # base auth.Group instances) so assign_role classifies it as a Group.

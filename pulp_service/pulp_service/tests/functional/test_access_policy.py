@@ -13,19 +13,6 @@ from pulpcore.app.access_policy import AccessPolicyFromSettings
 from pulp_service.app.access_policy import PulpServiceAccessPolicy
 
 
-def _rbac_user(**overrides):
-    """A non-superuser, authenticated user that is NOT in any admin-readonly group.
-
-    _is_admin_readonly() reads user.is_authenticated and user.groups.filter(name=...).exists();
-    without a groups manager those code paths raise AttributeError instead of exercising the policy.
-    """
-    groups = MagicMock()
-    groups.filter.return_value.exists.return_value = False
-    attrs = {"is_superuser": False, "is_authenticated": True, "groups": groups}
-    attrs.update(overrides)
-    return SimpleNamespace(**attrs)
-
-
 class TestPulpServiceAccessPolicyLoads:
     """Verify the class can be imported and instantiated."""
 
@@ -53,7 +40,7 @@ class TestSuperuserBypass:
         """A non-superuser with no domain context should fall through to RBAC."""
         policy = PulpServiceAccessPolicy()
         request = SimpleNamespace(
-            user=_rbac_user(),
+            user=SimpleNamespace(is_superuser=False, is_authenticated=True),
             method="GET",
             pulp_domain=None,
         )
@@ -138,7 +125,7 @@ class TestPublicDomainAccess:
         policy = PulpServiceAccessPolicy()
         domain = SimpleNamespace(name="my-private-domain", pk=1)
         request = SimpleNamespace(
-            user=_rbac_user(),
+            user=SimpleNamespace(is_superuser=False, is_authenticated=True),
             method="GET",
             pulp_domain=domain,
         )
@@ -415,7 +402,7 @@ class TestDomainContentReadScoping:
         return qs
 
     def _view(self, method, domain_name, has_perm):
-        user = _rbac_user(has_perm=lambda *_a, **_k: has_perm)
+        user = SimpleNamespace(has_perm=lambda *_a, **_k: has_perm)
         request = SimpleNamespace(
             method=method,
             pulp_domain=SimpleNamespace(name=domain_name) if domain_name else None,

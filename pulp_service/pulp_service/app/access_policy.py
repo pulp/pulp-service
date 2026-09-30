@@ -4,7 +4,6 @@ from base64 import b64decode
 from binascii import Error as Base64DecodeError
 
 import jq
-from django.conf import settings
 from django.db.models import Q
 from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS
@@ -13,8 +12,6 @@ from pulpcore.app.access_policy import AccessPolicyFromSettings
 from pulpcore.plugin.models import Content, Domain
 from pulpcore.plugin.util import get_domain_pk
 
-from pulp_service.app.authorization import set_domain_create_context
-from pulp_service.app.features_service import check_subscription
 from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
@@ -36,9 +33,7 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
         1. Superuser bypass
         2. Public domain anonymous read (safe methods on public-* domains)
         3. PyPi content guard delegation
-        4. DOMAIN_ACCESS_POLICIES grants (subscription feature / readonly group, safe methods)
-        5. admin-readonly group read (safe methods)
-        6. Fall through to standard RBAC (super().has_permission)
+        4. Fall through to standard RBAC (super().has_permission)
     """
 
     def has_permission(self, request, view):
@@ -55,37 +50,7 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
             if pypi_access is not None:
                 return pypi_access
 
-            # DOMAIN_ACCESS_POLICIES: subscription-feature and readonly-group read grants.
-            if domain:
-                policy = self._get_domain_policies().get(domain.name, {})
-                if policy and self._check_domain_policy(request, domain, request.user, policy):
-                    return True
-
-            # admin-readonly members can read any endpoint the checks above did not decide.
-            # Content guards still win, because a guarded PyPI view returns an explicit
-            # allow/deny above.
-            if self._is_admin_readonly(request.user):
-                return True
-
-        # Generic pulpcore DomainViewSet create (POST domains-list): populate the ContextVars the
-        # post_create_domain signal (signals.py) consumes for the DomainOrg/RBAC dual-write.
-        # CreateDomainView sets these itself; the generic endpoint used to get them from the
-        # DomainBasedPermission default, which no longer exists. Without this, a domain created
-        # here gets no DomainOrg row and no owner roles, so it is invisible to its own org under
-        # RBAC. set_domain_create_context overwrites both vars unconditionally, so a create that
-        # is denied below cannot leak this request's principal into the next create.
-        if self._is_domain_create(request):
-            set_domain_create_context(request)
-
         return super().has_permission(request, view)
-
-    @staticmethod
-    def _is_domain_create(request):
-        """True for a POST to the generic pulpcore DomainViewSet create endpoint (domains-list)."""
-        if request.method in SAFE_METHODS:
-            return False
-        match = getattr(request, "resolver_match", None)
-        return bool(match and match.view_name == "domains-list")
 
     @staticmethod
     def _is_public_domain_read(request):
@@ -138,41 +103,10 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
         if self._is_domain_content_read(view, qs):
             return qs
 
-        request = getattr(view, "request", None)
-        user = getattr(request, "user", None)
-        is_safe_read = request is not None and getattr(request, "method", None) in SAFE_METHODS
-
-        # The cross-cutting SAFE-method read grants that has_permission honours (admin-readonly
-        # and DOMAIN_ACCESS_POLICIES subscription/readonly-group) must be honoured here too:
-        # otherwise the grantee passes has_permission (200) but the default RBAC scoping below
-        # filters the queryset to empty because they hold no per-object role. For domain-scoped
-        # models base.py has already filtered the queryset to the request domain, so returning it
-        # unscoped stays within that domain (no cross-domain leak).
-        if is_safe_read and user is not None:
-            # admin-readonly is a global read group (support/break-glass), so it reads every model.
-            if self._is_admin_readonly(user):
-                return qs
-            # A DOMAIN_ACCESS_POLICIES grant is scoped to a single domain, so it may only return
-            # the queryset unscoped for models base.py domain-scoped (those with a pulp_domain FK).
-            # Global models (Domain, Group, User, Role) are NOT domain-scoped by base.py; returning
-            # them unscoped would leak every tenant's rows. They fall through: Domain is handled by
-            # the qs.model is Domain block below (readonly-group members see only their policy
-            # domain + public-*); the rest get standard per-object RBAC scoping.
-            domain = getattr(request, "pulp_domain", None)
-            if domain and hasattr(qs.model, "pulp_domain"):
-                policy = self._get_domain_policies().get(domain.name, {})
-                if policy and self._check_domain_policy(request, domain, user, policy):
-                    return qs
-
         qs = super().scope_queryset(view, qs)
         if qs.model is Domain:
-            extra = Domain.objects.filter(name__startswith="public-")
-            # DOMAIN_ACCESS_POLICIES readonly-group members see the policy's domain in listings.
-            for domain_name, policy in self._get_domain_policies().items():
-                group = policy.get("readonly_group")
-                if group and user is not None and user.is_authenticated and user.groups.filter(name=group).exists():
-                    extra = extra | Domain.objects.filter(name=domain_name)
-            qs = (qs | extra).distinct()
+            public_domains = Domain.objects.filter(name__startswith="public-")
+            qs = (qs | public_domains).distinct()
 
         return qs
 
@@ -271,47 +205,4 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
                 return _org_id_json_path.input_value(header_value).first()
             except json.JSONDecodeError:
                 return None
-        return None
-
-    @staticmethod
-    def _is_admin_readonly(user):
-        """True if user is an authenticated member of the ADMIN_READONLY_GROUP."""
-        group_name = settings.ADMIN_READONLY_GROUP
-        return bool(group_name and user and user.is_authenticated and user.groups.filter(name=group_name).exists())
-
-    @staticmethod
-    def _get_domain_policies():
-        return getattr(settings, "DOMAIN_ACCESS_POLICIES", {})
-
-    def _check_domain_policy(self, request, domain, user, policy):
-        """
-        Returns True if a DOMAIN_ACCESS_POLICIES entry grants read access, else None.
-
-        ``subscription_endpoints`` are path prefixes: a policy applies when the request path
-        (after stripping the domain routing prefix) starts with one of them, and the caller's
-        org holds the ``subscription_feature``. ``readonly_group`` grants read to any
-        authenticated member of the named group.
-        """
-        subscription_feature = policy.get("subscription_feature")
-        subscription_endpoints = policy.get("subscription_endpoints", [])
-        if subscription_feature and subscription_endpoints:
-            path = request.path_info
-            if domain:
-                api_root = getattr(settings, "API_ROOT", "/api/pulp/")
-                domain_prefix = f"{api_root.rstrip('/')}/{domain.name}/"
-                if path.startswith(domain_prefix):
-                    path = "/" + path[len(domain_prefix) :]
-            if any(path.startswith(endpoint) for endpoint in subscription_endpoints):
-                decoded_header = self._get_decoded_identity_header(request)
-                org_id = self._get_org_id(decoded_header)
-                try:
-                    if org_id and check_subscription(org_id, [subscription_feature]):
-                        return True
-                except Exception:
-                    _logger.exception("Unexpected error checking %s subscription", subscription_feature)
-
-        readonly_group = policy.get("readonly_group", "")
-        if readonly_group and user.is_authenticated and user.groups.filter(name=readonly_group).exists():
-            return True
-
         return None

@@ -10,7 +10,6 @@ def test_authentication_with_username_and_org_id(
     pulpcore_bindings,
     python_bindings,
     gen_object_with_cleanup,
-    create_service_domain,
     cleanup_auth_headers,
 ):
     """Test that requests with both username and org_id in x-rh-identity header work."""
@@ -21,9 +20,17 @@ def test_authentication_with_username_and_org_id(
         header_content = json.dumps(user_with_orgid)
         auth_header = b64encode(bytes(header_content, "ascii"))
 
-        # Under RBAC non-admins create domains via the self-service endpoint, not DomainsApi.
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+
         domain_name = str(uuid4())
-        domain = create_service_domain(domain_name, identity_header=auth_header)
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
 
         assert domain is not None
         assert domain.name == domain_name
@@ -43,7 +50,6 @@ def test_authentication_with_org_id_and_username(
     pulpcore_bindings,
     python_bindings,
     gen_object_with_cleanup,
-    create_service_domain,
     cleanup_auth_headers,
 ):
     """Test that requests with org_id and username in x-rh-identity header work."""
@@ -52,8 +58,17 @@ def test_authentication_with_org_id_and_username(
         header_content = json.dumps(user_with_orgid)
         auth_header = b64encode(bytes(header_content, "ascii"))
 
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+
         domain_name = str(uuid4())
-        domain = create_service_domain(domain_name, identity_header=auth_header)
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
 
         assert domain is not None
         assert domain.name == domain_name
@@ -73,7 +88,6 @@ def test_authentication_with_only_username(
     pulpcore_bindings,
     python_bindings,
     gen_object_with_cleanup,
-    create_service_domain,
     cleanup_auth_headers,
 ):
     """Test that requests with only username (no org_id) in x-rh-identity header still authenticate."""
@@ -83,8 +97,17 @@ def test_authentication_with_only_username(
         header_content = json.dumps(only_username)
         auth_header = b64encode(bytes(header_content, "ascii"))
 
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+
         domain_name = str(uuid4())
-        domain = create_service_domain(domain_name, identity_header=auth_header)
+        domain = gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
 
         assert domain is not None
         assert domain.name == domain_name
@@ -96,16 +119,11 @@ def test_get_requests_without_auth_to_simple_api(
     pulpcore_bindings,
     python_bindings,
     gen_object_with_cleanup,
-    create_service_domain,
 ):
-    """Test that an unguarded domain allows GET requests without authentication but blocks
-    other methods on the PyPI simple API.
+    """Test that public domains allow GET requests without authentication but block other methods.
 
-    Under RBAC every non-public domain created via the self-service endpoint gets a default
-    identity content guard (post_create_domain -> _provision_domain_content_guards), so its
-    distributions deny anonymous reads. "public-" domains are the unguarded case: they skip
-    guard provisioning, so anonymous GET succeeds while writes stay blocked. Guarded domains
-    (e.g. "lightwell") are covered in test_content_guard_permission.py.
+    Private domains receive a default identity content guard and are covered by
+    ``test_content_guard_permission.py``.
     """
     # Create a user with credentials to set up the domain
     setup_user = {
@@ -116,13 +134,18 @@ def test_get_requests_without_auth_to_simple_api(
         header_content = json.dumps(setup_user)
         auth_header = b64encode(bytes(header_content, "ascii"))
 
-        # A public- domain is the only unguarded case now, so anonymous GET can return 200.
-        domain_name = f"public-{uuid4()}"
-        create_service_domain(domain_name, identity_header=auth_header)
-
-        # monitor_task (used by gen_object_with_cleanup for the async distribution create) reads
-        # via pulpcore_bindings.TasksApi, which needs the identity header inside anonymous_user.
         pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+
+        # Create a public domain.
+        domain_name = f"public-{uuid4()}"
+        gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
 
         # Create a Python repository
         python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_header
@@ -147,7 +170,7 @@ def test_get_requests_without_auth_to_simple_api(
         api_host = python_bindings.DistributionsPypiApi.api_client.configuration.host
         simple_url = f"{api_host}/api/pypi/{domain_name}/{base_path}/simple/"
 
-        # GET request should succeed for an unguarded (public-) domain without auth
+        # GET request should succeed for any domain without auth
         response = requests.get(simple_url)
         assert response.status_code == 200, f"Expected 200 for GET on domain, got {response.status_code}"
 
@@ -158,17 +181,26 @@ def test_get_requests_without_auth_to_simple_api(
             403,
         ], f"Expected 401/403 for POST without auth, got {response.status_code}"
 
-        # PyPI SimpleView (a DRF ViewSet) only maps GET (list/retrieve) and POST (create); PUT,
-        # DELETE and PATCH are unmapped, so the router returns 405 before any permission check.
-        # 405 blocks the method regardless of auth (stricter than 401/403) and is independent of
-        # the DRF default permission class.
-        for method in (requests.put, requests.delete, requests.patch):
-            response = method(simple_url)
-            assert response.status_code in [
-                401,
-                403,
-                405,
-            ], f"Expected 401/403/405 for {method.__name__.upper()} without auth, got {response.status_code}"
+        # PUT request should be blocked (401/403) without auth
+        response = requests.put(simple_url, data={})
+        assert response.status_code in [
+            401,
+            403,
+        ], f"Expected 401/403 for PUT without auth, got {response.status_code}"
+
+        # DELETE request should be blocked (401/403) without auth
+        response = requests.delete(simple_url)
+        assert response.status_code in [
+            401,
+            403,
+        ], f"Expected 401/403 for DELETE without auth, got {response.status_code}"
+
+        # PATCH request should be blocked (401/403) without auth
+        response = requests.patch(simple_url, data={})
+        assert response.status_code in [
+            401,
+            403,
+        ], f"Expected 401/403 for PATCH without auth, got {response.status_code}"
 
         # some bindings has scope=session, so we need to remove the headers to avoid
         # affecting the other tests
@@ -183,7 +215,6 @@ def test_public_domain_allows_unauthenticated_get(
     pulpcore_bindings,
     python_bindings,
     gen_object_with_cleanup,
-    create_service_domain,
 ):
     """Test that domains with 'public-' in the name allow GET requests without authentication
     on the standard API, while non-public domains block unauthenticated GET requests."""
@@ -195,13 +226,29 @@ def test_public_domain_allows_unauthenticated_get(
         header_content = json.dumps(setup_user)
         auth_header = b64encode(bytes(header_content, "ascii"))
 
-        # Create a public domain (name contains "public-") via the self-service endpoint
+        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_header
+
+        # Create a public domain (name contains "public-")
         public_domain_name = f"public-{uuid4()}"
-        create_service_domain(public_domain_name, identity_header=auth_header)
+        gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": public_domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
 
         # Create a non-public domain
         private_domain_name = str(uuid4())
-        create_service_domain(private_domain_name, identity_header=auth_header)
+        gen_object_with_cleanup(
+            pulpcore_bindings.DomainsApi,
+            {
+                "name": private_domain_name,
+                "storage_class": "pulpcore.app.models.storage.FileSystem",
+                "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+            },
+        )
 
         # Create a repository in the public domain
         python_bindings.RepositoriesPythonApi.api_client.default_headers["x-rh-identity"] = auth_header

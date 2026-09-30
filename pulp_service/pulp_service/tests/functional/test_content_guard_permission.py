@@ -1,5 +1,5 @@
 """
-Functional tests for the content-guard-driven access check enforced by PulpServiceAccessPolicy
+Functional tests for the content-guard-driven access check enforced by DomainBasedPermission
 on PyPI views. When a PyPI distribution has a content guard, SAFE_METHOD access is gated
 by guard.cast().permit(request). Distributions without content guards keep the pre-existing
 open-access behavior.
@@ -209,17 +209,14 @@ def test_write_operations_unaffected_by_content_guard(configure_guarded_pypi_dis
 
 def test_non_pypi_endpoints_unaffected_by_content_guard(configure_guarded_pypi_distribution):
     """Non-PyPI endpoints (here, the Pulp REST API's repository listing) must keep using the
-    standard RBAC permission model: the content guard on a PyPI distribution grants no
-    access to non-PyPI endpoints. Under RBAC the repository list allows any authenticated
-    user and scopes the queryset by role, so a caller with no role on the domain gets an
-    empty 200 (no cross-domain leak) rather than the 403 the old permission class returned."""
+    existing DomainOrg-based permission model: the content guard on a PyPI distribution
+    grants no access to non-PyPI endpoints."""
     _, _, repos_url, _ = configure_guarded_pypi_distribution()
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-rest-user")}
 
     response = requests.get(repos_url, headers=headers, timeout=30)
 
-    assert response.status_code == 200
-    assert response.json()["count"] == 0
+    assert response.status_code == 403
 
 
 def test_non_public_distribution_denies_unauthenticated_access(configure_pypi_distribution):

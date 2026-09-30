@@ -29,6 +29,7 @@ from pulpcore.plugin.viewsets import LabelsMixin, NamedModelViewSet, RolesMixin
 from pulp_rpm.app.models import Modulemd, Package, PackageEnvironment, PackageGroup, UpdateRecord
 from pulp_rpm.app.models.advisory import UpdateReference
 
+from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.app.content_view_models import ContentView, ContentViewSearchScope
 from pulp_service.app.content_view_serializers import (
     ContentViewErrataSerializer,
@@ -111,6 +112,7 @@ class ContentViewViewSet(
     serializer_class = ContentViewSerializer
     filterset_class = ContentViewFilter
     ordering = "-pulp_created"
+    permission_classes = [DomainBasedPermission]
     queryset_filtering_required_permission = "service.view_contentview"
 
     DEFAULT_ACCESS_POLICY = {
@@ -240,6 +242,7 @@ class ContentViewSearchViewSet(NamedModelViewSet):
     queryset = ContentViewSearchScope.objects.none()
     parent_viewset = ContentViewViewSet
     parent_lookup_kwargs = {"content_view_pk": "content_view__pk"}
+    permission_classes = [DomainBasedPermission]
 
     DEFAULT_ACCESS_POLICY = {
         "statements": [
