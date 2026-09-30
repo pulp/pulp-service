@@ -1,0 +1,2 @@
+Fixed RBAC 403s on content/file/files (create/upload), artifacts/, and orphans/cleanup/ for
+domain-admin service accounts after PulpServiceAccessPolicy became the default access policy.

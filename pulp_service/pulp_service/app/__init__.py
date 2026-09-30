@@ -16,6 +16,9 @@ class PulpServicePluginAppConfig(PulpPluginAppConfig):
         from django.db.models.signals import post_migrate
 
         from . import signals  # noqa: F401
+        from .pulpcore_access_policy_overrides import apply_pulpcore_access_policy_overrides
+
+        apply_pulpcore_access_policy_overrides()
 
         post_migrate.connect(
             _populate_domain_view_access_policies,
