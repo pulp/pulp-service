@@ -17,8 +17,8 @@ _session = None
 
 
 class FeatureContentGuardCache(Cache):
-    default_base_key = "PULP_FEATURE_CONTENTGUARD_CACHE"
-    default_expires_ttl = 86400  # The key expires in one day.
+    default_base_key = "PULP_FEATURE_CONTENTGUARD_NEW_CACHE"
+    default_expires_ttl = 3600  # The key expires in one hour.
 
 
 def _get_session():
