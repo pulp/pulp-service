@@ -3,6 +3,13 @@
 Patches applied to upstream packages during the container image build.
 Each patch modifies files installed into site-packages via the Dockerfile.
 
+## Validation notes
+
+Apply the existing stack with GNU `patch`, as the Dockerfiles do. Some older
+patches rely on its context matching and do not apply with `git apply`.
+When testing an isolated source tree through `oci-env exec`, set `PYTHONPATH`
+after `sudo -u pulp`; sudo can remove it even with `-E`.
+
 ## Upstream Repositories
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
@@ -31,6 +38,12 @@ The custom OCI storage backend (`OCIStorage`, ORAS client, Quay.io blob storage)
 The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
+
+### 0077 - Directory membership timestamp experiment
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/content/handler.py`
+- **Description:** Dispatches eligible HTML directory membership date lookups through the service's disabled-by-default PULP-2505 experiment. B filters in SQL and fetches only content IDs and creation dates. Shared displayed names retain A because their existing timestamps depend on unordered row iteration. JSON listings are unchanged. See `docs/test_plans/0004-Directory_Membership_Dates.md`.
 
 ### 0022 — Adds authentication to the mvn deploy api
 

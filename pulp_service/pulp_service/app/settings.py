@@ -20,6 +20,9 @@ FEATURE_SERVICE_API_READ_TIMEOUT = 5
 AUTHENTICATION_HEADER_DEBUG = False
 INSTALLED_APPS = "@merge django.contrib.admin.apps.SimpleAdminConfig,hijack,hijack.contrib.admin"
 TEST_TASK_INGESTION = False
+CONTENT_DIRECTORY_AB_ENABLED = False
+CONTENT_DIRECTORY_AB_PROBABILITY = 0.5
+CONTENT_DIRECTORY_AB_REVISION = ""
 LOGIN_REDIRECT_URL = "/api/pulp-mgmt/"
 LOGIN_URL = "/api/pulp-mgmt/login/"
 
