@@ -369,8 +369,9 @@ Background tasks dispatched via pulpcore's RedisWorker (in `pulp_service/pulp_se
 - ⬆️ `PULP_API_GUNICORN_WORKERS=1` - Number of API workers
 - ⬆️ `PULP_API_GUNICORN_MAX_REQUESTS=2500` - Max requests per worker before restart
 - ⬆️ `PULP_API_GUNICORN_MAX_REQUESTS_JITTER=500` - Jitter for max requests
+- ⬆️ `PULP_API_GUNICORN_GRACEFUL_TIMEOUT=120` - API graceful shutdown timeout
 - ⬆️ `PULP_CONTENT_GUNICORN_TIMEOUT=90` - Content request timeout
-- ⬆️ `PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT=300` - Graceful shutdown timeout
+- ⬆️ `PULP_CONTENT_GUNICORN_GRACEFUL_TIMEOUT=90` - Graceful shutdown timeout
 - ⬆️ `PULP_CONTENT_GUNICORN_MAX_REQUESTS=5000` - Max requests per content worker
 - ⬆️ `PULP_CONTENT_GUNICORN_MAX_REQUESTS_JITTER=500` - Jitter for content max requests
 - 🔧 `GUNICORN_CMD_ARGS=--config /usr/bin/log_middleware.py` - Additional Gunicorn args (plugin-specific)
@@ -534,6 +535,7 @@ Stage mirrors this with `crcs02ue1` + `pulps01ue1` (dedicated stage worker clust
 - **Default Replicas**: 1 (configurable via `PULP_API_REPLICAS`)
 - **Gunicorn Configuration**:
   - Timeout: 1800s (30 minutes)
+  - Graceful timeout: 120s
   - Workers: 1 (configurable)
   - Max requests per worker: 20 (with jitter: 5)
 - **Resource Limits**:
@@ -558,7 +560,7 @@ Stage mirrors this with `crcs02ue1` + `pulps01ue1` (dedicated stage worker clust
 - **Default Replicas**: 1 (configurable via `PULP_CONTENT_REPLICAS`)
 - **Gunicorn Configuration**:
   - Timeout: 90s
-  - Graceful timeout: 300s
+  - Graceful timeout: 90s
   - Max requests per worker: 20 (with jitter: 5)
   - Config file: `/tmp/gunicorn_config.py`
 - **Resource Limits**:
