@@ -23,7 +23,7 @@ jobs:
         working-directory: tools/agents
         run: go test ./agent-alertmanager/... -v
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: agent-alertmanager
           path: tools/agents/agent-alertmanager/agent-alertmanager
@@ -45,7 +45,7 @@ jobs:
           fi
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Download binary artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: agent-alertmanager
       - name: Create GitHub Release
