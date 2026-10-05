@@ -1,23 +1,24 @@
 import re
+from urllib.parse import urlencode
 
 from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db.models import Q
 from django.urls import reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from hijack.contrib.admin import HijackUserAdminMixin
 
 from pulpcore.app.models import Task
+from pulpcore.app.models.role import GroupRole, UserRole
 from pulpcore.plugin.models import Domain, Group
 
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
-
-from .models import DomainOrg
 
 USERNAME_PATTERN = r"^[\w.@+=/\-|]+$"
 USERNAME_ERROR_MSG = "Username can only contain letters, numbers, and these special characters: @, ., +, -, =, /, _, |"
@@ -64,9 +65,153 @@ class PulpUserChangeForm(PulpUserFormMixin, UserChangeForm):
     pass
 
 
+def _userrole_links(user_roles):
+    """Render UserRole assignments as links to their admin change pages."""
+    return [
+        format_html(
+            '<a href="{}">User: {} - {}</a>',
+            reverse("myadmin:core_userrole_change", args=[user_role.pk]),
+            user_role.user.username,
+            user_role.role.name,
+        )
+        for user_role in user_roles
+    ]
+
+
+def _role_scope(role):
+    """What a role is scoped to, for display, covering all three cases a role can
+    take: ``"domain: <name>"`` for a domain-scoped role (``domain`` FK),
+    ``"<type>: <name>"`` for an object-level role (``content_object``, usually a
+    Domain here, but may be a repository, group, etc.), or ``"global"`` for a role
+    with no scope that applies account-wide. Lets otherwise-identical group+role
+    lines be told apart by what they apply to.
+    """
+    if role.domain_id:
+        return f"domain: {role.domain.name}"
+    target = role.content_object
+    if target is not None:
+        name = getattr(target, "name", None) or str(target)
+        return f"{role.content_type.model}: {name}"
+    return "global"
+
+
+def _grouprole_links(group_roles, show_scope=False):
+    """Render GroupRole assignments as links to their admin change pages. With
+    ``show_scope``, append the scope (domain/object/global) each role applies to.
+    """
+    links = []
+    for group_role in group_roles:
+        link = format_html(
+            '<a href="{}">Group: {} - {}</a>',
+            reverse("myadmin:core_grouprole_change", args=[group_role.pk]),
+            group_role.group.name,
+            group_role.role.name,
+        )
+        if show_scope:
+            link = format_html("{} ({})", link, _role_scope(group_role))
+        links.append(link)
+    return links
+
+
+class ReadOnlyRoleInline(admin.TabularInline):
+    """Display-only inline of role assignments. Management happens on the
+    dedicated UserRole/GroupRole admin pages, so every row is read-only."""
+
+    extra = 0
+    can_delete = False
+    fields = ["role", "domain", "role_target", "change_link"]
+    readonly_fields = ["role", "domain", "role_target", "change_link"]
+    verbose_name_plural = "Role assignments"
+
+    @admin.display(description="Target object")
+    def role_target(self, obj):
+        return obj.content_object or "-"
+
+    @admin.display(description="Edit")
+    def change_link(self, obj):
+        """Link each row to its own UserRole/GroupRole change page so an admin can
+        jump straight from the user/group to manage the assignment."""
+        if obj.pk is None:
+            return "-"
+        url = reverse(f"myadmin:{obj._meta.app_label}_{obj._meta.model_name}_change", args=[obj.pk])
+        return format_html('<a href="{}">Edit</a>', url)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        # Safe default; subclasses widen this to let a non-superuser see the
+        # roles on their own User/Group page.
+        return request.user.is_superuser
+
+
+class UserRoleInline(ReadOnlyRoleInline):
+    model = UserRole
+    fk_name = "user"
+    verbose_name_plural = "Direct role assignments"
+
+    def has_view_permission(self, request, obj=None):
+        # obj is the parent User. Non-superusers see only their own roles,
+        # matching UserRoleAdmin's queryset scoping.
+        if request.user.is_superuser:
+            return True
+        return obj is not None and obj.pk == request.user.pk
+
+
+class GroupRoleInline(ReadOnlyRoleInline):
+    model = GroupRole
+    fk_name = "group"
+
+    def has_view_permission(self, request, obj=None):
+        # obj is the parent Group. Non-superusers see only roles for groups
+        # they belong to, matching GroupRoleAdmin's queryset scoping.
+        if request.user.is_superuser:
+            return True
+        return obj is not None and request.user.groups.filter(pk=obj.pk).exists()
+
+
 class PulpUserAdmin(HijackUserAdminMixin, UserAdmin):
     form = PulpUserChangeForm
     add_form = PulpUserCreationForm
+    inlines = [UserRoleInline]
+    readonly_fields = ("roles_via_groups",)
+    fieldsets = (*UserAdmin.fieldsets, ("Roles via groups", {"fields": ("roles_via_groups",)}))
+
+    def get_inline_instances(self, request, obj=None):
+        # No object yet (add page) means there are no role rows to show.
+        if obj is None:
+            return []
+        return super().get_inline_instances(request, obj)
+
+    @admin.display(description="Roles inherited from group memberships")
+    def roles_via_groups(self, obj):
+        """Summarize the GroupRole assignments this user inherits through group
+        membership and link to the GroupRole changelist filtered to those groups,
+        rather than rendering every assignment inline (direct roles are in the
+        inline above). The changelist handles sorting, search, and pagination, so
+        this scales to a user in an org-wide group that spans many domains."""
+        if not obj or not obj.pk:
+            return "-"
+        group_ids = list(obj.groups.values_list("pk", flat=True))
+        count = GroupRole.objects.filter(group_id__in=group_ids).count() if group_ids else 0
+        if not count:
+            return "-"
+        query = urlencode({"group__id__in": ",".join(str(pk) for pk in group_ids)})
+        return format_html(
+            '{} role assignment{} via {} group{} - <a href="{}?{}">view in GroupRole admin</a>',
+            count,
+            "" if count == 1 else "s",
+            len(group_ids),
+            "" if len(group_ids) == 1 else "s",
+            reverse("myadmin:core_grouprole_changelist"),
+            query,
+        )
 
 
 class PulpGroupForm(forms.ModelForm):
@@ -130,6 +275,7 @@ class PulpGroupForm(forms.ModelForm):
 class PulpGroupAdmin(GroupAdmin):
     form = PulpGroupForm
     fields = ("name", "users")  # Show name and users fields
+    inlines = [GroupRoleInline]
 
     def get_queryset(self, request):
         """
@@ -247,133 +393,188 @@ class ContentSourceDomainFilter(admin.SimpleListFilter):
         return queryset
 
 
-class DomainOrgForm(forms.ModelForm):
-    class Meta:
-        model = DomainOrg
-        fields = ["org_id", "domains", "user", "group"]
+# Help text for the interdependent scoping fields on the role add/change forms.
+# A role is either object-level (content_type + object_id) or domain-scoped
+# (domain), never both; pulpcore provides no help text of its own.
+ROLE_FIELD_HELP = {
+    "content_type": (
+        "The kind of object this role applies to (e.g. domain, pythonrepository, group). "
+        "Required when setting 'Object id'; leave blank for a domain-scoped role."
+    ),
+    "object_id": (
+        "The primary key of the Content Type object set above: a UUID for most Pulp objects like a "
+        "domain or repository, an integer for Django objects like a group. Leave this and 'Content "
+        "type' blank to scope the role to an entire domain using the 'Domain' field instead."
+    ),
+    "domain": (
+        "Scope the role to an entire domain, so it applies to everything in that domain. Use this "
+        "instead of Content type/Object id. Leave blank for an object-level or global role."
+    ),
+}
+
+
+class RoleAdminForm(forms.ModelForm):
+    """Shared form for the UserRole/GroupRole admins. The model allows NULL for the
+    scope fields, so the admin would otherwise mark them required. This form makes
+    them optional and enforces the scope invariants pulpcore applies in
+    ``assign_role`` (which the admin bypasses by writing the row directly):
+
+    * content_type and object_id are set together; a GenericForeignKey can't
+      resolve with only one half.
+    * domain and the object-level scope (content_type/object_id) are mutually
+      exclusive; a role is domain-scoped, object-level, or global, never a mix.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make user and group field optional since it can be null
-        self.fields["org_id"].required = False
-        self.fields["user"].required = False
-        self.fields["group"].required = False
+        self.fields["content_type"].required = False
+        self.fields["object_id"].required = False
+        self.fields["domain"].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        content_type = cleaned_data.get("content_type")
+        object_id = cleaned_data.get("object_id")
+        domain = cleaned_data.get("domain")
+        if content_type and not object_id:
+            self.add_error("object_id", "Required when Content type is set.")
+        elif object_id and not content_type:
+            self.add_error("content_type", "Required when Object id is set.")
+        elif content_type and object_id and not self._object_exists(content_type, object_id):
+            # Resolve the id against the selected content type: an orphaned
+            # assignment grants no access, and a malformed id for a typed (e.g.
+            # UUID) primary key raises during content_object prefetch and breaks
+            # the whole changelist.
+            self.add_error("object_id", "No object of the selected Content type has this Object id.")
+        if domain and (content_type or object_id):
+            raise ValidationError(
+                "A role is either domain-scoped (set Domain) or object-level (set Content type and "
+                "Object id), not both. Clear Domain, or clear Content type and Object id."
+            )
+        return cleaned_data
+
+    @staticmethod
+    def _object_exists(content_type, object_id):
+        model = content_type.model_class()
+        if model is None:
+            return False
+        try:
+            return model._base_manager.filter(pk=object_id).exists()
+        except (ValueError, ValidationError, TypeError):
+            # Malformed id for the model's primary-key type (e.g. a non-UUID
+            # string for a UUID pk) cannot identify a valid object.
+            return False
 
 
-class DomainOrgAdmin(admin.ModelAdmin):
-    form = DomainOrgForm
-    list_display = ["user", "org_id", "group", "domains_display"]
-    list_filter = ["user", "org_id", "group"]
+class UserRoleAdminForm(RoleAdminForm):
+    class Meta:
+        model = UserRole
+        fields = ["user", "role", "domain", "content_type", "object_id"]
 
-    def domains_display(self, obj):
-        """Display related domains for this DomainOrg with links to detail view."""
-        domains = obj.domains.all()
-        if not domains:
-            return "-"
 
-        links = []
-        for domain in domains:
-            url = reverse("admin:core_domain_change", args=[domain.pk])
-            label = domain.name if domain.name else "Unnamed domain"
-            links.append(format_html('<a href="{}">{}</a>', url, label))
+class GroupRoleAdminForm(RoleAdminForm):
+    class Meta:
+        model = GroupRole
+        fields = ["group", "role", "domain", "content_type", "object_id"]
 
-        return format_html(", ".join(links))
 
-    def get_queryset(self, request):
-        """
-        Filter DomainOrg based on user's group memberships and access.
-        """
-        qs = super().get_queryset(request)
+class RoleNameListFilter(admin.RelatedFieldListFilter):
+    """Role sidebar filter that labels choices with the plain role name instead
+    of Role's inherited "<Role: name>" __str__."""
 
-        if request.user.is_superuser:
-            return qs
+    def field_choices(self, field, request, model_admin):
+        return [(role.pk, role.name) for role in field.related_model.objects.order_by("name")]
 
-        # For common users, show DomainOrg entries where:
-        # 1. User is assigned directly, OR
-        # 2. User belongs to the group assigned to the DomainOrg
-        user_groups = request.user.groups.all()
-        query = Q(user=request.user)
 
-        if user_groups.exists():
-            query |= Q(group__in=user_groups)
+class RoleAdminMixin:
+    """Shared permission rules for role admins: any authenticated user may view,
+    only superusers may add/change/delete."""
 
-        return qs.filter(query).distinct()
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        field = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if field is not None and db_field.name in ROLE_FIELD_HELP:
+            field.help_text = ROLE_FIELD_HELP[db_field.name]
+        if field is not None and db_field.name == "role":
+            # Show the plain role name in the dropdown; Role's inherited __str__
+            # wraps it as "<Role: name>", redundant in a field already labeled Role.
+            field.label_from_instance = lambda role: role.name
+            # Role defines no default ordering, so the dropdown would otherwise be
+            # in arbitrary DB order. Sort by name to match the content_type dropdown
+            # and the RoleNameListFilter sidebar.
+            field.queryset = field.queryset.order_by("name")
+        if field is not None and db_field.name == "content_type":
+            # The raw dropdown lists every ContentType in the deployment (hundreds).
+            # Narrow it to content types some role grants permissions on, the only
+            # valid targets for an object-level role. Coarse (not specific to the
+            # role chosen on this same form) but a large usability win that blocks
+            # obviously-wrong targets at the admin boundary.
+            field.queryset = (
+                ContentType.objects.filter(permission__role__isnull=False).distinct().order_by("app_label", "model")
+            )
+        return field
 
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        if db_field.name == "domains":
-            if not request.user.is_superuser:
-                # Filter domains based on user's accessible DomainOrg entries
-                user_groups = request.user.groups.all()
-                domain_query = Q(domain_orgs__user=request.user)
+    @admin.display(description="Role", ordering="role__name")
+    def role_name(self, obj):
+        """Show the plain role name in the changelist (avoids the "<Role: name>"
+        that Role's inherited __str__ would render)."""
+        return obj.role.name
 
-                if user_groups.exists():
-                    domain_query |= Q(domain_orgs__group__in=user_groups)
-
-                kwargs["queryset"] = Domain.objects.filter(domain_query).distinct().order_by("name")
-            else:
-                kwargs["queryset"] = Domain.objects.order_by("name")
-        return super().formfield_for_manytomany(db_field, request, **kwargs)
-
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == "user" and not request.user.is_superuser:
-            # Regular users can only assign users from their groups
-            user_groups = request.user.groups.all()
-            if user_groups.exists():
-                kwargs["queryset"] = User.objects.filter(groups__in=user_groups).distinct()
-            else:
-                kwargs["queryset"] = User.objects.filter(pk=request.user.pk)
-        elif db_field.name == "group" and not request.user.is_superuser:
-            # Regular users can only assign their own groups
-            kwargs["queryset"] = request.user.groups.all()
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
-    def has_change_permission(self, request, obj=None):
-        """
-        Regular users can only modify DomainOrg entries they have access to.
-        """
-        if request.user.is_superuser:
-            return True
-
-        if obj is None:
-            return True
-
-        if obj.user == request.user:
-            return True
-
-        # Check if user has access to this DomainOrg entry
-        user_groups = request.user.groups.all()
-
-        return user_groups.exists() and obj.group in user_groups
-
-    def has_delete_permission(self, request, obj=None):
-        """
-        Use same logic as change permission for delete.
-        """
-        return self.has_change_permission(request, obj)
-
-    def has_view_permission(self, request, obj=None):
-        """
-        Regular users can view DomainOrg entries based on same rules as change permission.
-        """
-        if request.user.is_superuser:
-            return True
-
-        if obj is None:
-            return True
-
-        return self.has_change_permission(request, obj)
-
-    def has_add_permission(self, request):
-        """
-        Only superusers can add new DomainOrg entries.
-        """
-        return request.user.is_superuser
+    def get_list_filter(self, request):
+        # A non-superuser's changelist is already scoped to their own rows; the
+        # unfiltered sidebar dropdowns would otherwise enumerate every
+        # role/domain name.
+        return self.list_filter if request.user.is_superuser else ()
 
     def has_module_permission(self, request):
-        """
-        Allow any authenticated user to access the DomainOrg module.
-        """
         return request.user.is_authenticated and request.user.is_active
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_authenticated and request.user.is_active
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    @admin.display(description="Target object")
+    def content_object(self, obj):
+        """Render the role's generic target (``content_object`` is a GFK, which
+        Django's admin cannot label directly in ``list_display``)."""
+        return obj.content_object or "-"
+
+
+class UserRoleAdmin(RoleAdminMixin, admin.ModelAdmin):
+    form = UserRoleAdminForm
+    list_display = ["user", "role_name", "domain", "content_object"]
+    list_select_related = ["user", "role", "domain"]  # content_object is a GFK, can't select_related
+    list_filter = [("role", RoleNameListFilter), "domain"]
+    search_fields = ["user__username", "role__name"]
+
+    def get_queryset(self, request):
+        """Non-superusers see only their own role assignments."""
+        qs = super().get_queryset(request).prefetch_related("content_object")
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(user=request.user)
+
+
+class GroupRoleAdmin(RoleAdminMixin, admin.ModelAdmin):
+    form = GroupRoleAdminForm
+    list_display = ["group", "role_name", "domain", "content_object"]
+    list_select_related = ["group", "role", "domain"]  # content_object is a GFK, can't select_related
+    list_filter = [("role", RoleNameListFilter), "domain"]
+    search_fields = ["group__name", "role__name"]
+
+    def get_queryset(self, request):
+        """Non-superusers see only role assignments for groups they belong to."""
+        qs = super().get_queryset(request).prefetch_related("content_object")
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(group__in=request.user.groups.all())
 
 
 class DomainAdminForm(forms.ModelForm):
@@ -398,126 +599,49 @@ class DomainAdminForm(forms.ModelForm):
 
 class DomainAdmin(admin.ModelAdmin):
     form = DomainAdminForm
-    list_display = ["name", "description", "storage_class", "domain_orgs_display"]
+    list_display = ["name", "description", "storage_class"]
     list_filter = ["description", "storage_class", ContentSourceDomainFilter]
     search_fields = ["name"]
-    readonly_fields = ["domain_url", "domain_orgs_detail"]
+    readonly_fields = ["domain_url", "role_assignments"]
 
     def domain_url(self, obj):
         """Display the domain's API URL."""
         api_url = f"/api/pulp/{obj.name}/api/v3/"
         return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', api_url, api_url)
 
-    def domain_orgs_display(self, obj):
-        """Display related DomainOrg entries for this domain with links."""
-        domain_orgs = obj.domain_orgs.all()
-        if not domain_orgs:
+    @admin.display(description="Role assignments")
+    def role_assignments(self, obj):
+        """List the UserRole/GroupRole assignments targeting this domain, linked
+        to their admin pages. Covers both domain-scoped (``domain`` FK) and
+        object-level (``content_object`` is this Domain) roles."""
+        domain_ct = ContentType.objects.get_for_model(Domain)
+        target = Q(domain=obj) | Q(content_type=domain_ct, object_id=str(obj.pk))
+        user_roles = UserRole.objects.filter(target).select_related("user", "role")
+        group_roles = GroupRole.objects.filter(target).select_related("group", "role")
+
+        links = _userrole_links(user_roles) + _grouprole_links(group_roles)
+        if not links:
             return "-"
+        return format_html_join("", "{}<br>", ((link,) for link in links))
 
-        links = []
-        for domain_org in domain_orgs:
-            url = reverse("myadmin:service_domainorg_change", args=[domain_org.pk])
-            parts = []
-            if domain_org.org_id:
-                parts.append(f"Org: {domain_org.org_id}")
-            if domain_org.user:
-                parts.append(f"User: {domain_org.user.username}")
-            if domain_org.group:
-                parts.append(f"Group: {domain_org.group.name}")
-
-            label = " | ".join(parts) if parts else f"DomainOrg #{domain_org.pk}"
-            links.append(format_html('<a href="{}">{}</a>', url, label))
-
-        return format_html("<br>".join(links))
-
-    def domain_orgs_detail(self, obj):
-        """Display related DomainOrg entries with links in detail view."""
-        domain_orgs = obj.domain_orgs.all()
-        if not domain_orgs:
-            return "-"
-
-        links = []
-        for domain_org in domain_orgs:
-            url = reverse("myadmin:service_domainorg_change", args=[domain_org.pk])
-            parts = []
-            if domain_org.org_id:
-                parts.append(f"Org: {domain_org.org_id}")
-            if domain_org.user:
-                parts.append(f"User: {domain_org.user.username}")
-            if domain_org.group:
-                parts.append(f"Group: {domain_org.group.name}")
-
-            label = " | ".join(parts) if parts else f"DomainOrg #{domain_org.pk}"
-            links.append(format_html('<a href="{}">{}</a>', url, label))
-
-        return format_html("<br>".join(links))
-
-    def get_queryset(self, request):
-        """
-        Filter domains based on user's access through DomainOrg relationships.
-        """
-        qs = super().get_queryset(request)
-
-        if request.user.is_superuser:
-            return qs
-
-        # Filter domains based on user's DomainOrg associations
-        user_groups = request.user.groups.all()
-        domain_query = Q(domain_orgs__user=request.user)
-
-        if user_groups.exists():
-            domain_query |= Q(domain_orgs__group__in=user_groups)
-
-        return qs.filter(domain_query).distinct()
+    # Domains are superuser-only for now. Editing a domain exposes its storage
+    # backend and settings, so until view-vs-change is untangled for RBAC roles
+    # (a read-only ``core.domain_viewer`` must not imply write), non-superusers
+    # get no Domain visibility here at all.
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     def has_change_permission(self, request, obj=None):
-        """
-        Regular users can only modify domains they have access to.
-        """
-        if request.user.is_superuser:
-            return True
-
-        if obj is None:
-            return True
-
-        # Check if user has access to this domain through DomainOrg
-        user_groups = request.user.groups.all()
-        domain_query = Q(user=request.user)
-
-        if user_groups.exists():
-            domain_query |= Q(group__in=user_groups)
-
-        return DomainOrg.objects.filter(domain_query, domains=obj).exists()
+        return request.user.is_superuser
 
     def has_delete_permission(self, request, obj=None):
-        """
-        Only superusers can delete domains.
-        """
         return request.user.is_superuser
 
     def has_add_permission(self, request):
-        """
-        Only superusers can add new domains.
-        """
         return request.user.is_superuser
 
-    def has_view_permission(self, request, obj=None):
-        """
-        Regular users can view domains based on same rules as change permission.
-        """
-        if request.user.is_superuser:
-            return True
-
-        if obj is None:
-            return True
-
-        return self.has_change_permission(request, obj)
-
     def has_module_permission(self, request):
-        """
-        Allow any authenticated user to access the Domain module.
-        """
-        return request.user.is_authenticated and request.user.is_active
+        return request.user.is_superuser
 
 
 class TaskAdmin(admin.ModelAdmin):
@@ -608,7 +732,8 @@ class TaskAdmin(admin.ModelAdmin):
 
 admin_site = PulpAdminSite(name="myadmin")
 
-admin_site.register(DomainOrg, DomainOrgAdmin)
+admin_site.register(UserRole, UserRoleAdmin)
+admin_site.register(GroupRole, GroupRoleAdmin)
 admin_site.register(User, PulpUserAdmin)
 admin_site.register(Group, PulpGroupAdmin)
 admin_site.register(Domain, DomainAdmin)

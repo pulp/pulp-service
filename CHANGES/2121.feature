@@ -1,0 +1,1 @@
+Replaced the DomainOrg-based admin with UserRole/GroupRole management. The admin now shows RBAC role assignments and lets any authenticated user view (and superusers manage) role entries. Domain objects remain superuser-only.
