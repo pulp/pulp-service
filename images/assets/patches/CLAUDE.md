@@ -193,3 +193,10 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** `_match_and_stream()` runs three more unguarded `ContentArtifact` queries that patches 0069-0071 didn't cover: the pass-through publication lookup, and (for repository versions served without a publication) the `index.html` existence check and the final content-artifact lookup. Seen in production as `OperationalError: canceling statement due to conflict with recovery` from the content app (a `core_contentartifact` lookup by `relative_path` scoped to a repository version's content, e.g. for a Maven repo) when the read replica killed the query mid-flight during hot-standby recovery. Adds `Handler._retry_content_artifact_query()`, a reusable async wrapper around the same catch-reset-retry pattern as patches 0069/0070, and applies it at all three call sites.
+
+### 0076 — Fix false-positive artifact-storage prefix check
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/models/fields.py`
+- **Description:** `ArtifactFileField.pre_save()` used a raw string prefix check to detect whether an incoming file was already stored in Artifact storage. When `MEDIA_ROOT` is empty (e.g. S3-backed deployments), the prefix collapses to the bare string `"artifact"`, so any freshly uploaded file whose name happens to start with that substring (e.g. a Maven checksum sidecar like `artifact-2.42.13.pom.sha512`) was wrongly flagged as already being in storage, raising an unhandled `ValueError` and a 500. Fix: anchor the check on a real path boundary instead of a raw substring.
+- **Upstream:** Candidate for a pulpcore fix (pulpcore #8041).
