@@ -25,10 +25,10 @@ from pulp_service.app.constants import (
 # group_var and wraps the save in transaction.atomic() so the signal nests as a
 # savepoint (domain_committed_standalone=False, the explicit_group branch).
 #
-# Before RBAC these also drove the generic DomainsApi autocommit path
-# (domain_committed_standalone=True). With PulpServiceAccessPolicy a non-admin can no
-# longer create a domain via the generic DomainsApi (that needs core.add_domain), so
-# that entry point is unreachable through supported org-user flows and its
+# The generic DomainsApi also drives this signal via the autocommit path
+# (domain_committed_standalone=True). Non-admins can reach it now that new users are granted
+# core.domain_creator (core.add_domain), but the self-service endpoint remains the path these
+# tests use because it exercises the transaction-wrapped savepoint branch; the generic
 # autocommit/rollback branch is left to unit tests with mocking.
 #
 # Domain listing works via object-level RBAC regardless of the dual-write, so it
