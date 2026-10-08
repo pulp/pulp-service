@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Humberto Yagi <hyagi@redhat.com>
+Date: Wed, 8 Oct 2026 12:00:00 -0300
+Subject: [PATCH] Make cached ArtifactResponse reconstruct from storage_path
+ instead of artifact_pk
+
+ArtifactResponse cache entries previously stored artifact_pk. On a cache
+HIT, prepare() ran Artifact.objects.aget(pk=...) -- a DB round-trip on
+every cached content-app response. Worse, path-index serves in-memory
+Artifact objects that have no DB row, so the old patch 0067 had to skip
+caching them entirely (every request was a MISS).
+
+Store storage_path + size instead under a new "CachedArtifactResponse"
+type. On cache HIT, CachedArtifactResponse reconstructs a synthetic
+Artifact with a CachedFile (same pattern as pulp_maven's IndexedFile) --
+no DB query needed. This:
+
+  * Makes path-index responses fully cacheable (~25ms -> ~5ms)
+  * Eliminates the DB round-trip on ALL ArtifactResponse cache hits
+  * Replaces the old patch 0067 (the skip-caching workaround)
+
+ArtifactResponse is kept in RESPONSE_TYPES so new workers can still
+read old-format cache entries (with artifact_pk) during rolling
+deployments. Old workers encountering "CachedArtifactResponse" entries
+treat them as cache misses (the unknown type branch in make_response
+deletes the entry and returns None), so no errors occur -- only a brief
+window of extra misses until all pods are updated.
+---
+ pulpcore/cache/cache.py | 26 +++++++++++++++++++++++---
+ 1 file changed, 23 insertions(+), 3 deletions(-)
+
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -22,9 +22,30 @@
+ from pulpcore.metrics import artifacts_size_counter
+ from pulpcore.responses import ArtifactResponse
+ 
++from django.db.models.fields.files import FieldFile
++
+ DEFAULT_EXPIRES_TTL = settings.CACHE_SETTINGS["EXPIRES_TTL"]
+ 
+ 
++class CachedFile(FieldFile):
++    """FieldFile that returns a cached size instead of issuing a storage HEAD."""
++
++    @property
++    def size(self):
++        return self.instance.size
++
++
++class CachedArtifactResponse(ArtifactResponse):
++    """Reconstruct an ArtifactResponse from cached storage_path + size (no DB query)."""
++
++    def __init__(self, storage_path=None, size=None, **kwargs):
++        from pulpcore.app.models import Artifact
++
++        obj = Artifact(size=size)
++        obj.file = CachedFile(obj, Artifact._meta.get_field("file"), storage_path)
++        super().__init__(artifact=obj, **kwargs)
++
++
+ class CacheKeys(enum.Enum):
+     """Available keys to construct the index key for cache entry."""
+ 
+@@ -310,6 +331,7 @@
+     RESPONSE_TYPES = {
+         "FileResponse": FileResponse,
+         "ArtifactResponse": ArtifactResponse,
++        "CachedArtifactResponse": CachedArtifactResponse,
+         "Response": Response,
+         "Redirect": HTTPFound,
+         "HTTPNotFound": HTTPNotFound,
+@@ -434,8 +456,9 @@
+             entry["path"] = str(response._path)
+             entry["type"] = "FileResponse"
+         elif isinstance(response, ArtifactResponse):
+-            entry["artifact_pk"] = str(response._artifact.pk)
+-            entry["type"] = "ArtifactResponse"
++            entry["storage_path"] = str(response._artifact.file.name)
++            entry["size"] = response._artifact.size
++            entry["type"] = "CachedArtifactResponse"
+         elif isinstance(response, HTTPNotFound):
+             if not getattr(response, "cacheable", False):
+                 return response
+-- 
+2.55.0
