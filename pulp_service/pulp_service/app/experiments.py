@@ -41,7 +41,15 @@ def run_experiment(exp_id, control, candidate, *, p_candidate, context):
 
 def control_membership_dates(memberships, names):
     """Keep the existing membership iteration and Python filtering."""
-    return {names[row.content_id]: row.pulp_created for row in memberships if row.content_id in names}
+    dates = {}
+    for row in memberships:
+        if row.content_id not in names:
+            continue
+        name = names[row.content_id]
+        current = dates.get(name)
+        if current is None or current < row.pulp_created:
+            dates[name] = row.pulp_created
+    return dates
 
 
 def candidate_membership_dates(memberships, names, sources):
@@ -50,7 +58,15 @@ def candidate_membership_dates(memberships, names, sources):
     for queryset, field in sources:
         listed_content |= Q(content_id__in=queryset.values(field))
     rows = memberships.filter(listed_content).values_list("content_id", "pulp_created")
-    return {names[content_id]: created for content_id, created in rows if content_id in names}
+    dates = {}
+    for content_id, created in rows:
+        if content_id not in names:
+            continue
+        name = names[content_id]
+        current = dates.get(name)
+        if current is None or current < created:
+            dates[name] = created
+    return dates
 
 
 def _marked_lookup(memberships, names, sources, variant):

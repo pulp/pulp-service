@@ -12,7 +12,9 @@ Patch 0077 connects `Handler.list_directory()` to
 - A iterates the version's membership models and filters them in Python.
 - B restricts the same membership queryset using the listing's content artifact
   and published artifact subqueries, selecting only `content_id` and `pulp_created`.
-  It does not bind a parameter for every listed content ID.
+  It does not bind a parameter for every listed content ID. Both variants retain
+  pulpcore's newest-timestamp-wins behavior when multiple membership rows map to
+  the same displayed name.
 
 Both preserve the version's historical membership predicate. Published paths and
 pass-through paths remain separate sources. Each eligible call runs one variant;
@@ -20,10 +22,9 @@ failed B calls propagate their exception without retrying A.
 
 Calls are eligible only when the content-to-name mapping is nonempty and each
 displayed name occurs once. Several contents can collapse into one directory name.
-The existing date for that directory depends on unordered membership iteration;
-changing its query plan can change the winning timestamp. Such calls retain A and
-emit `ab_experiment_skipped` with `reason=shared_name`. Empty directory listings
-never reach the membership lookup and do not emit an experiment event.
+Such calls retain A and emit `ab_experiment_skipped` with `reason=shared_name` to
+keep the experiment scope conservative. Empty directory listings never reach the
+membership lookup and do not emit an experiment event.
 
 JSON `list_directory_flat()`, plugin directory handlers, and cached responses are
 outside the measured section. The sample count is eligible lookups, not total
