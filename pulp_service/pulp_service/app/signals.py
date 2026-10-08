@@ -51,6 +51,20 @@ def log_new_user(sender, instance, created, **kwargs):  # noqa: ARG001
         _logger.info("New user created: username=%s, route=%s", instance.username, request_path or "unknown")
 
 
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def assign_domain_creator_role(sender, instance, created, **kwargs):  # noqa: ARG001
+    """Grant every newly created user the model-level ``core.add_domain`` permission.
+
+    Pulpcore's generic ``DomainViewSet`` gates create on ``has_model_perms:core.add_domain``,
+    which no service role grants at model scope. Without this, auto-created service accounts
+    get "Operation domains_create is not authorized" when creating a domain via the Pulp CLI.
+    The ``core.domain_creator`` locked role is pulpcore's model-scoped grant of that
+    permission. See PULP-2526.
+    """
+    if created:
+        assign_role("core.domain_creator", instance)
+
+
 def _derive_org_id_from_user(user):
     """Derive an org_id from the user's rh-org-<org_id> group membership, or None.
 

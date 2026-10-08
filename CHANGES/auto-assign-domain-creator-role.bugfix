@@ -1,0 +1,1 @@
+Automatically grant every newly created user the ``core.domain_creator`` role, and backfill it for existing users via a data migration, so service accounts can create domains (and Python repositories/distributions in them) via the generic Pulp API instead of receiving "Operation domains_create is not authorized".

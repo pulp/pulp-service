@@ -6,12 +6,12 @@ from uuid import uuid4
 import pytest
 import requests
 
-# Under RBAC the default permission class is PulpServiceAccessPolicy (RBAC). Non-admin
-# users can no longer create domains via the generic DomainsApi (that needs core.add_domain);
-# they use the self-service POST /api/pulp/create-domain/ endpoint (create_service_domain
-# fixture), which drives the post_create_domain dual-write. Domain visibility on list is
-# scoped by RBAC object perms (core.view_domain) granted to the creator, the domain group,
-# and the auto-assigned rh-org-<org_id> group.
+# Under RBAC the default permission class is PulpServiceAccessPolicy (RBAC). New users are
+# granted core.domain_creator on creation, so non-admin users can create domains via the
+# generic DomainsApi too; these tests use the self-service POST /api/pulp/create-domain/
+# endpoint (create_service_domain fixture) because it drives the post_create_domain
+# dual-write. Domain visibility on list is scoped by RBAC object perms (core.view_domain)
+# granted to the creator, the domain group, and the auto-assigned rh-org-<org_id> group.
 
 
 def test_user_domain_repo_creation(file_bindings, anonymous_user, gen_object_with_cleanup, create_service_domain):
