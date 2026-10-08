@@ -614,6 +614,13 @@ objects:
             value: ${PULP_ALLOWED_CONTENT_CHECKSUMS}
           - name: PULP_DATABASE_ROUTERS
             value: "['pulp_service.app.database_router.ContentReplicaRouter']"
+          # PULP-2505 A/B experiment: directory membership dates (content app only).
+          - name: PULP_CONTENT_DIRECTORY_AB_ENABLED
+            value: ${PULP_CONTENT_DIRECTORY_AB_ENABLED}
+          - name: PULP_CONTENT_DIRECTORY_AB_PROBABILITY
+            value: ${PULP_CONTENT_DIRECTORY_AB_PROBABILITY}
+          - name: PULP_CONTENT_DIRECTORY_AB_REVISION
+            value: ${PULP_CONTENT_DIRECTORY_AB_REVISION}
           - name: PULP_FEATURE_SERVICE_API_CERT_PATH
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_FEATURE_SERVICE_API_URL
@@ -1803,6 +1810,15 @@ parameters:
   - name: PULP_CACHE_ENABLED
     description: Enable CACHE. Need REDIS installed.
     value: "true"
+  - name: PULP_CONTENT_DIRECTORY_AB_ENABLED
+    description: Enable the PULP-2505 directory-membership-dates A/B experiment (content app).
+    value: "false"
+  - name: PULP_CONTENT_DIRECTORY_AB_PROBABILITY
+    description: Probability of running candidate variant B for PULP-2505.
+    value: "0.5"
+  - name: PULP_CONTENT_DIRECTORY_AB_REVISION
+    description: Deployed image git SHA tagged on PULP-2505 experiment log lines (required when enabled).
+    value: ""
   - name: PULP_AWS_DEFAULT_ACL
     description: AWS default ACL
     value: "@none None"
