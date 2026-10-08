@@ -163,8 +163,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0066-use-cache-control-max-age-for-redis-ttl.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0066-use-cache-control-max-age-for-redis-ttl.patch
 
-COPY images/assets/patches/0067-do-not-cache-unsaved-artifactresponse.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0067-do-not-cache-unsaved-artifactresponse.patch
+COPY images/assets/patches/0067-Make-cached-ArtifactResponse-DB-free.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0067-Make-cached-ArtifactResponse-DB-free.patch
 
 COPY images/assets/patches/0068-Reset-all-db-connections-on-stale-connection-retry.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0068-Reset-all-db-connections-on-stale-connection-retry.patch

@@ -136,12 +136,12 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/cache/cache.py`, `pulpcore/content/handler.py`
 - **Description:** Sets `Cache-Control: max-age=86400` on content app responses and uses that value as the Redis cache entry TTL, but only when the domain has `redirect_to_object_storage=False` (content streamed through the app). When `redirect_to_object_storage=True`, responses are redirects to signed S3/CloudFront URLs with limited lifetimes, so the Redis TTL is left at the default to avoid serving expired signed URLs from cache.
 
-### 0067 — Do not cache ArtifactResponse backed by an unsaved (in-memory) Artifact
+### 0067 — Make cached ArtifactResponse DB-free
 
 - **Package:** pulpcore
 - **Files:** `pulpcore/cache/cache.py`
-- **Description:** Fixes silent 502s on Maven repos with `path_index` enabled. `AsyncContentCache.make_entry` serialized every `ArtifactResponse` as `artifact_pk=str(response._artifact.pk)`. pulp_maven's path_index serves `IndexedArtifactResponse` built from an in-memory `Artifact` that was never saved; because `pulp_id` is a `UUIDField(primary_key=True, default=pulp_uuid)`, that instance already has a **random** pk that matches **no DB row** (an earlier `pk is None` guard therefore never triggered). Caching it stored an `artifact_pk` with no matching row; on a cache HIT `make_response` rebuilt `ArtifactResponse(artifact_pk=<missing>)` whose `prepare()` runs `Artifact.objects.aget(pk=<missing>)` → `Artifact.DoesNotExist`, raised after the response is committed → the worker drops the connection → gateway 502. The patch skips caching any `ArtifactResponse` whose `_artifact._state.adding` is True (unsaved/in-memory instance); it is served live instead. See PULP-2447 and pulp/pulp_maven#506.
-- **Upstream:** Candidate for a pulpcore fix (defensive cache guard).
+- **Description:** Replaces the old 0067 skip-caching workaround with a proper fix. Instead of storing `artifact_pk` in the Redis cache entry (which required a DB round-trip on every cache HIT via `Artifact.objects.aget(pk=...)`, and couldn't work at all for path-index's unsaved in-memory artifacts), stores `storage_path` and `size` under a new `CachedArtifactResponse` type. On cache HIT, `CachedArtifactResponse` reconstructs a synthetic `Artifact` with a `CachedFile` (same pattern as pulp_maven's `IndexedFile`) — no DB query needed. This makes path-index responses fully cacheable in Redis (~25ms → ~5ms) and eliminates the DB round-trip on ALL `ArtifactResponse` cache hits (benefits non-path-index too). `ArtifactResponse` is kept in `RESPONSE_TYPES` so new workers can still read old-format cache entries (with `artifact_pk`) during rolling deployments; old workers encountering the new `CachedArtifactResponse` type treat it as a cache miss (no error). See PULP-2513.
+- **Upstream:** Candidate for a pulpcore fix (cache entries should not require DB lookups).
 
 ### 0068 — Reset all DB connections on stale connection retry
 
