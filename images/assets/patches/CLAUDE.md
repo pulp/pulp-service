@@ -14,7 +14,7 @@ after `sudo -u pulp`; sudo can remove it even with `-E`.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.119.0             |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.121.2             |
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.36.2              |
@@ -43,7 +43,7 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
-- **Description:** Dispatches eligible HTML directory membership date lookups through the service's disabled-by-default PULP-2505 experiment. B filters in SQL and fetches only content IDs and creation dates. Shared displayed names retain A because their existing timestamps depend on unordered row iteration. JSON listings are unchanged. See `docs/test_plans/0004-Directory_Membership_Dates.md`.
+- **Description:** Dispatches eligible HTML directory membership date lookups through the service's disabled-by-default PULP-2505 experiment. B filters in SQL and fetches only content IDs and creation dates. Both variants preserve pulpcore's newest-timestamp-wins behavior; shared displayed names retain A to keep the experiment scope conservative. JSON listings are unchanged. See `docs/test_plans/0004-Directory_Membership_Dates.md`.
 
 ### 0022 — Adds authentication to the mvn deploy api
 
