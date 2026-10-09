@@ -19,7 +19,7 @@ from pulp_service.app.constants import (
     VPN_VERIFIED_HEADER_NAME,
 )
 
-# These tests exercise the RBAC dual-write in the post_create_domain signal
+# These tests exercise the RBAC role assignment in the post_create_domain signal
 # (pulp_service/app/signals.py) via the self-service create-domain endpoint
 # (CreateDomainView) -- the supported production path under RBAC, which sets
 # group_var and wraps the save in transaction.atomic() so the signal nests as a
@@ -31,11 +31,9 @@ from pulp_service.app.constants import (
 # tests use because it exercises the transaction-wrapped savepoint branch; the generic
 # autocommit/rollback branch is left to unit tests with mocking.
 #
-# Domain listing works via object-level RBAC regardless of the dual-write, so it
-# cannot prove the dual-write. Instead we introspect the role assignments the signal
-# writes. There is no DomainOrg API; since the role writes and the DomainOrg insert
-# share one transaction.atomic() in the signal, asserting the roles committed
-# transitively confirms the DomainOrg row too.
+# Domain listing works via object-level RBAC regardless of which roles the signal
+# writes, so it cannot prove the grants. Instead we introspect the role assignments
+# the signal writes directly.
 #
 # Not covered here: the delete-on-failure rollback path. It needs fault injection
 # that is brittle over black-box HTTP -- better suited to a unit test with mocking.

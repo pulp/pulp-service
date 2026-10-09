@@ -89,7 +89,7 @@ def configure_lightwell_domain(
 
 def test_entitled_org_can_list_content(configure_lightwell_domain):
     """A user whose org has the lightwell-network feature can list content in the lightwell
-    domain, even without a DomainOrg association or read-only group membership."""
+    domain, even without a role on the domain or read-only group membership."""
     content_url, _, _ = configure_lightwell_domain
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-content-user")}
 
@@ -135,7 +135,7 @@ def test_unauthenticated_denied_content_listing(configure_lightwell_domain):
 
 
 def test_domain_owner_can_list_content(configure_lightwell_domain):
-    """The domain owner (via DomainOrg association) can list content regardless of
+    """The domain owner (via their domain role) can list content regardless of
     subscription status."""
     content_url, _, owner_header = configure_lightwell_domain
     headers = {"x-rh-identity": owner_header}
