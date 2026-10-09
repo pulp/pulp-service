@@ -171,7 +171,7 @@ def test_more_than_parameter_limit(experiment_settings):
         [RepositoryContent(repository=repository, content=unit, version_added=version) for unit in units],
         batch_size=1000,
     )
-    names = {unit.pk: str(i) for i, unit in enumerate(units)}
+    names = {unit.pk: {str(i)} for i, unit in enumerate(units)}
     sources = [(ContentArtifact.objects.filter(content__in=version.content), "content_id")]
     options = {"serving_mode": "repository", "directory_count": count, "is_root": False}
     experiment_settings.CONTENT_DIRECTORY_AB_PROBABILITY = 0
@@ -188,7 +188,7 @@ def test_more_than_parameter_limit(experiment_settings):
 
 def test_candidate_selects_only_listed_columns_and_preserves_routing(history, experiment_settings, monkeypatch):
     version = history.versions[0]
-    names = {history.units[0].pk: "first"}
+    names = {history.units[0].pk: {"first"}}
     sources = [(ContentArtifact.objects.filter(relative_path="leaf/first"), "content_id")]
     real_memberships = version._content_relationships()
     routed_memberships = Mock(db="replica")
@@ -201,7 +201,7 @@ def test_candidate_selects_only_listed_columns_and_preserves_routing(history, ex
             version, names, sources, serving_mode="repository", directory_count=1, is_root=False
         )
     routed_memberships.using.assert_called_once_with("replica")
-    assert result == {"first": history.dates[0]}
+    assert result == {history.units[0].pk: history.dates[0]}
     assert len(queries) == 1
     select = queries[0]["sql"].split(" FROM ")[0]
     assert '"content_id"' in select and '"pulp_created"' in select
@@ -243,6 +243,26 @@ def test_one_variant_and_timing(monkeypatch, caplog, variant, probability):
     assert record["outcome"] == "success"
 
 
+def test_one_content_can_have_multiple_displayed_names(history, experiment_settings, caplog):
+    content_id = history.units[0].pk
+    names = {content_id: {"first", "renamed/first"}}
+    sources = [(ContentArtifact.objects.filter(content_id=content_id), "content_id")]
+    experiment_settings.CONTENT_DIRECTORY_AB_PROBABILITY = 1
+    with caplog.at_level("INFO", logger="pulp.experiment"):
+        dates = experiments.directory_membership_dates(
+            history.versions[0],
+            names,
+            sources,
+            serving_mode="publication",
+            directory_count=2,
+            is_root=True,
+        )
+    assert dates == {content_id: history.dates[0]}
+    record = json.loads(caplog.records[-1].message)
+    assert record["event"] == "ab_experiment"
+    assert record["variant"] == "B"
+
+
 def test_errors_are_logged_without_fallback(caplog, monkeypatch):
     control = Mock()
     failure = RuntimeError("do not log private exception messages")
@@ -265,16 +285,16 @@ def test_errors_are_logged_without_fallback(caplog, monkeypatch):
 @pytest.mark.parametrize(
     "enabled,names,probability,revision,reason",
     [
-        (False, {1: "file"}, 1, "test", None),
+        (False, {1: {"file"}}, 1, "test", None),
         (True, {}, 1, "test", "empty"),
-        (True, {1: "folder/", 2: "folder/"}, 1, "test", "shared_name"),
-        (True, {1: "file"}, -1, "test", "invalid_probability"),
-        (True, {1: "file"}, 2, "test", "invalid_probability"),
-        (True, {1: "file"}, float("nan"), "test", "invalid_probability"),
-        (True, {1: "file"}, float("inf"), "test", "invalid_probability"),
-        (True, {1: "file"}, "0.5", "test", "invalid_probability"),
-        (True, {1: "file"}, True, "test", "invalid_probability"),
-        (True, {1: "file"}, 1, "", "missing_revision"),
+        (True, {1: {"folder/"}, 2: {"folder/"}}, 1, "test", "shared_name"),
+        (True, {1: {"file"}}, -1, "test", "invalid_probability"),
+        (True, {1: {"file"}}, 2, "test", "invalid_probability"),
+        (True, {1: {"file"}}, float("nan"), "test", "invalid_probability"),
+        (True, {1: {"file"}}, float("inf"), "test", "invalid_probability"),
+        (True, {1: {"file"}}, "0.5", "test", "invalid_probability"),
+        (True, {1: {"file"}}, True, "test", "invalid_probability"),
+        (True, {1: {"file"}}, 1, "", "missing_revision"),
     ],
 )
 def test_ineligible_calls_do_not_dispatch(settings, monkeypatch, caplog, enabled, names, probability, revision, reason):
@@ -289,7 +309,7 @@ def test_ineligible_calls_do_not_dispatch(settings, monkeypatch, caplog, enabled
         result = experiments.directory_membership_dates(
             version, names, [], serving_mode="repository", directory_count=len(names), is_root=False
         )
-    assert result == {name: pk for pk, name in names.items()}
+    assert result == {pk: pk for pk in names}
     dispatch.assert_not_called()
     if reason is None:
         assert not caplog.records

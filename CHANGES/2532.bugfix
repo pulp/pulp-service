@@ -1,0 +1,1 @@
+Published directory listings now use the repository membership date from pulpcore instead of the publication timestamp.

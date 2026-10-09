@@ -14,7 +14,7 @@ after `sudo -u pulp`; sudo can remove it even with `-E`.
 
 | Patch prefix     | GitHub repository                                          | PyPI package     | Current version tag |
 | ---------------- | ---------------------------------------------------------- | ---------------- | ------------------- |
-| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.121.2             |
+| `pulpcore/`      | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | pulpcore         | 3.121.3             |
 | `pulp_file/`     | [pulp/pulpcore](https://github.com/pulp/pulpcore)          | (bundled)        | 3.112.0             |
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.36.2              |
