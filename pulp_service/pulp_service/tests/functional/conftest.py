@@ -126,7 +126,7 @@ def create_service_domain(pulpcore_bindings, bindings_cfg, template_domain_s3, m
     New users are granted ``core.domain_creator`` on creation, so a non-admin user
     (X-RH-IDENTITY header or basic auth) can create a domain via the generic ``DomainsApi``
     too. The self-service endpoint is still the path used here because it drives the
-    ``post_create_domain`` dual-write (content guards, DomainOrg, group scoping).
+    ``post_create_domain`` signal (content guards, RBAC roles, group scoping).
 
     Pass ``identity_header`` for header auth or ``auth=(user, password)`` for basic auth.
     Returns a ``SimpleNamespace`` with ``name`` and ``pulp_href``; registers admin-auth

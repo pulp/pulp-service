@@ -1,0 +1,1 @@
+Removed the legacy DomainOrg authorization system now that RBAC is the default: the DomainOrg model and table, the DomainBasedPermission class, the domain-create dual-write, and the DomainOrg backfill/report tooling and debug endpoints. The domain-owner content-guard bypass now uses the ``core.view_content`` role grant instead of a DomainOrg lookup.

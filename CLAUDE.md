@@ -64,7 +64,7 @@ WSGI middleware (`images/assets/log_middleware.py`) → Django middleware stack 
 
 **Key patterns:**
 - **Authentication**: `X-RH-IDENTITY` header (base64-encoded JSON) → custom auth classes in `app/authentication.py`
-- **Multi-tenancy**: `DomainOrg` model maps org_id → Pulp domain; domain-based routing for content APIs
+- **Multi-tenancy**: RBAC (`PulpServiceAccessPolicy`) scopes access by Pulp domain; domain creation grants `core.domain_owner`/`service.domain_admin` roles to the creator, team group, and `rh-org-<org_id>` org group; domain-based routing for content APIs
 - **Context variables**: `ContextVar` instances in `app/middleware.py` carry request-scoped data (org_id, user_id, request_path) across layers
 - **Storage**: S3 via pulpcore's built-in `S3Boto3Storage` with CloudFront patches; domain creation clones settings from `template-domain-s3`
 - **Tasks**: Background work in `app/tasks/` (package scanning, domain metrics, RDS testing)

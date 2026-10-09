@@ -29,7 +29,7 @@ from pulp_service.tests.functional.constants import (
     LIGHTWELL_NOT_ENTITLED_ORG_ID,
 )
 
-# An org with no DomainOrg association with the test domains and no lightwell-network
+# An org with no role on the test domains and no lightwell-network
 # feature entitlement; only used to own the test domain/repo/distribution.
 DOMAIN_OWNER_ORG_ID = "555555555"
 
@@ -155,8 +155,8 @@ def configure_guarded_pypi_distribution(configure_pypi_distribution):
 
 
 def test_org_without_feature_denied_on_guarded_pypi_simple_api(configure_guarded_pypi_distribution):
-    """A user whose org doesn't have the required feature and has no DomainOrg
-    association gets 403 on a content-guarded PyPI simple API."""
+    """A user whose org doesn't have the required feature and holds no role on the
+    domain gets 403 on a content-guarded PyPI simple API."""
     _, pypi_url, _, _ = configure_guarded_pypi_distribution()
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_NOT_ENTITLED_ORG_ID, "not-entitled-user")}
 
@@ -167,7 +167,7 @@ def test_org_without_feature_denied_on_guarded_pypi_simple_api(configure_guarded
 
 def test_org_with_feature_allowed_on_guarded_pypi_simple_api(configure_guarded_pypi_distribution):
     """A user whose org has the required feature can read a content-guarded PyPI
-    simple API, even without a DomainOrg association."""
+    simple API, even without a role on the domain."""
     _, pypi_url, _, _ = configure_guarded_pypi_distribution()
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-user")}
 
@@ -176,9 +176,9 @@ def test_org_with_feature_allowed_on_guarded_pypi_simple_api(configure_guarded_p
     assert response.status_code == 200
 
 
-def test_domain_org_association_bypasses_content_guard(configure_guarded_pypi_distribution):
-    """The domain owner (has a DomainOrg association) can read the guarded PyPI
-    simple API regardless of the content guard."""
+def test_domain_member_bypasses_content_guard(configure_guarded_pypi_distribution):
+    """The domain owner (holds core.view_content on the domain) can read the guarded
+    PyPI simple API regardless of the content guard."""
     _, pypi_url, _, owner_header = configure_guarded_pypi_distribution()
     headers = {"x-rh-identity": owner_header}
 
@@ -198,7 +198,7 @@ def test_unauthenticated_denied_on_guarded_pypi_simple_api(configure_guarded_pyp
 
 def test_write_operations_unaffected_by_content_guard(configure_guarded_pypi_distribution):
     """The content guard only gates SAFE_METHOD access -- an entitled org with no
-    DomainOrg association must still be denied write access."""
+    role on the domain must still be denied write access."""
     _, pypi_url, _, _ = configure_guarded_pypi_distribution()
     headers = {"x-rh-identity": _identity_header(LIGHTWELL_ENTITLED_ORG_ID, "entitled-write-user")}
 

@@ -4,7 +4,7 @@ default permission class is switched to ``PulpServiceAccessPolicy``, a user who
 uploads content into their domain must still be able to *view* that content even
 though it is not in any repository (orphan content).
 
-Under the previous ``DomainBasedPermission`` default this worked because content
+Under the previous (pre-RBAC) authorization this worked because content
 reads were not repository-scoped. Under naive RBAC, pulpcore's
 ``BaseContentViewSet.scope_queryset`` scopes content reads by repository
 membership, which hides orphan content and breaks read-after-upload.
@@ -13,7 +13,7 @@ visibility by gating content ``list`` on the domain-scoped ``core.view_content``
 permission and dropping queryset scoping.
 
 Setup mirrors the production self-service flow: the org creates its domain through
-pulp-service's ``create-domain`` endpoint (``x-rh-identity``), which dual-writes
+pulp-service's ``create-domain`` endpoint (``x-rh-identity``), which assigns
 the ``service.domain_admin`` role -- including ``core.view_content`` -- to the
 org's ``rh-org-<org_id>`` group. Orphan content is then uploaded (no repository)
 by the admin superuser, and the reads under test are performed as the org.
