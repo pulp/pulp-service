@@ -39,20 +39,19 @@ def run_experiment(exp_id, control, candidate, *, p_candidate, context):
         logger.info(json.dumps(record))
 
 
-def control_membership_dates(memberships, names):
+def control_membership_dates(memberships, content_to_names):
     """Keep the existing membership iteration and Python filtering."""
     dates = {}
     for row in memberships:
-        if row.content_id not in names:
+        if row.content_id not in content_to_names:
             continue
-        name = names[row.content_id]
-        current = dates.get(name)
+        current = dates.get(row.content_id)
         if current is None or current < row.pulp_created:
-            dates[name] = row.pulp_created
+            dates[row.content_id] = row.pulp_created
     return dates
 
 
-def candidate_membership_dates(memberships, names, sources):
+def candidate_membership_dates(memberships, content_to_names, sources):
     """Filter memberships with SQL subqueries, without binding every content ID."""
     listed_content = Q(content_id__in=[])
     for queryset, field in sources:
@@ -60,16 +59,15 @@ def candidate_membership_dates(memberships, names, sources):
     rows = memberships.filter(listed_content).values_list("content_id", "pulp_created")
     dates = {}
     for content_id, created in rows:
-        if content_id not in names:
+        if content_id not in content_to_names:
             continue
-        name = names[content_id]
-        current = dates.get(name)
+        current = dates.get(content_id)
         if current is None or current < created:
-            dates[name] = created
+            dates[content_id] = created
     return dates
 
 
-def _marked_lookup(memberships, names, sources, variant):
+def _marked_lookup(memberships, content_to_names, sources, variant):
     alias = memberships.db
 
     def mark(execute, sql, params, many, context):
@@ -78,38 +76,43 @@ def _marked_lookup(memberships, names, sources, variant):
     with connections[alias].execute_wrapper(mark):
         memberships = memberships.using(alias)
         if variant == "A":
-            return control_membership_dates(memberships, names)
-        return candidate_membership_dates(memberships, names, sources)
+            return control_membership_dates(memberships, content_to_names)
+        return candidate_membership_dates(memberships, content_to_names, sources)
 
 
-def _ineligibility_reason(names, probability, revision):
+def _ineligibility_reason(content_to_names, probability, revision):
     if isinstance(probability, bool) or not isinstance(probability, (int, float)) or not 0 <= probability <= 1:
         return "invalid_probability"
     if not isinstance(revision, str) or not revision.strip():
         return "missing_revision"
-    if not names:
+    if not content_to_names:
         return "empty"
-    if len(names) != len(set(names.values())):
+    displayed_names = [name for names in content_to_names.values() for name in names]
+    if len(displayed_names) != len(set(displayed_names)):
         return "shared_name"
     return None
 
 
-def directory_membership_dates(version, names, sources, *, serving_mode, directory_count, is_root):
-    """Run PULP-2505 only when configuration and displayed names are unambiguous."""
+def directory_membership_dates(version, content_to_names, sources, *, serving_mode, directory_count, is_root):
+    """Run PULP-2505 for content IDs mapped to their displayed directory names.
+
+    Returns the newest membership timestamp by content ID, letting the caller preserve
+    pulpcore's content-date precedence and aggregate dates across each ID's displayed names.
+    """
     memberships = version._content_relationships()
     if not getattr(settings, "CONTENT_DIRECTORY_AB_ENABLED", False):
-        return control_membership_dates(memberships, names)
+        return control_membership_dates(memberships, content_to_names)
 
     probability = getattr(settings, "CONTENT_DIRECTORY_AB_PROBABILITY", 0.5)
     revision = getattr(settings, "CONTENT_DIRECTORY_AB_REVISION", "")
     context = {
         "serving_mode": serving_mode,
         "is_root": is_root,
-        "candidate_count": len(names),
+        "candidate_count": len(content_to_names),
         "directory_count": directory_count,
         "deployment_revision": revision if isinstance(revision, str) else None,
     }
-    if reason := _ineligibility_reason(names, probability, revision):
+    if reason := _ineligibility_reason(content_to_names, probability, revision):
         logger.info(
             json.dumps(
                 {
@@ -121,12 +124,12 @@ def directory_membership_dates(version, names, sources, *, serving_mode, directo
                 }
             )
         )
-        return control_membership_dates(memberships, names)
+        return control_membership_dates(memberships, content_to_names)
 
     return run_experiment(
         DIRECTORY_EXPERIMENT,
-        lambda: _marked_lookup(memberships, names, sources, "A"),
-        lambda: _marked_lookup(memberships, names, sources, "B"),
+        lambda: _marked_lookup(memberships, content_to_names, sources, "A"),
+        lambda: _marked_lookup(memberships, content_to_names, sources, "B"),
         p_candidate=probability,
         context=context,
     )

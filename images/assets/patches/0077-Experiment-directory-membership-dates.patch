@@ -1,23 +1,23 @@
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -48,6 +48,8 @@
+@@ -44,6 +44,8 @@
+     transaction,
  )
- from django.utils.http import http_date  # noqa: E402
  from jinja2 import Template  # noqa: E402
 +
 +from pulp_service.app.experiments import directory_membership_dates  # noqa: E402
-
+ 
  from pulpcore.app import mime_types  # noqa: E402
  from pulpcore.app.models import (  # noqa: E402
-@@ -899,6 +901,7 @@
+@@ -636,6 +638,7 @@
              directory_list = set()
              dates = {}
              content_to_find = {}
 +            content_sources = []
+             content_dates = {}
              sizes = {}
              artifacts_to_find = {}
-
-@@ -906,6 +909,7 @@
+@@ -644,6 +647,7 @@
                  pas = publication.published_artifact.select_related(
                      "content_artifact__artifact"
                  ).filter(relative_path__startswith=path)
@@ -25,7 +25,7 @@
                  for pa in pas:
                      name = file_or_directory_name(path, pa.relative_path)
                      directory_list.add(name)
-@@ -920,6 +924,7 @@
+@@ -660,6 +664,7 @@
                  cas = ContentArtifact.objects.select_related("artifact").filter(
                      content__in=content_repo_ver.content, relative_path__startswith=path
                  )
@@ -33,11 +33,15 @@
                  for ca in cas:
                      name = file_or_directory_name(path, ca.relative_path)
                      directory_list.add(name)
-@@ -933,3 +938,13 @@
+@@ -672,10 +677,19 @@
+                             artifacts_to_find[ca.pk] = name
+ 
+             if directory_list:
+-                # Find the dates the content got added to the repository
 -                for rc in content_repo_ver._content_relationships():
 -                    if rc.content_id in content_to_find:
--                        update_date(dates, content_to_find[rc.content_id], rc.pulp_created)
-+                for name, timestamp in directory_membership_dates(
+-                        content_dates[rc.content_id] = rc.pulp_created
++                membership_dates = directory_membership_dates(
 +                    content_repo_ver,
 +                    content_to_find,
 +                    content_sources,
@@ -48,5 +52,8 @@
 +                    ),
 +                    directory_count=len(directory_list),
 +                    is_root=not path,
-+                ).items():
-+                    update_date(dates, name, timestamp)
++                )
++                content_dates.update(membership_dates)
+ 
+                 # Prefer repository membership dates, then aggregate the newest date per entry.
+                 for content_id, names in content_to_find.items():
