@@ -250,7 +250,6 @@ The custom `OCIStorage` backend (artifacts stored as OCI blobs in Quay.io via th
 Key models in `pulp_service/pulp_service/app/models.py`:
 *Plugin-specific models - extend upstream Pulpcore models*
 
-- **DomainOrg** - One-to-many relationship between org IDs and Pulp Domains (multi-tenancy)
 - **FeatureContentGuard** - Content guard based on Subscription Features (extends `HeaderContentGuard`)
 - **YankedPackageReport** - Stores PyPI yank check results
 - **PyPIYankMonitor** - Registers repositories for daily PyPI yank monitoring
@@ -766,7 +765,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 - Artifact management and deduplication
 
 **Plugin Integration Points:**
-- Extends core models with plugin-specific models (DomainOrg, FeatureContentGuard, VulnerabilityReport)
+- Extends core models with plugin-specific models (FeatureContentGuard, VulnerabilityReport)
 - Overrides authentication backends (RHServiceAccountCertAuthentication, RHTermsBasedRegistryAuthentication, RHSamlAuthentication)
 - Adds custom middleware (TrueClientIPMiddleware, ProfilerMiddleware, RhEdgeHostMiddleware, ActiveConnectionsMetricMiddleware)
 - Adds custom viewsets for Red Hat-specific functionality (domain management, task debugging, lock management)

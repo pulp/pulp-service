@@ -4,9 +4,43 @@ from importlib import import_module
 from django.db import migrations
 
 from pulp_service.app.constants import ORG_GROUP_PREFIX
-from pulp_service.app.domainorg_backfill import derive_org_id, normalize_org_id
 
 _logger = logging.getLogger(__name__)
+
+# Inlined from the former pulp_service.app.domainorg_backfill module (removed with the DomainOrg
+# model). A migration must stay self-contained, so the org_id derivation it needs lives here.
+MISSING_ORG_SENTINELS = frozenset({"", "null", "None"})
+
+
+def normalize_org_id(value):
+    """Return a real org_id string, or None for NULL / blank / whitespace / sentinel values."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text in MISSING_ORG_SENTINELS:
+        return None
+    return text
+
+
+def _team_org_ids(domain_org):
+    """Distinct org ids among the team group's members, from their rh-org-<org_id> groups."""
+    org_ids = set()
+    for user in domain_org.group.user_set.all():
+        for name in user.groups.filter(name__startswith=ORG_GROUP_PREFIX).values_list("name", flat=True):
+            org_ids.add(name[len(ORG_GROUP_PREFIX) :])
+    return org_ids
+
+
+def derive_org_id(domain_org):
+    """The org_id this backfill stores: the stored value if real, else the single unambiguous org
+    among the team group's members, else None."""
+    stored = normalize_org_id(domain_org.org_id)
+    if stored:
+        return stored
+    if domain_org.group_id is None:
+        return None
+    org_ids = _team_org_ids(domain_org)
+    return next(iter(org_ids)) if len(org_ids) == 1 else None
 
 # Reuse migration 0019's role-assignment primitives so the GroupRole rows this backfill
 # writes are byte-identical to the ones 0019/0021 write. Migration module names start with

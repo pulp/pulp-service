@@ -20,7 +20,6 @@ from pulp_service.app.constants import (
     ORG_GROUP_PREFIX,
     VPN_VERIFIED_HEADER_NAME,
 )
-from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
 
@@ -197,7 +196,7 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
         # below nests as a savepoint and a failure rolls the Domain back with it. When
         # the caller is in autocommit (generic DomainViewSet), the Domain row is already
         # committed on its own, so on failure we delete it to avoid leaving a domain
-        # without its RBAC/DomainOrg or default content guard state.
+        # without its RBAC roles or default content guard state.
         domain_committed_standalone = not connection.in_atomic_block
         try:
             with transaction.atomic():
@@ -206,35 +205,25 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                     # When the create request carried no identity.internal.org_id, org_id_var
                     # is None -- the calunga null-org_id shape that leaves the rh-org-<org_id>
                     # group role-less. Recover it from the creator's own rh-org membership so
-                    # the DomainOrg row and the rh-org role grant below still happen. `or`
-                    # (not an `if`) keeps this function under the branch-count lint ceiling.
+                    # the rh-org role grant below still happens. `or` (not an `if`) keeps this
+                    # function under the branch-count lint ceiling.
                     org_id = org_id or _derive_org_id_from_user(user)
                     # The creator always gets direct roles, even when the domain is group-scoped.
-                    # This diverges from migration 0019 (which assigns to user OR group per
-                    # DomainOrg row); on a rollback+re-migrate the creator would lose this
-                    # direct service.domain_admin. The creator keeps direct admin.
                     _assign_domain_roles(user, domain)
-                    group = explicit_group
-                    if explicit_group:
-                        do = DomainOrg.objects.create(org_id=org_id, group=explicit_group)
-                    # Skip the auto-assigned rh-org-<org_id> groups as the DomainOrg's group:
-                    # those are per-org and get their own role grant below (org_group). Only an
-                    # explicit "team" group should scope domain visibility to a group.
-                    # Query through the pulpcore Group proxy (not user.groups, which yields
-                    # base auth.Group instances) so assign_role classifies it as a Group.
-                    elif group := (Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first()):
-                        do = DomainOrg.objects.create(org_id=org_id, group=group)
-                    else:
-                        do = DomainOrg.objects.create(org_id=org_id, user=user)
-
+                    # An explicit "team" group scopes domain visibility to a group; otherwise fall
+                    # back to the user's first non-org group. Auto-assigned rh-org-<org_id> groups are
+                    # excluded -- they are per-org and get their own role grant below via org_group.
+                    # Query through the pulpcore Group proxy (not user.groups, which yields base
+                    # auth.Group instances) so assign_role classifies it as a Group.
+                    group = explicit_group or (
+                        Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first()
+                    )
                     if group is not None:
                         _assign_domain_roles(group, domain)
                     if org_id:
                         org_group, _ = Group.objects.get_or_create(name=f"{ORG_GROUP_PREFIX}{org_id}")
                         if org_group != group:
                             _assign_domain_roles(org_group, domain)
-
-                    do.domains.add(domain)
 
                 _provision_domain_content_guards(domain)
         except Exception:

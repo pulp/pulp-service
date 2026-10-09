@@ -11,6 +11,7 @@ from django.http import Http404
 from pulpcore.app.access_policy import AccessPolicyFromSettings
 
 from pulp_service.app.access_policy import PulpServiceAccessPolicy
+from pulp_service.exceptions import AuthenticationError
 
 
 def _rbac_user(**overrides):
@@ -252,6 +253,24 @@ class TestPyPIContentGuardDelegation:
         assert result is False
         casted_guard.permit.assert_called_once_with(request)
 
+    def test_content_guard_permit_authentication_error_denies(self, caplog):
+        policy = PulpServiceAccessPolicy()
+        request = SimpleNamespace(method="GET")
+
+        casted_guard = Mock()
+        casted_guard.permit.side_effect = AuthenticationError("Authentication required")
+
+        guard = Mock()
+        guard.cast.return_value = casted_guard
+
+        with caplog.at_level(logging.WARNING):
+            result = policy._evaluate_content_guard(guard, request, org_id=None, user=None)
+
+        assert result is False
+        casted_guard.permit.assert_called_once_with(request)
+        # AuthenticationError must be treated as a plain denial, not an unexpected error.
+        assert not any("unexpected error" in r.getMessage().lower() for r in caplog.records)
+
     def test_content_guard_permit_unexpected_error_denies_and_logs(self, caplog):
         policy = PulpServiceAccessPolicy()
         request = SimpleNamespace(method="GET")
@@ -269,11 +288,11 @@ class TestPyPIContentGuardDelegation:
         assert any("content guard" in r.getMessage().lower() for r in caplog.records)
 
     def test_domain_access_short_circuits_before_content_guard(self):
-        """DomainOrg access should grant access without evaluating the content guard."""
+        """A domain member (core.view_content) should be granted without evaluating the content guard."""
         from pulp_python.app.pypi.views import PyPIMixin
 
         policy = PulpServiceAccessPolicy()
-        user = SimpleNamespace(is_authenticated=True)
+        user = SimpleNamespace(is_authenticated=True, has_perm=Mock(return_value=True))
         request = SimpleNamespace(method="GET", user=user, META={})
         domain = SimpleNamespace(name="org-domain", pk=1)
 
@@ -281,10 +300,7 @@ class TestPyPIContentGuardDelegation:
         view.distribution = MagicMock()
         view.distribution.content_guard = MagicMock()
 
-        with (
-            patch.object(PulpServiceAccessPolicy, "_has_domain_access", return_value=True),
-            patch.object(policy, "_evaluate_content_guard") as mock_eval,
-        ):
+        with patch.object(policy, "_evaluate_content_guard") as mock_eval:
             result = policy._check_pypi_safe_method_access(request, view, domain)
 
         assert result is True
