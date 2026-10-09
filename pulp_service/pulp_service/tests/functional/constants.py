@@ -39,7 +39,7 @@ CONTENT_GUARD_FEATURES_NOT_SUBSCRIBED = ["rhods"]
 CONTENT_GUARD_FILTER = ".identity.org_id"
 
 # LIGHTWELL-NETWORK FEATURE CONSTANTS
-# Used to test the lightwell-network feature check enforced by DomainBasedPermission on the
+# Used to test the lightwell-network feature check enforced by PulpServiceAccessPolicy on the
 # "lightwell" domain's PyPI views. These are real staging Features Service accounts.
 LIGHTWELL_NETWORK_FEATURE = "lightwell-network"
 LIGHTWELL_ENTITLED_ORG_ID = "20434047"  # has the lightwell-network feature (entitlement expires 2027-08-30)

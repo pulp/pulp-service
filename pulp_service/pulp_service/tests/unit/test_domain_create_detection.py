@@ -3,7 +3,7 @@ Unit tests for PulpServiceAccessPolicy._is_domain_create().
 
 This predicate gates the bridge that populates the domain-create ContextVars for the
 generic pulpcore DomainViewSet endpoint (so post_create_domain assigns the owner
-DomainOrg row and RBAC roles). It must fire only for a POST to the generic
+RBAC roles). It must fire only for a POST to the generic
 ``domains-list`` route, never for reads or unrelated writes.
 """
 

@@ -305,8 +305,7 @@ class TestFeatureContentGuardFeatureServiceCall:
 
 
 class TestFeatureContentGuardCheckFeature:
-    """Unit tests for `check_feature()`, the caching entry point reused by `permit()` and by
-    `DomainBasedPermission` (for the lightwell-network feature check on PyPI views)."""
+    """Unit tests for `check_feature()`, the caching entry point reused by `permit()`."""
 
     @patch(_GET_SESSION)
     @patch.object(FeatureContentGuardCache, "set")

@@ -11,8 +11,8 @@ on a public-* domain, but ``scope_queryset`` filtered the repo out of the querys
 bypass, so the read resolves to 200.
 
 Only meaningful when ``PulpServiceAccessPolicy`` is the active permission class (the dev
-container enables RBAC). Under the reverted ``DomainBasedPermission`` default a public-* domain
-is readable anyway, so these tests pass trivially there too.
+container enables RBAC). Under the legacy pre-RBAC authorization a public-* domain
+was readable anyway, so these tests passed trivially there too.
 """
 
 import json

@@ -7,8 +7,8 @@ RBAC that org group must hold the domain roles, or the service account is scoped
 on reads, 400 on uploads).
 
 Only meaningful when ``PulpServiceAccessPolicy`` is the active permission class (the dev
-container enables RBAC). Under the ``DomainBasedPermission`` default a same-org member is
-granted by the org_id match anyway, so these pass there too. This guards the *forward*
+container enables RBAC). Under the legacy pre-RBAC authorization a same-org member was
+granted by the org_id match anyway, so these passed there too. This guards the *forward*
 create path (a self-service create carrying ``identity.internal.org_id`` grants
 ``rh-org-<org_id>`` its roles) so the regression is caught if that grant or its org_id
 capture breaks again. The historical broken-state repair is covered by migration
@@ -26,8 +26,8 @@ import requests
 
 def _identity_header(org_id, username):
     """An RH identity header carrying org_id (used for the username) and internal.org_id
-    (used by the auth mixin to auto-join ``rh-org-<org_id>`` and by DomainBasedPermission
-    to capture org_id at create time) -- the real service-account shape."""
+    (used by the auth mixin to auto-join ``rh-org-<org_id>`` and captured at domain-create
+    time for the org-group role grant) -- the real service-account shape."""
     identity = {
         "identity": {
             "org_id": org_id,
