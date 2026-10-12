@@ -29,7 +29,9 @@ fetch_definition() {
     git clone -q --depth 1 --branch "$AGENT_DEFINITION_REF" "$AGENT_DEFINITION_REPO" "$REPO_DIR"
   fi
 }
-current_commit() { git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null; }
+# The agent tracks its own subtree, not the monorepo: an unrelated merge to
+# main must not restart it.
+current_commit() { git -C "$REPO_DIR" rev-parse "HEAD:.buzz/agents/$AGENT_SLUG" 2>/dev/null; }
 
 install_definition() {
   [ -d "$DEF" ] || { echo "agent-entrypoint: no definition at .buzz/agents/$AGENT_SLUG"; return 1; }
@@ -70,7 +72,7 @@ publish_profile() {
 fetch_definition || { echo "agent-entrypoint: could not fetch $AGENT_DEFINITION_REPO@$AGENT_DEFINITION_REF"; exit 1; }
 install_definition || exit 1
 publish_profile
-echo "agent-entrypoint: $AGENT_SLUG on image $AGENT_REVISION, definition $AGENT_DEFINITION_COMMIT"
+echo "agent-entrypoint: $AGENT_SLUG on image $AGENT_REVISION, definition tree $AGENT_DEFINITION_COMMIT (repo $(git -C "$REPO_DIR" rev-parse --short HEAD))"
 
 signalled=0; child=""
 trap 'signalled=1; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null' TERM INT

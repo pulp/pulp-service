@@ -4,6 +4,7 @@
 display_name: Echo
 description: Canary agent for the Pulp team's Buzz agents on OpenShift
 owner: gm-rh
+owner_pubkey: 6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93   # the key that signed its auth tag
 parallelism: 1
 session_policy: isolated
 effort: low
