@@ -24,7 +24,7 @@ def out(k, v):
 out("AGENT_DISPLAY_NAME", d.get("display_name"))
 out("AGENT_ABOUT", d.get("description"))
 out("BUZZ_ACP_AGENTS", d.get("parallelism", 1))
-out("BUZZ_ACP_SESSION_POLICY", d.get("session_policy", "isolated"))
+out("BUZZ_ACP_SESSION_POLICY", d.get("session_policy", "thread"))
 out("BUZZ_ACP_EFFORT_LEVEL", d.get("effort", "medium"))
 out("BUZZ_ACP_RESPOND_TO", d.get("respond_to", "allowlist"))
 out("BUZZ_ACP_RESPOND_TO_ALLOWLIST", d.get("allowlist", []))
