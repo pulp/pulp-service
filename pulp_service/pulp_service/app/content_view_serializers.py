@@ -111,8 +111,10 @@ class ContentViewPackageSerializer(serializers.Serializer):
     """
     A lightweight representation of a Package for Content View search results.
 
-    Used by the ``packages/`` (typeahead) and ``packages/list/`` search endpoints. Instances
-    may originate from any domain the ContentView's Distributions span, so ``pulp_href``
+    Used by the ``packages/`` (typeahead) and ``packages/list/`` search endpoints, as well as
+    the ad-hoc ``rpm/content-search/packages`` endpoint (content_search_viewsets.py). Instances
+    may originate from any domain spanned by the ContentView's Distributions, or -- for the
+    ad-hoc endpoint -- by the caller-supplied ``repository_version`` hrefs, so ``pulp_href``
     resolves per-object using each Package's own domain.
     """
 
