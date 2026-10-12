@@ -30,7 +30,7 @@ parameters:
 - name: STATE_SIZE
   value: 5Gi
 - name: VERTEX_SECRET_NAME
-  value: alcove-vertex-ai
+  value: vertex-ai   # the namespace's own vault-secret for app-interface/pulp/stage/vertex-ai; Secrets are namespace scoped
 - name: VERTEX_SECRET_KEY
   value: service-account.json
 - name: VERTEX_PROJECT
@@ -42,6 +42,8 @@ parameters:
 - name: HTTPS_PROXY
   value: ""
 - name: NO_PROXY
+  # ROSA defaults for the pod and service networks; the SaaS target sets the
+  # cluster's real CIDRs and proxy URL.
   value: "localhost,127.0.0.1,.svc,.cluster.local,10.128.0.0/14,172.30.0.0/16"
 objects:
 - apiVersion: v1
@@ -129,6 +131,12 @@ objects:
           - name: HTTPS_PROXY
             value: ${HTTPS_PROXY}
           - name: NO_PROXY
+            value: ${NO_PROXY}
+          - name: http_proxy
+            value: ${HTTP_PROXY}
+          - name: https_proxy
+            value: ${HTTPS_PROXY}
+          - name: no_proxy
             value: ${NO_PROXY}
           - name: DISABLE_TELEMETRY
             value: "1"
