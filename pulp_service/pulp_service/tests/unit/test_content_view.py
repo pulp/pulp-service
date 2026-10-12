@@ -8,12 +8,15 @@ style used by test_domain_based_permission.py.
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from pulpcore.app.models import RepositoryVersion
+
 from pulp_service.app.content_view_util import (
     STATUS_NO_DOMAIN_ACCESS,
     STATUS_NO_VERSION,
     STATUS_OK,
     group_versions_by_domain,
     resolve_content_view_distributions,
+    resolve_repository_versions,
     scatter_gather,
     user_can_view_domain,
 )
@@ -132,6 +135,60 @@ class TestResolveContentViewDistributions:
         assert resolutions[0].status == STATUS_OK
         assert resolutions[0].repository_version is version
         assert resolutions[0].domain is domain
+
+
+def _make_version(domain):
+    version = MagicMock()
+    version.repository.pulp_domain = domain
+    return version
+
+
+class TestResolveRepositoryVersions:
+    @patch("pulp_service.app.content_view_util.user_can_view_domain")
+    @patch("pulp_service.app.content_view_util.NamedModelViewSet.get_resource")
+    def test_resolves_ok_when_accessible(self, mock_get_resource, mock_can_view):
+        domain = _make_domain("my-domain")
+        version = _make_version(domain)
+        mock_get_resource.return_value = version
+        mock_can_view.return_value = True
+
+        resolutions = resolve_repository_versions(["/pulp/my-domain/api/v3/.../"], _make_user())
+
+        assert len(resolutions) == 1
+        assert resolutions[0].status == STATUS_OK
+        assert resolutions[0].repository_version is version
+        assert resolutions[0].domain is domain
+
+    @patch("pulp_service.app.content_view_util.user_can_view_domain")
+    @patch("pulp_service.app.content_view_util.NamedModelViewSet.get_resource")
+    def test_excludes_domain_without_access(self, mock_get_resource, mock_can_view):
+        domain = _make_domain("other-domain")
+        mock_get_resource.return_value = _make_version(domain)
+        mock_can_view.return_value = False
+
+        resolutions = resolve_repository_versions(["/pulp/other-domain/api/v3/.../"], _make_user())
+
+        assert resolutions[0].status == STATUS_NO_DOMAIN_ACCESS
+        assert resolutions[0].repository_version is None
+        assert resolutions[0].domain is domain
+
+    @patch("pulp_service.app.content_view_util.user_can_view_domain")
+    @patch("pulp_service.app.content_view_util.NamedModelViewSet.get_resource")
+    def test_resolves_each_href_independently(self, mock_get_resource, mock_can_view):
+        domain_a = _make_domain("a")
+        domain_b = _make_domain("b")
+        version_a = _make_version(domain_a)
+        version_b = _make_version(domain_b)
+        mock_get_resource.side_effect = [version_a, version_b]
+        mock_can_view.side_effect = [True, False]
+
+        resolutions = resolve_repository_versions(["href-a", "href-b"], _make_user())
+
+        assert [r.status for r in resolutions] == [STATUS_OK, STATUS_NO_DOMAIN_ACCESS]
+        assert resolutions[0].repository_version is version_a
+        assert resolutions[1].repository_version is None
+        mock_get_resource.assert_any_call("href-a", RepositoryVersion)
+        mock_get_resource.assert_any_call("href-b", RepositoryVersion)
 
 
 class TestGroupVersionsByDomain:

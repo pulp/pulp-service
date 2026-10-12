@@ -49,6 +49,10 @@ KNOWN_ERRATA_SEVERITIES = {"critical", "important", "moderate", "low", "none"}
 ERRATA_SORT_FIELDS = {"id", "updated_date", "issued_date", "severity", "type", "title"}
 MODULE_STREAM_SORT_FIELDS = {"name", "stream", "version", "context", "arch"}
 MODULE_STREAMS_HARD_CAP = 5000
+# scatter_gather over-fetches each domain to `limit + offset` rows before slicing in Python, so an
+# unbounded offset lets a caller force per-domain queries (and the merge step) to materialize an
+# arbitrarily large row set. Cap it to keep that worst case bounded.
+MAX_OFFSET = 10000
 
 SEARCH_PARAMETER = OpenApiParameter(
     name="search",
@@ -456,7 +460,7 @@ class RpmContentViewErrataViewSet(ContentViewSearchViewSet):
         types = _list_param(request, "type")
         severities = _list_param(request, "severity")
         limit = _int_param(request, "limit", default=100, minimum=1, maximum=1000)
-        offset = _int_param(request, "offset", default=0, minimum=0)
+        offset = _int_param(request, "offset", default=0, minimum=0, maximum=MAX_OFFSET)
 
         sort_by = request.query_params.get("sort_by", "id")
         descending = sort_by.startswith("-")
@@ -540,6 +544,40 @@ class RpmContentViewModuleStreamsViewSet(ContentViewSearchViewSet):
         return Response({"results": serializer.data})
 
 
+def paginated_package_search(request, versions_by_domain):
+    """
+    Exact-name-filtered, NEVRA-sorted, paginated Package search across ``versions_by_domain``.
+
+    Shared by the ContentView-backed ``search/rpm/packages/list`` endpoint and the ad-hoc
+    ``rpm/content-search/packages`` endpoint (content_search_viewsets.py) -- the query logic is
+    identical, only how ``versions_by_domain`` gets resolved differs between the two.
+
+    Returns:
+        tuple: ``(page, total, limit, offset)``, ready for ``paginated_response``.
+    """
+    name = request.query_params.get("name", "")
+    limit = _int_param(request, "limit", default=100, minimum=1, maximum=1000)
+    offset = _int_param(request, "offset", default=0, minimum=0, maximum=MAX_OFFSET)
+
+    def build_queryset(versions):
+        qs = content_for_versions(Package, versions)
+        if name:
+            qs = qs.filter(name=name)
+        # pulp_id breaks ties between packages with identical NEVRA (e.g. the same package
+        # present in more than one of the searched domains), giving a stable order across pages
+        # regardless of which domain's rows reach the merge step first.
+        return qs.order_by("name", "version", "release", "arch", "pulp_id")
+
+    page, total = scatter_gather(
+        versions_by_domain,
+        build_queryset,
+        order_by=("name", "version", "release", "arch", "pulp_id"),
+        limit=limit,
+        offset=offset,
+    )
+    return page, total, limit, offset
+
+
 @extend_schema_view(
     list=extend_schema(
         parameters=[
@@ -562,22 +600,6 @@ class RpmContentViewPackageListViewSet(ContentViewSearchViewSet):
 
     def list(self, request, *args, **kwargs):
         versions_by_domain = self._versions_by_domain()
-        name = request.query_params.get("name", "")
-        limit = _int_param(request, "limit", default=100, minimum=1, maximum=1000)
-        offset = _int_param(request, "offset", default=0, minimum=0)
-
-        def build_queryset(versions):
-            qs = content_for_versions(Package, versions)
-            if name:
-                qs = qs.filter(name=name)
-            return qs.order_by("name", "version", "release", "arch")
-
-        page, total = scatter_gather(
-            versions_by_domain,
-            build_queryset,
-            order_by=("name", "version", "release", "arch"),
-            limit=limit,
-            offset=offset,
-        )
+        page, total, limit, offset = paginated_package_search(request, versions_by_domain)
         serializer = self.get_serializer(page, many=True)
         return paginated_response(request, serializer.data, total, limit, offset)

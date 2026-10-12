@@ -24,8 +24,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from pulpcore.app.contexts import with_domain
+from pulpcore.app.models import RepositoryVersion
+from pulpcore.plugin.viewsets import NamedModelViewSet
 
-# Distribution resolution statuses.
+# Distribution/repository-version resolution statuses.
 STATUS_OK = "ok"
 STATUS_NO_DOMAIN_ACCESS = "no_domain_access"
 STATUS_NO_VERSION = "no_version"
@@ -92,16 +94,65 @@ def resolve_content_view_distributions(content_view, user):
     return resolutions
 
 
+@dataclass
+class RepositoryVersionResolution:
+    """The result of resolving a single repository-version href/PRN passed directly in a request."""
+
+    href: str
+    domain: Any
+    repository_version: Any | None
+    status: str
+
+
+def resolve_repository_versions(hrefs, user):
+    """
+    Resolve repository-version hrefs/PRNs -- potentially spanning multiple domains -- supplied
+    directly in a request, enforcing per-domain read access. Never raises for an access problem:
+    a well-formed href pointing at a domain the user can't read resolves with
+    STATUS_NO_DOMAIN_ACCESS instead, so it's silently excluded from results the same way an
+    inaccessible ContentView Distribution is (see resolve_content_view_distributions).
+
+    This is the ad-hoc counterpart to resolve_content_view_distributions: instead of starting
+    from a persisted ContentView's Distributions, it starts directly from hrefs supplied in the
+    request, letting callers (e.g. image-builder) search across repository versions in their own
+    domain and any shared domain (redhat, community, ...) without first provisioning a
+    ContentView.
+
+    Args:
+        hrefs (list[str]): Repository-version hrefs or PRNs.
+        user: The requesting user, used for the per-domain accessibility check.
+
+    Returns:
+        list[RepositoryVersionResolution]
+
+    Raises:
+        rest_framework.exceptions.ValidationError: if an href is malformed or doesn't resolve to
+            any repository version (via NamedModelViewSet.get_resource) -- a client error, unlike
+            the silently-excluded no-domain-access case.
+    """
+    resolutions = []
+    for href in hrefs:
+        version = NamedModelViewSet.get_resource(href, RepositoryVersion)
+        domain = version.repository.pulp_domain
+        if not user_can_view_domain(user, domain):
+            resolutions.append(RepositoryVersionResolution(href, domain, None, STATUS_NO_DOMAIN_ACCESS))
+        else:
+            resolutions.append(RepositoryVersionResolution(href, domain, version, STATUS_OK))
+    return resolutions
+
+
 def group_versions_by_domain(resolutions):
     """
     Group the RepositoryVersions of "ok" resolutions by domain.
 
     This is the input scatter_gather (or a lighter Python-side merge) consumes -- lost-access
     and stale/deleted distributions (any non-"ok" status) are already excluded here, satisfying
-    the "search silently excludes inaccessible distributions" requirement.
+    the "search silently excludes inaccessible distributions" requirement. Works equally on
+    DistributionResolution or RepositoryVersionResolution lists (or any mix), since it only reads
+    the status/domain/repository_version attributes common to both.
 
     Args:
-        resolutions (list[DistributionResolution]):
+        resolutions (list[DistributionResolution | RepositoryVersionResolution]):
 
     Returns:
         dict: Domain -> list[RepositoryVersion]
