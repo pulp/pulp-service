@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Starts buzz-acp for one always on agent on OpenShift.
+# The definition comes from git (AGENT_DEFINITION_REPO at AGENT_DEFINITION_REF,
+# folder .buzz/agents/$AGENT_SLUG); a watcher re-fetches every five minutes and
+# restarts buzz-acp when the commit changes. Secrets are mounted files under
+# /run/secrets and are never printed.
+set -uo pipefail
+: "${AGENT_SLUG:?}" "${AGENT_DEFINITION_REPO:?}" "${AGENT_DEFINITION_REF:=main}" "${AGENT_REVISION:?}"
+STATE=${AGENT_STATE_DIR:-/state}
+export CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-$STATE/claude}
+export AGENT_WORKDIR=${AGENT_WORKDIR:-$STATE/work}
+export HOME=${HOME:-/home/agent}
+REPO_DIR=$STATE/definition
+DEF=$REPO_DIR/.buzz/agents/$AGENT_SLUG
+ACP=${BUZZ_ACP_BIN:-buzz-acp}
+WATCH_SECONDS=${AGENT_DEFINITION_WATCH_SECONDS:-300}
+mkdir -p "$CLAUDE_CONFIG_DIR" "$AGENT_WORKDIR" "$STATE"
+
+# Keys from the mounted Vault secret; absent means do not start.
+SEC=${AGENT_SECRET_DIR:-/run/secrets/agent}
+if [ -s "$SEC/nsec" ]; then export BUZZ_PRIVATE_KEY="$(cat "$SEC/nsec")"; else echo "agent-entrypoint: $SEC/nsec missing"; exit 1; fi
+if [ -s "$SEC/auth-tag" ]; then export BUZZ_AUTH_TAG="$(cat "$SEC/auth-tag")"; fi
+
+fetch_definition() {
+  if [ -d "$REPO_DIR/.git" ]; then
+    git -C "$REPO_DIR" fetch -q --depth 1 origin "$AGENT_DEFINITION_REF" && git -C "$REPO_DIR" reset -q --hard FETCH_HEAD
+  else
+    rm -rf "$REPO_DIR"
+    git clone -q --depth 1 --branch "$AGENT_DEFINITION_REF" "$AGENT_DEFINITION_REPO" "$REPO_DIR"
+  fi
+}
+current_commit() { git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null; }
+
+install_definition() {
+  [ -d "$DEF" ] || { echo "agent-entrypoint: no definition at .buzz/agents/$AGENT_SLUG"; return 1; }
+  # The definition is the whole truth: nothing from an earlier revision lingers.
+  rm -rf "$CLAUDE_CONFIG_DIR/skills" "$CLAUDE_CONFIG_DIR/CLAUDE.md"
+  [ -f "$DEF/CLAUDE.md" ] && cp "$DEF/CLAUDE.md" "$CLAUDE_CONFIG_DIR/CLAUDE.md"
+  [ -d "$DEF/skills" ] && cp -R "$DEF/skills" "$CLAUDE_CONFIG_DIR/skills"
+  local cj="$CLAUDE_CONFIG_DIR/.claude.json"
+  [ -s "$cj" ] || echo '{"hasCompletedOnboarding":true}' > "$cj"
+  local mcp="$DEF/mcp.json"; [ -f "$mcp" ] || mcp=<(echo '{"mcpServers":{}}')
+  jq -s '.[0] + {mcpServers: .[1].mcpServers}' "$cj" "$mcp" > "$cj.tmp" && mv "$cj.tmp" "$cj"
+  eval "$(definition-env "$DEF/agent.yaml")"
+  export BUZZ_ACP_SYSTEM_PROMPT_FILE="$DEF/charter.md"
+  export BUZZ_ACP_AGENT_COMMAND=${BUZZ_ACP_AGENT_COMMAND:-claude-agent-acp}
+  export BUZZ_ACP_AGENT_ARGS=${BUZZ_ACP_AGENT_ARGS:-}
+  export BUZZ_ACP_EXIT_AFTER_INACTIVITY=${BUZZ_ACP_EXIT_AFTER_INACTIVITY:-0}
+  export BUZZ_ACP_CONTEXT_MESSAGE_LIMIT=${BUZZ_ACP_CONTEXT_MESSAGE_LIMIT:-100}
+  export BUZZ_GIT_IDENTITY=user
+  git config --global user.name "${AGENT_DISPLAY_NAME:-$AGENT_SLUG} (AI agent)"
+  git config --global user.email "${AGENT_GIT_EMAIL:-$AGENT_SLUG@agents.pulpproject.org}"
+  export AGENT_DEFINITION_COMMIT="$(current_commit)"
+}
+
+# Publish the profile with the owner tag so a new or rotated identity shows by
+# name; without a tag nothing is published (an untagged kind:0 would replace
+# the tagged one and Desktop would stop trusting the agent).
+publish_profile() {
+  [ -n "${BUZZ_AUTH_TAG:-}" ] || { echo "agent-entrypoint: no owner tag; profile not published"; return 0; }
+  local cur avatar args
+  cur=$(timeout 20 buzz users get 2>/dev/null) || cur=""
+  avatar=$(printf '%s' "$cur" | jq -r '.[0] | .picture // .avatar // empty' 2>/dev/null)
+  args=(users set-profile --name "$AGENT_DISPLAY_NAME")
+  [ -n "${AGENT_ABOUT:-}" ] && args+=(--about "$AGENT_ABOUT")
+  [ -n "$avatar" ] && args+=(--avatar "$avatar")
+  timeout 20 buzz "${args[@]}" >/dev/null 2>&1 && echo "agent-entrypoint: profile published as $AGENT_DISPLAY_NAME" || echo "agent-entrypoint: profile not published; carrying on"
+}
+
+fetch_definition || { echo "agent-entrypoint: could not fetch $AGENT_DEFINITION_REPO@$AGENT_DEFINITION_REF"; exit 1; }
+install_definition || exit 1
+publish_profile
+echo "agent-entrypoint: $AGENT_SLUG on image $AGENT_REVISION, definition $AGENT_DEFINITION_COMMIT"
+
+signalled=0; child=""
+trap 'signalled=1; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null' TERM INT
+cd "$AGENT_WORKDIR"
+while :; do
+  "$ACP" & child=$!
+  [ $signalled -eq 1 ] && kill -TERM "$child" 2>/dev/null
+  # Watch the definition while buzz-acp runs. A changed commit ends this
+  # round: buzz-acp gets SIGTERM (it finishes in flight turns), then restarts
+  # on the new definition. The pod itself never restarts for a definition change.
+  restart=0
+  while kill -0 "$child" 2>/dev/null; do
+    sleep "$WATCH_SECONDS" & wait $! 2>/dev/null
+    [ $signalled -eq 1 ] && break
+    kill -0 "$child" 2>/dev/null || break
+    before=$(current_commit)
+    fetch_definition || continue
+    if [ "$(current_commit)" != "$before" ]; then
+      echo "agent-entrypoint: definition changed $before -> $(current_commit); restarting buzz-acp"
+      restart=1; kill -TERM "$child" 2>/dev/null; break
+    fi
+  done
+  wait "$child"; rc=$?
+  [ $signalled -eq 1 ] && exit 0
+  if [ $restart -eq 1 ]; then install_definition || exit 1; publish_profile; continue; fi
+  echo "agent-entrypoint: buzz-acp exited $rc"; exit $rc
+done

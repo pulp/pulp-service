@@ -1,0 +1,17 @@
+# The canary. Proves the OpenShift path (image, secrets from Vault, relay,
+# definition pulled from git) before a real agent is moved. Keys never live
+# here: nsec and auth-tag come from Vault as the Secret agent-echo.
+display_name: Echo
+description: Canary agent for the Pulp team's Buzz agents on OpenShift
+owner: gm-rh
+parallelism: 1
+session_policy: isolated
+effort: low
+relay: wss://buzz-rh.bouterse.casa
+respond_to: allowlist
+allowlist:
+  - 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian
+  - e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4   # Brian's Claude
+  - 6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93   # gm-rh
+  - 6a14bf7b3d7259f77e5b40a4817a084b11002f54e585eda431c4befa5d150c0d   # cos-rh
+channels: []   # cos-rh adds it to its #bench on the relay; nothing is joined from here

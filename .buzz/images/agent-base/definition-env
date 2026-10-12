@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Print the buzz-acp environment for one agent definition as shell exports.
+
+Reads .buzz/agents/<slug>/agent.yaml and emits the BUZZ_ACP_* and AGENT_*
+variables the entrypoint exports before starting buzz-acp. Keys and tags are
+never here; they come from the mounted Vault secret.
+"""
+import shlex
+import sys
+
+import yaml
+
+path, = sys.argv[1:]
+with open(path) as f:
+    d = yaml.safe_load(f) or {}
+
+def out(k, v):
+    if v is None or v == "":
+        return
+    if isinstance(v, (list, tuple)):
+        v = ",".join(str(x) for x in v)
+    print(f"export {k}={shlex.quote(str(v))}")
+
+out("AGENT_DISPLAY_NAME", d.get("display_name"))
+out("AGENT_ABOUT", d.get("description"))
+out("BUZZ_ACP_AGENTS", d.get("parallelism", 1))
+out("BUZZ_ACP_SESSION_POLICY", d.get("session_policy", "isolated"))
+out("BUZZ_ACP_EFFORT_LEVEL", d.get("effort", "medium"))
+out("BUZZ_ACP_RESPOND_TO", d.get("respond_to", "allowlist"))
+out("BUZZ_ACP_ALLOWED_RESPOND_TO", d.get("respond_to", "allowlist"))
+out("BUZZ_ACP_RESPOND_TO_ALLOWLIST", d.get("allowlist", []))
+out("BUZZ_ACP_CHANNELS", d.get("channels", []))
+out("BUZZ_ACP_MODEL", d.get("model"))
+out("BUZZ_RELAY_URL", d.get("relay"))

@@ -1,0 +1,14 @@
+# .buzz: always on Buzz agents for the Pulp team
+
+This tree defines the long lived agents that talk on the Red Hat Buzz relay and run as pods on OpenShift (`hcmais01ue1`, namespace `pulp-agents-stage`), beside the Pulp team's Alcove deployment. It is the counterpart of `.alcove/`: Alcove runs short lived task agents from `.alcove/agents/`; this tree runs agents that stay up for weeks, hold a Buzz identity and answer people in channels.
+
+How it fits together:
+
+- **`agents/<slug>/`** is an agent's definition: `agent.yaml` (display name, who it answers, channels, parallelism, model) and `charter.md` (its instructions), plus optional `skills/`, `files/` and `mcp.json`. The pod clones this repository at start, reads its own folder, and a watcher in the pod re-reads it every five minutes and restarts the agent process when the commit changes. **Editing a definition and pushing to `main` is the deploy.** No image build, no app-interface merge request.
+- **`images/agent-base/`** is the one container image every agent runs: Claude Code, `buzz`, `buzz-acp` and the entrypoint. Built by `.github/workflows/build-buzz-agent-base.yml` on a `buzz-agent-base-v*` tag and pushed to `ghcr.io/pulp/buzz-agent-base`. An agent that needs extra tools gets its own `images/agent-<slug>/` that starts `FROM` the base.
+- **`deploy/buzz-agents.yaml`** (repository root) is the OpenShift template that app-interface's SaaS file `deploy-buzz-agents.yml` renders once per agent: one Deployment, one PersistentVolumeClaim, one Service. Its parameters are the image tag, the agent slug, this repository and ref, the resource profile, and the cluster's proxy settings. Adding an agent to the cluster is one target in that SaaS file (one merge request); everything after that is a push here.
+- **Secrets** never live in this repository. Each agent's Buzz key and owner tag come from Red Hat's Vault (`app-interface/pulp/stage/agents/<slug>`, mounted as the Kubernetes Secret `agent-<slug>`), and the shared Vertex service account from `app-interface/pulp/stage/vertex-ai`. app-interface's `qontract.recycle` restarts the pod when a value changes.
+
+Who changes what: the Red Hat chief of staff agent (`cos-rh`) authors and reviews definitions here by push and pull request; the Red Hat general manager agent (`gm-rh`) owns the image, the template and the app-interface merge requests; people approve. The full design, including the change table and the open points, is in the RH platform repository (`docs/openshift-always-on-agents.md`).
+
+Canary: `agents/echo/` is a deliberately tiny agent used to prove a cluster path end to end. It answers only its owner and only in its bench channel.
