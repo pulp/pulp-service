@@ -16,7 +16,7 @@ Yank monitors are **not scoped to a Pulp domain**. Although you access the API t
 
 Before proceeding, ensure that you have:
 
-1. **Domain access** — Your organization must be a member of the domain where the monitored repositories reside. Access is granted through DomainOrg membership.
+1. **Domain access** — Your organization must be a member of the domain where the monitored repositories reside. Access is granted through your RBAC roles on the domain.
 2. **A Python repository** in your Pulp domain with content to monitor.
 3. **API credentials** configured. See the [API access guide](https://gitlab.cee.redhat.com/hosted-pulp/pulp-docs/-/blob/main/api-access.md) for authentication options.
 
@@ -167,4 +167,4 @@ All endpoints use the base path `/api/pulp/{domain}/api/v3/`.
 | `pypi_yank_monitor/{id}/check/` | `POST` | Trigger an on-demand yank check (returns 202 with task) |
 | `pypi_yank_monitor/{id}/report/` | `GET` | Retrieve the latest yank report (returns 404 if no report exists) |
 
-All endpoints require **DomainOrg membership** for the target domain.
+Listing monitors (`GET pypi_yank_monitor/`) is available to any authenticated user. All other endpoints (create, retrieve, delete, check, report) require **an RBAC role on the target domain**.

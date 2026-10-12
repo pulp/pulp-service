@@ -5,7 +5,6 @@ from binascii import Error as Base64DecodeError
 
 import jq
 from django.conf import settings
-from django.db.models import Q
 from django.http import Http404
 from rest_framework.permissions import SAFE_METHODS
 
@@ -15,7 +14,6 @@ from pulpcore.plugin.util import get_domain_pk
 
 from pulp_service.app.authorization import set_domain_create_context
 from pulp_service.app.features_service import check_subscription
-from pulp_service.app.models import DomainOrg
 
 _logger = logging.getLogger(__name__)
 _org_id_json_path = jq.compile(".identity.internal.org_id")
@@ -68,10 +66,9 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
                 return True
 
         # Generic pulpcore DomainViewSet create (POST domains-list): populate the ContextVars the
-        # post_create_domain signal (signals.py) consumes for the DomainOrg/RBAC dual-write.
-        # CreateDomainView sets these itself; the generic endpoint used to get them from the
-        # DomainBasedPermission default, which no longer exists. Without this, a domain created
-        # here gets no DomainOrg row and no owner roles, so it is invisible to its own org under
+        # post_create_domain signal (signals.py) consumes to assign the RBAC domain roles.
+        # CreateDomainView sets these itself; the generic endpoint needs them set here too. Without
+        # this, a domain created here gets no owner roles, so it is invisible to its own org under
         # RBAC. set_domain_create_context overwrites both vars unconditionally, so a create that
         # is denied below cannot leak this request's principal into the next create.
         if self._is_domain_create(request):
@@ -199,13 +196,16 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
             return True
 
         user = request.user
-        domain_pk = domain.pk if domain is not None else get_domain_pk()
-        decoded_header = self._get_decoded_identity_header(request)
-        org_id = self._get_org_id(decoded_header)
+        org_id = self._get_org_id(self._get_decoded_identity_header(request))
 
-        if user.is_authenticated and self._has_domain_access(domain_pk, org_id, user):
+        # Domain owners (creator / team group / org group) bypass the content guard for SAFE reads,
+        # mirroring the owner roles domain creation grants them. core.change_domain on the domain is
+        # held by core.domain_owner / service.domain_admin but not by the view-only roles
+        # (core.domain_viewer / service.domain_viewer), so read-only members do not bypass the guard.
+        check_domain = domain or Domain.objects.filter(pk=get_domain_pk()).first()
+        if user.is_authenticated and check_domain is not None and user.has_perm("core.change_domain", obj=check_domain):
             _logger.info(
-                "Content-guarded PyPI access GRANTED via DomainOrg: user=%s org_id=%s",
+                "Content-guarded PyPI access GRANTED via domain role: user=%s org_id=%s",
                 user,
                 org_id,
             )
@@ -238,19 +238,6 @@ class PulpServiceAccessPolicy(AccessPolicyFromSettings):
         except Exception:
             _logger.exception("Unexpected error evaluating content guard permit")
             return False
-
-    @staticmethod
-    def _has_domain_access(domain_pk, org_id, user):
-        query = Q(domains__pk=domain_pk, user=user)
-
-        group_pks = list(user.groups.values_list("pk", flat=True))
-        if group_pks:
-            query |= Q(domains__pk=domain_pk, group_id__in=group_pks)
-
-        if org_id is not None:
-            query |= Q(domains__pk=domain_pk, org_id=org_id)
-
-        return DomainOrg.objects.filter(query).exists()
 
     @staticmethod
     def _get_decoded_identity_header(request):

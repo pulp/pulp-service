@@ -34,11 +34,11 @@ import pytest
 import requests
 from django.conf import settings
 
-# An org with no DomainOrg association with the test domain and no lightwell-network
+# An org with no role on the test domain and no lightwell-network
 # feature entitlement; only used to own the test domain/repo/distribution.
 DOMAIN_OWNER_ORG_ID = "555555555"
 # A distinct org used for the group members created in these tests, so they never
-# accidentally collide with the domain owner's DomainOrg association.
+# accidentally collide with the domain owner's domain role.
 GROUP_MEMBER_ORG_ID = "666666666"
 # See DOMAIN_ACCESS_POLICIES in settings.py
 LIGHTWELL_DOMAIN_NAME = "lightwell"
@@ -87,7 +87,7 @@ def configure_lightwell_domain(
     read-only group), with a File repository and a PyPI-distributed Python repository.
 
     Under RBAC the read-only group grants access via RBAC roles rather than a
-    DomainBasedPermission special case: this fixture assigns the group the same roles
+    legacy permission special case: this fixture assigns the group the same roles
     migration 0019 grants it on the lightwell domain -- object-level core.domain_viewer
     (so the domain is visible in listings) and domain-scoped service.domain_viewer (so
     members can read content inside the domain). Real deployments get these at migrate
@@ -194,7 +194,7 @@ def gen_readonly_group_member(pulpcore_bindings, gen_object_with_cleanup, lightw
 
 
 def test_readonly_group_member_can_read_lightwell_repositories(configure_lightwell_domain, gen_readonly_group_member):
-    """A user with no DomainOrg association, whose only access path is the read-only group's
+    """A user with no role on the domain, whose only access path is the read-only group's
     RBAC roles on the lightwell domain, can list repositories in the lightwell domain and
     actually sees them (the domain-scoped service.domain_viewer role scopes them in)."""
     repos_url, _, _ = configure_lightwell_domain
@@ -209,7 +209,7 @@ def test_readonly_group_member_can_read_lightwell_repositories(configure_lightwe
 def test_non_member_denied_reading_lightwell_repositories(
     configure_lightwell_domain, gen_object_with_cleanup, pulpcore_bindings
 ):
-    """A user with no DomainOrg association and no read-only group membership has no RBAC
+    """A user with no role on the domain and no read-only group membership has no RBAC
     role granting content access. Under the RBAC default the request is not denied outright;
     it returns 200 with an empty, scoped list (no repositories leak)."""
     repos_url, _, _ = configure_lightwell_domain
@@ -237,7 +237,7 @@ def test_readonly_group_member_write_denied(configure_lightwell_domain, gen_read
 
 def test_readonly_group_member_pypi_still_requires_feature(configure_lightwell_domain, gen_readonly_group_member):
     """Read-only group membership does not bypass the lightwell-network feature check on
-    PyPI views -- a member with no feature entitlement and no DomainOrg association still
+    PyPI views -- a member with no feature entitlement and no role on the domain still
     gets 403 on the PyPI simple API."""
     _, pypi_url, _ = configure_lightwell_domain
     headers = {"x-rh-identity": gen_readonly_group_member("pypi")}

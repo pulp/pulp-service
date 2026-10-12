@@ -10,37 +10,13 @@ from django.contrib.postgres.fields import ArrayField, HStoreField
 from django.db import models
 
 from pulpcore.app.models import HeaderContentGuard
-from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel, Domain, Group
+from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel
 from pulpcore.plugin.util import get_domain_pk
 
 from pulp_service.app.content_view_models import ContentView, ContentViewSearchScope  # noqa: F401
 from pulp_service.app.features_service import check_subscription
 
 _logger = logging.getLogger(__name__)
-
-
-class DomainOrg(models.Model):
-    """
-    One-to-many relationship between org ids and Domains.
-    """
-
-    org_id = models.CharField(null=True, db_index=True)  # noqa: DJ001 — NULL semantics needed for org lookup
-    domains = models.ManyToManyField(Domain, related_name="domain_orgs")
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        related_name="users",
-        on_delete=models.SET_NULL,
-        null=True,
-    )
-    group = models.ForeignKey(
-        Group,
-        related_name="domain_orgs",
-        on_delete=models.SET_NULL,
-        null=True,
-    )
-
-    def __str__(self):
-        return f"DomainOrg(org_id={self.org_id})"
 
 
 class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):

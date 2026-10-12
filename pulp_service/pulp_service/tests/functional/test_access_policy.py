@@ -269,11 +269,11 @@ class TestPyPIContentGuardDelegation:
         assert any("content guard" in r.getMessage().lower() for r in caplog.records)
 
     def test_domain_access_short_circuits_before_content_guard(self):
-        """DomainOrg access should grant access without evaluating the content guard."""
+        """A domain member (core.view_content) should be granted without evaluating the content guard."""
         from pulp_python.app.pypi.views import PyPIMixin
 
         policy = PulpServiceAccessPolicy()
-        user = SimpleNamespace(is_authenticated=True)
+        user = SimpleNamespace(is_authenticated=True, has_perm=Mock(return_value=True))
         request = SimpleNamespace(method="GET", user=user, META={})
         domain = SimpleNamespace(name="org-domain", pk=1)
 
@@ -281,10 +281,7 @@ class TestPyPIContentGuardDelegation:
         view.distribution = MagicMock()
         view.distribution.content_guard = MagicMock()
 
-        with (
-            patch.object(PulpServiceAccessPolicy, "_has_domain_access", return_value=True),
-            patch.object(policy, "_evaluate_content_guard") as mock_eval,
-        ):
+        with patch.object(policy, "_evaluate_content_guard") as mock_eval:
             result = policy._check_pypi_safe_method_access(request, view, domain)
 
         assert result is True
