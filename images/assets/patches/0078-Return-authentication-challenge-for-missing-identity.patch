@@ -13,12 +13,18 @@ diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publicatio
          if not self.guards.all():
              # No guards specified? PASS
              return
-@@ -586,7 +587,9 @@
+@@ -586,7 +587,14 @@
                  detail_guard.permit(request)
                  return  # success on first-pass
-             except PermissionError as pe:
-+                if isinstance(pe, AuthenticationError) and authentication_error is None:
+-            except PermissionError as pe:
++            except AuthenticationError as pe:
++                if authentication_error is None:
 +                    authentication_error = pe
++                guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
++                    detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
++                )
++                errors.append(guard_error)
++            except PermissionError as pe:
                  guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
                      detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
                  )

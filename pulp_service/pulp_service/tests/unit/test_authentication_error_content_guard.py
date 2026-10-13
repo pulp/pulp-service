@@ -1,3 +1,5 @@
+import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,6 +9,8 @@ from asgiref.sync import async_to_sync
 from pulpcore.app.models import CompositeContentGuard
 from pulpcore.content.handler import Handler
 
+from pulp_service.app.access_policy import PulpServiceAccessPolicy
+from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.exceptions import AuthenticationError
 
 
@@ -32,6 +36,9 @@ def _distribution(detail_guard):
 
 
 class TestCompositeContentGuardAuthentication:
+    def test_authentication_error_is_not_authorization_error(self):
+        assert not issubclass(AuthenticationError, PermissionError)
+
     def test_authentication_error_does_not_short_circuit_a_later_success(self, monkeypatch):
         authentication_guard = _detail_guard(
             "identity",
@@ -134,3 +141,46 @@ class TestHandlerAuthentication:
             async_to_sync(Handler.auth_cached)(request, cached, "base")
 
         assert cached.writes == []
+
+
+class TestPermissionPolicyAuthentication:
+    def test_access_policy_treats_authentication_error_as_denial(self, caplog):
+        policy = PulpServiceAccessPolicy()
+        guard = MagicMock()
+        guard.cast.return_value.permit.side_effect = AuthenticationError("Authentication required.")
+
+        with caplog.at_level(logging.WARNING):
+            result = policy._evaluate_content_guard(guard, MagicMock(), org_id=None, user=None)
+
+        assert result is False
+        assert not any(
+            "unexpected error evaluating content guard" in record.getMessage().lower() for record in caplog.records
+        )
+
+    def test_domain_based_permission_treats_authentication_error_as_denial(self, caplog):
+        from pulp_python.app.pypi.views import PyPIMixin
+
+        permission = DomainBasedPermission()
+        request = SimpleNamespace(
+            method="GET",
+            user=SimpleNamespace(is_authenticated=True),
+            META={},
+        )
+        domain = SimpleNamespace(pk=1, name="lightwell")
+        view = MagicMock(spec=PyPIMixin)
+        view.distribution.content_guard.cast.return_value.permit.side_effect = AuthenticationError(
+            "Authentication required."
+        )
+
+        with (
+            patch.object(permission, "_has_domain_access", return_value=False),
+            patch.object(permission, "get_decoded_identity_header", return_value=None),
+            patch.object(permission, "get_org_id", return_value=None),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = permission._check_pypi_safe_method_access(request, view, domain)
+
+        assert result is False
+        assert not any(
+            "unexpected error evaluating content guard" in record.getMessage().lower() for record in caplog.records
+        )

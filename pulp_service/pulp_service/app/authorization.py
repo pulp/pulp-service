@@ -15,6 +15,7 @@ from pulpcore.plugin.util import extract_pk, get_domain_pk
 
 from pulp_service.app.features_service import check_subscription
 from pulp_service.app.models import DomainOrg
+from pulp_service.exceptions import AuthenticationError
 
 _logger = logging.getLogger(__name__)
 org_id_var = ContextVar("org_id")
@@ -152,6 +153,13 @@ class DomainBasedPermission(BasePermission):
                 user,
             )
             return True
+        except AuthenticationError:
+            _logger.info(
+                "Content-guarded PyPI access DENIED: authentication required, org_id=%s user=%s",
+                org_id,
+                user,
+            )
+            return False
         except PermissionError:
             _logger.info(
                 "Content-guarded PyPI access DENIED via content guard: org_id=%s user=%s",
