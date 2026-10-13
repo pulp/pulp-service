@@ -30,12 +30,12 @@ parameters:
 - name: STATE_SIZE
   value: 5Gi
 - name: VERTEX_SECRET_NAME
-  value: vertex-ai   # the namespace's own vault-secret for app-interface/pulp/stage/vertex-ai; Secrets are namespace scoped
+  value: vertex-ai   # the namespace's own vault-secret for app-interface/pulp/stage/agents/vertex-ai
 - name: VERTEX_SECRET_KEY
-  # the key inside the vault-secret for app-interface/pulp/stage/vertex-ai
+  # the key inside that vault-secret: a GCP service account key JSON
   value: application_default_credentials.json
 - name: VERTEX_PROJECT
-  value: itpc-gcp-hosted-pulp
+  value: hosted-pulp   # the project that owns the agents' service account and serves Claude
 - name: VERTEX_REGION
   value: global
 - name: HTTP_PROXY
