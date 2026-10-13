@@ -32,7 +32,8 @@ parameters:
 - name: VERTEX_SECRET_NAME
   value: vertex-ai   # the namespace's own vault-secret for app-interface/pulp/stage/vertex-ai; Secrets are namespace scoped
 - name: VERTEX_SECRET_KEY
-  value: service-account.json
+  # the key inside the vault-secret for app-interface/pulp/stage/vertex-ai
+  value: application_default_credentials.json
 - name: VERTEX_PROJECT
   value: itpc-gcp-hosted-pulp
 - name: VERTEX_REGION
