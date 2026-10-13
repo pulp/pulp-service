@@ -15,6 +15,7 @@ from pulpcore.plugin.util import get_domain_pk
 
 from pulp_service.app.content_view_models import ContentView, ContentViewSearchScope  # noqa: F401
 from pulp_service.app.features_service import check_subscription
+from pulp_service.exceptions import AuthenticationError
 
 _logger = logging.getLogger(__name__)
 
@@ -60,6 +61,10 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
         try:
             header_content = request.headers[self.header_name]
         except KeyError:
+            if self.header_name.casefold() == "x-rh-identity":
+                _logger.info("Authentication required. Header %s not found.", self.header_name)
+                raise AuthenticationError(_("Authentication required.")) from None
+
             _logger.exception("Access not allowed. Header %s not found.", self.header_name)
             raise PermissionError(_("Access denied.")) from None
 

@@ -1,0 +1,93 @@
+diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
+--- a/pulpcore/app/models/publication.py
++++ b/pulpcore/app/models/publication.py
+@@ -27,2 +27,3 @@
+ from pulpcore.cache import Cache
+ from pulpcore.responses import ArtifactResponse
++from pulp_service.exceptions import AuthenticationError
+@@ -576,6 +576,7 @@
+         Permit if ANY content-guard allows (OR permissions).
+         """
+         errors = []
++        authentication_error = None
+         if not self.guards.all():
+             # No guards specified? PASS
+             return
+@@ -586,7 +587,14 @@
+                 detail_guard.permit(request)
+                 return  # success on first-pass
+-            except PermissionError as pe:
++            except AuthenticationError as pe:
++                if authentication_error is None:
++                    authentication_error = pe
++                guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
++                    detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
++                )
++                errors.append(guard_error)
++            except PermissionError as pe:
+                 guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
+                     detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
+                 )
+                 errors.append(guard_error)
+@@ -594,3 +596,5 @@
+         # If we get here - FAIL
++        if authentication_error is not None:
++            raise authentication_error
+         msg = _("Access forbidden. Refusals: {}").format(errors)
+         raise PermissionError(msg)
+diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -19,5 +19,6 @@
+     HTTPMovedPermanently,
+     HTTPNotFound,
+     HTTPRequestRangeNotSatisfiable,
++    HTTPUnauthorized,
+ )
+ from asgiref.sync import sync_to_async
+@@ -65,3 +65,4 @@
+ from pulpcore.metrics import artifacts_size_counter  # noqa: E402
+-
++from pulp_service.exceptions import AuthenticationError  # noqa: E402
++
+ log = logging.getLogger(__name__)
+@@ -254,6 +257,7 @@
+         """
+         guard_key = "DISTRO#GUARD#PRESENT"
+         present = await cached.get(guard_key, base_key=base_key)
++        guard = None
+         if present == b"True" or present is None:
+             path = request.match_info["path"]
+             distro = await sync_to_async(cls._match_distribution)(
+@@ -262,8 +266,8 @@
+             try:
+                 guard = await sync_to_async(cls._permit)(request, distro)
+-            except HTTPForbidden:
++            except (HTTPForbidden, HTTPUnauthorized):
+                 guard = True
+                 raise
+             finally:
+-                if not present:
++                if not present and guard is not None:
+                     await cached.set(guard_key, str(guard), base_key=base_key)
+@@ -495,11 +495,20 @@
+         if not guard:
+             return False
+         try:
+             guard.cast().permit(request)
++        except AuthenticationError as ae:
++            log.debug(
++                'Path: %(p)s requires authentication for guard: "%(g)s" reason: %(r)s',
++                {"p": request.path, "g": guard.name, "r": str(ae)},
++            )
++            raise HTTPUnauthorized(
++                reason=str(ae),
++                headers={"WWW-Authenticate": 'Basic realm="packages.redhat.com"'},
++            )
+         except PermissionError as pe:
+             log.debug(
+                 'Path: %(p)s not permitted by guard: "%(g)s" reason: %(r)s',
+                 {"p": request.path, "g": guard.name, "r": str(pe)},
+             )
+             raise HTTPForbidden(reason=str(pe))
+         return True

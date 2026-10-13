@@ -20,6 +20,7 @@ import requests
 import pulp_service.app.features_service as _features_mod
 from pulp_service.app.features_service import FeatureContentGuardCache
 from pulp_service.app.models import FeatureContentGuard
+from pulp_service.exceptions import AuthenticationError
 
 FEATURES = ["lightwell-network"]
 ACCOUNT_ID = "1979710"
@@ -43,6 +44,12 @@ def _make_request(account_id=ACCOUNT_ID):
     identity = json.dumps({"identity": {"org_id": account_id}}).encode()
     request = MagicMock()
     request.headers = {"x-rh-identity": b64encode(identity).decode()}
+    return request
+
+
+def _make_unauthenticated_request():
+    request = MagicMock()
+    request.headers = {}
     return request
 
 
@@ -213,6 +220,23 @@ class TestFeatureContentGuardCaching:
 
         payload = json.loads(mock_set.call_args.args[1])
         assert payload["allowed"] is False
+
+
+class TestFeatureContentGuardAuthentication:
+    def test_missing_identity_raises_authentication_error(self):
+        guard = _make_guard()
+
+        with pytest.raises(AuthenticationError, match="Authentication required"):
+            guard.permit(_make_unauthenticated_request())
+
+    def test_missing_non_identity_header_remains_forbidden(self):
+        guard = _make_guard()
+        guard.header_name = "x-pulp-vpn-verified"
+
+        with pytest.raises(PermissionError) as exc_info:
+            guard.permit(_make_unauthenticated_request())
+
+        assert not isinstance(exc_info.value, AuthenticationError)
 
 
 class TestFeatureContentGuardFeatureServiceCall:
