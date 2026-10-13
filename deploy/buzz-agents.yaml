@@ -38,6 +38,9 @@ parameters:
   value: hosted-pulp   # the project that owns the agents' service account and serves Claude
 - name: VERTEX_REGION
   value: global
+- name: CLAUDE_MODEL
+  # every model slot, including the ones Claude Code uses for side tasks (Brian, 2026-10-12)
+  value: claude-opus-4-8
 - name: HTTP_PROXY
   value: ""
 - name: HTTPS_PROXY
@@ -127,6 +130,14 @@ objects:
             value: ${VERTEX_PROJECT}
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: /run/secrets/vertex/${VERTEX_SECRET_KEY}
+          - name: ANTHROPIC_MODEL
+            value: ${CLAUDE_MODEL}
+          - name: ANTHROPIC_DEFAULT_OPUS_MODEL
+            value: ${CLAUDE_MODEL}
+          - name: ANTHROPIC_DEFAULT_SONNET_MODEL
+            value: ${CLAUDE_MODEL}
+          - name: ANTHROPIC_DEFAULT_HAIKU_MODEL
+            value: ${CLAUDE_MODEL}
           - name: HTTP_PROXY
             value: ${HTTP_PROXY}
           - name: HTTPS_PROXY
