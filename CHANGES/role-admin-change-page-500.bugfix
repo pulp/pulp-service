@@ -1,0 +1,5 @@
+Fixed a 500 (``KeyError: 'content_type'``) when a non-superuser opened a UserRole or GroupRole
+change page in pulp-mgmt. The admin grants any authenticated user view access but limits change
+to superusers, so Django renders the change form read-only and strips every field; the role form
+then assumed the scope fields were present. It now relaxes ``required`` only on the fields that
+are actually on the form.

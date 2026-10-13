@@ -427,9 +427,12 @@ class RoleAdminForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["content_type"].required = False
-        self.fields["object_id"].required = False
-        self.fields["domain"].required = False
+        # On a read-only change page (a view-only, non-superuser user) Django's
+        # ModelAdmin.get_form excludes every field, so the scope fields may be
+        # absent; only relax the ones actually present.
+        for name in ("content_type", "object_id", "domain"):
+            if name in self.fields:
+                self.fields[name].required = False
 
     def clean(self):
         cleaned_data = super().clean()

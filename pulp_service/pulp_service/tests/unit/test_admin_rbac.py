@@ -220,6 +220,31 @@ def test_userrole_admin_scope_and_permission_matrix():
     assert ur.has_add_permission(_request(su)) and ur.has_change_permission(_request(su)), "superuser may manage"
 
 
+def test_role_change_page_renders_for_view_only_user():
+    """A view-only (non-superuser) user may open a role's change page. Django strips
+    every field from the form when the user lacks change permission, so the form must
+    not assume the scope fields are present. Regression test for a
+    ``KeyError('content_type')`` 500 on the GroupRole/UserRole change page.
+    """
+    suffix = uuid4().hex[:10]
+    domain = _domain(f"viewonly-{suffix}")
+    member = User.objects.create(username=f"viewonly-{suffix}")
+    group = Group.objects.create(name=f"viewonly-grp-{suffix}")
+    group.user_set.add(member)
+    role = Role.objects.get(name="core.domain_owner")
+    grouprole = GroupRole.objects.create(group=group, role=role, domain=domain)
+    userrole = UserRole.objects.create(user=member, role=role, domain=domain)
+
+    client = Client()
+    client.force_login(member)
+
+    gr_page = client.get(reverse("myadmin:core_grouprole_change", args=[grouprole.pk]))
+    ur_page = client.get(reverse("myadmin:core_userrole_change", args=[userrole.pk]))
+
+    assert gr_page.status_code == 200, "view-only user must be able to open a GroupRole change page"
+    assert ur_page.status_code == 200, "view-only user must be able to open a UserRole change page"
+
+
 def test_userrole_admin_form_scope_validation():
     """The UserRole admin form treats the scope fields as optional (a domain-scoped
     role is valid), requires content_type/object_id as a pair, and rejects setting
