@@ -188,13 +188,13 @@ def test_domain_org_association_bypasses_content_guard(configure_guarded_pypi_di
 
 
 def test_unauthenticated_denied_on_guarded_pypi_simple_api(configure_guarded_pypi_distribution):
-    """Without any identity, a feature-guarded PyPI API requests TBR authentication."""
+    """Without any identity, a feature-guarded PyPI API requests API authentication."""
     _, pypi_url, _, _ = configure_guarded_pypi_distribution()
 
     response = requests.get(pypi_url, timeout=30)
 
     assert response.status_code == 401
-    assert response.headers["WWW-Authenticate"] == 'Basic realm="packages.redhat.com"'
+    assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
 def test_write_operations_unaffected_by_content_guard(configure_guarded_pypi_distribution):
