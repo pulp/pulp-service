@@ -19,7 +19,10 @@ mkdir -p "$CLAUDE_CONFIG_DIR" "$AGENT_WORKDIR" "$STATE"
 # Keys from the mounted Vault secret; absent means do not start.
 SEC=${AGENT_SECRET_DIR:-/run/secrets/agent}
 if [ -s "$SEC/nsec" ]; then export BUZZ_PRIVATE_KEY="$(cat "$SEC/nsec")"; else echo "agent-entrypoint: $SEC/nsec missing"; exit 1; fi
-if [ -s "$SEC/auth-tag" ]; then export BUZZ_AUTH_TAG="$(cat "$SEC/auth-tag")"; fi
+# The owner tag is public. The definition's auth-tag file wins when present, so
+# an ownership change is a git push; the Vault copy is the fallback.
+VAULT_AUTH_TAG=""
+[ -s "$SEC/auth-tag" ] && VAULT_AUTH_TAG="$(cat "$SEC/auth-tag")"
 
 fetch_definition() {
   if [ -d "$REPO_DIR/.git" ]; then
@@ -49,6 +52,9 @@ install_definition() {
   unset AGENT_DISPLAY_NAME AGENT_ABOUT BUZZ_ACP_AGENTS BUZZ_ACP_SESSION_POLICY BUZZ_ACP_EFFORT_LEVEL \
         BUZZ_ACP_RESPOND_TO BUZZ_ACP_RESPOND_TO_ALLOWLIST BUZZ_ACP_CHANNELS BUZZ_ACP_MODEL BUZZ_RELAY_URL BUZZ_ACP_AGENT_OWNER
   eval "$(definition-env "$DEF/agent.yaml")"
+  if [ -s "$DEF/auth-tag" ]; then export BUZZ_AUTH_TAG="$(tr -d '\n' < "$DEF/auth-tag")"
+  elif [ -n "$VAULT_AUTH_TAG" ]; then export BUZZ_AUTH_TAG="$VAULT_AUTH_TAG"
+  else unset BUZZ_AUTH_TAG; fi
   # The definition's files/ are reachable from the workspace, as /opt/agent/files is on serrano.
   rm -rf "$AGENT_WORKDIR/definition-files"
   [ -d "$DEF/files" ] && cp -R "$DEF/files" "$AGENT_WORKDIR/definition-files"
