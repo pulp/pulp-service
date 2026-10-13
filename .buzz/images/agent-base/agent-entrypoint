@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Starts buzz-acp for one always on agent on OpenShift.
+# The definition comes from git (AGENT_DEFINITION_REPO at AGENT_DEFINITION_REF,
+# folder .buzz/agents/$AGENT_SLUG); a watcher re-fetches every five minutes and
+# restarts buzz-acp when the commit changes. Secrets are mounted files under
+# /run/secrets and are never printed.
+set -uo pipefail
+: "${AGENT_SLUG:?}" "${AGENT_DEFINITION_REPO:?}" "${AGENT_DEFINITION_REF:=main}" "${AGENT_REVISION:?}"
+STATE=${AGENT_STATE_DIR:-/state}
+export CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-$STATE/claude}
+export AGENT_WORKDIR=${AGENT_WORKDIR:-$STATE/work}
+export HOME=${HOME:-/home/agent}
+REPO_DIR=$STATE/definition
+DEF=$REPO_DIR/.buzz/agents/$AGENT_SLUG
+ACP=${BUZZ_ACP_BIN:-buzz-acp}
+WATCH_SECONDS=${AGENT_DEFINITION_WATCH_SECONDS:-300}
+mkdir -p "$CLAUDE_CONFIG_DIR" "$AGENT_WORKDIR" "$STATE"
+
+# Keys from the mounted Vault secret; absent means do not start.
+SEC=${AGENT_SECRET_DIR:-/run/secrets/agent}
+if [ -s "$SEC/nsec" ]; then export BUZZ_PRIVATE_KEY="$(cat "$SEC/nsec")"; else echo "agent-entrypoint: $SEC/nsec missing"; exit 1; fi
+if [ -s "$SEC/auth-tag" ]; then export BUZZ_AUTH_TAG="$(cat "$SEC/auth-tag")"; fi
+
+fetch_definition() {
+  if [ -d "$REPO_DIR/.git" ]; then
+    timeout "${AGENT_GIT_TIMEOUT:-120}" git -C "$REPO_DIR" fetch -q --depth 1 origin "$AGENT_DEFINITION_REF" && git -C "$REPO_DIR" reset -q --hard FETCH_HEAD
+  else
+    rm -rf "$REPO_DIR"
+    timeout "${AGENT_GIT_TIMEOUT:-120}" git clone -q --depth 1 --branch "$AGENT_DEFINITION_REF" "$AGENT_DEFINITION_REPO" "$REPO_DIR"
+  fi
+}
+# The agent tracks its own subtree, not the monorepo: an unrelated merge to
+# main must not restart it.
+current_tree() { git -C "$REPO_DIR" rev-parse "HEAD:.buzz/agents/$AGENT_SLUG" 2>/dev/null; }
+current_commit() { git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null; }
+
+install_definition() {
+  [ -d "$DEF" ] || { echo "agent-entrypoint: no definition at .buzz/agents/$AGENT_SLUG"; return 1; }
+  # The definition is the whole truth: nothing from an earlier revision lingers.
+  rm -rf "$CLAUDE_CONFIG_DIR/skills" "$CLAUDE_CONFIG_DIR/CLAUDE.md"
+  [ -f "$DEF/CLAUDE.md" ] && cp "$DEF/CLAUDE.md" "$CLAUDE_CONFIG_DIR/CLAUDE.md"
+  [ -d "$DEF/skills" ] && cp -R "$DEF/skills" "$CLAUDE_CONFIG_DIR/skills"
+  local cj="$CLAUDE_CONFIG_DIR/.claude.json"
+  [ -s "$cj" ] || echo '{"hasCompletedOnboarding":true}' > "$cj"
+  local mcp="$DEF/mcp.json"; [ -f "$mcp" ] || mcp=<(echo '{"mcpServers":{}}')
+  jq -s '.[0] + {mcpServers: .[1].mcpServers}' "$cj" "$mcp" > "$cj.tmp" && mv "$cj.tmp" "$cj"
+  # Clear what the previous definition exported, so a removed or emptied
+  # setting does not survive into the next buzz-acp.
+  unset AGENT_DISPLAY_NAME AGENT_ABOUT BUZZ_ACP_AGENTS BUZZ_ACP_SESSION_POLICY BUZZ_ACP_EFFORT_LEVEL \
+        BUZZ_ACP_RESPOND_TO BUZZ_ACP_RESPOND_TO_ALLOWLIST BUZZ_ACP_CHANNELS BUZZ_ACP_MODEL BUZZ_RELAY_URL BUZZ_ACP_AGENT_OWNER
+  eval "$(definition-env "$DEF/agent.yaml")"
+  # The definition's files/ are reachable from the workspace, as /opt/agent/files is on serrano.
+  rm -rf "$AGENT_WORKDIR/definition-files"
+  [ -d "$DEF/files" ] && cp -R "$DEF/files" "$AGENT_WORKDIR/definition-files"
+  export AGENT_DEF_DIR="$DEF"
+  export BUZZ_ACP_SYSTEM_PROMPT_FILE="$DEF/charter.md"
+  export BUZZ_ACP_AGENT_COMMAND=${BUZZ_ACP_AGENT_COMMAND:-claude-agent-acp}
+  export BUZZ_ACP_AGENT_ARGS=${BUZZ_ACP_AGENT_ARGS:-}
+  export BUZZ_ACP_EXIT_AFTER_INACTIVITY=${BUZZ_ACP_EXIT_AFTER_INACTIVITY:-0}
+  export BUZZ_ACP_CONTEXT_MESSAGE_LIMIT=${BUZZ_ACP_CONTEXT_MESSAGE_LIMIT:-100}
+  export BUZZ_GIT_IDENTITY=user
+  git config --global user.name "${AGENT_DISPLAY_NAME:-$AGENT_SLUG} (AI agent)"
+  git config --global user.email "${AGENT_GIT_EMAIL:-$AGENT_SLUG@agents.pulpproject.org}"
+  export AGENT_DEFINITION_COMMIT="$(current_commit)"
+  installed_tree="$(current_tree)"
+}
+
+# Publish the profile with the owner tag so a new or rotated identity shows by
+# name; without a tag nothing is published (an untagged kind:0 would replace
+# the tagged one and Desktop would stop trusting the agent).
+publish_profile() {
+  [ -n "${BUZZ_AUTH_TAG:-}" ] || { echo "agent-entrypoint: no owner tag; profile not published"; return 0; }
+  local cur avatar args
+  cur=$(timeout 20 buzz users get 2>/dev/null) || cur=""
+  avatar=$(printf '%s' "$cur" | jq -r '.[0] | .picture // .avatar // empty' 2>/dev/null)
+  args=(users set-profile --name "$AGENT_DISPLAY_NAME")
+  [ -n "${AGENT_ABOUT:-}" ] && args+=(--about "$AGENT_ABOUT")
+  [ -n "$avatar" ] && args+=(--avatar "$avatar")
+  timeout 20 buzz "${args[@]}" >/dev/null 2>&1 && echo "agent-entrypoint: profile published as $AGENT_DISPLAY_NAME" || echo "agent-entrypoint: profile not published; carrying on"
+}
+
+fetch_definition || { echo "agent-entrypoint: could not fetch $AGENT_DEFINITION_REPO@$AGENT_DEFINITION_REF"; exit 1; }
+install_definition || exit 1
+publish_profile
+echo "agent-entrypoint: $AGENT_SLUG on image $AGENT_REVISION, definition commit $AGENT_DEFINITION_COMMIT"
+
+signalled=0; child=""
+trap 'signalled=1; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null' TERM INT
+cd "$AGENT_WORKDIR"
+DRAIN=${AGENT_DRAIN_SECONDS:-300}
+# Wait for buzz-acp to finish in flight turns after SIGTERM; force it after DRAIN.
+drain_child() {
+  local waited=0
+  while kill -0 "$child" 2>/dev/null && [ $waited -lt "$DRAIN" ]; do sleep 2; waited=$((waited+2)); done
+  kill -0 "$child" 2>/dev/null && { echo "agent-entrypoint: buzz-acp did not stop in ${DRAIN}s; killing"; kill -KILL "$child" 2>/dev/null; }
+}
+while :; do
+  "$ACP" & child=$!
+  [ $signalled -eq 1 ] && kill -TERM "$child" 2>/dev/null
+  # Watch the definition while buzz-acp runs, polling every few seconds so a
+  # crash is noticed at once. A changed tree ends this round: buzz-acp gets
+  # SIGTERM (it finishes in flight turns), then restarts on the new definition.
+  # The pod itself never restarts for a definition change. Only a successful
+  # install advances installed_tree, so a failed update is retried next tick.
+  restart=0; elapsed=0
+  while kill -0 "$child" 2>/dev/null; do
+    sleep 5; elapsed=$((elapsed+5))
+    [ $signalled -eq 1 ] && break
+    [ $elapsed -lt "$WATCH_SECONDS" ] && continue
+    elapsed=0
+    fetch_definition || continue
+    if [ "$(current_tree)" != "$installed_tree" ]; then
+      echo "agent-entrypoint: definition changed; restarting buzz-acp"
+      restart=1; kill -TERM "$child" 2>/dev/null; drain_child; break
+    fi
+  done
+  wait "$child" 2>/dev/null; rc=$?
+  [ $signalled -eq 1 ] && exit 0
+  if [ $restart -eq 1 ]; then
+    if install_definition; then publish_profile; else echo "agent-entrypoint: install failed; keeping the old definition and retrying later"; fi
+    continue
+  fi
+  echo "agent-entrypoint: buzz-acp exited $rc"; exit $rc
+done

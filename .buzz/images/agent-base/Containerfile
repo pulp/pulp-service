@@ -1,0 +1,19 @@
+# The one image every always on Buzz agent on OpenShift runs. Same lineage as
+# the agents on serrano: buzz-sprig (buzz + buzz-acp) with Claude Code through
+# claude-agent-acp. Runs under an arbitrary UID on OpenShift: everything it
+# writes at runtime is on the state volume or under a group writable HOME.
+# buzz-sprig pinned by digest (main as of 2026-10-09). Bump deliberately.
+FROM ghcr.io/block/buzz-sprig@sha256:40c2775f21bcf299a70bfa65a2f8bc604209855ecea170b3fdd195c665791f8f
+USER root
+RUN apk add --no-cache nodejs npm git bash jq curl ca-certificates python3 py3-yaml \
+ && npm install -g @agentclientprotocol/claude-agent-acp@0.84.0 \
+ && npm cache clean --force
+COPY agent-entrypoint /usr/local/bin/agent-entrypoint
+COPY definition-env /usr/local/bin/definition-env
+RUN chmod 755 /usr/local/bin/agent-entrypoint /usr/local/bin/definition-env \
+ && mkdir -p /home/agent /state \
+ && chgrp -R 0 /home/agent /state && chmod -R g=u /home/agent /state
+ENV HOME=/home/agent
+USER 1000
+WORKDIR /home/agent
+ENTRYPOINT ["/usr/local/bin/agent-entrypoint"]

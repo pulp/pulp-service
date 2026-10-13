@@ -1,0 +1,186 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: buzz-agent
+  annotations:
+    description: >-
+      One always on Buzz agent (buzz-acp driving Claude Code through Vertex)
+      whose definition lives in .buzz/agents/<slug> of a git repository and
+      whose keys come from Vault as the Secret agent-<slug>. Rendered once per
+      agent by app-interface's deploy-buzz-agents.yml SaaS file.
+parameters:
+- name: AGENT_SLUG
+  required: true
+- name: IMAGE
+  value: ghcr.io/pulp/buzz-agent-base
+- name: IMAGE_TAG
+  required: true
+- name: AGENT_DEFINITION_REPO
+  value: https://github.com/pulp/pulp-service.git
+- name: AGENT_DEFINITION_REF
+  value: main
+- name: CPU_REQUEST
+  value: 250m
+- name: CPU_LIMIT
+  value: "1"
+- name: MEMORY_REQUEST
+  value: 1Gi
+- name: MEMORY_LIMIT
+  value: 2Gi
+- name: STATE_SIZE
+  value: 5Gi
+- name: VERTEX_SECRET_NAME
+  value: vertex-ai   # the namespace's own vault-secret for app-interface/pulp/stage/agents/vertex-ai
+- name: VERTEX_SECRET_KEY
+  # the key inside that vault-secret: a GCP service account key JSON
+  value: application_default_credentials.json
+- name: VERTEX_PROJECT
+  value: hosted-pulp   # the project that owns the agents' service account and serves Claude
+- name: VERTEX_REGION
+  value: global
+- name: CLAUDE_MODEL
+  # every model slot, including the ones Claude Code uses for side tasks (Brian, 2026-10-12)
+  value: claude-opus-4-8
+- name: HTTP_PROXY
+  value: ""
+- name: HTTPS_PROXY
+  value: ""
+- name: NO_PROXY
+  # ROSA defaults for the pod and service networks; the SaaS target sets the
+  # cluster's real CIDRs and proxy URL.
+  value: "localhost,127.0.0.1,.svc,.cluster.local,10.128.0.0/14,172.30.0.0/16"
+objects:
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: buzz-agent-${AGENT_SLUG}-state
+    labels:
+      app: buzz-agent
+      agent: ${AGENT_SLUG}
+  spec:
+    accessModes: [ReadWriteOnce]
+    resources:
+      requests:
+        storage: ${STATE_SIZE}
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: buzz-agent-${AGENT_SLUG}
+    labels:
+      app: buzz-agent
+      agent: ${AGENT_SLUG}
+    annotations:
+      qontract.recycle: "true"
+  spec:
+    replicas: 1
+    strategy:
+      type: Recreate
+    selector:
+      matchLabels:
+        app: buzz-agent
+        agent: ${AGENT_SLUG}
+    template:
+      metadata:
+        labels:
+          app: buzz-agent
+          agent: ${AGENT_SLUG}
+      spec:
+        automountServiceAccountToken: false
+        securityContext:
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        terminationGracePeriodSeconds: 120
+        containers:
+        - name: agent
+          image: ${IMAGE}:${IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+          - name: AGENT_SLUG
+            value: ${AGENT_SLUG}
+          - name: AGENT_REVISION
+            value: ${IMAGE_TAG}
+          - name: AGENT_DEFINITION_REPO
+            value: ${AGENT_DEFINITION_REPO}
+          - name: AGENT_DEFINITION_REF
+            value: ${AGENT_DEFINITION_REF}
+          - name: AGENT_STATE_DIR
+            value: /state
+          - name: HOME
+            value: /home/agent
+          - name: KUBERNETES_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: CLAUDE_CODE_USE_VERTEX
+            value: "1"
+          - name: CLOUD_ML_REGION
+            value: ${VERTEX_REGION}
+          - name: ANTHROPIC_VERTEX_PROJECT_ID
+            value: ${VERTEX_PROJECT}
+          - name: GOOGLE_CLOUD_QUOTA_PROJECT
+            value: ${VERTEX_PROJECT}
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: /run/secrets/vertex/${VERTEX_SECRET_KEY}
+          - name: ANTHROPIC_MODEL
+            value: ${CLAUDE_MODEL}
+          - name: ANTHROPIC_DEFAULT_OPUS_MODEL
+            value: ${CLAUDE_MODEL}
+          - name: ANTHROPIC_DEFAULT_SONNET_MODEL
+            value: ${CLAUDE_MODEL}
+          - name: ANTHROPIC_DEFAULT_HAIKU_MODEL
+            value: ${CLAUDE_MODEL}
+          - name: HTTP_PROXY
+            value: ${HTTP_PROXY}
+          - name: HTTPS_PROXY
+            value: ${HTTPS_PROXY}
+          - name: NO_PROXY
+            value: ${NO_PROXY}
+          - name: http_proxy
+            value: ${HTTP_PROXY}
+          - name: https_proxy
+            value: ${HTTPS_PROXY}
+          - name: no_proxy
+            value: ${NO_PROXY}
+          - name: DISABLE_TELEMETRY
+            value: "1"
+          resources:
+            requests:
+              cpu: ${CPU_REQUEST}
+              memory: ${MEMORY_REQUEST}
+            limits:
+              cpu: ${CPU_LIMIT}
+              memory: ${MEMORY_LIMIT}
+          volumeMounts:
+          - name: state
+            mountPath: /state
+          - name: home
+            mountPath: /home/agent
+          - name: agent-secret
+            mountPath: /run/secrets/agent
+            readOnly: true
+          - name: vertex
+            mountPath: /run/secrets/vertex
+            readOnly: true
+        volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: buzz-agent-${AGENT_SLUG}-state
+        - name: home
+          emptyDir: {}
+        - name: agent-secret
+          secret:
+            secretName: agent-${AGENT_SLUG}
+            defaultMode: 0440
+        - name: vertex
+          secret:
+            secretName: ${VERTEX_SECRET_NAME}
+            defaultMode: 0440
