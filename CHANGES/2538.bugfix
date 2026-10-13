@@ -1,0 +1,1 @@
+Missing ``x-rh-identity`` headers on feature-guarded content now produce an authentication challenge instead of an authorization denial.
