@@ -1,0 +1,1 @@
+Domain creation no longer auto-creates the org-id-based (``rh-org-<org_id>``) group or grants any existing org-id-based group access to the new domain. Only the domain-name group is auto-created and granted access. Existing org-id-based groups and their current access are left untouched.

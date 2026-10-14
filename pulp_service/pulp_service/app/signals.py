@@ -215,13 +215,14 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                     # direct service.domain_admin. The creator keeps direct admin.
                     _assign_domain_roles(user, domain)
                     group = explicit_group
-                    if explicit_group:
-                        do = DomainOrg.objects.create(org_id=org_id, group=explicit_group)
-                    # Skip the auto-assigned rh-org-<org_id> groups as the DomainOrg's group:
-                    # those are per-org and get their own role grant below (org_group). Only an
-                    # explicit "team" group should scope domain visibility to a group.
+                    # Skip the rh-org-<org_id> groups as the DomainOrg's group, whether passed
+                    # explicitly as group_name or auto-assigned: those are per-org and no longer
+                    # get a domain role grant. Only an explicit "team" group should scope domain
+                    # visibility to a group.
                     # Query through the pulpcore Group proxy (not user.groups, which yields
                     # base auth.Group instances) so assign_role classifies it as a Group.
+                    if explicit_group and not explicit_group.name.startswith(ORG_GROUP_PREFIX):
+                        do = DomainOrg.objects.create(org_id=org_id, group=explicit_group)
                     elif group := (Group.objects.filter(user=user).exclude(name__startswith=ORG_GROUP_PREFIX).first()):
                         do = DomainOrg.objects.create(org_id=org_id, group=group)
                     else:
@@ -229,10 +230,6 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
 
                     if group is not None:
                         _assign_domain_roles(group, domain)
-                    if org_id:
-                        org_group, _ = Group.objects.get_or_create(name=f"{ORG_GROUP_PREFIX}{org_id}")
-                        if org_group != group:
-                            _assign_domain_roles(org_group, domain)
 
                     do.domains.add(domain)
 

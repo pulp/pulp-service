@@ -11,7 +11,8 @@ import requests
 # generic DomainsApi too; these tests use the self-service POST /api/pulp/create-domain/
 # endpoint (create_service_domain fixture) because it drives the post_create_domain
 # dual-write. Domain visibility on list is scoped by RBAC object perms (core.view_domain)
-# granted to the creator, the domain group, and the auto-assigned rh-org-<org_id> group.
+# granted to the creator and the domain's team group (the rh-org-<org_id> group is no longer
+# granted access when a domain is created).
 
 
 def test_user_domain_repo_creation(file_bindings, anonymous_user, gen_object_with_cleanup, create_service_domain):
@@ -55,12 +56,15 @@ def test_user_domain_repo_creation(file_bindings, anonymous_user, gen_object_wit
         # Use User2 OrgID1 auth credentials
         file_bindings.RepositoriesFileApi.api_client.default_headers["x-rh-identity"] = auth_user2_orgid1
 
-        # User 2 from OrgID2 create a repo on his domain
-        gen_object_with_cleanup(
-            file_bindings.RepositoriesFileApi,
-            {"name": str(uuid4())},
-            pulp_domain=domain_name,
-        )
+        # User2 (same org, but not the creator and not in a team group) cannot create a repo in
+        # User1's domain: the org-id group is no longer granted access when a domain is created.
+        with pytest.raises(file_bindings.ApiException) as exp:
+            gen_object_with_cleanup(
+                file_bindings.RepositoriesFileApi,
+                {"name": str(uuid4())},
+                pulp_domain=domain_name,
+            )
+        assert exp.value.status == 403
 
         # Users are not allowed to create pulp object outside of their domains
         with pytest.raises(file_bindings.ApiException) as exp:
@@ -344,53 +348,6 @@ def test_cross_org_isolation(pulpcore_bindings, anonymous_user, create_service_d
         assert response_org2.results[0].name == domain_org2_name
 
 
-def test_org_based_visibility(pulpcore_bindings, anonymous_user, create_service_domain):
-    """Test that users with same org_id both see each other's domains."""
-    user_a_org1 = {
-        "identity": {
-            "org_id": 1,
-            "internal": {"org_id": 1},
-            "user": {"username": "userA_org1"},
-        }
-    }
-
-    user_b_org1 = {
-        "identity": {
-            "org_id": 1,
-            "internal": {"org_id": 1},
-            "user": {"username": "userB_org1"},
-        }
-    }
-
-    with anonymous_user:
-        # User A (org_id 1) creates domain A
-        header_user_a_org1 = json.dumps(user_a_org1)
-        auth_user_a_org1 = b64encode(bytes(header_user_a_org1, "ascii"))
-
-        domain_a_name = str(uuid4())
-        create_service_domain(domain_a_name, identity_header=auth_user_a_org1)
-
-        # User B (org_id 1) creates domain B
-        header_user_b_org1 = json.dumps(user_b_org1)
-        auth_user_b_org1 = b64encode(bytes(header_user_b_org1, "ascii"))
-
-        domain_b_name = str(uuid4())
-        create_service_domain(domain_b_name, identity_header=auth_user_b_org1)
-
-        # Both users see both domains due to shared org_id (rh-org-1 group)
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_a_org1
-        response_a = pulpcore_bindings.DomainsApi.list()
-        assert response_a.count == 2
-        domain_names_a = {domain.name for domain in response_a.results}
-        assert domain_names_a == {domain_a_name, domain_b_name}
-
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user_b_org1
-        response_b = pulpcore_bindings.DomainsApi.list()
-        assert response_b.count == 2
-        domain_names_b = {domain.name for domain in response_b.results}
-        assert domain_names_b == {domain_a_name, domain_b_name}
-
-
 def test_group_based_domain_visibility(
     pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_group, create_service_domain
 ):
@@ -500,43 +457,6 @@ def test_default_domain_invisible_to_regular_users(pulpcore_bindings, anonymous_
         # Only domains the user has view_domain on are visible
         domain_names = {domain.name for domain in response.results}
         assert "default" not in domain_names
-
-
-def test_domain_deduplication(
-    pulpcore_bindings, anonymous_user, gen_object_with_cleanup, gen_group, create_service_domain
-):
-    """Test that a domain matching via both group and org appears only once."""
-    user_name = f"dedup-user-{uuid4()}"
-    user_combined = f"1|{user_name}"
-
-    test_group = gen_group()
-
-    gen_object_with_cleanup(pulpcore_bindings.UsersApi, {"username": user_combined})
-    gen_object_with_cleanup(
-        pulpcore_bindings.GroupsUsersApi,
-        group_href=test_group.pulp_href,
-        group_user={"username": user_combined},
-    )
-
-    with anonymous_user:
-        # User in a group creates a domain scoped to that group. The user matches the domain
-        # via both the group role and the rh-org-1 role — scope_queryset must return it once.
-        user_data = {
-            "identity": {
-                "org_id": 1,
-                "internal": {"org_id": 1},
-                "user": {"username": user_name},
-            }
-        }
-        header_user = json.dumps(user_data)
-        auth_user = b64encode(bytes(header_user, "ascii"))
-
-        domain = create_service_domain(identity_header=auth_user, group_name=test_group.name)
-
-        pulpcore_bindings.DomainsApi.api_client.default_headers["x-rh-identity"] = auth_user
-        response = pulpcore_bindings.DomainsApi.list()
-        assert response.count == 1
-        assert response.results[0].name == domain.name
 
 
 def test_basic_auth_user_domain_visibility(pulpcore_bindings, gen_user, create_service_domain):
