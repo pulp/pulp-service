@@ -15,10 +15,13 @@ with open(path) as f:
     d = yaml.safe_load(f) or {}
 
 def out(k, v):
-    if v is None or v == "":
-        return
+    # Join lists first, so an empty list counts as unset: an empty
+    # BUZZ_ACP_CHANNELS makes buzz-acp use an explicit empty channel list and
+    # ignore the channels it discovers from membership.
     if isinstance(v, (list, tuple)):
         v = ",".join(str(x) for x in v)
+    if v is None or v == "":
+        return
     print(f"export {k}={shlex.quote(str(v))}")
 
 out("AGENT_DISPLAY_NAME", d.get("display_name"))
