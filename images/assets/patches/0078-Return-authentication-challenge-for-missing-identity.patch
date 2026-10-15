@@ -1,11 +1,16 @@
 diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
+index 8c9535d..8d3690e 100644
 --- a/pulpcore/app/models/publication.py
 +++ b/pulpcore/app/models/publication.py
-@@ -27,2 +27,3 @@
+@@ -26,6 +26,7 @@ from pulpcore.app.models import AutoAddObjPermsMixin
+ from pulpcore.app.models.fields import RelativePathField
+ from pulpcore.app.util import cache_key, get_domain_pk, get_url, retain_distributed_pub_enabled
  from pulpcore.cache import Cache
- from pulpcore.responses import ArtifactResponse
 +from pulp_service.exceptions import AuthenticationError
-@@ -576,6 +576,7 @@
+ from pulpcore.responses import ArtifactResponse
+ 
+ from .base import BaseModel, MasterModel
+@@ -665,6 +666,7 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
          Permit if ANY content-guard allows (OR permissions).
          """
          errors = []
@@ -13,10 +18,10 @@ diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publicatio
          if not self.guards.all():
              # No guards specified? PASS
              return
-@@ -586,7 +587,14 @@
+@@ -674,6 +676,13 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
+             try:
                  detail_guard.permit(request)
                  return  # success on first-pass
--            except PermissionError as pe:
 +            except AuthenticationError as pe:
 +                if authentication_error is None:
 +                    authentication_error = pe
@@ -24,42 +29,48 @@ diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publicatio
 +                    detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
 +                )
 +                errors.append(guard_error)
-+            except PermissionError as pe:
+             except PermissionError as pe:
                  guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
                      detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
-                 )
+@@ -681,6 +690,8 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
                  errors.append(guard_error)
-@@ -594,3 +596,5 @@
+ 
          # If we get here - FAIL
 +        if authentication_error is not None:
 +            raise authentication_error
          msg = _("Access forbidden. Refusals: {}").format(errors)
          raise PermissionError(msg)
+ 
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
+index 5abe50f..fbccce4 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -19,5 +19,6 @@
-     HTTPMovedPermanently,
+@@ -20,6 +20,7 @@ from aiohttp.web_exceptions import (
      HTTPNotFound,
+     HTTPNotModified,
      HTTPRequestRangeNotSatisfiable,
 +    HTTPUnauthorized,
  )
  from asgiref.sync import sync_to_async
-@@ -65,3 +65,4 @@
+ from django.utils import timezone
+@@ -68,6 +69,7 @@ from pulpcore.exceptions import (  # noqa: E402
+     UnsupportedDigestValidationError,
+ )
  from pulpcore.metrics import artifacts_size_counter  # noqa: E402
--
 +from pulp_service.exceptions import AuthenticationError  # noqa: E402
-+
+ 
  log = logging.getLogger(__name__)
-@@ -254,6 +257,7 @@
+ _current_distribution = ContextVar("current_distribution", default=None)
+@@ -269,6 +271,7 @@ class Handler:
          """
          guard_key = "DISTRO#GUARD#PRESENT"
          present = await cached.get(guard_key, base_key=base_key)
 +        guard = None
          if present == b"True" or present is None:
              path = request.match_info["path"]
-             distro = await sync_to_async(cls._match_distribution)(
-@@ -262,8 +266,8 @@
+             if not (distro := _current_distribution.get()):
+@@ -278,11 +281,11 @@ class Handler:
+                 _current_distribution.set(distro)
              try:
                  guard = await sync_to_async(cls._permit)(request, distro)
 -            except HTTPForbidden:
@@ -70,8 +81,9 @@ diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
 -                if not present:
 +                if not present and guard is not None:
                      await cached.set(guard_key, str(guard), base_key=base_key)
-@@ -495,11 +495,20 @@
-         if not guard:
+ 
+     @AsyncContentCache(
+@@ -517,6 +520,15 @@ class Handler:
              return False
          try:
              guard.cast().permit(request)
@@ -87,7 +99,3 @@ diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
          except PermissionError as pe:
              log.debug(
                  'Path: %(p)s not permitted by guard: "%(g)s" reason: %(r)s',
-                 {"p": request.path, "g": guard.name, "r": str(pe)},
-             )
-             raise HTTPForbidden(reason=str(pe))
-         return True
