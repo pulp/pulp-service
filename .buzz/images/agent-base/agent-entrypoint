@@ -45,8 +45,9 @@ install_definition() {
   [ -d "$DEF/skills" ] && cp -R "$DEF/skills" "$CLAUDE_CONFIG_DIR/skills"
   local cj="$CLAUDE_CONFIG_DIR/.claude.json"
   [ -s "$cj" ] || echo '{"hasCompletedOnboarding":true}' > "$cj"
-  local mcp="$DEF/mcp.json"; [ -f "$mcp" ] || mcp=<(echo '{"mcpServers":{}}')
-  jq -s '.[0] + {mcpServers: .[1].mcpServers}' "$cj" "$mcp" > "$cj.tmp" && mv "$cj.tmp" "$cj"
+  # No /dev/fd in the pod, so no process substitution: read mcp.json if present.
+  local servers='{}'; [ -f "$DEF/mcp.json" ] && servers="$(jq -c '.mcpServers // {}' "$DEF/mcp.json")"
+  jq --argjson s "$servers" '. + {mcpServers: $s}' "$cj" > "$cj.tmp" && mv "$cj.tmp" "$cj"
   # Clear what the previous definition exported, so a removed or emptied
   # setting does not survive into the next buzz-acp.
   unset AGENT_DISPLAY_NAME AGENT_ABOUT BUZZ_ACP_AGENTS BUZZ_ACP_SESSION_POLICY BUZZ_ACP_EFFORT_LEVEL \
