@@ -85,8 +85,8 @@ spec:
       default: ""
     - name: PULP_CREDENTIALS
       type: string
-      default: pulp-sa-cert
-      description: "Secret for connecting to python-bindings domain in prod pulp."
+      default: tbr-sa
+      description: "Secret for connecting to python-bindings domain in prod pulp via packages.redhat.com."
     - name: PULP_BINDINGS_COMPONENTS
       type: string
       description: space-separated list of Pulp components to generate the bindings
@@ -842,6 +842,8 @@ spec:
           value: "$(params.SNAPSHOT)"
         - name: COMPONENT_NAME
           value: "$(tasks.test-metadata.results.component-name)"
+        - name: PULP_CREDENTIALS
+          value: "$(params.PULP_CREDENTIALS)"
       runAfter:
         - pulp-functional-tests
       taskSpec:
@@ -858,7 +860,7 @@ spec:
             description: Namespace name to deploy the application to
           - name: PULP_CREDENTIALS
             type: string
-            default: pulp-sa-cert
+            default: tbr-sa
           - name: PULP_DOMAIN
             type: string
             default: python-bindings
@@ -874,22 +876,44 @@ spec:
             env:
               - name: PULP_DOMAIN
                 value: $(params.PULP_DOMAIN)
-              - name: PULP_CREDENTIALS
+              - name: PULP_USER
                 valueFrom:
                   secretKeyRef:
                     name: $(params.PULP_CREDENTIALS)
-                    key: pulp-sa-cert.pem
+                    key: user
+              - name: PULP_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: password
             script: |
-              echo "$PULP_CREDENTIALS" > /workspace/pulp-sa-cert.pem
-              curl -s --cert /workspace/pulp-sa-cert.pem https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/repositories/file/file/?name=${PULP_FILE_REPO_NAME}|python3 -c "import json,sys;print(json.load(sys.stdin)['results'][0]['pulp_href'])" | tee /workspace/file_repo
+              NETRC_FILE=$(mktemp)
+              printf 'machine packages.redhat.com\nlogin %s\npassword %s\n' "$PULP_USER" "$PULP_PASSWORD" > "$NETRC_FILE"
+              chmod 600 "$NETRC_FILE"
+              trap 'rm -f "$NETRC_FILE"' EXIT
+              curl -s --netrc-file "$NETRC_FILE" https://packages.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/repositories/file/file/?name=${PULP_FILE_REPO_NAME}|python3 -c "import json,sys;print(json.load(sys.stdin)['results'][0]['pulp_href'])" | tee /workspace/file_repo
           - name: get-current-postn-and-increment-it
             image: "$(params.BONFIRE_IMAGE)"
             env:
               - name: PULP_DOMAIN
                 value: $(params.PULP_DOMAIN)
+              - name: PULP_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: user
+              - name: PULP_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: password
             script: |
+              NETRC_FILE=$(mktemp)
+              printf 'machine packages.redhat.com\nlogin %s\npassword %s\n' "$PULP_USER" "$PULP_PASSWORD" > "$NETRC_FILE"
+              chmod 600 "$NETRC_FILE"
+              trap 'rm -f "$NETRC_FILE"' EXIT
               CUR_DATE=$(date +%Y%m%d)
-              postN=$(curl -s --cert /workspace/pulp-sa-cert.pem https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/?relative_path__contains="pulpcore-$CUR_DATE" |python3 -c "import json,sys;results=json.load(sys.stdin)['results'];print(len(results))")
+              postN=$(curl -s --netrc-file "$NETRC_FILE" https://packages.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/?relative_path__contains="pulpcore-$CUR_DATE" |python3 -c "import json,sys;results=json.load(sys.stdin)['results'];print(len(results))")
               postN=$((postN + 1))
               echo $postN | tee /workspace/postN
           - name: get-commit-hash
@@ -960,13 +984,18 @@ spec:
                 value: $(params.PULP_DOMAIN)
               - name: PULP_BINDINGS_COMPONENTS
                 value: $(params.PULP_BINDINGS_COMPONENTS)
-              - name: PULP_CREDENTIALS
+              - name: PULP_USER
                 valueFrom:
                   secretKeyRef:
                     name: $(params.PULP_CREDENTIALS)
-                    key: pulp-sa-cert.pem
+                    key: user
+              - name: PULP_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: password
             script: |
-              set -ex
+              set -e
               login.sh
 
               if [ -n "$NS" ]; then
@@ -980,11 +1009,15 @@ spec:
               POSTN=$(cat /workspace/postN)
               SHORT_COMMIT_SHA=$(cat /workspace/commit_sha)
               PULP_FILE_REPO=$(cat /workspace/file_repo)
-              PULP_BASE_URL="https://mtls.internal.console.redhat.com"
-              CERT="/workspace/pulp-sa-cert.pem"
+              PULP_BASE_URL="https://packages.redhat.com"
+              NETRC_FILE=$(mktemp)
+              printf 'machine packages.redhat.com\nlogin %s\npassword %s\n' "$PULP_USER" "$PULP_PASSWORD" > "$NETRC_FILE"
+              chmod 600 "$NETRC_FILE"
+              trap 'rm -f "$NETRC_FILE"' EXIT
 
-              # copy pulp certificate into API container
-              oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c "echo \"$PULP_CREDENTIALS\" > /tmp/pulp-sa-cert.pem"
+              # Write .netrc into the pod for uploads (credentials via stdin, not shell args)
+              printf 'machine packages.redhat.com\nlogin %s\npassword %s\n' "$PULP_USER" "$PULP_PASSWORD" | \
+                oc_wrapper exec -i -c pulp-api deployment/pulp-api -- bash -c 'cat > /tmp/.netrc && chmod 600 /tmp/.netrc'
 
               # Phase 1: Upload each schema synchronously and collect content hrefs
               # /upload/ is synchronous — returns content href directly, no task polling needed
@@ -996,10 +1029,10 @@ spec:
                 echo "Uploading $FILENAME as $RELATIVE_PATH ..."
 
                 CONTENT_HREF=$(oc_wrapper exec -c pulp-api deployment/pulp-api -- bash -c \
-                  "curl -sf -XPOST --cert /tmp/pulp-sa-cert.pem \
+                  "curl -sf -XPOST --netrc-file /tmp/.netrc \
                     -F 'file=@/data/${FILENAME}' \
                     -F 'relative_path=${RELATIVE_PATH}' \
-                    https://mtls.internal.console.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/upload/" \
+                    https://packages.redhat.com/api/pulp/${PULP_DOMAIN}/api/v3/content/file/files/upload/" \
                   | python3 -c "import json,sys; print(json.load(sys.stdin)['pulp_href'])")
 
                 echo "Content href: $CONTENT_HREF"
@@ -1016,7 +1049,7 @@ spec:
 
               # Single modify call — one new repository version for all content
               echo "Adding all content units to repository in one version..."
-              MODIFY_RESPONSE=$(curl -sf -XPOST --cert "$CERT" \
+              MODIFY_RESPONSE=$(curl -sf -XPOST --netrc-file "$NETRC_FILE" \
                 -H "Content-Type: application/json" \
                 -d "$CONTENT_HREFS_JSON" \
                 "${PULP_BASE_URL}${PULP_FILE_REPO}modify/")
@@ -1027,7 +1060,7 @@ spec:
 
               # Poll the modify task until completion
               while true; do
-                MODIFY_RESULT=$(curl -sf --cert "$CERT" "${PULP_BASE_URL}${MODIFY_TASK_HREF}")
+                MODIFY_RESULT=$(curl -sf --netrc-file "$NETRC_FILE" "${PULP_BASE_URL}${MODIFY_TASK_HREF}")
                 MODIFY_STATE=$(echo "$MODIFY_RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['state'])")
                 case "$MODIFY_STATE" in
                   completed) break ;;
@@ -1054,6 +1087,8 @@ spec:
           value: "$(params.SNAPSHOT)"
         - name: COMPONENT_NAME
           value: "$(tasks.test-metadata.results.component-name)"
+        - name: PULP_CREDENTIALS
+          value: "$(params.PULP_CREDENTIALS)"
       runAfter:
         - test-metadata
       taskSpec:
@@ -1064,7 +1099,7 @@ spec:
             default: quay.io/redhat-user-workloads/hcc-devprod-tenant/hcc-cicd-tools/cicd-tools:834176766e3f911ffa24bfacff59dd15126e4b3a
           - name: PULP_CREDENTIALS
             type: string
-            default: pulp-sa-cert
+            default: tbr-sa
           - name: PULP_DOMAIN
             type: string
             default: python-bindings
@@ -1078,18 +1113,6 @@ spec:
           - name: TEST_OUTPUT
             description: The output of the step
         steps:
-          - name: get-pulp-cert
-            image: "$(params.BONFIRE_IMAGE)"
-            env:
-              - name: PULP_CREDENTIALS
-                valueFrom:
-                  secretKeyRef:
-                    name: $(params.PULP_CREDENTIALS)
-                    key: pulp-sa-cert.pem
-            script: |
-              # store the cert+key in a file, so that we can use it in python requests
-              echo "$PULP_CREDENTIALS" > /workspace/pulp-sa-cert.pem
-
           - name: get-commit-hash
             image: "$(params.BONFIRE_IMAGE)"
             env:
@@ -1230,6 +1253,16 @@ spec:
                 value: $(params.PULP_BINDINGS_COMPONENTS)
               - name: TASK_RESULT_NOT_FOUND_NOTE
                 value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
+              - name: PULP_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: user
+              - name: PULP_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: password
             script: |
               #!/usr/bin/env python3
               import json
@@ -1243,14 +1276,14 @@ spec:
                 commit_sha = file.read().strip()
                 print(commit_sha)
 
-              pulp_cert_file="/workspace/pulp-sa-cert.pem"
+              pulp_auth = (os.environ["PULP_USER"], os.environ["PULP_PASSWORD"])
               pulp_domain=os.getenv("PULP_DOMAIN","")
               components = os.getenv("PULP_BINDINGS_COMPONENTS","")
               with open("/workspace/list-of-api.json","w") as file:
                 for component in components.split(" "):
-                  files_url = f'https://mtls.internal.console.redhat.com/api/pulp/{pulp_domain}/api/v3/content/file/files/?relative_path__regex={component}-.*{commit_sha}'
+                  files_url = f'https://packages.redhat.com/api/pulp/{pulp_domain}/api/v3/content/file/files/?relative_path__regex={component}-.*{commit_sha}'
                   try:
-                    response = requests.get(url=files_url, cert=pulp_cert_file, timeout=(5, 30))
+                    response = requests.get(url=files_url, auth=pulp_auth, timeout=(5, 30))
                     response.raise_for_status()
                     payload = response.json()
                   except requests.exceptions.RequestException as err:
@@ -1295,6 +1328,16 @@ spec:
                 value: $(params.PULP_DOMAIN)
               - name: TASK_RESULT_NOT_FOUND_NOTE
                 value: $(params.TASK_RESULT_NOT_FOUND_NOTE)
+              - name: PULP_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: user
+              - name: PULP_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: $(params.PULP_CREDENTIALS)
+                    key: password
             script: |
               # skip step if openapi-schema is not found
               if [ -f $(results.TEST_OUTPUT.path) ] ; then
@@ -1305,12 +1348,16 @@ spec:
                 fi
               fi
 
+              NETRC_FILE=$(mktemp)
+              printf 'machine packages.redhat.com\nlogin %s\npassword %s\n' "$PULP_USER" "$PULP_PASSWORD" > "$NETRC_FILE"
+              chmod 600 "$NETRC_FILE"
+              trap 'rm -f "$NETRC_FILE"' EXIT
               mkdir -p /workspace/api-json-files ; cd $_
               while read FILE ; do
                  curl --fail --show-error --location --retry-all-errors --retry 3 --retry-delay 5 \
                    --connect-timeout 10 --max-time 120 --remote-name \
-                   --cert /workspace/pulp-sa-cert.pem \
-                   https://mtls.internal.console.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
+                   --netrc-file "$NETRC_FILE" \
+                   https://packages.redhat.com/api/pulp-content/${PULP_DOMAIN}/python-bindings/${FILE}
                 if [ $? -ne 0 ]; then
                   echo "Error: Failed to download ${FILE} from Pulp"
                   exit 1
