@@ -3,7 +3,7 @@
 # it is restarting, and record them so the entrypoint can post "Back." when it
 # returns. Runs inside the agent container with the container's own buzz key.
 # Writes stopping-at first (the replay floor), then announces under a hard 22s
-# cap; the pod's termination grace period is 70s.
+# cap; the pod's termination grace period is 300s.
 set -uo pipefail
 dir=${AGENT_RESTART_DIR:-/state/restart}
 self=${AGENT_PUBKEY:-}
@@ -27,21 +27,40 @@ announce() {
       | jq -c 'select(.ch != null and .root != null)' \
       | jq -s 'sort_by(.t) | reverse | reduce .[] as $x ([]; if any(.[]; .root == $x.root) then . else . + [$x] end) | .[0:10]'
   )
+  # New active threads this stop, as {channel,root}; may be empty.
+  local new_rows existing merged
   if [ -z "$rows" ] || [ "$rows" = "null" ] || [ "$rows" = "[]" ]; then
+    new_rows='[]'
+  else
+    new_rows=$(printf '%s' "$rows" | jq -c '[.[] | {channel:.ch, root:.root}]')
+  fi
+  # Merge with any pending record an earlier stop left that restart-back has not
+  # cleared yet, unique by channel+root, new ones first, cap 10. Never clobber a
+  # pending record: with no new threads this stop we still keep the pending ones
+  # so they get their "Back." when the pod returns.
+  existing=$(jq -c '.' "$f" 2>/dev/null) || existing='[]'
+  case "$existing" in ''|null) existing='[]';; esac
+  merged=$(jq -cn --argjson new "$new_rows" --argjson old "$existing" \
+    '($new + $old) | reduce .[] as $x ([]; if any(.[]; .channel == $x.channel and .root == $x.root) then . else . + [$x] end) | .[0:10]')
+  if [ "$merged" = "[]" ]; then
     printf '[]' > "$f"; echo "no active threads"; return 0
   fi
-  # Save before posting, so a crash mid-loop still leaves "Back." work to do.
-  printf '%s' "$rows" | jq -c '[.[] | {channel:.ch, root:.root}]' > "$f"
+  # Save before posting, so a crash mid-loop still leaves "Back." work to do; the
+  # record carries both the new and the still-pending threads.
+  printf '%s' "$merged" > "$f"
+  # Announce only in the threads active this stop. Threads carried over from an
+  # earlier stop already got their notice then; announcing again would repeat it.
   local row ch root
   while IFS= read -r row; do
     ch=$(printf '%s' "$row" | jq -r '.channel')
     root=$(printf '%s' "$row" | jq -r '.root')
+    [ -n "$ch" ] && [ "$ch" != null ] && [ -n "$root" ] && [ "$root" != null ] || continue
     if printf '%s\n' "$msg" | buzz messages send --channel "$ch" --reply-to "$root" --content - >/dev/null 2>&1; then
       echo "restart-notice: stop $root"
     else
       echo "send failed for $root"
     fi
-  done < <(jq -c '.[]' "$f" 2>/dev/null)
+  done < <(printf '%s' "$new_rows" | jq -c '.[]' 2>/dev/null)
 }
 
 # Re-exec path, run under the timeout below.
