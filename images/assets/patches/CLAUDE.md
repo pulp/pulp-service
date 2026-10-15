@@ -99,18 +99,6 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulpcore/app/tasks/migrate.py`
 - **Description:** Fixes the storage backend migration task to handle artifacts that fail to migrate gracefully, collecting skipped items instead of raising a `ValidationError` on first failure.
 
-### 0059 — Add content negotiation and JSON listing to the content app
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/app/models/publication.py`, `pulpcore/cache/__init__.py`, `pulpcore/cache/cache.py`, `pulpcore/content/handler.py`
-- **Description:** Adds content negotiation to the content app so clients requesting `application/json` receive a JSON directory listing instead of a file download. Extends the cache layer to handle the new response type.
-
-### 0060 — Add content_handler_json to PythonDistribution
-
-- **Package:** pulp_python
-- **Files:** `pulp_python/app/models.py`, `pulp_python/app/utils.py`
-- **Description:** Implements `content_handler_json` on `PythonDistribution` to serve JSON-formatted package metadata responses when clients request `application/json` via the content app.
-
 ### 0063 — Redirect large artifacts to object storage
 
 - **Package:** pulpcore

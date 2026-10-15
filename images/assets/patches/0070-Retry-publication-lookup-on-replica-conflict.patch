@@ -1,8 +1,8 @@
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 286db4c..5fc3251 100644
+index 42b1851..1dad7cd 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -218,6 +218,18 @@ class Handler:
+@@ -213,6 +213,18 @@ class Handler:
          for conn in connections.all():
              conn.close_if_unusable_or_obsolete()
  
@@ -21,7 +21,7 @@ index 286db4c..5fc3251 100644
      async def list_distributions(self, request):
          """
          The handler for an HTML listing all distributions
-@@ -1073,8 +1085,8 @@ class Handler:
+@@ -852,8 +864,8 @@ class Handler:
              original_rel_path = original_rel_path.split("/", 1)[1]
          else:
              repository, repo_version, publication = await sync_to_async(
@@ -31,4 +31,4 @@ index 286db4c..5fc3251 100644
 +            )(distro)
  
          if publication:
-             if wants_json:
+             try:
