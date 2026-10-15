@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Publish an agent's kind:30177 managed-agent record, signed by its owner.
+
+    agent-register --agent HEX --name NAME [--allowlist HEX,...] [--parallelism N] [--dry-run]
+
+Buzz Desktop lists an agent in its @mention menu only when a kind:30177 record
+for it is signed by the owner named in the agent's NIP-OA auth tag (bmbouter,
+2026-10-12). Signs with BUZZ_PRIVATE_KEY (hex or nsec) and posts to
+BUZZ_RELAY_URL (wss:// or https://), sending BUZZ_AUTH_TAG as x-auth-tag when
+set. The signer's own key is always added to the allowlist. Standard library
+only, so it runs anywhere with python3, with any owner's key. --dry-run prints
+the signed event instead of posting it. The key is never printed.
+"""
+import argparse, base64, hashlib, json, os, pathlib, re, secrets, sys, time, urllib.error, urllib.request
+
+# BIP340 Schnorr over secp256k1 (the reference algorithm).
+P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+G = (0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+     0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8)
+
+
+def _add(a, b):
+    if a is None: return b
+    if b is None: return a
+    if a[0] == b[0] and a[1] != b[1]: return None
+    lam = (3 * a[0] * a[0] * pow(2 * a[1], P - 2, P)) % P if a == b else ((b[1] - a[1]) * pow(b[0] - a[0], P - 2, P)) % P
+    x = (lam * lam - a[0] - b[0]) % P
+    return (x, (lam * (a[0] - x) - a[1]) % P)
+
+
+def _mul(p, n):
+    r = None
+    for i in range(256):
+        if (n >> i) & 1: r = _add(r, p)
+        p = _add(p, p)
+    return r
+
+
+def _th(tag, data):
+    t = hashlib.sha256(tag.encode()).digest()
+    return hashlib.sha256(t + t + data).digest()
+
+
+def xonly(sk: int) -> str:
+    return _mul(G, sk)[0].to_bytes(32, "big").hex()
+
+
+def sign(sk: int, msg: bytes) -> str:
+    pt = _mul(G, sk)
+    d = sk if pt[1] % 2 == 0 else N - sk
+    t = (d ^ int.from_bytes(_th("BIP0340/aux", secrets.token_bytes(32)), "big")).to_bytes(32, "big")
+    k0 = int.from_bytes(_th("BIP0340/nonce", t + pt[0].to_bytes(32, "big") + msg), "big") % N
+    R = _mul(G, k0)
+    k = k0 if R[1] % 2 == 0 else N - k0
+    e = int.from_bytes(_th("BIP0340/challenge", R[0].to_bytes(32, "big") + pt[0].to_bytes(32, "big") + msg), "big") % N
+    return (R[0].to_bytes(32, "big") + ((k + e * d) % N).to_bytes(32, "big")).hex()
+
+
+def _bech32_decode(s):
+    cs = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+    acc = bits = 0; out = []
+    for v in [cs.index(c) for c in s[s.rfind("1") + 1:]][:-6]:
+        acc = (acc << 5) | v; bits += 5
+        while bits >= 8:
+            bits -= 8; out.append((acc >> bits) & 255)
+    return bytes(out)
+
+
+def secret_from_env() -> int:
+    v = os.environ.get("BUZZ_PRIVATE_KEY", "").strip()
+    if not v:
+        sys.exit("agent-register: BUZZ_PRIVATE_KEY is not set")
+    sk = int.from_bytes(_bech32_decode(v) if v.startswith("nsec1") else bytes.fromhex(v), "big")
+    if not 0 < sk < N:
+        sys.exit("agent-register: BUZZ_PRIVATE_KEY is not a valid key")
+    return sk
+
+
+def make_event(sk: int, kind: int, tags: list, content: str) -> dict:
+    pk = xonly(sk)
+    created = int(time.time())
+    ser = json.dumps([0, pk, created, kind, tags, content], separators=(",", ":"), ensure_ascii=False)
+    eid = hashlib.sha256(ser.encode()).hexdigest()
+    return {"id": eid, "pubkey": pk, "created_at": created, "kind": kind, "tags": tags,
+            "content": content, "sig": sign(sk, bytes.fromhex(eid))}
+
+
+HEX = re.compile(r"[0-9a-f]{64}")
+
+
+def write_auth_tag(a):
+    """Sign a NIP-OA owner tag for an existing agent with BUZZ_PRIVATE_KEY and
+    write it to a file. Reassigns ownership of --agent to the signer. Same tag
+    shape and hash preimage as agent-mint, so buzz-acp accepts it. The key and
+    the tag are never printed."""
+    if not a.out:
+        sys.exit("agent-register: --auth-tag needs --out, a mode 700 directory for the auth_tag file")
+    out = pathlib.Path(a.out)
+    if not out.is_dir() or out.stat().st_mode & 0o777 != 0o700:
+        sys.exit("agent-register: --out must be an existing directory with mode 700")
+    if (out / "auth_tag").exists():
+        sys.exit("agent-register: --out already holds an auth_tag; refusing to overwrite it")
+    sk = secret_from_env()
+    me = xonly(sk)
+    msg = hashlib.sha256(f"nostr:agent-auth:{a.agent}:{a.conditions}".encode()).digest()
+    tag = ["auth", me, a.conditions, sign(sk, msg)]
+    old = os.umask(0o077)
+    try:
+        (out / "auth_tag").write_text(json.dumps(tag, separators=(",", ":")))
+    finally:
+        os.umask(old)
+    print(f"agent-register: wrote owner auth_tag for {a.agent} owned by {me} to {out / 'auth_tag'}")
+    return 0
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="agent-register", description=__doc__.split("\n")[0])
+    ap.add_argument("--agent", required=True, help="the agent's pubkey (hex)")
+    ap.add_argument("--name", help="the agent's display name (required unless --auth-tag)")
+    ap.add_argument("--allowlist", default="", help="comma separated hex pubkeys the agent answers")
+    ap.add_argument("--parallelism", type=int, default=1)
+    ap.add_argument("--dry-run", action="store_true", help="print the signed event, post nothing")
+    ap.add_argument("--auth-tag", dest="auth_tag", action="store_true",
+                    help="instead of registering, sign a NIP-OA owner tag for --agent and write it to --out")
+    ap.add_argument("--conditions", default="", help="NIP-OA conditions for --auth-tag (default none)")
+    ap.add_argument("--out", help="with --auth-tag, a mode 700 directory to write the auth_tag file into")
+    a = ap.parse_args(argv)
+    if not HEX.fullmatch(a.agent):
+        sys.exit("agent-register: --agent must be a 64 character lowercase hex pubkey")
+    if a.auth_tag:
+        return write_auth_tag(a)
+    if not a.name:
+        sys.exit("agent-register: --name is required")
+    allow = [k for k in a.allowlist.split(",") if k]
+    bad = [k for k in allow if not HEX.fullmatch(k)]
+    if bad:
+        sys.exit(f"agent-register: not hex pubkeys in --allowlist: {', '.join(bad)}")
+    if a.parallelism < 1:
+        sys.exit("agent-register: --parallelism must be at least 1")
+    sk = secret_from_env()
+    me = xonly(sk)
+    allow = list(dict.fromkeys(allow + [me]))
+    content = json.dumps({"name": a.name, "parallelism": a.parallelism, "respond_to": "allowlist",
+                          "respond_to_allowlist": allow}, separators=(",", ":"), ensure_ascii=False)
+    ev = make_event(sk, 30177, [["d", a.agent]], content)
+    if a.dry_run:
+        print(json.dumps(ev, indent=2, ensure_ascii=False))
+        return 0
+    relay = os.environ.get("BUZZ_RELAY_URL", "").strip().rstrip("/")
+    if not relay:
+        sys.exit("agent-register: BUZZ_RELAY_URL is not set")
+    url = relay.replace("wss://", "https://").replace("ws://", "http://") + "/events"
+    body = json.dumps(ev, separators=(",", ":"), ensure_ascii=False).encode()
+    # NIP-98 HTTP auth, the way the buzz CLI posts stored events.
+    auth = make_event(sk, 27235, [["u", url], ["method", "POST"], ["nonce", secrets.token_hex(16)],
+                                  ["payload", hashlib.sha256(body).hexdigest()]], "")
+    headers = {"Content-Type": "application/json",
+               "Authorization": "Nostr " + base64.b64encode(json.dumps(auth, separators=(",", ":")).encode()).decode()}
+    tag = os.environ.get("BUZZ_AUTH_TAG", "").strip()
+    if tag:
+        headers["x-auth-tag"] = tag
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, data=body, headers=headers, method="POST"), timeout=30) as r:
+            resp = r.read().decode(errors="replace")
+    except urllib.error.HTTPError as e:
+        sys.exit(f"agent-register: relay refused ({e.code}): {e.read().decode(errors='replace')[:300]}")
+    except urllib.error.URLError as e:
+        sys.exit(f"agent-register: could not reach {url}: {e.reason}")
+    print(f"agent-register: published kind:30177 {ev['id']} for {a.agent} as {me} ({resp[:200]})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

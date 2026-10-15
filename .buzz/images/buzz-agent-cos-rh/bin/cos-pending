@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""gm-pending: list the work waiting on the GM (determinism item 7).
+
+Adopted from GM-ic (imagine-circus/cluster e5bac4d, tools/gm-pending, sha256 b77e8ba19271).
+Personal changes: no approval-check env file here, so the Personal keys and channels are
+the defaults (env still overrides each); COS_KEY defaults to the Personal CoS; the asker
+prefix is ASK_PREFIX (default "For the GM:") so a CoS copy needs only env; a later GM
+message in the same channel naming the ask's 8 character id answers it.
+
+  gm-pending [--hours 48] [--now UNIXTIME]
+
+Reads the last --hours of the GM's channels (APPROVAL_CHANNELS: #gm and #staff) and
+prints one line per thread whose latest ask has no answer from the GM after it:
+
+  OPEN   <age> <channel> thread <root8> event <id8> <who> <kind>: <first words>
+  PICKED <age> <channel> thread <root8> event <id8> <who> <kind>: <first words>
+
+An ask is a message that
+  - comes from an approver key and p-tags the GM, or p-tags nobody and is in #gm (the
+    GM's own channel) or in a thread the GM had already posted in; kind "yes or reply"
+    when the GM posted earlier in that thread, else "request";
+  - or comes from the CoS key and contains ASK_PREFIX ("For the GM:"); kind "for the GM".
+OPEN means no GM message after the ask in its thread, and none anywhere in the same
+channel after it that names the ask's event id (its first 8 hex characters; how the GM
+answers an ask from another thread, as with a "full text" post beside its request). PICKED means the only GM
+messages after it start with "Picked up": a session took it, and it is live only if
+that session still is (after a restart it is nobody's). The GM's restart notices
+("Restarting now..." and "Back.") never answer anything. <age> is the ask's age
+(PICKED: the pickup's), as 12m or 3h05m. Lines are oldest first.
+
+It only reads and decides nothing: the GM still judges each line (a yes under an
+hour old has a live session on it; check git log and the thing itself before acting).
+Exit 0 when it ran, even with nothing open; exit 2 with
+  gm-pending: CHECK FAILED: <why>
+when a fetch fails or the configuration is missing.
+
+Configuration, from the env file PENDING_ENV if set and present, else the Personal
+defaults below (the keys gm-approval-check uses). The running agent's environment
+cannot override these (review minor 13), so the approver set is tamper proof:
+APPROVER_KEYS, GM_KEY, APPROVAL_CHANNELS (first is #gm, second #staff), COS_KEY,
+ASK_PREFIX, BUZZ (default buzz), CHANNEL_NAMES (labels for APPROVAL_CHANNELS in order,
+default "#gm,#staff"; a channel without one is shown by its first 8 characters).
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+
+DEFAULTS = {
+    "APPROVER_KEYS": "763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1,"
+                     "e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4",
+    "GM_KEY": "c18423106decbd49cdbdec6b12e4bb156c3457097bf0e73723f050baed931f04",
+    "APPROVAL_CHANNELS": "737366af-014c-4d79-b9db-8e80a9a8dae2,e7b736a9-0c12-422e-abe5-e18728a25331",
+    "COS_KEY": "80fe6edf6c680189b7ac10bab11e0c70557b2673f09ef58a7aa1e3855099746f",
+    "ASK_PREFIX": "For the GM:",
+    "BUZZ": "buzz",
+    "CHANNEL_NAMES": "#gm,#staff",
+}
+STOP_TEXT = "Restarting now. Back in a few minutes; anything sent meanwhile is picked up when I return."
+BACK_TEXT = "Back."
+PAGE = 200
+
+
+class CheckFailed(Exception):
+    pass
+
+
+def config():
+    conf = dict(DEFAULTS)
+    path = os.environ.get("PENDING_ENV", "")
+    if path and os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    conf[k.strip()] = v.strip()
+    # No env override of the baked values (review minor 13): the approver list,
+    # keys and channels come from the root owned PENDING_ENV file (or the built-in
+    # DEFAULTS), never from the running agent's environment, so a compromised
+    # session cannot widen its own approver set.
+    split = lambda v: [x.strip().lower() for x in (v or "").split(",") if x.strip()]
+    c = {"approvers": set(split(conf.get("APPROVER_KEYS"))), "gm": (conf.get("GM_KEY") or "").strip().lower(),
+         "channels": [x.strip() for x in (conf.get("APPROVAL_CHANNELS") or "").split(",") if x.strip()],
+         "cos": (conf.get("COS_KEY") or "").strip().lower(), "prefix": conf.get("ASK_PREFIX") or "For the GM:",
+         "buzz": conf.get("BUZZ") or "buzz",
+         "names": [x.strip() for x in (conf.get("CHANNEL_NAMES") or "").split(",")]}
+    if not c["approvers"] or not c["gm"] or not c["channels"]:
+        raise CheckFailed(f"APPROVER_KEYS, GM_KEY and APPROVAL_CHANNELS must be set (env, PENDING_ENV or defaults)")
+    return c
+
+
+def fetch(buzz, channel, since):
+    """Every message in channel since a time, paging back with --before."""
+    out, before = {}, None
+    while True:
+        cmd = [buzz, "messages", "get", "--channel", channel, "--since", str(since), "--limit", str(PAGE)]
+        if before:
+            cmd += ["--before", str(before)]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode:
+            raise CheckFailed(f"buzz messages get {channel[:8]} exit {r.returncode}: {r.stderr.strip()[:200]}")
+        try:
+            page = json.loads(r.stdout)
+        except ValueError:
+            raise CheckFailed(f"buzz messages get {channel[:8]} printed no JSON")
+        new = [e for e in page if e.get("id") not in out]
+        for e in new:
+            out[e["id"]] = e
+        if len(page) < PAGE or not new:
+            return list(out.values())
+        before = min(e["created_at"] for e in page) + 1
+
+
+def root_of(ev):
+    """Thread root: the e tag marked root, else the one marked reply, else itself."""
+    tags = [t for t in ev.get("tags") or [] if len(t) >= 2 and t[0] == "e"]
+    for marker in ("root", "reply"):
+        for t in tags:
+            if len(t) >= 4 and t[3] == marker:
+                return t[1]
+    return ev["id"]
+
+
+def p_tags(ev):
+    return {t[1].lower() for t in ev.get("tags") or [] if len(t) >= 2 and t[0] == "p"}
+
+
+def is_notice(ev):
+    return ev.get("content", "").strip() in (STOP_TEXT, BACK_TEXT)
+
+
+def age(seconds):
+    m = max(0, int(seconds)) // 60
+    return f"{m}m" if m < 60 else f"{m // 60}h{m % 60:02d}m"
+
+
+def pending(events_by_channel, c, now):
+    lines = []
+    for idx, (channel, events) in enumerate(events_by_channel):
+        names = c.get("names", ["#gm", "#staff"])
+        name = names[idx] if idx < len(names) and names[idx] else channel[:8]
+        threads, cited = {}, []
+        for ev in events:
+            if ev["pubkey"].lower() == c["gm"] and not is_notice(ev):
+                cited.append(ev)
+        for ev in events:
+            threads.setdefault(root_of(ev), []).append(ev)
+        for root, evs in threads.items():
+            evs.sort(key=lambda e: (e["created_at"], e["id"]))
+            mine = [e for e in evs if e["pubkey"].lower() == c["gm"] and not is_notice(e)]
+            ask = None
+            for ev in evs:
+                who = ev["pubkey"].lower()
+                earlier_gm = any(m["created_at"] < ev["created_at"] for m in mine)
+                tagged = p_tags(ev)
+                if who in c["approvers"] and (c["gm"] in tagged or (not tagged and (idx == 0 or earlier_gm))):
+                    ask = (ev, "yes or reply" if earlier_gm else "request")
+                elif who == c["cos"] and c["prefix"] in ev.get("content", ""):
+                    ask = (ev, "for the GM")
+            if not ask:
+                continue
+            ev, kind = ask
+            after = [m for m in mine if (m["created_at"], m["id"]) > (ev["created_at"], ev["id"])]
+            short = ev["id"][:8].lower()
+            if any((m["created_at"], m["id"]) > (ev["created_at"], ev["id"]) and short in m.get("content", "").lower()
+                   for m in cited):
+                continue
+            if after and not all(m["content"].lstrip().startswith("Picked up") for m in after):
+                continue
+            state, since = ("PICKED", after[-1]["created_at"]) if after else ("OPEN", ev["created_at"])
+            text = " ".join(ev.get("content", "").split())[:90]
+            lines.append((ev["created_at"], f"{state} {age(now - since)} {name} thread {root[:8]} event {ev['id'][:8]} "
+                                             f"{ev['pubkey'][:8]} {kind}: {text}"))
+    return [l for _, l in sorted(lines)]
+
+
+def main(argv):
+    hours, now = 48, int(time.time())
+    it = iter(argv)
+    try:
+        for a in it:
+            if a == "--hours":
+                hours = int(next(it))
+            elif a == "--now":
+                now = int(next(it))
+            else:
+                raise ValueError(a)
+    except (ValueError, StopIteration):
+        print("usage: gm-pending [--hours 48] [--now UNIXTIME]", file=sys.stderr)
+        return 1
+    try:
+        c = config()
+        since = now - hours * 3600
+        data = [(ch, fetch(c["buzz"], ch, since)) for ch in c["channels"]]
+    except (CheckFailed, OSError) as e:
+        print(f"gm-pending: CHECK FAILED: {e}")
+        return 2
+    for line in pending(data, c, now):
+        print(line)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
