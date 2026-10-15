@@ -1,5 +1,5 @@
 diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
-index 0f4fd64..e2f05e7 100644
+index 190b2f1..6ad8c30 100644
 --- a/pulpcore/cache/cache.py
 +++ b/pulpcore/cache/cache.py
 @@ -18,7 +18,7 @@ from pulpcore.app.redis_connection import (
@@ -11,7 +11,7 @@ index 0f4fd64..e2f05e7 100644
  from pulpcore.metrics import artifacts_size_counter
  from pulpcore.responses import ArtifactResponse
  
-@@ -460,6 +460,19 @@ class AsyncContentCache(AsyncCache):
+@@ -410,6 +410,19 @@ class AsyncContentCache(AsyncCache):
          response.headers.update({"X-PULP-CACHE": "HIT"})
          return response
  
@@ -31,7 +31,7 @@ index 0f4fd64..e2f05e7 100644
      async def make_entry(self, key, base_key, handler, args, kwargs, expires=DEFAULT_EXPIRES_TTL):
          """Gets the response for the request and try to turn it into a cacheable entry"""
          try:
-@@ -473,6 +486,11 @@ class AsyncContentCache(AsyncCache):
+@@ -423,6 +436,11 @@ class AsyncContentCache(AsyncCache):
  
          entry = {"headers": dict(response.headers), "status": response.status}
  
@@ -44,14 +44,21 @@ index 0f4fd64..e2f05e7 100644
              # Redis TTL is not sufficient: https://github.com/pulp/pulpcore/issues/4845
              entry["expires"] = expires + time.time()
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 8c47987..a79056d 100644
+index 5abe50f..6f9e4cd 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -75,7 +75,7 @@ log = logging.getLogger(__name__)
+@@ -72,8 +72,13 @@ from pulpcore.metrics import artifacts_size_counter  # noqa: E402
+ log = logging.getLogger(__name__)
  _current_distribution = ContextVar("current_distribution", default=None)
  
- # The "shared cache" (cdn/edge) should always ask pulp if their cache is still valid
+-# The "shared cache" (cdn/edge) should always ask pulp if their cache is still valid
 -EDGE_CACHE_CONTROL = "public, max-age=0, must-revalidate"
++# Content is served with a one-day max-age so pulp's Redis response cache and the
++# CDN edge can retain it (this max-age also drives the Redis cache TTL; see
++# AsyncContentCache._parse_max_age in pulpcore/cache/cache.py). Authorization is
++# still enforced on every request: Akamai centralized auth forwards each request to
++# origin (revalidating via If-Modified-Since -> 304) regardless of max-age, and
++# must-revalidate forbids serving stale content once the max-age has expired.
 +EDGE_CACHE_CONTROL = "public, max-age=86400, must-revalidate"
  
  # Tell HTTP caches not to store redirects containing signed URLs.
