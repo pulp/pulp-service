@@ -111,24 +111,11 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 - **Files:** `pulp_python/app/models.py`, `pulp_python/app/utils.py`
 - **Description:** Implements `content_handler_json` on `PythonDistribution` to serve JSON-formatted package metadata responses when clients request `application/json` via the content app.
 
-### 0062 — Add If-Modified-Since header support
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/cache/cache.py`, `pulpcore/content/handler.py`
-- **Description:** Adds `If-Modified-Since` request header handling to the content app so clients receive `304 Not Modified` responses when cached content has not changed, reducing unnecessary data transfer.
-
 ### 0063 — Redirect large artifacts to object storage
 
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
 - **Description:** Adds a `LARGE_FILE_REDIRECT_THRESHOLD` (1.7 GB) so that artifacts exceeding the threshold are always redirected to object storage, even when `domain.redirect_to_object_storage` is False. Prevents large file downloads from being served directly through the content app.
-
-### 0064 — Add ETag header support to content app
-
-- **Package:** pulpcore
-- **Files:** `pulpcore/content/handler.py`, `pulpcore/cache/cache.py`
-- **Description:** Adds `ETag` (sha256-based) and `Cache-Control: public, max-age=0, must-revalidate` headers to content app file responses. Extends the cache layer's `_check_not_modified()` to handle `If-None-Match` requests alongside `If-Modified-Since`, and calls it on both cache HIT and MISS paths so ETag-matched 304 responses are properly cached in Redis.
-- **Upstream:** Not upstreamed yet — candidate for pulpcore contribution (no upstream PR).
 
 ### 0065 — Route content pull-through writes to primary
 

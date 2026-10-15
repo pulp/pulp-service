@@ -1,8 +1,8 @@
 diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
-index 734fbb4..82bd38f 100644
+index 8c9535d..c246626 100644
 --- a/pulpcore/app/models/publication.py
 +++ b/pulpcore/app/models/publication.py
-@@ -779,6 +779,31 @@ class Distribution(MasterModel):
+@@ -855,6 +855,31 @@ class Distribution(MasterModel):
          """
          return None
  
@@ -45,10 +45,10 @@ index a5a4b9d..54f1f05 100644
 +    accept_prefers_json,
  )
 diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
-index 04a7506..1865d40 100644
+index 190b2f1..0f4fd64 100644
 --- a/pulpcore/cache/cache.py
 +++ b/pulpcore/cache/cache.py
-@@ -30,6 +30,54 @@ class CacheKeys(enum.Enum):
+@@ -31,6 +31,54 @@ class CacheKeys(enum.Enum):
      path = "path"
      host = "host"
      method = "method"
@@ -103,7 +103,7 @@ index 04a7506..1865d40 100644
  
  
  def connection_error_wrapper(func):
-@@ -325,7 +373,9 @@ class AsyncContentCache(AsyncCache):
+@@ -326,7 +374,9 @@ class AsyncContentCache(AsyncCache):
                        can be a callable taking the request and cache instance as arguments
              expires_ttl: length in seconds entries should live in the cache, EXPIRES_TTL is default
              keys: a list of CacheKeys to use for key creation upon entry placement,
@@ -114,7 +114,7 @@ index 04a7506..1865d40 100644
              auth: a callable to check authorization of the request; takes the request, cache
                    instance, and base_key as arguments.
          """
-@@ -461,6 +511,9 @@ class AsyncContentCache(AsyncCache):
+@@ -470,6 +520,9 @@ class AsyncContentCache(AsyncCache):
              CacheKeys.path: request.path,
              CacheKeys.method: request.method,
              CacheKeys.host: request.url.host,
@@ -125,7 +125,7 @@ index 04a7506..1865d40 100644
          key = ":".join(all_keys[k] for k in self.keys)
          return key
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index f1cb2b5..00f92d1 100644
+index 5abe50f..de66730 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
 @@ -1,4 +1,5 @@
@@ -134,8 +134,8 @@ index f1cb2b5..00f92d1 100644
  import logging
  import os
  import re
-@@ -59,7 +60,7 @@ from pulpcore.app.util import (  # noqa: E402
-     cache_key,
+@@ -62,7 +63,7 @@ from pulpcore.app.util import (  # noqa: E402
+     check_request_was_modified,
      get_domain,
  )
 -from pulpcore.cache import AsyncContentCache  # noqa: E402
@@ -143,7 +143,7 @@ index f1cb2b5..00f92d1 100644
  from pulpcore.exceptions import (  # noqa: E402
      DigestValidationError,
      UnsupportedDigestValidationError,
-@@ -188,6 +189,10 @@ class Handler:
+@@ -197,6 +198,10 @@ class Handler:
  
      distribution_model = None
  
@@ -154,7 +154,7 @@ index f1cb2b5..00f92d1 100644
      @staticmethod
      def _reset_db_connection():
          """
-@@ -279,6 +284,11 @@ class Handler:
+@@ -288,6 +293,11 @@ class Handler:
      @AsyncContentCache(
          base_key=lambda req, cac: Handler.find_base_path_cached(req, cac),
          auth=lambda req, cac, bk: Handler.auth_cached(req, cac, bk),
@@ -166,9 +166,9 @@ index f1cb2b5..00f92d1 100644
      )
      async def stream_content(self, request):
          """
-@@ -594,6 +604,198 @@ class Handler:
-             sizes=sizes,
-         )
+@@ -647,6 +657,198 @@ class Handler:
+     def _set_etag_headers(headers, sha):
+         headers["ETag"] = f'"{sha}"'
  
 +    @staticmethod
 +    def negotiate_json(request):
@@ -365,7 +365,7 @@ index f1cb2b5..00f92d1 100644
      async def list_directory(self, repo_version, publication, path):
          """
          Generate a set with directory listing of the path.
-@@ -695,6 +897,13 @@ class Handler:
+@@ -766,6 +968,13 @@ class Handler:
          Finally, when nothing is served to client yet, we check if there is a remote for the
          Distribution. If so, the Artifact is pulled from the remote and streamed to the client.
  
@@ -379,7 +379,7 @@ index f1cb2b5..00f92d1 100644
          Args:
              path (str): The path component of the URL.
              request(aiohttp.web.Request) The request to prepare a response for.
-@@ -731,6 +940,11 @@ class Handler:
+@@ -802,6 +1011,11 @@ class Handler:
  
          headers = self.response_headers(original_rel_path, distro)
  
@@ -391,7 +391,7 @@ index f1cb2b5..00f92d1 100644
          content_handler_result = await sync_to_async(distro.content_handler)(original_rel_path)
          if content_handler_result is not None:
              if isinstance(content_handler_result, ContentArtifact):
-@@ -746,6 +960,13 @@ class Handler:
+@@ -824,6 +1038,13 @@ class Handler:
                  # the result is a response so just return it
                  return content_handler_result
  
@@ -405,7 +405,7 @@ index f1cb2b5..00f92d1 100644
          if distro.checkpoint:
              repository = repo_version = None
              publication = await sync_to_async(self._select_checkpoint_publication)(
-@@ -760,30 +981,42 @@ class Handler:
+@@ -838,34 +1059,46 @@ class Handler:
              )()
  
          if publication:
@@ -418,14 +418,18 @@ index f1cb2b5..00f92d1 100644
 -                    raise HTTPMovedPermanently(f"{request.path}/")
 -                original_rel_path = index_path
 -                headers = self.response_headers(original_rel_path, distro)
--            except ObjectDoesNotExist:
--                dir_list, dates, sizes = await self.list_directory(None, publication, rel_path)
--                dir_list.update(
--                    await sync_to_async(distro.content_handler_list_directory)(rel_path)
+-                # last-modified heuristic assumes distribution doesn't rollback to older publications
+-                await self._set_last_modified_header(
+-                    headers, last_modified=publication.pulp_created
 +            if wants_json:
 +                entries, total = await self.list_directory_flat(
 +                    None, publication, rel_path, json_limit, json_offset
                  )
+-            except ObjectDoesNotExist:
+-                dir_list, dates, sizes = await self.list_directory(None, publication, rel_path)
+-                dir_list.update(
+-                    await sync_to_async(distro.content_handler_list_directory)(rel_path)
+-                )
 -                if dir_list and not ends_in_slash:
 -                    # Directory can be listed, but user did not specify trailing slash
 -                    raise HTTPMovedPermanently(f"{request.path}/")
@@ -452,6 +456,10 @@ index f1cb2b5..00f92d1 100644
 +                        raise HTTPMovedPermanently(f"{request.path}/")
 +                    original_rel_path = index_path
 +                    headers = self.response_headers(original_rel_path, distro)
++                    # last-modified heuristic assumes distribution doesn't rollback to older publications
++                    await self._set_last_modified_header(
++                        headers, last_modified=publication.pulp_created
++                    )
 +                except ObjectDoesNotExist:
 +                    dir_list, dates, sizes = await self.list_directory(None, publication, rel_path)
 +                    dir_list.update(
@@ -470,7 +478,7 @@ index f1cb2b5..00f92d1 100644
  
              # published artifact
              try:
-@@ -846,30 +1079,42 @@ class Handler:
+@@ -934,30 +1167,42 @@ class Handler:
                      )
  
          if repo_version and not publication and not distro.SERVE_FROM_PUBLICATION:
