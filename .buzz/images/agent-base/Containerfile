@@ -5,7 +5,7 @@
 # buzz-sprig pinned by digest (main as of 2026-10-09). Bump deliberately.
 FROM ghcr.io/block/buzz-sprig@sha256:40c2775f21bcf299a70bfa65a2f8bc604209855ecea170b3fdd195c665791f8f
 USER root
-RUN apk add --no-cache nodejs npm git bash jq curl ca-certificates python3 py3-yaml \
+RUN apk add --no-cache nodejs npm git bash jq curl ca-certificates python3 py3-yaml tzdata \
  && npm install -g @agentclientprotocol/claude-agent-acp@0.84.0 \
  && npm cache clean --force
 COPY agent-entrypoint /usr/local/bin/agent-entrypoint

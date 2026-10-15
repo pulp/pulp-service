@@ -45,13 +45,21 @@ install_definition() {
   [ -d "$DEF/skills" ] && cp -R "$DEF/skills" "$CLAUDE_CONFIG_DIR/skills"
   local cj="$CLAUDE_CONFIG_DIR/.claude.json"
   [ -s "$cj" ] || echo '{"hasCompletedOnboarding":true}' > "$cj"
-  local mcp="$DEF/mcp.json"; [ -f "$mcp" ] || mcp=<(echo '{"mcpServers":{}}')
-  jq -s '.[0] + {mcpServers: .[1].mcpServers}' "$cj" "$mcp" > "$cj.tmp" && mv "$cj.tmp" "$cj"
+  # No /dev/fd in the pod, so no process substitution: read mcp.json if present.
+  local servers='{}'; [ -f "$DEF/mcp.json" ] && servers="$(jq -c '.mcpServers // {}' "$DEF/mcp.json")"
+  jq --argjson s "$servers" '. + {mcpServers: $s}' "$cj" > "$cj.tmp" && mv "$cj.tmp" "$cj"
   # Clear what the previous definition exported, so a removed or emptied
   # setting does not survive into the next buzz-acp.
   unset AGENT_DISPLAY_NAME AGENT_ABOUT BUZZ_ACP_AGENTS BUZZ_ACP_SESSION_POLICY BUZZ_ACP_EFFORT_LEVEL \
-        BUZZ_ACP_RESPOND_TO BUZZ_ACP_RESPOND_TO_ALLOWLIST BUZZ_ACP_CHANNELS BUZZ_ACP_MODEL BUZZ_RELAY_URL BUZZ_ACP_AGENT_OWNER
+        BUZZ_ACP_RESPOND_TO BUZZ_ACP_RESPOND_TO_ALLOWLIST BUZZ_ACP_CHANNELS BUZZ_ACP_MODEL BUZZ_RELAY_URL BUZZ_ACP_AGENT_OWNER \
+        BUZZ_ACP_HEARTBEAT_INTERVAL BUZZ_ACP_HEARTBEAT_PROMPT_FILE
   eval "$(definition-env "$DEF/agent.yaml")"
+  # An agent with a heartbeat.md in its definition runs it on the interval from
+  # agent.yaml (heartbeat_interval, emitted above). No heartbeat.md means no
+  # heartbeat, so drop any interval the agent.yaml set. Agents without one (echo)
+  # are unaffected.
+  if [ -f "$DEF/heartbeat.md" ]; then export BUZZ_ACP_HEARTBEAT_PROMPT_FILE="$DEF/heartbeat.md"
+  else unset BUZZ_ACP_HEARTBEAT_PROMPT_FILE BUZZ_ACP_HEARTBEAT_INTERVAL; fi
   if [ -s "$DEF/auth-tag" ]; then export BUZZ_AUTH_TAG="$(tr -d '\n' < "$DEF/auth-tag")"
   elif [ -n "$VAULT_AUTH_TAG" ]; then export BUZZ_AUTH_TAG="$VAULT_AUTH_TAG"
   else unset BUZZ_AUTH_TAG; fi
