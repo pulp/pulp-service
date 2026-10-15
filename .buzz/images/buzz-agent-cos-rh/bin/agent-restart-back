@@ -1,0 +1,39 @@
+#!/bin/bash
+# After a restart, reply "Back." in every thread the preStop hook announced in,
+# then delete the record. Backgrounded by the entrypoint; does nothing on a boot
+# with no pending record. If buzz-acp never comes up (the owner stopped the pod),
+# the record is kept and answered on a later real start.
+set -uo pipefail
+dir=${AGENT_RESTART_DIR:-/state/restart}
+f="$dir/threads.json"
+[ -f "$f" ] || exit 0
+# Nothing to announce (no active threads at stop, or a truncated/empty record):
+# clear it and skip the buzz-acp wait.
+content=$(tr -d '[:space:]' < "$f" 2>/dev/null || true)
+if [ -z "$content" ] || [ "$content" = "[]" ]; then rm -f "$f" 2>/dev/null || true; exit 0; fi
+for _ in $(seq 60); do pgrep -x buzz-acp >/dev/null 2>&1 && break; sleep 5; done
+if ! pgrep -x buzz-acp >/dev/null 2>&1; then
+  echo "agent-restart-back: buzz-acp not up, kept threads.json" >&2
+  exit 0
+fi
+# Forked by staff-entrypoint before it execs agent-entrypoint, so the key, relay
+# and tag are not in this process yet. buzz-acp is up, so the definition exists:
+# pull them in before the buzz sends below, else keep the record for a later try.
+. /usr/local/bin/agent-runtime-env
+_agent_runtime_env || { echo "agent-restart-back: no runtime env, kept threads.json" >&2; exit 0; }
+sleep 10
+n=0 fail=0
+while IFS= read -r row; do
+  ch=$(printf '%s' "$row" | jq -r '.channel')
+  root=$(printf '%s' "$row" | jq -r '.root')
+  [ -n "$ch" ] && [ "$ch" != null ] && [ -n "$root" ] && [ "$root" != null ] || continue
+  if printf 'Back.\n' | buzz messages send --channel "$ch" --reply-to "$root" --content - >/dev/null 2>&1; then
+    n=$((n + 1)); echo "restart-notice: back $root" >&2
+  else
+    fail=$((fail + 1)); echo "agent-restart-back: send failed for $root" >&2
+  fi
+done < <(jq -c '.[]' "$f" 2>/dev/null)
+# Keep the record if any send failed, so the next start retries and gm-status
+# flags the pod as not having finished coming back meanwhile.
+[ "$fail" -eq 0 ] && rm -f "$f" 2>/dev/null || true
+echo "agent-restart-back: posted $n, failed $fail" >&2

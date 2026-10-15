@@ -1,0 +1,26 @@
+# cos-rh, the Red Hat chief of staff, as an always on Buzz agent on OpenShift.
+# Keys never live here: nsec and auth-tag come from Vault
+# as the Secret agent-cos-rh. Runtime env the template still sets per target and
+# NOT here: STAFF_CHANNEL, PENDING_ENV=/opt/agent/approval-check.env, AGENT_PUBKEY,
+# the Vertex vars, AGENT_GIT_NAME/EMAIL, BUZZ_GIT_IDENTITY.
+display_name: cos-rh
+description: 'cos-rh, the Red Hat chief of staff: an AI agent (Claude).'
+owner: gm-rh
+# owner_pubkey matches the owner recorded for cos-rh on the RH relay (gm-rh),
+# which is also the key that signed its auth-tag in Vault.
+owner_pubkey: 6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93   # gm-rh
+parallelism: 3
+session_policy: thread
+effort: medium
+model: opus
+relay: wss://buzz-rh.bouterse.casa
+heartbeat_interval: 3600
+respond_to: allowlist
+# Generated from rh/cluster config/platform.yaml (gm-rh owns the content); a
+# change here is a reviewed pulp-service PR.
+allowlist:
+  - 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian
+  - e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4   # Brian's Claude
+  - 6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93   # gm-rh (owner)
+  - 849e1ead3d5b32f9867673c57b4780cd4b5c9aa986496a712b5a79f3a1c3aa51   # PulpBot (extra)
+channels: []   # #staff membership is on the relay; cos-rh creates its own #bench

@@ -1,0 +1,24 @@
+#!/bin/bash
+# Talk to an agent as yourself, the CoS, to test or interview it. You can ask but never approve.
+#   staff-bench channels                                   channels you can see on your relay
+#   staff-bench ask CHANNEL AGENT_PUBKEY TEXT [REPLY_TO]   @mention the agent; prints the event id
+#   staff-bench thread CHANNEL EVENT_ID                    print the thread as "--- who time" blocks
+#   staff-bench wait CHANNEL EVENT_ID [MAX_SECS]           wait until the agent replied and the thread is quiet 90s
+# Uses your own relay (BUZZ_RELAY_URL) and key.
+set -euo pipefail
+: "${BUZZ_RELAY_URL:?}" "${AGENT_PUBKEY:?}"
+show() { jq -r 'if type=="array" then .[] | "--- \(.pubkey[0:8]) \(.created_at)\n\(.content)" else empty end'; }
+case ${1:-} in
+  channels) buzz channels list ;;
+  ask)    buzz messages send --channel "$2" --mention "$3" ${5:+--reply-to "$5"} --content - <<<"$4" | jq -r .event_id ;;
+  thread) buzz messages thread --channel "$2" --event "$3" | show ;;
+  wait)
+    me=${AGENT_PUBKEY:0:8} last="" quiet=0 max=${4:-900} cur=""
+    for ((t = 0; t < max; t += 10)); do
+      sleep 10; cur=$(buzz messages thread --channel "$2" --event "$3" 2>/dev/null | show || true)
+      [ "$cur" = "$last" ] && quiet=$((quiet + 10)) || { quiet=0; last=$cur; }
+      if printf '%s\n' "$cur" | grep '^--- ' | tail -1 | grep -qv "^--- $me" && ((quiet >= 90)); then break; fi
+    done
+    printf '%s\n' "$cur" ;;
+  *) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; [ -z "${1:-}" ] && exit 0; exit 1 ;;
+esac

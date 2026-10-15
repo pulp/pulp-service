@@ -1,0 +1,32 @@
+# buzz-agent-cos-rh: the Red Hat chief of staff image for OpenShift. It is the
+# shared buzz-agent-base plus cos-rh's tamper-proof half, baked root owned per
+# model C: its bin tools (buzz lives in the base; these are agent-register,
+# staff-bench, cos-pending, staff-entrypoint, and the restart/alive/prestop
+# helpers), the cos-pending approver list (approval-check.env), and the boot
+# resume prompt. Charter, heartbeat.md, skills and mcp.json come from the git
+# definition at .buzz/agents/cos-rh/, so a charter or heartbeat edit is a push,
+# not an image rebuild. Built by pulp-service CI to ghcr.io/pulp/buzz-agent-cos-rh.
+#
+# The patched base: buzz-agent-base v0.2.1 carries the heartbeat
+# (patches/agent-base-heartbeat.diff), tzdata, the mcp.json fix (no /dev/fd) and
+# the empty-channels fix, so cos-rh's heartbeat arms. Bump the tag and digest
+# below deliberately (same rule as the base).
+FROM ghcr.io/pulp/buzz-agent-base:v0.2.1@sha256:b0f15ebe52ddca751b4f2df05d37aabcb5ccabc39580b508e16ecc703a1a0215
+USER root
+# Tools onto PATH; config into /opt/agent. Root owned so the running agent (an
+# arbitrary OpenShift UID in group 0) cannot rewrite its own approver list.
+COPY bin/ /usr/local/bin/
+COPY approval-check.env boot-resume.md /opt/agent/
+# cos-pending reads its baked approver list from this path, hardcoded as BAKED_ENV;
+# when the file exists PENDING_ENV is ignored, so it is not overridable at runtime
+# (see cos-pending, blocker 4 / minor 13). The ENV below only documents the path.
+ENV PENDING_ENV=/opt/agent/approval-check.env
+RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
+      /usr/local/bin/agent-register /usr/local/bin/agent-restart-back \
+      /usr/local/bin/agent-restart-floor /usr/local/bin/agent-restart-stuck \
+      /usr/local/bin/staff-bench /usr/local/bin/cos-pending /usr/local/bin/staff-entrypoint \
+ && chmod 0644 /opt/agent/approval-check.env /opt/agent/boot-resume.md \
+ && chmod -R go-w /opt/agent
+USER 1000
+WORKDIR /home/agent
+ENTRYPOINT ["/usr/local/bin/staff-entrypoint"]
