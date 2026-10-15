@@ -264,11 +264,13 @@ objects:
           env:
           - name: TRANSCRIPTS_ROOT
             value: /state
-          # gm-rh addition (transcripts auth): the shared bearer token the sidecar
-          # requires on every request but /healthz. It is the key transcripts-token
-          # in the agent-<slug> vault-secret, already mounted at /run/secrets/agent.
-          # Without that key the sidecar refuses everything but /healthz (fail
-          # closed); auditor-rh reads its own copy and sends the header.
+          # Transcripts auth: the bearer token the sidecar requires on every
+          # request but /healthz. It is the key transcripts-token in this agent's
+          # own agent-<slug> vault-secret, mounted at /run/secrets/agent. Each
+          # agent gets a distinct token, so one agent's token never opens another
+          # agent's sidecar; only auditor-rh holds a copy of each (as
+          # transcripts-token-<slug> in its own secret). Without the key the
+          # sidecar refuses everything but /healthz (fail closed).
           - name: TRANSCRIPTS_TOKEN_FILE
             value: /run/secrets/agent/transcripts-token
           - name: TRANSCRIPTS_REQUIRE_TOKEN
