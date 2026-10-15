@@ -161,6 +161,11 @@ class UserRoleInline(ReadOnlyRoleInline):
         # matching UserRoleAdmin's queryset scoping.
         if request.user.is_superuser:
             return True
+        # NOTE: this carries the same obj=None defect fixed in GroupRoleInline
+        # below (Django's InlineModelAdmin.get_queryset passes obj=None and would
+        # empty the inline). Left unfixed because PulpUserAdmin gates the User page
+        # to superusers, so a non-superuser never reaches this inline today. Fix
+        # alongside enabling member self-view of the User page.
         return obj is not None and obj.pk == request.user.pk
 
 
@@ -173,7 +178,14 @@ class GroupRoleInline(ReadOnlyRoleInline):
         # they belong to, matching GroupRoleAdmin's queryset scoping.
         if request.user.is_superuser:
             return True
-        return obj is not None and request.user.groups.filter(pk=obj.pk).exists()
+        # Django's InlineModelAdmin.get_queryset calls this with obj=None to
+        # decide whether to populate rows; denying it there empties the inline
+        # even for members. Row display is still gated by get_inline_instances
+        # (which passes the real obj) and PulpGroupAdmin's member-only page
+        # access, so allow the obj=None case.
+        if obj is None:
+            return True
+        return request.user.groups.filter(pk=obj.pk).exists()
 
 
 class PulpUserAdmin(HijackUserAdminMixin, UserAdmin):
