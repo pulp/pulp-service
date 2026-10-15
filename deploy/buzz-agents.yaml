@@ -19,6 +19,22 @@ parameters:
   value: https://github.com/pulp/pulp-service.git
 - name: AGENT_DEFINITION_REF
   value: main
+# gm-rh addition (blocker 4): the agent's own pubkey, used by the staff image's
+# boot-resume and restart/prestop helpers. Empty on the base Echo target (which
+# runs the base image and never reads it); the cos-rh and later staff targets set
+# it. Empty is safe: the helpers log and skip rather than exit.
+- name: AGENT_PUBKEY
+  value: ""
+# gm-rh addition (blocker 4): the agent's staff channel uuid, read by the staff
+# image's cos-pending and boot-resume. Empty on the base Echo target; staff
+# targets set it.
+- name: STAFF_CHANNEL
+  value: ""
+# gm-rh addition (important 6): set non-empty on staff targets to arm the preStop
+# drain-and-announce hook (agent-prestop, which the staff image provides). Empty
+# on the Echo target, where the hook is a no-op and the base image is unchanged.
+- name: PRESTOP
+  value: ""
 - name: CPU_REQUEST
   value: 250m
 - name: CPU_LIMIT
@@ -34,6 +50,17 @@ parameters:
 - name: VERTEX_SECRET_KEY
   # the key inside that vault-secret: a GCP service account key JSON
   value: application_default_credentials.json
+# gm-rh addition (review important 7): the per-agent Gitea token vault-secret.
+# Mounted read only in the agent and the transcripts sidecar (so the sidecar
+# redacts it) and exposed as the file GITEA_TOKEN_FILE. The mount is always
+# present but the secret is optional, so an agent whose GITEA_SECRET_NAME has no
+# such secret (Echo keeps the placeholder) gets an empty mount and its tools skip
+# gitea; only a target that sets GITEA_SECRET_NAME to a real vault-secret gets a
+# token. cos-rh sets it to gitea-cos-rh (app-interface/pulp/stage/agents/gitea-cos-rh).
+- name: GITEA_SECRET_NAME
+  value: gitea-none   # placeholder: no such secret exists, so the mount is empty
+- name: GITEA_SECRET_KEY
+  value: token
 - name: VERTEX_PROJECT
   value: hosted-pulp   # the project that owns the agents' service account and serves Claude
 - name: VERTEX_REGION
@@ -49,6 +76,22 @@ parameters:
   # ROSA defaults for the pod and service networks; the SaaS target sets the
   # cluster's real CIDRs and proxy URL.
   value: "localhost,127.0.0.1,.svc,.cluster.local,10.128.0.0/14,172.30.0.0/16"
+# gm-rh addition (piece c): the transcripts sidecar image. Built by pulp-service
+# CI as ghcr.io/pulp/buzz-transcripts from .buzz/images/buzz-transcripts.
+- name: TRANSCRIPTS_IMAGE
+  value: ghcr.io/pulp/buzz-transcripts
+- name: TRANSCRIPTS_IMAGE_TAG
+  # Defaulted (Brian's Claude, 2026-10-15) so the live Echo target keeps rendering
+  # whichever order the SaaS edit and this template land in. Build buzz-transcripts
+  # at this tag before the template merges so the sidecar image resolves; audited
+  # targets (cos-rh, gm-rh) override with their own pinned tag.
+  value: v0.1.0
+# Transcripts auth fails closed. With no transcripts-token key (Echo today) the
+# sidecar answers 503 to everything but /healthz, so the pod stays ready and serves
+# nothing. Once the key is written, dropping it later cannot silently turn auth off.
+# "false" is for local tests only.
+- name: TRANSCRIPTS_REQUIRE_TOKEN
+  value: "true"
 objects:
 - apiVersion: v1
   kind: PersistentVolumeClaim
@@ -152,6 +195,32 @@ objects:
             value: ${NO_PROXY}
           - name: DISABLE_TELEMETRY
             value: "1"
+          # gm-rh addition (important 7): where the Gitea token is mounted. The
+          # file is present only when GITEA_SECRET_NAME names a real vault-secret
+          # (cos-rh); the agent's tools check it is readable before using gitea.
+          - name: GITEA_TOKEN_FILE
+            value: /run/secrets/gitea/token
+          # gm-rh addition (blocker 4): read by the staff image's helpers; empty
+          # and unused on the base Echo image.
+          - name: AGENT_PUBKEY
+            value: ${AGENT_PUBKEY}
+          - name: STAFF_CHANNEL
+            value: ${STAFF_CHANNEL}
+          - name: PRESTOP
+            value: ${PRESTOP}
+          # gm-rh addition (important 6, also gate 1): drain on SIGTERM. When
+          # PRESTOP is set (staff targets) this runs agent-prestop, which records
+          # the active threads and announces the restart before the grace period;
+          # buzz-acp then finishes its in flight turn within the grace window. When
+          # PRESTOP is empty (Echo) the hook is a no-op, so the base image, which
+          # has no agent-prestop, is unaffected.
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - /bin/sh
+                - -c
+                - '[ -n "$PRESTOP" ] && exec /usr/local/bin/agent-prestop || true'
           resources:
             requests:
               cpu: ${CPU_REQUEST}
@@ -170,6 +239,68 @@ objects:
           - name: vertex
             mountPath: /run/secrets/vertex
             readOnly: true
+          # gm-rh addition (important 7): the Gitea token, read only. Optional, so
+          # empty for agents without a gitea-* vault-secret.
+          - name: gitea-token
+            mountPath: /run/secrets/gitea
+            readOnly: true
+        # gm-rh addition (piece c): the transcripts sidecar. Serves this agent's
+        # own Claude Code sessions, redacted, on 8090 to the auditor only (gated by
+        # the Service and NetworkPolicy below). It mounts the state PVC read only at
+        # /state/rh so the server's glob TRANSCRIPTS_ROOT/*/claude/projects matches
+        # the agent's /state/claude (CLAUDE_CONFIG_DIR) under community "rh", and it
+        # mounts the same secrets read only so it can redact this pod's own key
+        # values before anything leaves the pod. Ported from the serrano shape.
+        - name: transcripts
+          image: ${TRANSCRIPTS_IMAGE}:${TRANSCRIPTS_IMAGE_TAG}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+          - name: transcripts
+            containerPort: 8090
+          env:
+          - name: TRANSCRIPTS_ROOT
+            value: /state
+          # gm-rh addition (transcripts auth): the shared bearer token the sidecar
+          # requires on every request but /healthz. It is the key transcripts-token
+          # in the agent-<slug> vault-secret, already mounted at /run/secrets/agent.
+          # Without that key the sidecar refuses everything but /healthz (fail
+          # closed); auditor-rh reads its own copy and sends the header.
+          - name: TRANSCRIPTS_TOKEN_FILE
+            value: /run/secrets/agent/transcripts-token
+          - name: TRANSCRIPTS_REQUIRE_TOKEN
+            value: ${TRANSCRIPTS_REQUIRE_TOKEN}
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 20m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+          - name: state
+            mountPath: /state/rh
+            readOnly: true
+          - name: agent-secret
+            mountPath: /run/secrets/agent
+            readOnly: true
+          - name: vertex
+            mountPath: /run/secrets/vertex
+            readOnly: true
+          # gm-rh addition (important 7): the sidecar mounts the token too so it
+          # redacts the token value from transcripts before serving them.
+          - name: gitea-token
+            mountPath: /run/secrets/gitea
+            readOnly: true
         volumes:
         - name: state
           persistentVolumeClaim:
@@ -184,3 +315,67 @@ objects:
           secret:
             secretName: ${VERTEX_SECRET_NAME}
             defaultMode: 0440
+        # gm-rh addition (important 7): the Gitea token. optional:true so a missing
+        # secret (the Echo placeholder gitea-none) yields an empty mount instead of
+        # blocking the pod. items pins the mounted filename to "token" whatever the
+        # secret's key is called, so GITEA_TOKEN_FILE stays /run/secrets/gitea/token.
+        - name: gitea-token
+          secret:
+            secretName: ${GITEA_SECRET_NAME}
+            optional: true
+            defaultMode: 0440
+            items:
+            - key: ${GITEA_SECRET_KEY}
+              path: token
+# gm-rh addition (piece c): the Service the auditor reaches the sidecar through.
+# Only ClusterIP on 8090; the agent itself needs no Service (outbound only).
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: buzz-agent-${AGENT_SLUG}-transcripts
+    labels:
+      app: buzz-agent
+      agent: ${AGENT_SLUG}
+  spec:
+    selector:
+      app: buzz-agent
+      agent: ${AGENT_SLUG}
+    ports:
+    - name: transcripts
+      protocol: TCP
+      port: 8090
+      targetPort: 8090
+# gm-rh addition (piece c): the auditor gate. All staff share the one
+# pulp-agents-stage namespace, so the podSelector names this agent's pod and the
+# only ingress THIS policy permits is from the auditor-rh pod to 8090. Because it
+# is a podSelector Ingress policy, it also makes the agent pod default-deny for
+# other inbound connections this policy does not name, which is correct: buzz
+# agents are outbound only.
+#
+# NetworkPolicies are additive, so this is not an exclusive allowlist. The
+# namespace's default policies (allow-from-same-namespace, the ingress namespace and
+# app-sre-observability) also admit traffic to 8090. Isolation therefore comes from
+# the sidecar's bearer token (TRANSCRIPTS_REQUIRE_TOKEN) and its redaction; this
+# policy documents the intended reader.
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: buzz-agent-${AGENT_SLUG}-transcripts
+    labels:
+      app: buzz-agent
+      agent: ${AGENT_SLUG}
+  spec:
+    podSelector:
+      matchLabels:
+        app: buzz-agent
+        agent: ${AGENT_SLUG}
+    policyTypes: [Ingress]
+    ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            app: buzz-agent
+            agent: auditor-rh
+      ports:
+      - protocol: TCP
+        port: 8090
