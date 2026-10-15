@@ -17,8 +17,9 @@ USER root
 # arbitrary OpenShift UID in group 0) cannot rewrite its own approver list.
 COPY bin/ /usr/local/bin/
 COPY approval-check.env boot-resume.md /opt/agent/
-# cos-pending reads its baked approver list from here; fixed in the image, not
-# overridable at runtime (see cos-pending, blocker 4 / minor 13).
+# cos-pending reads its baked approver list from this path, hardcoded as BAKED_ENV;
+# when the file exists PENDING_ENV is ignored, so it is not overridable at runtime
+# (see cos-pending, blocker 4 / minor 13). The ENV below only documents the path.
 ENV PENDING_ENV=/opt/agent/approval-check.env
 RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
       /usr/local/bin/agent-register /usr/local/bin/agent-restart-back \

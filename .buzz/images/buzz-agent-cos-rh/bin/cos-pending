@@ -34,9 +34,12 @@ Exit 0 when it ran, even with nothing open; exit 2 with
   gm-pending: CHECK FAILED: <why>
 when a fetch fails or the configuration is missing.
 
-Configuration, from the env file PENDING_ENV if set and present, else the Personal
-defaults below (the keys gm-approval-check uses). The running agent's environment
-cannot override these (review minor 13), so the approver set is tamper proof:
+Configuration, from the root owned file BAKED_ENV (/opt/agent/approval-check.env) when
+it exists, else from the env file PENDING_ENV if set and present (off-image tests
+only), else the Personal defaults below (the keys gm-approval-check uses). When the
+baked file exists, PENDING_ENV is ignored, so a caller cannot point it at a file of
+its own; the running agent's environment cannot override these (review minor 13),
+so the approver set is tamper proof:
 APPROVER_KEYS, GM_KEY, APPROVAL_CHANNELS (first is #gm, second #staff), COS_KEY,
 ASK_PREFIX, BUZZ (default buzz), CHANNEL_NAMES (labels for APPROVAL_CHANNELS in order,
 default "#gm,#staff"; a channel without one is shown by its first 8 characters).
@@ -60,6 +63,7 @@ DEFAULTS = {
 STOP_TEXT = "Restarting now. Back in a few minutes; anything sent meanwhile is picked up when I return."
 BACK_TEXT = "Back."
 PAGE = 200
+BAKED_ENV = "/opt/agent/approval-check.env"
 
 
 class CheckFailed(Exception):
@@ -68,7 +72,9 @@ class CheckFailed(Exception):
 
 def config():
     conf = dict(DEFAULTS)
-    path = os.environ.get("PENDING_ENV", "")
+    # The baked file wins whenever it exists: PENDING_ENV is caller controlled, so
+    # honoring it in the image would let any invocation substitute the approver list.
+    path = BAKED_ENV if os.path.exists(BAKED_ENV) else os.environ.get("PENDING_ENV", "")
     if path and os.path.exists(path):
         with open(path) as f:
             for line in f:
@@ -77,7 +83,7 @@ def config():
                     k, _, v = line.partition("=")
                     conf[k.strip()] = v.strip()
     # No env override of the baked values (review minor 13): the approver list,
-    # keys and channels come from the root owned PENDING_ENV file (or the built-in
+    # keys and channels come from the root owned BAKED_ENV file (or the built-in
     # DEFAULTS), never from the running agent's environment, so a compromised
     # session cannot widen its own approver set.
     split = lambda v: [x.strip().lower() for x in (v or "").split(",") if x.strip()]
@@ -87,7 +93,7 @@ def config():
          "buzz": conf.get("BUZZ") or "buzz",
          "names": [x.strip() for x in (conf.get("CHANNEL_NAMES") or "").split(",")]}
     if not c["approvers"] or not c["gm"] or not c["channels"]:
-        raise CheckFailed(f"APPROVER_KEYS, GM_KEY and APPROVAL_CHANNELS must be set (env, PENDING_ENV or defaults)")
+        raise CheckFailed(f"APPROVER_KEYS, GM_KEY and APPROVAL_CHANNELS must be set (BAKED_ENV, PENDING_ENV or defaults)")
     return c
 
 

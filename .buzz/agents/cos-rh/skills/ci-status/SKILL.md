@@ -9,9 +9,12 @@ Your gitea token (account cos-rh, read only) is mounted as a per-agent vault-sec
 [ -n "${GITEA_TOKEN_FILE:-}" ] && [ -r "$GITEA_TOKEN_FILE" ] || { echo "ci-status: no gitea token mounted (GITEA_TOKEN_FILE), CI not available"; exit 0; }
 G=https://gitea.bouterse.casa/api/v1/repos/rh
 for r in agents cluster; do
-  curl -s -H "Authorization: token $(cat "$GITEA_TOKEN_FILE")" "$G/$r/actions/runs?limit=5" \
-    | jq -r --arg r "$r" '.workflow_runs[]? | "\($r) #\(.run_number) \(.status) \(.conclusion // "-") \(.display_title // .head_sha[0:7]) \(.started_at)"'
+  out=$(curl -sS --fail --connect-timeout 10 --max-time 30 -H "Authorization: token $(cat "$GITEA_TOKEN_FILE")" "$G/$r/actions/runs?limit=5") \
+    && printf '%s' "$out" | jq -r --arg r "$r" 'if (.workflow_runs|type) == "array" then .workflow_runs[] | "\($r) #\(.run_number) \(.status) \(.conclusion // "-") \(.display_title // .head_sha[0:7]) \(.started_at)" else error("no workflow_runs in the reply") end' \
+    || echo "$r CI UNKNOWN: the gitea query failed or timed out"
 done
 ```
+
+A `CI UNKNOWN` line means the query failed (unreachable, timed out, an HTTP error or an unexpected reply). Report CI for that repo as unknown, never as passing or healthy.
 
 Status is `completed`/`in_progress`; conclusion is `success`, `failure`, `cancelled` or `-` while running. A failed run in rh/agents leaves the previously deployed agents running once agents are on-cluster; say which commit failed. You cannot read Flux or pod state (no Kubernetes access), so the deployed state check from the Personal version does not apply to you; report only what Gitea shows.

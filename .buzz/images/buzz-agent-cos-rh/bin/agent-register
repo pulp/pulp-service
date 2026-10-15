@@ -6,12 +6,12 @@
 Buzz Desktop lists an agent in its @mention menu only when a kind:30177 record
 for it is signed by the owner named in the agent's NIP-OA auth tag (bmbouter,
 2026-10-12). Signs with BUZZ_PRIVATE_KEY (hex or nsec) and posts to
-BUZZ_RELAY_URL (wss:// or https://), sending BUZZ_AUTH_TAG as x-auth-tag when
+BUZZ_RELAY_URL (wss:// or https://; plain ws:// or http:// only for localhost), sending BUZZ_AUTH_TAG as x-auth-tag when
 set. The signer's own key is always added to the allowlist. Standard library
 only, so it runs anywhere with python3, with any owner's key. --dry-run prints
 the signed event instead of posting it. The key is never printed.
 """
-import argparse, base64, hashlib, json, os, pathlib, re, secrets, sys, time, urllib.error, urllib.request
+import argparse, base64, hashlib, json, os, pathlib, re, secrets, sys, time, urllib.error, urllib.parse, urllib.request
 
 # BIP340 Schnorr over secp256k1 (the reference algorithm).
 P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
@@ -151,6 +151,11 @@ def main(argv):
     if not relay:
         sys.exit("agent-register: BUZZ_RELAY_URL is not set")
     url = relay.replace("wss://", "https://").replace("ws://", "http://") + "/events"
+    # Plain ws:// or http:// only to a relay on this host (a local test relay); the signed
+    # record and NIP-98 header go over TLS everywhere else.
+    host = urllib.parse.urlsplit(url).hostname or ""
+    if not url.startswith("https://") and host not in ("localhost", "127.0.0.1", "::1"):
+        sys.exit("agent-register: BUZZ_RELAY_URL must be wss:// or https:// unless the relay is on localhost")
     body = json.dumps(ev, separators=(",", ":"), ensure_ascii=False).encode()
     # NIP-98 HTTP auth, the way the buzz CLI posts stored events.
     auth = make_event(sk, 27235, [["u", url], ["method", "POST"], ["nonce", secrets.token_hex(16)],
