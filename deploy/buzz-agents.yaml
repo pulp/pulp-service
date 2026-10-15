@@ -133,7 +133,10 @@ objects:
           runAsNonRoot: true
           seccompProfile:
             type: RuntimeDefault
-        terminationGracePeriodSeconds: 120
+        # agent-entrypoint forwards SIGTERM to buzz-acp and waits for its in
+        # flight turn with no timeout of its own, so this is the drain ceiling.
+        # The staff preStop (up to 22s) runs first while the turn keeps going.
+        terminationGracePeriodSeconds: 300
         containers:
         - name: agent
           image: ${IMAGE}:${IMAGE_TAG}
