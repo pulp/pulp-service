@@ -23,7 +23,7 @@ hours must be finite, positive and at most MAX_HOURS; at most MAX_SESSIONS (newe
 sessions are considered; only the last MAX_READ_BYTES of a transcript are read; and
 a response stops at MAX_RESPONSE_BYTES (each TRANSCRIPTS_<NAME> in the environment).
 """
-import base64, glob, hmac, json, math, os, re, sys, time
+import base64, glob, hmac, json, math, os, re, signal, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -321,4 +321,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # As the container's PID 1 this process ignores SIGTERM unless it handles it, which
+    # would hold the pod for its whole termination grace period. Exit at once instead.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     ThreadingHTTPServer(("0.0.0.0", int(os.environ.get("PORT", "8090"))), Handler).serve_forever()
