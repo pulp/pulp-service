@@ -56,6 +56,15 @@ objects:
             client_body_timeout 60s;
             proxy_http_version 1.1;
             proxy_request_buffering off;
+            # Stream responses straight through to the client instead of
+            # buffering them. With buffering on, nginx drains the upstream into
+            # its temp-file buffer (<= proxy_max_temp_file_size, 1G default) and
+            # then pauses reading from the upstream while it feeds a slow client.
+            # On large files (e.g. ~1G torch wheels) over slow VPN clients, the
+            # upstream (Akamai) hits its own idle timeout during that pause and
+            # closes the connection, so the download is cut mid-stream
+            # ("upstream prematurely closed connection while reading upstream").
+            proxy_buffering off;
             set $upstream https://${UPSTREAM_HOST}:${UPSTREAM_PORT};
             proxy_pass $upstream;
             proxy_ssl_server_name on;
@@ -65,8 +74,11 @@ objects:
             proxy_set_header X-Pulp-VPN-Access VPN_ACCESS_SECRET;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_connect_timeout 10s;
-            proxy_read_timeout 120s;
-            proxy_send_timeout 120s;
+            # Raised from 120s: large uploads (e.g. RPM package uploads) can take
+            # longer than 2 minutes before the upstream sends response headers,
+            # which previously tripped "upstream timed out (110)".
+            proxy_read_timeout 300s;
+            proxy_send_timeout 300s;
           }
         }
       }
