@@ -123,6 +123,13 @@ STOP_HOLD=${AGENT_STOP_HOLD_SECONDS:-230}
 # buzz-acp's own "turn starting for" / "turn complete for" lines, kept so the
 # hold can tell a turn that is quiet mid tool call from one that has ended.
 TURN_LOG=$STATE/turns.log
+# buzz-acp logs those lines under the pool::prompt target, which its default
+# filter (buzz_acp=info) hides, so enable it alongside whatever RUST_LOG holds.
+case ",${RUST_LOG:-}," in
+  *,pool::prompt*) ;;
+  ,,) export RUST_LOG="buzz_acp=info,pool::prompt=info" ;;
+  *) export RUST_LOG="$RUST_LOG,pool::prompt=info" ;;
+esac
 # Start buzz-acp with its output passed through to the pod log as before, and
 # its turn lines copied to TURN_LOG. A named pipe, not process substitution:
 # the pod has no /dev/fd.

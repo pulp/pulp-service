@@ -32,11 +32,14 @@ cat > "$W/bin/fake-acp" <<'EOF'
 #!/bin/bash
 trap 'date +%s > "$OUT/term-at"; exit 0' TERM
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/-w"
-echo "INFO pool::prompt: turn starting for channel t"
+# Like buzz-acp, the turn lines come only when RUST_LOG enables pool::prompt
+# (its default filter is buzz_acp=info alone).
+turnlog() { case ",${RUST_LOG:-}," in *,pool::prompt=info,*|*,pool::prompt=debug,*|*,pool::prompt,*) echo "INFO pool::prompt: $1";; esac; }
+turnlog "turn starting for channel t"
 i=0
 while [ "$TURN" = 0 ] || [ $i -lt "$TURN" ]; do [ -n "${DIE:-}" ] && [ $i -ge "$DIE" ] && exit 101; echo x >> "$CLAUDE_CONFIG_DIR/projects/-w/s.jsonl"; sleep 1 & wait $!; i=$((i+1)); done
 sleep "${SILENT:-0}" & wait $!
-echo "INFO pool::prompt: turn complete for channel t: end_turn"
+turnlog "turn complete for channel t: end_turn"
 while true; do sleep 1 & wait $!; done
 EOF
 chmod +x "$W/bin/fake-acp"
