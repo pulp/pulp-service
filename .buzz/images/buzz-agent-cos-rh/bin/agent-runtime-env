@@ -21,5 +21,17 @@ _agent_runtime_env() {
   if [ -s "$def_dir/auth-tag" ]; then export BUZZ_AUTH_TAG="$(tr -d '\n' < "$def_dir/auth-tag")"
   elif [ -s "$sec/auth-tag" ]; then export BUZZ_AUTH_TAG="$(tr -d '\n' < "$sec/auth-tag")"
   else unset BUZZ_AUTH_TAG; fi
+  # Export the BUZZ_ACP_* that agent-entrypoint sets for buzz-acp, so the
+  # boot-resume fork's `buzz-acp run` can spawn the agent command. Without
+  # these (BUZZ_ACP_AGENT_COMMAND above all) the fork's spawn fails with
+  # agent_spawn_failed. Mirrors agent-entrypoint; the defaults do not
+  # override a value already set in the env.
+  export AGENT_DEF_DIR="$def_dir"
+  export BUZZ_ACP_SYSTEM_PROMPT_FILE="$def_dir/charter.md"
+  [ -f "$def_dir/heartbeat.md" ] && export BUZZ_ACP_HEARTBEAT_PROMPT_FILE="$def_dir/heartbeat.md"
+  export BUZZ_ACP_AGENT_COMMAND="${BUZZ_ACP_AGENT_COMMAND:-claude-agent-acp}"
+  export BUZZ_ACP_AGENT_ARGS="${BUZZ_ACP_AGENT_ARGS:-}"
+  export BUZZ_ACP_EXIT_AFTER_INACTIVITY="${BUZZ_ACP_EXIT_AFTER_INACTIVITY:-0}"
+  export BUZZ_ACP_CONTEXT_MESSAGE_LIMIT="${BUZZ_ACP_CONTEXT_MESSAGE_LIMIT:-100}"
   return 0
 }
