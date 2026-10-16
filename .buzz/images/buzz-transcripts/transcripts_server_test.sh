@@ -133,4 +133,13 @@ O5=$(curl -s "localhost:18094/show?hours=1")
 check "caps the response size and says so" '[ ${#O5} -lt 450 ] && [[ "$O5" == *truncated* ]]'
 kill $P5 2>/dev/null
 
+# SIGTERM: the server handles it itself and exits 0. As a container's PID 1 a
+# process with no handler ignores SIGTERM, which holds the pod for its whole
+# termination grace period.
+PORT=18095 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets python3 "$SRV" & P6=$!
+for i in $(seq 1 30); do curl -s localhost:18095/healthz >/dev/null && break; sleep 0.2; done
+kill -TERM $P6; for i in $(seq 1 15); do kill -0 $P6 2>/dev/null || break; sleep 0.2; done
+wait $P6 2>/dev/null; RC6=$?
+check "exits 0 on SIGTERM within 3s" '[ "$RC6" = 0 ]'
+
 echo "transcripts server tests: $pass passed, $fail failed"; [ $fail -eq 0 ]
