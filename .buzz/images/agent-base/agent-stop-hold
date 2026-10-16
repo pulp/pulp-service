@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Wait until the agent is idle, for the stop path in agent-entrypoint.
+
+    agent-stop-hold <claude config dir> <idle seconds> <cap seconds> [turn log]
+
+buzz-acp gives an in flight turn only 30 seconds after SIGTERM and then kills it
+(block/buzz#8392). So agent-entrypoint holds the pod's SIGTERM here first and
+passes it on once the agent is idle, which takes both of:
+- no Claude Code session transcript (<config dir>/projects/*/*.jsonl) written
+  for <idle seconds>, and
+- in the turn log (buzz-acp's own output, as agent-entrypoint keeps it), every
+  "turn starting for <label>" followed by an end line for that label. A long
+  tool call or model request can leave the transcript quiet mid turn; this
+  catches it. A turn that errors logs no end line, so it holds to the cap.
+Exits 0 when idle, 3 when <cap seconds> pass first; the caller sends SIGTERM
+either way.
+"""
+import glob
+import os
+import re
+import sys
+import time
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+START = re.compile(r"turn starting for (.+?)\s*$")
+# buzz-acp pool.rs log_stop_reason: complete, cancelled, refused, hit max_tokens
+# or max_turn_requests, each "for <label>" as the start line names it.
+END = re.compile(r"turn (?:complete|cancelled|refused|hit \w+) for (.+?)(?:: end_turn|\s+\u2014 .*)?\s*$")
+
+
+def last_write(config_dir: str) -> float:
+    newest = 0.0
+    for path in glob.glob(os.path.join(config_dir, "projects", "*", "*.jsonl")):
+        try:
+            newest = max(newest, os.stat(path).st_mtime)
+        except OSError:
+            pass  # a transcript removed between the glob and the stat
+    return newest
+
+
+def open_turns(log: str) -> set:
+    """Labels whose last logged line is a start with no end after it."""
+    busy = set()
+    try:
+        with open(log, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = ANSI.sub("", line)
+                m = END.search(line)
+                if m:
+                    busy.discard(m.group(1))
+                    continue
+                m = START.search(line)
+                if m:
+                    busy.add(m.group(1))
+    except OSError:
+        pass  # no log yet: nothing has started
+    return busy
+
+
+def main() -> int:
+    config_dir, idle, cap = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
+    log = sys.argv[4] if len(sys.argv) > 4 else ""
+    deadline = time.time() + cap
+    while True:
+        last = last_write(config_dir)
+        quiet_for = time.time() - last
+        busy = open_turns(log) if log else set()
+        if quiet_for >= idle and not busy:
+            why = f"{quiet_for:.0f}s since the last transcript write" if last else "no transcripts"
+            print(f"agent-stop-hold: idle ({why})", flush=True)
+            return 0
+        if time.time() >= deadline:
+            left = f" ({len(busy)} turn(s) with no end line)" if busy else ""
+            print(f"agent-stop-hold: still busy after {cap:.0f}s{left}; stopping anyway", flush=True)
+            return 3
+        time.sleep(1)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

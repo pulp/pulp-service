@@ -99,8 +99,60 @@ publish_profile
 echo "agent-entrypoint: $AGENT_SLUG on image $AGENT_REVISION, definition commit $AGENT_DEFINITION_COMMIT"
 
 signalled=0; child=""
-trap 'signalled=1; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null' TERM INT
+# The pod's SIGTERM is not passed straight on: buzz-acp gives an in flight turn
+# only 30s after SIGTERM and then kills it (block/buzz#8392), so the main loop
+# below holds it until the agent is idle (stop_child).
+signal_at=""
+trap 'signalled=1; [ -n "$signal_at" ] || signal_at=$(date +%s)' TERM INT
 cd "$AGENT_WORKDIR"
+RESTART_DIR=${AGENT_RESTART_DIR:-$STATE/restart}
+# Replay what arrived while stopped. The staff entrypoint already set the floor
+# when it runs; on the base image read the marker stop_child leaves.
+# The marker is removed only once buzz-acp has started with it (start_acp), so
+# a crash before that keeps it for the next boot.
+floor_pending=0
+if [ -z "${BUZZ_ACP_REPLAY_FLOOR:-}" ] && [ -s "$RESTART_DIR/stopping-at" ]; then
+  export BUZZ_ACP_REPLAY_FLOOR="$(cat "$RESTART_DIR/stopping-at")"
+  floor_pending=1
+fi
+# Hold SIGTERM until no Claude Code transcript has been written for STOP_IDLE
+# seconds, up to STOP_HOLD, then pass it on. The defaults fit the pod's 300s
+# grace: up to 22s of preStop, 230s here, then buzz-acp's own 30s.
+STOP_IDLE=${AGENT_STOP_IDLE_SECONDS:-20}
+STOP_HOLD=${AGENT_STOP_HOLD_SECONDS:-230}
+# buzz-acp's own "turn starting for" / "turn complete for" lines, kept so the
+# hold can tell a turn that is quiet mid tool call from one that has ended.
+TURN_LOG=$STATE/turns.log
+# Start buzz-acp with its output passed through to the pod log as before, and
+# its turn lines copied to TURN_LOG. A named pipe, not process substitution:
+# the pod has no /dev/fd.
+start_acp() {
+  local fifo="${TMPDIR:-/tmp}/acp-out.$$"
+  : > "$TURN_LOG"
+  rm -f "$fifo"; mkfifo "$fifo"
+  awk -v tl="$TURN_LOG" '{ print; fflush() }
+    /turn (starting|complete|cancelled|refused|hit [a-z_]+) for / { print >> tl; fflush(tl) }' < "$fifo" &
+  "$ACP" > "$fifo" 2>&1 & child=$!
+  rm -f "$fifo"
+  if [ $floor_pending -eq 1 ]; then rm -f "$RESTART_DIR/stopping-at"; floor_pending=0; fi
+}
+# The hold counts from the pod's SIGTERM, not from when the main loop gets to
+# it (a definition fetch can block for minutes), so the whole stop still fits
+# inside the pod's grace period.
+hold_left() {
+  local spent=0
+  [ -n "$signal_at" ] && spent=$(( $(date +%s) - signal_at ))
+  local left=$(( STOP_HOLD - spent ))
+  [ $left -gt 0 ] && echo $left || echo 0
+}
+stop_child() {
+  agent-stop-hold "$CLAUDE_CONFIG_DIR" "$STOP_IDLE" "$(hold_left)" "$TURN_LOG" || true
+  # buzz-acp stops reading the relay at SIGTERM, so the next start replays from
+  # this moment. Not from the preStop's earlier mark: mentions answered during
+  # the hold would be answered twice.
+  mkdir -p "$RESTART_DIR" && date +%s > "$RESTART_DIR/stopping-at"
+  kill -TERM "$child" 2>/dev/null
+}
 DRAIN=${AGENT_DRAIN_SECONDS:-300}
 # Wait for buzz-acp to finish in flight turns after SIGTERM; force it after DRAIN.
 drain_child() {
@@ -109,7 +161,7 @@ drain_child() {
   kill -0 "$child" 2>/dev/null && { echo "agent-entrypoint: buzz-acp did not stop in ${DRAIN}s; killing"; kill -KILL "$child" 2>/dev/null; }
 }
 while :; do
-  "$ACP" & child=$!
+  start_acp
   [ $signalled -eq 1 ] && kill -TERM "$child" 2>/dev/null
   # Watch the definition while buzz-acp runs, polling every few seconds so a
   # crash is noticed at once. A changed tree ends this round: buzz-acp gets
@@ -118,16 +170,30 @@ while :; do
   # install advances installed_tree, so a failed update is retried next tick.
   restart=0; elapsed=0
   while kill -0 "$child" 2>/dev/null; do
-    sleep 5; elapsed=$((elapsed+5))
+    # "& wait", not a plain foreground command: bash runs the SIGTERM trap only
+    # once a foreground command ends, and a definition fetch can take minutes.
+    sleep 5 & wait $!; elapsed=$((elapsed+5))
     [ $signalled -eq 1 ] && break
     [ $elapsed -lt "$WATCH_SECONDS" ] && continue
     elapsed=0
-    fetch_definition || continue
+    fetch_definition & wait $!; fetched=$?
+    [ $signalled -eq 1 ] && break
+    [ $fetched -eq 0 ] || continue
     if [ "$(current_tree)" != "$installed_tree" ]; then
       echo "agent-entrypoint: definition changed; restarting buzz-acp"
-      restart=1; kill -TERM "$child" 2>/dev/null; drain_child; break
+      # Same hold as a pod stop, so the reload does not cut a turn short, and
+      # the restarted buzz-acp replays what arrived during the restart.
+      restart=1; agent-stop-hold "$CLAUDE_CONFIG_DIR" "$STOP_IDLE" "$(hold_left)" "$TURN_LOG" || true
+      export BUZZ_ACP_REPLAY_FLOOR="$(date +%s)"
+      kill -TERM "$child" 2>/dev/null; drain_child; break
     fi
   done
+  if [ $signalled -eq 1 ]; then
+    kill -0 "$child" 2>/dev/null && stop_child
+    # wait returns early when another signal arrives; keep waiting while buzz-acp drains.
+    while kill -0 "$child" 2>/dev/null; do wait "$child" 2>/dev/null; done
+    exit 0
+  fi
   wait "$child" 2>/dev/null; rc=$?
   [ $signalled -eq 1 ] && exit 0
   if [ $restart -eq 1 ]; then
