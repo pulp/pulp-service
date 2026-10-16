@@ -12,6 +12,12 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v5
+      - name: Test the stop path
+        # A turn in flight at a pod stop must get to finish; prove it before shipping.
+        run: |
+          bash .buzz/images/agent-base/agent-stop-hold_test.sh
+          podman run --rm -v "$PWD/.buzz/images/agent-base:/t:ro" docker.io/library/alpine:3.20 sh -c \
+            'apk add -q bash git jq python3 py3-yaml coreutils && bash /t/agent-entrypoint_stop_test.sh'
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Build

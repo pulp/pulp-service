@@ -10,7 +10,8 @@ RUN apk add --no-cache nodejs npm git bash jq curl ca-certificates python3 py3-y
  && npm cache clean --force
 COPY agent-entrypoint /usr/local/bin/agent-entrypoint
 COPY definition-env /usr/local/bin/definition-env
-RUN chmod 755 /usr/local/bin/agent-entrypoint /usr/local/bin/definition-env \
+COPY agent-stop-hold /usr/local/bin/agent-stop-hold
+RUN chmod 755 /usr/local/bin/agent-entrypoint /usr/local/bin/definition-env /usr/local/bin/agent-stop-hold \
  && mkdir -p /home/agent /state \
  && chgrp -R 0 /home/agent /state && chmod -R g=u /home/agent /state
 ENV HOME=/home/agent

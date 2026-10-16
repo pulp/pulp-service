@@ -99,8 +99,31 @@ publish_profile
 echo "agent-entrypoint: $AGENT_SLUG on image $AGENT_REVISION, definition commit $AGENT_DEFINITION_COMMIT"
 
 signalled=0; child=""
-trap 'signalled=1; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null' TERM INT
+# The pod's SIGTERM is not passed straight on: buzz-acp gives an in flight turn
+# only 30s after SIGTERM and then kills it (block/buzz#8392), so the main loop
+# below holds it until the agent is idle (stop_child).
+trap 'signalled=1' TERM INT
 cd "$AGENT_WORKDIR"
+RESTART_DIR=${AGENT_RESTART_DIR:-$STATE/restart}
+# Replay what arrived while stopped. The staff entrypoint already set the floor
+# when it runs; on the base image read the marker stop_child leaves.
+if [ -z "${BUZZ_ACP_REPLAY_FLOOR:-}" ] && [ -s "$RESTART_DIR/stopping-at" ]; then
+  export BUZZ_ACP_REPLAY_FLOOR="$(cat "$RESTART_DIR/stopping-at")"
+  rm -f "$RESTART_DIR/stopping-at"
+fi
+# Hold SIGTERM until no Claude Code transcript has been written for STOP_IDLE
+# seconds, up to STOP_HOLD, then pass it on. The defaults fit the pod's 300s
+# grace: up to 22s of preStop, 230s here, then buzz-acp's own 30s.
+STOP_IDLE=${AGENT_STOP_IDLE_SECONDS:-20}
+STOP_HOLD=${AGENT_STOP_HOLD_SECONDS:-230}
+stop_child() {
+  agent-stop-hold "$CLAUDE_CONFIG_DIR" "$STOP_IDLE" "$STOP_HOLD" || true
+  # buzz-acp stops reading the relay at SIGTERM, so the next start replays from
+  # this moment. Not from the preStop's earlier mark: mentions answered during
+  # the hold would be answered twice.
+  mkdir -p "$RESTART_DIR" && date +%s > "$RESTART_DIR/stopping-at"
+  kill -TERM "$child" 2>/dev/null
+}
 DRAIN=${AGENT_DRAIN_SECONDS:-300}
 # Wait for buzz-acp to finish in flight turns after SIGTERM; force it after DRAIN.
 drain_child() {
@@ -125,9 +148,19 @@ while :; do
     fetch_definition || continue
     if [ "$(current_tree)" != "$installed_tree" ]; then
       echo "agent-entrypoint: definition changed; restarting buzz-acp"
-      restart=1; kill -TERM "$child" 2>/dev/null; drain_child; break
+      # Same hold as a pod stop, so the reload does not cut a turn short, and
+      # the restarted buzz-acp replays what arrived during the restart.
+      restart=1; agent-stop-hold "$CLAUDE_CONFIG_DIR" "$STOP_IDLE" "$STOP_HOLD" || true
+      export BUZZ_ACP_REPLAY_FLOOR="$(date +%s)"
+      kill -TERM "$child" 2>/dev/null; drain_child; break
     fi
   done
+  if [ $signalled -eq 1 ]; then
+    kill -0 "$child" 2>/dev/null && stop_child
+    # wait returns early when another signal arrives; keep waiting while buzz-acp drains.
+    while kill -0 "$child" 2>/dev/null; do wait "$child" 2>/dev/null; done
+    exit 0
+  fi
   wait "$child" 2>/dev/null; rc=$?
   [ $signalled -eq 1 ] && exit 0
   if [ $restart -eq 1 ]; then
