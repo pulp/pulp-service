@@ -142,20 +142,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0058-fix-migrate.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0058-fix-migrate.patch
 
-COPY images/assets/patches/0059-Add-content-negotiation-and-JSON-listing-to-the-content-app.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0059-Add-content-negotiation-and-JSON-listing-to-the-content-app.patch
-
-COPY images/assets/patches/0060-Add-content_handler_json-to-PythonDistribution.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0060-Add-content_handler_json-to-PythonDistribution.patch
-
-COPY images/assets/patches/0062-Add-if-modified-since-header-support.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0062-Add-if-modified-since-header-support.patch
-
 COPY images/assets/patches/0063-Redirect-large-artifacts-to-object-storage.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0063-Redirect-large-artifacts-to-object-storage.patch
-
-COPY images/assets/patches/0064-add-etag-header-content-app.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0064-add-etag-header-content-app.patch
 
 COPY images/assets/patches/0065-Route-content-pull-through-writes-to-primary.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0065-Route-content-pull-through-writes-to-primary.patch
