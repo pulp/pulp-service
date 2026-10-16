@@ -126,14 +126,37 @@ TURN_LOG=$STATE/turns.log
 # Start buzz-acp with its output passed through to the pod log as before, and
 # its turn lines copied to TURN_LOG. A named pipe, not process substitution:
 # the pod has no /dev/fd.
+reader=""
 start_acp() {
   local fifo="${TMPDIR:-/tmp}/acp-out.$$"
   : > "$TURN_LOG"
-  rm -f "$fifo"; mkfifo "$fifo"
-  awk -v tl="$TURN_LOG" '{ print; fflush() }
-    /turn (starting|complete|cancelled|refused|hit [a-z_]+) for / { print >> tl; fflush(tl) }' < "$fifo" &
-  "$ACP" > "$fifo" 2>&1 & child=$!
   rm -f "$fifo"
+  if mkfifo "$fifo"; then
+    # A read loop, not awk: some awks read a pipe in blocks, so a turn line
+    # could sit unseen in a buffer while the hold looks for it.
+    (
+      while IFS= read -r l || [ -n "$l" ]; do
+        printf '%s\n' "$l"
+        case $l in
+          *"turn starting for "*|*"turn complete for "*|*"turn cancelled for "*|*"turn refused for "*|*"turn hit "*" for "*)
+            printf '%s\n' "$l" >> "$TURN_LOG" ;;
+        esac
+      done
+    ) < "$fifo" &
+    reader=$!
+    # Open the pipe here before removing it: buzz-acp's own redirect could run
+    # after the rm and write to a plain file instead. The open waits for the
+    # reader's.
+    exec 3> "$fifo"
+    rm -f "$fifo"
+    "$ACP" >&3 2>&3 & child=$!
+    exec 3>&-
+  else
+    # No pipe: run as before; the hold then goes by the transcripts alone.
+    echo "agent-entrypoint: could not make $fifo; no turn log" >&2
+    reader=""
+    "$ACP" & child=$!
+  fi
   if [ $floor_pending -eq 1 ]; then rm -f "$RESTART_DIR/stopping-at"; floor_pending=0; fi
 }
 # The hold counts from the pod's SIGTERM, not from when the main loop gets to
@@ -145,11 +168,30 @@ hold_left() {
   local left=$(( STOP_HOLD - spent ))
   [ $left -gt 0 ] && echo $left || echo 0
 }
+# Hold until buzz-acp's turns are done (agent-stop-hold). A buzz-acp that dies
+# during the hold ends it: its open turn will never get an end line.
+hold_child() {
+  local h
+  agent-stop-hold "$CLAUDE_CONFIG_DIR" "$STOP_IDLE" "$(hold_left)" "$TURN_LOG" &
+  h=$!
+  while kill -0 "$h" 2>/dev/null && kill -0 "$child" 2>/dev/null; do sleep 1 & wait $!; done
+  kill "$h" 2>/dev/null; wait "$h" 2>/dev/null
+  return 0
+}
+# Let the reader copy buzz-acp's last lines (a panic, the drain) to the log
+# before PID 1 exits and takes the container with it.
+flush_reader() {
+  local i
+  [ -n "$reader" ] || return 0
+  for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$reader" 2>/dev/null || return 0; sleep 0.5; done
+}
 stop_child() {
-  agent-stop-hold "$CLAUDE_CONFIG_DIR" "$STOP_IDLE" "$(hold_left)" "$TURN_LOG" || true
+  hold_child
   # buzz-acp stops reading the relay at SIGTERM, so the next start replays from
   # this moment. Not from the preStop's earlier mark: mentions answered during
-  # the hold would be answered twice.
+  # the hold would be answered twice. A buzz-acp that died during the hold
+  # leaves the preStop's mark, from before it died.
+  kill -0 "$child" 2>/dev/null || return 0
   mkdir -p "$RESTART_DIR" && date +%s > "$RESTART_DIR/stopping-at"
   kill -TERM "$child" 2>/dev/null
 }
@@ -183,7 +225,7 @@ while :; do
       echo "agent-entrypoint: definition changed; restarting buzz-acp"
       # Same hold as a pod stop, so the reload does not cut a turn short, and
       # the restarted buzz-acp replays what arrived during the restart.
-      restart=1; agent-stop-hold "$CLAUDE_CONFIG_DIR" "$STOP_IDLE" "$(hold_left)" "$TURN_LOG" || true
+      restart=1; hold_child
       export BUZZ_ACP_REPLAY_FLOOR="$(date +%s)"
       kill -TERM "$child" 2>/dev/null; drain_child; break
     fi
@@ -192,9 +234,11 @@ while :; do
     kill -0 "$child" 2>/dev/null && stop_child
     # wait returns early when another signal arrives; keep waiting while buzz-acp drains.
     while kill -0 "$child" 2>/dev/null; do wait "$child" 2>/dev/null; done
+    flush_reader
     exit 0
   fi
   wait "$child" 2>/dev/null; rc=$?
+  flush_reader
   [ $signalled -eq 1 ] && exit 0
   if [ $restart -eq 1 ]; then
     if install_definition; then publish_profile; else echo "agent-entrypoint: install failed; keeping the old definition and retrying later"; fi

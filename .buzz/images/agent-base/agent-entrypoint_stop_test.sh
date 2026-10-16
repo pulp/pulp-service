@@ -34,7 +34,7 @@ trap 'date +%s > "$OUT/term-at"; exit 0' TERM
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/-w"
 echo "INFO pool::prompt: turn starting for channel t"
 i=0
-while [ "$TURN" = 0 ] || [ $i -lt "$TURN" ]; do echo x >> "$CLAUDE_CONFIG_DIR/projects/-w/s.jsonl"; sleep 1 & wait $!; i=$((i+1)); done
+while [ "$TURN" = 0 ] || [ $i -lt "$TURN" ]; do [ -n "${DIE:-}" ] && [ $i -ge "$DIE" ] && exit 101; echo x >> "$CLAUDE_CONFIG_DIR/projects/-w/s.jsonl"; sleep 1 & wait $!; i=$((i+1)); done
 sleep "${SILENT:-0}" & wait $!
 echo "INFO pool::prompt: turn complete for channel t: end_turn"
 while true; do sleep 1 & wait $!; done
@@ -49,7 +49,7 @@ exec $REALGIT "\$@"
 EOF
 chmod +x "$W/bin/git"
 
-pass=0 fail=0
+pass=0 fail=0 LOGLOST=0
 check() { if eval "$2"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; fi; }
 
 # run TURN HOLD: start the entrypoint, SIGTERM it 3s in, report when the fake
@@ -58,10 +58,11 @@ run() {
   local S="$W/state-$1-$2"; export OUT="$W/out-$1-$2"; mkdir -p "$S" "$OUT"
   AGENT_SLUG=t AGENT_DEFINITION_REPO="file://$R" AGENT_DEFINITION_REF=main AGENT_REVISION=test \
   AGENT_STATE_DIR="$S" AGENT_SECRET_DIR="$W/sec" BUZZ_ACP_BIN=fake-acp TURN="$1" \
-  SILENT="${SILENT:-0}" AGENT_STOP_IDLE_SECONDS=2 AGENT_STOP_HOLD_SECONDS="$2" agent-entrypoint > "$OUT/log" 2>&1 &
+  SILENT="${SILENT:-0}" DIE="${DIE:-}" AGENT_STOP_IDLE_SECONDS=2 AGENT_STOP_HOLD_SECONDS="$2" agent-entrypoint > "$OUT/log" 2>&1 &
   local pid=$!
   sleep 3; local sent; sent=$(date +%s); kill -TERM $pid
-  wait $pid; RC=$?
+  wait $pid; RC=$?; ENDED=$(( $(date +%s) - sent ))
+  grep -q "turn starting for channel t" "$OUT/log" || LOGLOST=$((LOGLOST+1))
   GOT=$(( $(cat "$OUT/term-at" 2>/dev/null || echo 0) - sent ))
   FLOOR=$(( $(cat "$S/restart/stopping-at" 2>/dev/null || echo 0) - sent ))
 }
@@ -106,5 +107,14 @@ pid=$!
 sleep 8; sent=$(date +%s); kill -TERM $pid; wait $pid; rm -f "$W/slow-fetch"
 GOT=$(( $(cat "$OUT/term-at" 2>/dev/null || echo 0) - sent ))
 check "the hold counts from the signal, not from after a slow fetch (got SIGTERM after ${GOT}s)" '[ $GOT -ge 0 ] && [ $GOT -le 21 ]'
+
+# buzz-acp dies mid turn during the hold: its open turn never gets an end line,
+# so the hold ends when it dies, and no later replay floor is written past the
+# crash (the preStop's mark stays).
+DIE=6 run 0 60
+check "a buzz-acp that dies during the hold ends it (entrypoint done ${ENDED}s after SIGTERM)" '[ $ENDED -le 8 ]'
+check "no replay floor written after buzz-acp died" '[ ! -s "$W/state-0-60/restart/stopping-at" ]'
+
+check "buzz-acp's output reached the container log in every run ($LOGLOST lost)" '[ $LOGLOST -eq 0 ]'
 
 echo "agent-entrypoint stop tests: $pass passed, $fail failed"; [ $fail -eq 0 ]
