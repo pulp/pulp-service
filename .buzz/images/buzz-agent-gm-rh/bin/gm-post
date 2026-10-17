@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""gm-post: post to Buzz only in a form that notifies who it names (determinism item 12).
+
+  gm-post --channel <uuid> [--reply-to <event>] [--mention <hex>]... < body
+
+Shared with the other GMs' gm-post; only this docstring is RH-specific.
+Enforces the RH mention rule (charter scope/rh.md: write @Name with the exact display name,
+never in backticks, pass --mention <hex>, and check mention_pubkeys is not empty), so the
+backticked-mention mistake gm-backtick-scan catches after the fact becomes impossible before
+a message is sent. The body comes on stdin. Before sending, gm-post refuses (exit 1, nothing
+sent) when
+  - the body is empty;
+  - outside fenced code blocks, an inline code span holds `@Name` where Name is the display
+    name of a channel member not passed with --mention (the backticked-member mistake: it
+    wakes nobody). Other @ text in backticks (`@scope/pkg`, a handle that is not a member)
+    is allowed, since the charter puts @ text that should notify nobody in backticks;
+  - outside code, an @Name does not start with the display name of a --mention pubkey
+    (display names from `buzz users get`); a mention with no @Name in the body is fine,
+    and @ inside a word (an email address), or followed by space or punctuation
+    ("every @, including"), is not a mention;
+  - a --mention is not a 64 character hex pubkey, or has no display name.
+Then it runs `buzz messages send --content -` and checks the result: accepted is true and,
+when there was a --mention, every one of them is in mention_pubkeys. On success it prints
+  gm-post: sent <event id> accepted, mentions <n>
+Exit 2 when it cannot run (buzz failed, nothing was sent as far as it knows); exit 3 when
+buzz answered but the check failed: the message may be on the relay, so read the
+channel before sending again. BUZZ (default buzz) names the CLI.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+HEX_RE = re.compile(r"[0-9a-f]{64}")
+FENCE_RE = re.compile(r"^[ \t]*(```|~~~).*?^[ \t]*\1[ \t]*$", re.M | re.S)
+SPAN_RE = re.compile(r"(`+)(.+?)\1", re.S)
+AT_RE = re.compile(r"(?<![\w.@/])@(?![\s.,;:!?)\]}>'\"`]|$)")
+
+
+class Refused(Exception):
+    code = 1
+
+
+class Failed(Exception):
+    code = 2
+
+
+class Unverified(Exception):
+    code = 3
+
+
+def buzz(args, stdin=None):
+    p = subprocess.run([os.environ.get("BUZZ") or "buzz", "--format", "compact", *args], input=stdin,
+                       capture_output=True, text=True)
+    if p.returncode:
+        raise Failed(f"buzz {' '.join(args[:2])} exit {p.returncode}: {p.stderr.strip()[:300]}")
+    try:
+        return json.loads(p.stdout)
+    except ValueError:
+        raise Failed(f"buzz {' '.join(args[:2])} printed no JSON")
+
+
+def lookup(pubkeys):
+    """Display names for these pubkeys, {pubkey: name}; a key with no name is left out."""
+    if not pubkeys:
+        return {}
+    args = ["users", "get"]
+    for k in pubkeys:
+        args += ["--pubkey", k]
+    out = buzz(args)
+    out = out if isinstance(out, list) else [out]
+    found = {(u.get("pubkey") or "").lower(): (u.get("display_name") or u.get("name") or "").strip() for u in out}
+    return {k: found[k] for k in pubkeys if found.get(k)}
+
+
+def names(pubkeys):
+    found = lookup(pubkeys)
+    missing = [k[:8] for k in pubkeys if k not in found]
+    if missing:
+        raise Refused(f"no display name for --mention {', '.join(missing)}")
+    return found
+
+
+def members(channel):
+    out = buzz(["channels", "members", "--channel", channel])
+    keys = [(m.get("pubkey") or "").lower() for m in (out if isinstance(out, list) else [])]
+    return lookup([k for k in dict.fromkeys(keys) if HEX_RE.fullmatch(k)])
+
+
+def starts_with_name(rest, wanted):
+    return any(rest.startswith(n) and not rest[len(n):len(n) + 1].isalnum() for n in wanted)
+
+
+def lint(body, display, member_names):
+    """Refuse a body whose mentions would not notify."""
+    prose = FENCE_RE.sub("", body)
+    silent = sorted({n for k, n in member_names.items() if k not in display}, key=len, reverse=True)
+    for m in SPAN_RE.finditer(prose):
+        for a in AT_RE.finditer(m.group(2)):
+            if starts_with_name(m.group(2)[a.end():], silent):
+                raise Refused(f"@ mention of a member in backticks wakes nobody: {m.group(0)[:60]!r}; write "
+                              f"@Name bare with --mention, or drop the @ when it is not a mention")
+    prose = SPAN_RE.sub("", prose)
+    wanted = sorted(display.values(), key=len, reverse=True)
+    for m in AT_RE.finditer(prose):
+        rest = prose[m.end():]
+        if not starts_with_name(rest, wanted):
+            word = rest.split()[0] if rest.split() else ""
+            raise Refused(f"@{word[:40]} matches no --mention display name ({', '.join(wanted) or 'none passed'})")
+
+
+def main(argv):
+    channel, reply, mentions = None, None, []
+    it = iter(argv)
+    try:
+        for a in it:
+            if a == "--channel":
+                channel = next(it)
+            elif a == "--reply-to":
+                reply = next(it)
+            elif a == "--mention":
+                mentions.append(next(it).strip().lower())
+            else:
+                raise ValueError(a)
+        if not channel:
+            raise ValueError("--channel")
+    except (StopIteration, ValueError):
+        print("usage: gm-post --channel <uuid> [--reply-to <event>] [--mention <hex>]... < body", file=sys.stderr)
+        return 1
+    try:
+        body = sys.stdin.read()
+        if not body.strip():
+            raise Refused("empty body")
+        bad = [k for k in mentions if not HEX_RE.fullmatch(k)]
+        if bad:
+            raise Refused(f"--mention must be a 64 character hex pubkey: {bad[0][:20]}")
+        mentions = list(dict.fromkeys(mentions))
+        display = names(mentions)
+        lint(body, display, members(channel) if "`" in body else {})
+        args = ["messages", "send", "--channel", channel, "--content", "-"]
+        if reply:
+            args += ["--reply-to", reply]
+        for k in mentions:
+            args += ["--mention", k]
+        res = buzz(args, stdin=body)
+        if not isinstance(res, dict) or res.get("accepted") is not True:
+            raise Unverified(f"relay did not accept: {json.dumps(res)[:300]}")
+        got = {k.lower() for k in res.get("mention_pubkeys") or []}
+        lost = [k[:8] for k in mentions if k not in got]
+        if lost:
+            raise Unverified(f"sent {res.get('event_id', '?')} but mention_pubkeys lacks {', '.join(lost)}")
+        print(f"gm-post: sent {res.get('event_id', '?')} accepted, mentions {len(got)}")
+        return 0
+    except (Refused, Failed, Unverified) as e:
+        print(f"gm-post: {'refused' if e.code == 1 else 'CHECK FAILED'}: {e}", file=sys.stderr)
+        return e.code
+    except OSError as e:
+        print(f"gm-post: CHECK FAILED: {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

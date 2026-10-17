@@ -1,0 +1,31 @@
+#!/bin/bash
+# Boot resume: buzz-acp arms its heartbeat a full interval after start, so work a
+# session left half done before a roll (its own "next step") would wait for a mention.
+# Once buzz-acp is up, run one task that finds such work and finishes it.
+# Not started when the pod stays stopped by the owner (buzz-acp never comes up).
+# The task runs in its own buzz-acp process, whose turn lines never reach the
+# entrypoint's turn log, so it writes its own start and end lines there: a pod
+# stop then holds until the resumed work is done, as for any other turn
+# (ported from pulp-service #1586, which does the same for cos-rh).
+set -uo pipefail
+BIN=${AGENT_BIN:-/usr/local/bin}
+SHARE=${AGENT_SHARE:-/opt/agent}
+STATE=${AGENT_STATE_DIR:-/state}
+TURN_LOG=$STATE/turns.log
+boot=$(date -u +%FT%TZ)
+[ -n "${AGENT_PUBKEY:-}" ] || { echo "boot-resume: no AGENT_PUBKEY, skipped" >&2; exit 0; }
+for _ in $(seq 60); do pgrep -x buzz-acp >/dev/null && break; sleep 5; done
+pgrep -x buzz-acp >/dev/null || { echo "boot-resume: buzz-acp not up, skipped" >&2; exit 0; }
+# buzz-acp is up, so the definition is cloned: pull the key, relay and tag into
+# this process (agent-entrypoint exported them only into its own buzz-acp child).
+. "$BIN/agent-runtime-env"
+_agent_runtime_env || { echo "boot-resume: no runtime env, skipped" >&2; exit 0; }
+sleep "${BOOT_RESUME_DELAY:-20}"
+t=$(mktemp -d) && chmod 700 "$t"
+prompt=$(sed "s/BOOT_TIME/$boot/g" "$SHARE/boot-resume.md")
+jq -n --arg id "boot-$(date -u +%s)" --arg pk "$AGENT_PUBKEY" --arg p "$prompt" \
+  '{version:1, taskId:$id, agentPubkey:$pk, prompt:$p, maxDurationMs:1200000}' > "$t/task.json"
+echo "boot-resume: turn starting for boot-resume" >> "$TURN_LOG"
+( cd "${AGENT_WORKDIR:-$STATE/work}" && buzz-acp run --task "$t/task.json" 2>&1 | sed 's/^/boot-resume: /' ) || true
+echo "boot-resume: turn complete for boot-resume" >> "$TURN_LOG"
+rm -rf "$t"

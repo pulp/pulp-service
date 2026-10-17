@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+"""gm-goals: the goal brakes as code (determinism item 11).
+
+  gm-goals check  [--now UNIXTIME]   one line per goal in goals.md: what the heartbeat may do
+  gm-goals status [--now UNIXTIME]   one line per goal for the daily status Goals section
+  gm-goals ask <goal> <owner> <channel> <event> <step...> [--at UNIXTIME]
+  gm-goals nudge <goal> <event> [--new-info <why...>] [--at UNIXTIME]
+  gm-goals done <goal> [<note...>]
+  gm-goals block <goal> <why...>
+
+Brian's brakes (charter "Goals", heartbeat.md): one step in flight per goal, at most
+OPEN_ASKS_LIMIT (2) open steps per owner, one nudge after 4 quiet hours and never two
+in a row without new information, and 14 days with no step is a bad goal. The GM still
+chooses each step and writes each ask; this tool keeps the ledger and does the counting.
+
+Owners: cos (cos-rh; quiet means no post from cos-rh) or bc (Brian's Claude; quiet means
+no post from any approver, since Brian's Claude speaks for Brian). <channel> and <event>
+are where the ask was posted; its thread is the event's root.
+
+check prints, per goal in file order:
+  ASK <goal>: free <owner n/limit, ...>          no step in flight: hand out one to a free owner
+  AT LIMIT <goal>: <owner n/limit, ...>          no step in flight, every owner is full: skip
+  WAIT <goal>: <owner> <why>                     a step is in flight and needs nothing now
+  NUDGE <goal>: <owner> thread <root> <channel>  quiet 4 hours: one nudge, then gm-goals nudge
+  BLOCKED <goal>: <why>                           blocked outside RH: daily status, never re-ask
+  MET <goal>: status check green                   standing goal, its status check is green: no step
+  BAD GOAL <goal>: no step for <n> days          say so in the daily status, do not nudge (a standing
+                                                 goal only while its check fails; the line then ends
+                                                 "; check failing <age>: <output>")
+  CHECK FAILED <goal>: <why>                     the relay read for this goal failed, or a standing
+                                                 goal has no status check
+A standing goal's status check is the command on its line in GOAL_CHECKS ("<goal>: <command>",
+run with bash): exit 0 printing "none" is green (MET when no step is in flight), exit 0
+printing anything else is failing (its output is appended to the line), any other exit is
+CHECK FAILED. The 14 days count for a standing goal only while its check is failing, from
+when it started failing or the last step, whichever is later (Brian's Claude for Brian,
+#gm fdb212db). Outcome goals have no check and keep the plain 14 day rule.
+ask, nudge, done and block refuse with exit 1 when the brakes say no (a second step for a
+goal, an owner at its limit, a nudge too early or a second nudge with no new information).
+Exit 2 with "gm-goals: CHECK FAILED: <why>" when goals.md or the ledger cannot be read.
+
+Configuration from the environment: GOALS_FILE (default /opt/agent/goals.md),
+GOALS_LEDGER (default /state/goals-ledger.json), OPEN_ASKS_LIMIT (2), QUIET_HOURS (4),
+BAD_DAYS (14), GOAL_CHECKS (default /opt/agent/goal-checks), COS_KEY, APPROVER_KEYS (comma
+separated; first is Brian's Claude by default), BUZZ (default buzz). The notebook
+/state/goals-state.md stays for what the GM
+learned; the ledger holds only what the brakes count.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+DEFAULTS = {
+    "GOALS_FILE": "/opt/agent/goals.md",
+    "GOALS_LEDGER": "/state/goals-ledger.json",
+    "OPEN_ASKS_LIMIT": "2",
+    "QUIET_HOURS": "4",
+    "BAD_DAYS": "14",
+    "COS_KEY": "6a14bf7b3d7259f77e5b40a4817a084b11002f54e585eda431c4befa5d150c0d",
+    "APPROVER_KEYS": "e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4,"
+                     "763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1",
+    "BUZZ": "buzz",
+    "GOAL_CHECKS": "/opt/agent/goal-checks",
+}
+OWNER_NAMES = {"cos": "cos-rh", "bc": "Brian's Claude"}
+# goals.md is a priority-ordered dash list: "- <id>: <sentence> Outcome goal." / "Standing goal."
+GOAL_RE = re.compile(r"^\s*-\s+([a-z0-9][a-z0-9-]*):.*\b(Standing|Outcome)\s+goal\.\s*$", re.M)
+# goal-checks is "<goal>: <command>", one line per standing goal.
+CHECK_RE = re.compile(r"^([a-z0-9][a-z0-9-]*):[ \t]*(\S.*)$", re.M)
+HEX_RE = re.compile(r"[0-9a-f]{64}")
+PAGE = 200
+BAKED_ENV = "/opt/agent/approval-check.env"
+
+
+class Failed(Exception):
+    pass
+
+
+class Refused(Exception):
+    pass
+
+
+def _baked():
+    # The baked file wins whenever it exists: PENDING_ENV is caller controlled, so
+    # honoring it in the image would let any invocation substitute the approver list.
+    # No env override of these values, so a compromised session cannot widen its set.
+    path = BAKED_ENV if os.path.exists(BAKED_ENV) else os.environ.get("PENDING_ENV", "")
+    out = {}
+    if path and os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    out[k.strip()] = v.strip()
+    return out
+
+
+BAKED = _baked()
+
+
+def conf(name):
+    return BAKED.get(name) or DEFAULTS[name]
+
+
+def owner_keys(owner):
+    if owner == "cos":
+        return {conf("COS_KEY").lower()}
+    return {k.strip().lower() for k in conf("APPROVER_KEYS").split(",") if k.strip()}
+
+
+def goals():
+    try:
+        with open(conf("GOALS_FILE")) as f:
+            return [(g, k.lower()) for g, k in GOAL_RE.findall(f.read())]
+    except OSError as e:
+        raise Failed(f"cannot read goals file: {e}")
+
+
+def load():
+    try:
+        with open(conf("GOALS_LEDGER")) as f:
+            led = json.load(f)
+    except FileNotFoundError:
+        led = {}
+    except (OSError, ValueError) as e:
+        raise Failed(f"cannot read ledger: {e}")
+    led.setdefault("first_seen", {})
+    led.setdefault("steps", [])
+    led.setdefault("failing_since", {})
+    return led
+
+
+def save(led):
+    path = conf("GOALS_LEDGER")
+    with open(path + ".tmp", "w") as f:
+        json.dump(led, f, indent=1, sort_keys=True)
+        f.write("\n")
+    os.replace(path + ".tmp", path)
+
+
+def goal_check(goal):
+    """(met, output) from the standing goal's status check in GOAL_CHECKS.
+
+    Exit 0 printing "none" (or nothing) is met; exit 0 printing anything else is failing,
+    the output saying what is wrong; any other exit, or no check configured, is Failed."""
+    path = conf("GOAL_CHECKS")
+    try:
+        with open(path) as f:
+            cmds = dict(m.groups() for m in CHECK_RE.finditer(f.read()))
+    except OSError as e:
+        raise Failed(f"cannot read goal checks: {e}")
+    if goal not in cmds:
+        raise Failed(f"standing goal has no status check in {path}")
+    try:
+        r = subprocess.run(["bash", "-o", "pipefail", "-c", cmds[goal]], capture_output=True, text=True,
+                           timeout=600)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Failed(f"status check: {e}")
+    out = " ".join(r.stdout.split()) or "none"
+    if r.returncode:
+        raise Failed(f"status check exit {r.returncode}: {(out if out != 'none' else r.stderr.strip())[:150]}")
+    return out == "none", out
+
+
+def open_step(led, goal):
+    """The goal's step in flight (open or blocked), or None."""
+    return next((s for s in led["steps"] if s["goal"] == goal and s["state"] in ("open", "blocked")), None)
+
+
+def load_count(led, owner):
+    return sum(1 for s in led["steps"] if s["owner"] == owner and s["state"] == "open")
+
+
+def last_step_time(led, goal):
+    times = [led["first_seen"].get(goal, 0)]
+    for s in led["steps"]:
+        if s["goal"] == goal:
+            times += [s["asked_at"], s.get("closed_at") or 0]
+    return max(times)
+
+
+def fetch(channel, since):
+    """Every message in channel since a time, paging back with --before."""
+    out, before = {}, None
+    while True:
+        cmd = [conf("BUZZ"), "messages", "get", "--channel", channel, "--since", str(since), "--limit", str(PAGE)]
+        if before:
+            cmd += ["--before", str(before)]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode:
+            raise Failed(f"buzz messages get {channel[:8]} exit {r.returncode}: {r.stderr.strip()[:200]}")
+        try:
+            page = json.loads(r.stdout)
+        except ValueError:
+            raise Failed(f"buzz messages get {channel[:8]} printed no JSON")
+        new = [e for e in page if e.get("id") not in out]
+        for e in new:
+            out[e["id"]] = e
+        if len(page) < PAGE or not new:
+            return list(out.values())
+        before = min(e["created_at"] for e in page) + 1
+
+
+def root_of(ev):
+    tags = [t for t in ev.get("tags") or [] if len(t) >= 2 and t[0] == "e"]
+    for marker in ("root", "reply"):
+        for t in tags:
+            if len(t) >= 4 and t[3] == marker:
+                return t[1]
+    return ev["id"]
+
+
+def owner_posts(step, since):
+    """Times the owner posted in the step's thread after <since>."""
+    return sorted(e["created_at"] for e in fetch(step["channel"], since)
+                  if e["created_at"] > since and e.get("pubkey", "").lower() in owner_keys(step["owner"])
+                  and step["thread"] in (root_of(e), e["id"]))
+
+
+def age(seconds):
+    m = max(0, int(seconds)) // 60
+    return f"{m}m" if m < 60 else (f"{m // 60}h{m % 60:02d}m" if m < 2880 else f"{m // 1440}d")
+
+
+def judge(led, step, now):
+    """(verdict, why) for a step in flight: WAIT or NUDGE."""
+    last_mine = max([step["asked_at"], *[n["at"] for n in step.get("nudges", [])]])
+    posts = owner_posts(step, step["asked_at"])
+    last = max([last_mine, *posts])
+    who = OWNER_NAMES[step["owner"]]
+    if now - last < int(conf("QUIET_HOURS")) * 3600:
+        heard = f"posted {age(now - posts[-1])} ago" if posts and posts[-1] == last else f"asked or nudged {age(now - last)} ago"
+        return "WAIT", f"{who} {heard}"
+    nudges = step.get("nudges", [])
+    if nudges and not any(p > nudges[-1]["at"] for p in posts):
+        return "WAIT", f"{who} quiet {age(now - last)} since the nudge {nudges[-1]['event'][:8]}: no second nudge without new information"
+    return "NUDGE", f"{who} quiet {age(now - last)} thread {step['thread'][:8]} {step['channel']}"
+
+
+def check(led, now, status=False):
+    lines, limit = [], int(conf("OPEN_ASKS_LIMIT"))
+    loads = ", ".join(f"{OWNER_NAMES[o]} {load_count(led, o)}/{limit}" for o in OWNER_NAMES)
+    for goal, kind in goals():
+        led["first_seen"].setdefault(goal, now)
+        step = open_step(led, goal)
+        idle = now - last_step_time(led, goal)
+        try:
+            met, failing = None, ""
+            if kind == "standing":
+                met, out = goal_check(goal)
+                if met:
+                    led["failing_since"].pop(goal, None)
+                else:
+                    since = led["failing_since"].setdefault(goal, now)
+                    idle = now - max(since, last_step_time(led, goal))
+                    failing = f"; check failing {age(now - since)}: {out[:120]}"
+            if met and not step:
+                line = f"MET {goal}: status check green"
+            elif not met and (not step or step["state"] == "blocked") and idle >= int(conf("BAD_DAYS")) * 86400:
+                line = f"BAD GOAL {goal}: no step for {idle // 86400} days"
+            elif step and step["state"] == "blocked":
+                line = f"BLOCKED {goal}: {step.get('note', '')} (step: {step['step'][:80]})"
+            elif step:
+                verdict, why = judge(led, step, now)
+                line = f"{verdict} {goal}: {why}"
+            elif all(load_count(led, o) >= limit for o in OWNER_NAMES):
+                line = f"AT LIMIT {goal}: {loads}"
+            else:
+                free = ", ".join(f"{OWNER_NAMES[o]} {load_count(led, o)}/{limit}" for o in OWNER_NAMES
+                                 if load_count(led, o) < limit)
+                line = f"ASK {goal}: free {free}"
+            line += failing
+        except Failed as e:
+            line = f"CHECK FAILED {goal}: {e}"
+        if status:
+            line = f"- {goal} ({kind}): {moved(led, goal, now)}; now {line}"
+            if step and step["state"] == "open":
+                line += f"; waiting on {OWNER_NAMES[step['owner']]} for: {step['step'][:80]}"
+        lines.append(line)
+    return lines
+
+
+def moved(led, goal, now):
+    day = now - 86400
+    asked = sum(1 for s in led["steps"] if s["goal"] == goal and s["asked_at"] >= day)
+    done = sum(1 for s in led["steps"] if s["goal"] == goal and s["state"] == "done" and (s.get("closed_at") or 0) >= day)
+    nudged = sum(1 for s in led["steps"] if s["goal"] == goal for n in s.get("nudges", []) if n["at"] >= day)
+    return f"last day {asked} asked, {done} done, {nudged} nudged"
+
+
+def flag(args, name):
+    """Remove --name <rest...> or --name <value> from args; return (args, value)."""
+    if name not in args:
+        return args, None
+    i = args.index(name)
+    if name == "--at":
+        if i + 1 >= len(args) or not args[i + 1].isdigit():
+            raise Refused("--at needs a unix time")
+        return args[:i] + args[i + 2:], int(args[i + 1])
+    return args[:i], " ".join(args[i + 1:])
+
+
+def known(goal):
+    if goal not in [g for g, _ in goals()]:
+        raise Refused(f"no goal {goal!r} in {conf('GOALS_FILE')}")
+
+
+def event_id(value, what):
+    if not HEX_RE.fullmatch(value or ""):
+        raise Refused(f"{what} must be a 64 character hex event id")
+    return value
+
+
+def thread_of(channel, event):
+    """Root of the ask's thread: the asked event's own root tag, read from the relay."""
+    r = subprocess.run([conf("BUZZ"), "messages", "thread", "--channel", channel, "--event", event],
+                       capture_output=True, text=True)
+    if r.returncode:
+        raise Failed(f"buzz messages thread exit {r.returncode}: {r.stderr.strip()[:200]}")
+    try:
+        evs = json.loads(r.stdout)
+    except ValueError:
+        raise Failed("buzz messages thread printed no JSON")
+    mine = [e for e in evs if e.get("id") == event]
+    if not mine:
+        raise Failed(f"event {event[:8]} not found in channel {channel[:8]}")
+    return root_of(mine[0])
+
+
+def act(led, cmd, args, now):
+    if cmd == "ask":
+        args, at = flag(args, "--at")
+        if len(args) < 5:
+            raise Refused("usage: gm-goals ask <goal> <cos|bc> <channel> <event> <step...> [--at UNIXTIME]")
+        goal, owner, channel, event, step = args[0], args[1], args[2], args[3], " ".join(args[4:])
+        known(goal)
+        if owner not in OWNER_NAMES:
+            raise Refused("owner must be cos (cos-rh) or bc (Brian's Claude); never a working agent or auditor-rh")
+        event_id(event, "event")
+        if open_step(led, goal):
+            raise Refused(f"{goal} already has a step in flight; finish it with done first")
+        limit = int(conf("OPEN_ASKS_LIMIT"))
+        if load_count(led, owner) >= limit:
+            raise Refused(f"{OWNER_NAMES[owner]} already holds {limit} open steps (OPEN_ASKS_LIMIT)")
+        led["steps"].append({"goal": goal, "owner": owner, "channel": channel, "event": event,
+                             "thread": thread_of(channel, event), "step": step, "asked_at": at or now,
+                             "state": "open", "nudges": []})
+        return f"gm-goals: asked {OWNER_NAMES[owner]} for {goal}"
+    if cmd == "nudge":
+        args, at = flag(args, "--at")
+        args, info = flag(args, "--new-info")
+        if len(args) != 2:
+            raise Refused("usage: gm-goals nudge <goal> <event> [--new-info <why...>] [--at UNIXTIME]")
+        goal, event = args[0], event_id(args[1], "event")
+        step = open_step(led, goal)
+        if not step or step["state"] != "open":
+            raise Refused(f"{goal} has no open step to nudge")
+        verdict, why = judge(led, step, at or now)
+        if verdict != "NUDGE" and not (info and why.endswith("no second nudge without new information")):
+            raise Refused(f"no nudge now: {why}")
+        step["nudges"].append({"at": at or now, "event": event, **({"new_info": info} if info else {})})
+        return f"gm-goals: nudge recorded for {goal}"
+    if cmd in ("done", "block"):
+        if not args or (cmd == "block" and len(args) < 2):
+            raise Refused(f"usage: gm-goals {cmd} <goal> {'<why...>' if cmd == 'block' else '[<note...>]'}")
+        goal = args[0]
+        step = open_step(led, goal)
+        if not step:
+            raise Refused(f"{goal} has no step in flight")
+        step["note"] = " ".join(args[1:])
+        if cmd == "done":
+            step["state"], step["closed_at"] = "done", now
+        else:
+            step["state"] = "blocked"
+        return f"gm-goals: {goal} step {'done' if cmd == 'done' else 'blocked'}"
+    raise Refused(f"unknown command {cmd!r}")
+
+
+def main(argv):
+    if not argv:
+        print(__doc__.split("\n\n")[1], file=sys.stderr)
+        return 1
+    cmd, args, now = argv[0], argv[1:], int(time.time())
+    if cmd in ("check", "status") and "--now" in args:
+        i = args.index("--now")
+        if i + 1 >= len(args) or not args[i + 1].isdigit():
+            print("gm-goals: --now needs a unix time", file=sys.stderr)
+            return 1
+        now, args = int(args[i + 1]), args[:i] + args[i + 2:]
+    try:
+        led = load()
+        if cmd in ("check", "status"):
+            if args:
+                raise Refused(f"usage: gm-goals {cmd} [--now UNIXTIME]")
+            lines = check(led, now, status=cmd == "status")
+            save(led)
+            print("\n".join(lines))
+            return 0
+        msg = act(led, cmd, args, now)
+        save(led)
+        print(msg)
+        return 0
+    except Refused as e:
+        print(f"gm-goals: {e}", file=sys.stderr)
+        return 1
+    except (Failed, OSError) as e:
+        print(f"gm-goals: CHECK FAILED: {e}")
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

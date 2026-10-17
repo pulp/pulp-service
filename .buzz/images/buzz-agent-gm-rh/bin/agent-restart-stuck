@@ -1,0 +1,15 @@
+#!/bin/bash
+# Print "stuck" if this agent announced a restart (threads.json present and not an
+# empty list) but never finished posting "Back." — the record is still here more
+# than 10 minutes after it was written. On OpenShift this runs inside the pod (the
+# restart helpers read it); gm-rh has no cluster access to read another pod's copy,
+# so a stuck restart there is caught by the relay liveness check, not this file.
+set -uo pipefail
+f="${AGENT_RESTART_DIR:-/state/restart}/threads.json"
+[ -s "$f" ] || exit 0
+now=$(date +%s); m=$(stat -c %Y "$f" 2>/dev/null || echo "$now")
+# 1200s clears a slow roll (grace, image pull, up to ~5 min waiting for buzz-acp)
+# but still catches a genuinely stuck restart.
+[ $(( now - m )) -gt 1200 ] || exit 0
+[ "$(tr -d '[:space:]' < "$f" 2>/dev/null)" = "[]" ] && exit 0
+echo stuck

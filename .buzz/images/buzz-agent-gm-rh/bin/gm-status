@@ -1,0 +1,69 @@
+#!/bin/bash
+# The RH platform's state in one screen, for the daily status, from where gm-rh now
+# runs: an always on Buzz agent on Red Hat's OpenShift (pulp-agents-stage). Every check
+# prints its own line; a check that cannot run prints "CHECK FAILED" so the report never
+# claims all clean. A check that does not apply from here prints "n/a here", which
+# gm-daily treats as clean, so the report never reads as a failure for an expected gap.
+#
+# What gm-rh reads from here: the relay and the two git repos over HTTPS, and pod
+# readiness in pulp-agents-stage through its own read-only ServiceAccount (the built-in
+# view role, no writes). The SaaS rollout, Flux (there is none for agents here), TLS
+# certificates and in-pod restart state (which need exec) stay Brian's to check with oc
+# from the Mac; this tool does not guess at them. The serrano-only checks (flux
+# kustomization, openssl certs, kubectl exec agent-restart-stuck, the four-namespace
+# sweep, gm-gate-drops, gm-chief-sync) live on the serrano image, not here.
+set -uo pipefail
+line() { printf '%s\n' "$*"; }
+run() { local name=$1; shift; local out; out=$("$@" 2>&1) && line "$name: ${out:-none}" || line "$name: CHECK FAILED: ${out:0:200}"; }
+
+# Pod readiness via the read-only ServiceAccount (view in pulp-agents-stage). Degrades
+# cleanly: with no kube client, or no read access because the projected token is not
+# mounted yet, it prints "n/a here" (gm-daily reads that as clean), so today's pod never
+# reports a false failure. Once a client and the token land it lists any pod that is not
+# Running, Completed or Succeeded. Read only: it never execs or writes.
+KUBE_NS=${KUBE_NS:-pulp-agents-stage}
+run "agent pods not ready ($KUBE_NS)" bash -o pipefail -c '
+  ns="'"$KUBE_NS"'"
+  kube=$(command -v kubectl || command -v oc) || { echo "n/a here"; exit 0; }
+  [ "$("$kube" auth can-i get pods -n "$ns" 2>/dev/null)" = yes ] || { echo "n/a here"; exit 0; }
+  "$kube" -n "$ns" get pods --no-headers 2>/dev/null \
+    | awk "\$3!=\"Running\" && \$3!=\"Completed\" && \$3!=\"Succeeded\" {print \$1\" \"\$3}" | paste -sd ";" -
+'
+
+# Relay liveness: each RH agent's presence on buzz-rh. FLEET is "slug=pubkey" pairs,
+# space separated; default the agents that are live once gm-rh itself is (enable order
+# puts cos-rh before gm-rh). Add auditor-rh and PulpBot to FLEET (template env) when
+# they deploy. An agent not "online", or whose presence is stale beyond LIVENESS_STALE
+# seconds, is flagged; "none" means every agent in FLEET is online and fresh.
+FLEET=${FLEET:-"gm-rh=6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93 cos-rh=6a14bf7b3d7259f77e5b40a4817a084b11002f54e585eda431c4befa5d150c0d"}
+LIVENESS_STALE=${LIVENESS_STALE:-5400}
+BUZZ=${BUZZ:-buzz}
+run "relay liveness" bash -o pipefail -c '
+  fleet="'"$FLEET"'"; stale='"$LIVENESS_STALE"'; now=$(date +%s)
+  keys=$(for pair in $fleet; do printf "%s\n" "${pair#*=}"; done | paste -sd, -)
+  [ -n "$keys" ] || { echo "no FLEET configured"; exit 1; }
+  pres=$('"$BUZZ"' --format compact users presence --pubkeys "$keys") || exit 1
+  bad=""
+  for pair in $fleet; do
+    slug=${pair%%=*}; pk=${pair#*=}
+    row=$(printf "%s" "$pres" | jq -r --arg pk "$pk" ".[] | select(.pubkey==\$pk) | \"\(.status) \(.updated_at)\"")
+    if [ -z "$row" ]; then bad="$bad $slug(no-presence)"; continue; fi
+    st=${row% *}; up=${row#* }
+    age=$(( now - up ))
+    if [ "$st" != online ] || [ "$age" -gt "$stale" ]; then bad="$bad $slug($st/${age}s)"; fi
+  done
+  printf "%s" "${bad# }"
+'
+# Mentions net: any message by a chief or agent (not an approver) on the relay that
+# wrote a backticked @Name with no p tag, so the mention woke nobody. gm-post guards
+# gm-rh's own posts; this catches the others.
+run "backticked mentions (no p tag)" gm-backtick-scan
+# Approval-check (determinism item 2): any commit on rh/cluster main since yesterday
+# that is MISSING a valid "Approved by <event id>" line or whose named yes is BAD. The
+# shared tools/approval-check, run over a fresh clone with gm-rh's token (CHECK FAILED
+# if gitea is unreachable from the cluster).
+run "approvals since yesterday" gm-approvals
+# Digest bumps under rh/cluster deploy/ whose commit lacks the matching pin-digest
+# line (determinism item 4). Warn only; covers the interim serrano workloads while
+# they are retired. pin-digest prints CHECK FAILED itself and exits non-zero.
+run "digest bumps without pin-digest proof (since yesterday)" bash -o pipefail -c "git -C /state/repos/cluster pull -q && cd /state/repos/cluster && pin-digest --check --since yesterday | paste -sd ';' -"

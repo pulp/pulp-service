@@ -1,0 +1,48 @@
+# buzz-agent-gm-rh: the Red Hat GM image for OpenShift. It is the shared
+# buzz-agent-base plus gm-rh's tamper-proof half, baked root owned per model C: its
+# bin tools (buzz lives in the base; these are the gm tools gitea-api, gm-approvals,
+# gm-backtick-scan, gm-daily, gm-goals, gm-pending, gm-post, gm-status, pin-digest,
+# secret-guard, the gm-entrypoint, the sourceable agent-runtime-env, and the
+# restart/alive/prestop helpers), the baked approver list and goal files
+# (approval-check.env, goals.md, goal-checks), the boot resume prompt, and the
+# managed-settings.json that wires the secret-guard hook. Charter, heartbeat.md,
+# skills and mcp.json come from the git definition at .buzz/agents/gm-rh/, so a
+# charter or heartbeat edit is a push, not an image rebuild. Built by pulp-service CI
+# to ghcr.io/pulp/buzz-agent-gm-rh.
+#
+# The patched base: buzz-agent-base v0.2.4 carries the heartbeat patch
+# (patches/agent-base-heartbeat.diff), tzdata, the mcp.json fix (no /dev/fd) and
+# the empty-channels fix, so gm-rh's hourly heartbeat (daily status, goals,
+# gm-pending) arms. v0.2.4 also carries the SIGTERM stop hold (agent-stop-hold):
+# the entrypoint holds the pod's SIGTERM until buzz-acp's in flight turn ends,
+# reading buzz-acp's turn log (pool::prompt enabled) so the turn drains within the
+# grace period instead of being aborted (gate 1, pulp-service #1583/#1584/#1585).
+# Bump the tag and digest below deliberately (same rule as the base).
+FROM ghcr.io/pulp/buzz-agent-base:v0.2.4@sha256:d79a6ffbf9be22586af8d067f41b10c3eafcb1c09d0f453ba5573cac9b7ef8ef
+USER root
+# Tools onto PATH; config into /opt/agent. Root owned so the running agent (an
+# arbitrary OpenShift UID in group 0) cannot rewrite its own approver list, goals,
+# or the secret-guard hook. agent-runtime-env is sourced, not executed, so it stays
+# non-executable like its neighbours in the base.
+COPY bin/ /usr/local/bin/
+COPY approval-check.env boot-resume.md goals.md goal-checks managed-settings.json /opt/agent/
+# gm-pending and gm-daily read the baked approver list and channels from here; fixed
+# in the image, not overridable at runtime, so a compromised session cannot widen its
+# own approver set.
+ENV PENDING_ENV=/opt/agent/approval-check.env
+RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
+      /usr/local/bin/agent-restart-back /usr/local/bin/agent-restart-floor \
+      /usr/local/bin/agent-restart-stuck /usr/local/bin/boot-resume \
+      /usr/local/bin/gitea-api /usr/local/bin/gm-approvals \
+      /usr/local/bin/gm-backtick-scan /usr/local/bin/gm-daily /usr/local/bin/gm-entrypoint \
+      /usr/local/bin/gm-goals /usr/local/bin/gm-pending /usr/local/bin/gm-post \
+      /usr/local/bin/gm-status /usr/local/bin/pin-digest /usr/local/bin/secret-guard \
+ && chmod 0644 /opt/agent/approval-check.env /opt/agent/boot-resume.md /opt/agent/goals.md \
+      /opt/agent/goal-checks /opt/agent/managed-settings.json \
+ && chmod -R go-w /opt/agent \
+ # Claude Code loads enterprise-managed settings from this path; root owned and read
+ # only so the session cannot disable its own secret-guard hook.
+ && install -D -m 644 -o root -g root /opt/agent/managed-settings.json /etc/claude-code/managed-settings.json
+USER 1000
+WORKDIR /home/agent
+ENTRYPOINT ["/usr/local/bin/gm-entrypoint"]

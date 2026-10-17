@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""gm-daily: when the daily status is due, and its skeleton (determinism item 8).
+
+  gm-daily due   [--now UNIXTIME]
+  gm-daily draft [--now UNIXTIME]
+
+due prints exactly one line:
+  DUE <date>                         07:30 or later in New York and no "Daily status" post
+                                     from the GM in #gm since 00:00 New York
+  NOT DUE <date>: before 07:30 (now HH:MM)
+  NOT DUE <date>: posted HH:MM event <id8>
+  gm-daily: CHECK FAILED: <why>      (exit 2) the fetch failed: post nothing this heartbeat
+
+draft runs gm-status and prints the status body to post, with <date> the New York date:
+  Daily status <date>
+  Not right             every CHECK FAILED line first, then every check that is not clean
+  Skip level            FILL: for the GM
+  Unrequested work      the GM's commits on both clones' origin/main and its top level posts in
+                        #gm since 00:00 New York yesterday: covered ones counted, the rest listed
+                        as "check" for the GM to explain in a note
+  Goals                 FILL: for the GM
+  Nothing else to report, only when no check failed and nothing is listed under Not right
+  or as "check"; otherwise a closing line counting what is open, so it can never read as
+  all clean.
+A commit is covered when its message has an "Approved by <who> <event id>" line or a
+"pin-digest: <image> sha256:<digest> run <n> commit <sha>" line (a digest bump naming its
+source commit). A top level post is covered when it is a "Daily status" post.
+A check is clean when its value is "none", or, for the checks in CLEAN_RULES, when the
+value matches that check's rule. gm-status not running at all is itself a CHECK FAILED line.
+The GM may remove a line under Not right only by answering it in a note below it; the
+CHECK FAILED lines and the closing line stay as printed.
+
+Configuration, from the environment or else from the approval-check env file
+(DAILY_ENV, default /opt/agent/approval-check.env): GM_KEY, and GM_CHANNEL or else the
+first of APPROVAL_CHANNELS. Also BUZZ (default buzz), GM_STATUS (default gm-status),
+DUE_AT (default 0730), TZ_NAME (default America/New_York),
+CLONES (default /state/repos/cluster,/state/repos/agents), GM_AUTHOR (default
+"gm-rh (AI agent)").
+"""
+import datetime
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import zoneinfo
+
+PAGE = 200
+PREFIX = "Daily status "
+BAKED_ENV = "/opt/agent/approval-check.env"
+APPROVED_RE = re.compile(r"^Approved by \S.*? [0-9a-f]{8,64}\b", re.M)
+PROOF_RE = re.compile(r"^pin-digest: [a-z0-9-]+ sha256:[0-9a-f]{64} run \d+ commit [0-9a-f]{7,40}\s*$", re.M)
+
+
+class CheckFailed(Exception):
+    pass
+
+
+def config():
+    conf = {}
+    # The baked file wins whenever it exists: DAILY_ENV is caller controlled, so honoring
+    # it in the image would let any invocation substitute the GM key, channel or checks.
+    # No per-key env override either, so a compromised session cannot widen its own set.
+    path = BAKED_ENV if os.path.exists(BAKED_ENV) else os.environ.get("DAILY_ENV", "")
+    if path and os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    conf[k.strip()] = v.strip()
+    channels = [x.strip() for x in (conf.get("APPROVAL_CHANNELS") or "").split(",") if x.strip()]
+    c = {"gm": (conf.get("GM_KEY") or "").strip().lower(),
+         "channel": (conf.get("GM_CHANNEL") or (channels[0] if channels else "")).strip(),
+         "buzz": conf.get("BUZZ") or "buzz", "status": conf.get("GM_STATUS") or "gm-status",
+         "due_at": conf.get("DUE_AT") or "0730", "tz": zoneinfo.ZoneInfo(conf.get("TZ_NAME") or "America/New_York"),
+         "clones": [x.strip() for x in (conf.get("CLONES") or "/state/repos/cluster,/state/repos/agents").split(",")
+                    if x.strip()],
+         "author": conf.get("GM_AUTHOR") or "gm-rh (AI agent)",
+         "goals": conf.get("GM_GOALS") or "gm-goals"}
+    if not c["gm"] or not c["channel"] or not re.fullmatch(r"\d{4}", c["due_at"]):
+        raise CheckFailed(f"GM_KEY and GM_CHANNEL (or APPROVAL_CHANNELS) must be set, DUE_AT as HHMM (env or {path})")
+    return c
+
+
+def fetch(buzz, channel, since):
+    """Every message in channel since a time, paging back with --before."""
+    out, before = {}, None
+    while True:
+        cmd = [buzz, "messages", "get", "--channel", channel, "--since", str(since), "--limit", str(PAGE)]
+        if before:
+            cmd += ["--before", str(before)]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode:
+            raise CheckFailed(f"buzz messages get {channel[:8]} exit {r.returncode}: {r.stderr.strip()[:200]}")
+        try:
+            page = json.loads(r.stdout)
+        except ValueError:
+            raise CheckFailed(f"buzz messages get {channel[:8]} printed no JSON")
+        new = [e for e in page if e.get("id") not in out]
+        for e in new:
+            out[e["id"]] = e
+        if len(page) < PAGE or not new:
+            return list(out.values())
+        before = min(e["created_at"] for e in page) + 1
+
+
+def due(c, now):
+    local = datetime.datetime.fromtimestamp(now, c["tz"])
+    date = local.date().isoformat()
+    if local.strftime("%H%M") < c["due_at"]:
+        return f"NOT DUE {date}: before {c['due_at'][:2]}:{c['due_at'][2:]} (now {local:%H:%M})"
+    midnight = int(datetime.datetime.combine(local.date(), datetime.time(), c["tz"]).timestamp())
+    posts = [e for e in fetch(c["buzz"], c["channel"], midnight - 1)
+             if e.get("pubkey", "").lower() == c["gm"] and e.get("created_at", 0) >= midnight
+             and e.get("content", "").lstrip().startswith(PREFIX)]
+    if posts:
+        first = min(posts, key=lambda e: e["created_at"])
+        at = datetime.datetime.fromtimestamp(first["created_at"], c["tz"])
+        return f"NOT DUE {date}: posted {at:%H:%M} event {first['id'][:8]}"
+    return f"DUE {date}"
+
+
+# Checks whose clean value is not "none". The OpenShift gm-status emits checks whose
+# clean value is "none" (relay liveness, backticked mentions, approvals, digest bumps,
+# and the pod check when every pod is ready) or the sentinel "n/a here" when a check does
+# not apply from this pod, both handled directly in draft(). Kept as the extension point
+# for any future check whose clean value is not one of those.
+CLEAN_RULES = {}
+
+
+def unrequested(c, now):
+    """(lines, number to explain, failed lines) for the Unrequested work section."""
+    local = datetime.datetime.fromtimestamp(now, c["tz"])
+    start_day = local.date() - datetime.timedelta(days=1)
+    start = int(datetime.datetime.combine(start_day, datetime.time(), c["tz"]).timestamp())
+    lines, check, failed = [f"Since {start_day.isoformat()} 00:00 New York"], 0, []
+    for clone in c["clones"]:
+        name = os.path.basename(clone.rstrip("/"))
+        try:
+            subprocess.run(["git", "-C", clone, "fetch", "-q", "origin", "main"], check=True, capture_output=True,
+                           text=True, timeout=120)
+            log = subprocess.run(["git", "-C", clone, "log", f"--since=@{start}", f"--until=@{now}",
+                                  "--author", c["author"], "--fixed-strings", "--format=\x1e%h %s%n%b",
+                                  "origin/main"], check=True, capture_output=True, text=True, timeout=120).stdout
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            detail = (getattr(e, "stderr", "") or "").strip()[:200]
+            failed.append(f"unrequested work, {name}: CHECK FAILED: {e} {detail}".rstrip())
+            continue
+        covered = 0
+        for chunk in log.split("\x1e")[1:]:
+            head, _, body = chunk.partition("\n")
+            if APPROVED_RE.search(body) or PROOF_RE.search(body):
+                covered += 1
+            else:
+                check += 1
+                lines.append(f"- check: {name} {head}")
+        lines.append(f"- {name}: {covered} commits covered by an approval or pin-digest line")
+    try:
+        posts = [e for e in fetch(c["buzz"], c["channel"], start - 1)
+                 if e.get("pubkey", "").lower() == c["gm"] and start <= e.get("created_at", 0) <= now
+                 and not any(len(t) >= 2 and t[0] == "e" for t in e.get("tags") or [])]
+    except CheckFailed as e:
+        failed.append(f"unrequested work, #gm posts: CHECK FAILED: {e}")
+        posts = []
+    else:
+        covered = 0
+        for e in sorted(posts, key=lambda e: e["created_at"]):
+            text = " ".join(e.get("content", "").split())
+            if text.startswith(PREFIX):
+                covered += 1
+            else:
+                check += 1
+                lines.append(f"- check: #gm post {e['id'][:8]}: {text[:90]}")
+        lines.append(f"- #gm: {covered} top level posts are daily statuses")
+    return lines, check, failed
+
+
+def goals_lines(c, now):
+    """The Goals section, one line per goal from `gm-goals status`.
+
+    gm-goals keeps the goal ledger (determinism item 11); its status output already reads
+    as the daily Goals section. A per goal relay read can print "CHECK FAILED <goal>: ...",
+    and the tool as a whole can fail to run; both come back here so the status reports them.
+    """
+    try:
+        r = subprocess.run([c["goals"], "status", "--now", str(now)],
+                           capture_output=True, text=True, timeout=900)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return [f"- gm-goals: CHECK FAILED: {e}"]
+    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    if r.returncode or not lines:
+        return [f"- gm-goals: CHECK FAILED: exit {r.returncode}: {(r.stderr or r.stdout).strip()[:200]}"]
+    return lines
+
+
+def draft(c, now):
+    date = datetime.datetime.fromtimestamp(now, c["tz"]).date().isoformat()
+    failed, wrong = [], []
+    try:
+        r = subprocess.run([c["status"]], capture_output=True, text=True, timeout=900)
+        lines = [l for l in r.stdout.splitlines() if l.strip()]
+        if not lines:
+            failed.append(f"gm-status: CHECK FAILED: exit {r.returncode}, no output: {r.stderr.strip()[:200]}")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        lines = []
+        failed.append(f"gm-status: CHECK FAILED: {e}")
+    for l in lines:
+        name, sep, value = l.partition(": ")
+        value = value.strip()
+        if "CHECK FAILED" in l:
+            failed.append(l)
+        elif not sep:
+            wrong.append(l)
+        elif value == "none":
+            continue
+        elif value in ("n/a here", "No resources found"):
+            # A check that does not apply from this pod (no cluster read access yet) or a
+            # kube read that found nothing: clean, not a failure and not something to look at.
+            continue
+        elif name in CLEAN_RULES and CLEAN_RULES[name](value, now, c):
+            continue
+        else:
+            wrong.append(l)
+    work, check, work_failed = unrequested(c, now)
+    failed += work_failed
+    glines = goals_lines(c, now)
+    failed += [l for l in glines if "CHECK FAILED" in l]
+    out = [f"{PREFIX}{date}", "", "Not right"]
+    out += [f"- {l}" for l in failed + wrong] or ["- none"]
+    out += ["", "Skip level", "- FILL: one line per skip level message sent yesterday, or none",
+            "", "Unrequested work", *work,
+            "", "Goals", *glines, ""]
+    if failed or wrong or check:
+        more = f", {check} unrequested items to explain" if check else ""
+        out.append(f"Not all clean: {len(failed)} checks failed, {len(wrong)} checks need a look{more} (above).")
+    else:
+        out.append("Nothing else to report")
+    return out
+
+
+def main(argv):
+    now = int(time.time())
+    try:
+        mode, rest = argv[0], argv[1:]
+        if mode not in ("due", "draft"):
+            raise ValueError(mode)
+        if rest:
+            if rest[0] != "--now" or len(rest) != 2:
+                raise ValueError(rest)
+            now = int(rest[1])
+    except (ValueError, IndexError):
+        print("usage: gm-daily due|draft [--now UNIXTIME]", file=sys.stderr)
+        return 1
+    try:
+        c = config()
+        if mode == "due":
+            print(due(c, now))
+        else:
+            print("\n".join(draft(c, now)))
+    except (CheckFailed, OSError, zoneinfo.ZoneInfoNotFoundError) as e:
+        print(f"gm-daily: CHECK FAILED: {e}")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

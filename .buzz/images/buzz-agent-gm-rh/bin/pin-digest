@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""pin-digest: pin an image digest only from CI, proved in the registry (determinism item 4).
+
+  pin-digest <image> <run-number>         edit the one deploy/ line that pins <image>
+  pin-digest --check [--since yesterday]  list digest bumps under deploy/ with no proof
+
+Pin mode takes the digest from the "IMAGE <name> <ref>@<digest>" line in that CI run's
+log, and refuses (exit 1) unless the run is a successful push run of images.yaml, its
+commit is on origin/main, the registry serves that digest, and exactly one line under
+deploy/ pins <image>. Then it edits that line and prints one line,
+  pin-digest: <image> sha256:<digest> run <n> commit <sha>
+which goes verbatim into the bump's commit message. It never commits or pushes.
+
+Check mode reads git log since the given date (default yesterday) and prints, for every
+image built by this repo (images/<name>/) whose pin changed under deploy/, either nothing
+(the commit message carries the matching pin-digest line) or
+  UNPROVEN <commit> <image> sha256:<digest12>
+Exit 2 with "pin-digest: CHECK FAILED" when it cannot run. Run either mode from the root of
+an rh/cluster clone. The Gitea token is read from GITEA_TOKEN_FILE inside this
+script, so no command line names it.
+"""
+import base64
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+GITEA = "https://gitea.bouterse.casa"
+OWNER, REPO = "rh", "cluster"
+WORKFLOW = "images.yaml"
+DIGEST_RE = r"sha256:[0-9a-f]{64}"
+
+
+def fail(msg, code=1):
+    print(f"pin-digest: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def token():
+    path = os.environ.get("GITEA_TOKEN_FILE", "/run/secrets/gitea/token")
+    if not path:
+        fail("GITEA_TOKEN_FILE is not set")
+    with open(path) as f:
+        return f.read().strip()
+
+
+def http(url, headers=None, method="GET"):
+    req = urllib.request.Request(url, headers=headers or {}, method=method)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.status, r.headers, r.read()
+
+
+def api(path):
+    _, _, body = http(f"{GITEA}/api/v1{path}", {"Authorization": f"token {token()}"})
+    return body
+
+
+def git(*args):
+    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+
+
+def find_run(number):
+    for page in range(1, 11):
+        runs = json.loads(api(f"/repos/{OWNER}/{REPO}/actions/runs?limit=50&page={page}")).get("workflow_runs") or []
+        for r in runs:
+            if r.get("run_number") == number:
+                return r
+        if not runs or min(r.get("run_number", 0) for r in runs) < number:
+            break
+    fail(f"no CI run number {number} in {OWNER}/{REPO}")
+
+
+def run_digest(run, image):
+    found = set()
+    for job in json.loads(api(f"/repos/{OWNER}/{REPO}/actions/runs/{run['id']}/jobs")).get("jobs") or []:
+        log = api(f"/repos/{OWNER}/{REPO}/actions/jobs/{job['id']}/logs").decode(errors="replace")
+        found |= set(re.findall(r"IMAGE " + re.escape(image) + r" \S+@(" + DIGEST_RE + r")", log))
+    if len(found) != 1:
+        fail(f"run {run['run_number']} log has {len(found)} IMAGE lines for {image}, need exactly 1")
+    return found.pop()
+
+
+def registry_serves(image, digest):
+    """HEAD the manifest with a registry token from Gitea's /v2/token."""
+    basic = base64.b64encode(f"gm-rh:{token()}".encode()).decode()
+    _, _, body = http(f"{GITEA}/v2/token?service=container_registry&scope=repository:{OWNER}/{image}:pull",
+                      {"Authorization": f"Basic {basic}"})
+    bearer = json.loads(body)["token"]
+    accept = ", ".join([
+        "application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
+        "application/vnd.docker.distribution.manifest.list.v2+json",
+        "application/vnd.docker.distribution.manifest.v2+json"])
+    try:
+        status, headers, _ = http(f"{GITEA}/v2/{OWNER}/{image}/manifests/{digest}",
+                                  {"Authorization": f"Bearer {bearer}", "Accept": accept}, method="HEAD")
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}"
+    served = headers.get("Docker-Content-Digest", "")
+    return status == 200 and served == digest, f"HTTP {status}, served {served[:19] or 'no digest'}"
+
+
+def pin_lines(image):
+    ref = re.escape(f"gitea.bouterse.casa/{OWNER}/{image}@")
+    hits = []
+    for path in sorted(git("ls-files", "deploy").split()):
+        with open(path) as f:
+            for i, text in enumerate(f, 1):
+                if re.search(ref + DIGEST_RE, text):
+                    hits.append((path, i))
+    return hits
+
+
+def pin(image, number):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", image):
+        fail(f"bad image name {image!r}")
+    if not os.path.isdir(f"images/{image}"):
+        fail(f"images/{image} does not exist: this repo's CI does not build {image}")
+    run = find_run(number)
+    if run.get("status") != "completed" or run.get("conclusion") != "success":
+        fail(f"run {number} is {run.get('status')}/{run.get('conclusion')}, not completed/success")
+    if run.get("event") != "push" or not str(run.get("path", "")).startswith(WORKFLOW + "@") or run.get("head_branch") != "main":
+        fail(f"run {number} is {run.get('event')} of {run.get('path')} on {run.get('head_branch')}, not a push of {WORKFLOW} on main")
+    sha = run["head_sha"]
+    git("fetch", "-q", "origin", "main")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", sha, "origin/main"]).returncode != 0:
+        fail(f"run {number} built {sha[:7]}, which is not on origin/main")
+    digest = run_digest(run, image)
+    ok, why = registry_serves(image, digest)
+    if not ok:
+        fail(f"the registry does not serve {image}@{digest[:19]} ({why})")
+    hits = pin_lines(image)
+    if len(hits) != 1:
+        fail(f"{len(hits)} lines under deploy/ pin {image}, need exactly 1: {hits}")
+    path, lineno = hits[0]
+    with open(path) as f:
+        lines = f.readlines()
+    old = lines[lineno - 1]
+    new = re.sub(re.escape(f"/{OWNER}/{image}@") + DIGEST_RE, f"/{OWNER}/{image}@{digest}", old)
+    proof = f"pin-digest: {image} {digest} run {number} commit {sha}"
+    if new == old:
+        print(proof)
+        print(f"pin-digest: {path}:{lineno} already pins this digest; nothing changed", file=sys.stderr)
+        return
+    lines[lineno - 1] = new
+    with open(path, "w") as f:
+        f.writelines(lines)
+    print(proof)
+
+
+def check(since):
+    built = {d for d in os.listdir("images") if os.path.isdir(os.path.join("images", d))}
+    log = git("log", f"--since={since}", "--format=\x1e%H%n%B%n\x1f", "-p", "--no-color", "--", "deploy")
+    out = []
+    for chunk in log.split("\x1e")[1:]:
+        head, _, diff = chunk.partition("\x1f")
+        commit, _, body = head.partition("\n")
+        for image, digest in re.findall(r"^\+[^+].*?gitea\.bouterse\.casa/" + OWNER + r"/([a-z0-9-]+)@(" + DIGEST_RE + ")", diff, re.M):
+            if image in built and f"pin-digest: {image} {digest} " not in body:
+                out.append(f"UNPROVEN {commit[:7]} {image} {digest[:19]}")
+    print("\n".join(sorted(set(out))))
+
+
+def main(argv):
+    try:
+        if argv[:1] == ["--check"]:
+            since = argv[2] if argv[1:2] == ["--since"] and len(argv) > 2 else "yesterday"
+            check(since)
+        elif len(argv) == 2 and argv[1].isdigit():
+            pin(argv[0], int(argv[1]))
+        else:
+            fail("usage: pin-digest <image> <run-number> | pin-digest --check [--since DATE]")
+    except (urllib.error.URLError, subprocess.CalledProcessError, OSError, ValueError, KeyError) as e:
+        if argv[:1] == ["--check"]:
+            print(f"pin-digest: CHECK FAILED: {e}")
+            sys.exit(2)
+        fail(f"cannot run: {e}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
