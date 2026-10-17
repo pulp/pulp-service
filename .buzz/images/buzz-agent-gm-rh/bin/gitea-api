@@ -21,7 +21,9 @@
 #   gitea-api GET /v2/rh/gm-rh/manifests/sha256:<digest> -o /dev/null -w '%{http_code}' \
 #     -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'
 set -euo pipefail
-base=${GITEA_URL:-https://gitea.bouterse.casa}
+# The host is fixed here, not taken from the environment, so the token can only
+# ever go to Gitea.
+base=https://gitea.bouterse.casa
 tokfile=${GITEA_TOKEN_FILE:-/run/secrets/gitea/token}
 [ -s "$tokfile" ] || { echo "gitea-api: no token at $tokfile" >&2; exit 2; }
 [ $# -ge 2 ] || { echo "usage: gitea-api <METHOD> <PATH> [curl args...]" >&2; exit 2; }
@@ -38,18 +40,21 @@ for arg in "$@"; do
       echo "gitea-api: refusing curl arg $arg" >&2; exit 2 ;;
   esac
 done
+# Credentials reach curl through a config on stdin, never its argument list,
+# where any process in the pod could read them.
+auth() { printf '%s = "%s"\n' "$1" "$2"; }
 case $path in
   /v2/token*)   # the token endpoint itself: Basic auth with the account token
-    exec curl -sS -X "$method" -u "gm-rh:$(cat "$tokfile")" "$base$path" "$@" ;;
+    auth user "gm-rh:$(cat "$tokfile")" | exec curl -sS -K - -X "$method" "$base$path" "$@" ;;
   /v2/*)        # any other registry path: mint a pull-scoped bearer, then use it
     rest=${path#/v2/}; owner=${rest%%/*}; rest=${rest#*/}; image=${rest%%/*}
-    bearer=$(curl -sS -u "gm-rh:$(cat "$tokfile")" \
+    bearer=$(auth user "gm-rh:$(cat "$tokfile")" | curl -sS -K - \
       "$base/v2/token?service=container_registry&scope=repository:$owner/$image:pull" \
       | jq -r '.token // empty')
     [ -n "$bearer" ] || { echo "gitea-api: no registry token for $owner/$image" >&2; exit 2; }
-    exec curl -sS -X "$method" -H "Authorization: Bearer $bearer" "$base$path" "$@" ;;
+    auth header "Authorization: Bearer $bearer" | exec curl -sS -K - -X "$method" "$base$path" "$@" ;;
   /api/*) url="$base$path" ;;
   /*)     url="$base/api/v1$path" ;;
   *)      url="$base/api/v1/$path" ;;
 esac
-exec curl -sS -X "$method" -H "Authorization: token $(cat "$tokfile")" "$url" "$@"
+auth header "Authorization: token $(cat "$tokfile")" | exec curl -sS -K - -X "$method" "$url" "$@"
