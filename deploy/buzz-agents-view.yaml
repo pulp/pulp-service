@@ -12,6 +12,9 @@ metadata:
 parameters:
 - name: AGENT_SLUG
   required: true
+- name: NAMESPACE
+  description: The namespace the agent runs in; a ServiceAccount subject needs it.
+  required: true
 objects:
 - apiVersion: v1
   kind: ServiceAccount
@@ -34,3 +37,4 @@ objects:
   subjects:
   - kind: ServiceAccount
     name: buzz-agent-${AGENT_SLUG}
+    namespace: ${NAMESPACE}

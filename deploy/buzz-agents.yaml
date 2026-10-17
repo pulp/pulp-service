@@ -315,7 +315,14 @@ objects:
           - name: gitea-token
             mountPath: /run/secrets/gitea
             readOnly: true
+          # Hide the pod's ServiceAccount token (MOUNT_SA_TOKEN) from the
+          # sidecar: only the agent container reads the namespace.
+          - name: no-sa-token
+            mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+            readOnly: true
         volumes:
+        - name: no-sa-token
+          emptyDir: {}
         - name: state
           persistentVolumeClaim:
             claimName: buzz-agent-${AGENT_SLUG}-state
