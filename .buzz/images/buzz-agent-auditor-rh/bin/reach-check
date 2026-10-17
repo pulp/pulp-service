@@ -12,17 +12,23 @@ line per drift:
 A managed agent is part of the intended set, so it is covered by the same missing/extra
 comparison; there is no separate rule that could contradict it.
 
-The rule logic (members_for) is baked into this image, not loaded from the rh/cluster
-clone, so gm-rh (which can push to rh/cluster) cannot run code inside the auditor.
-config/platform.yaml is read as data; an unapproved change to it is caught separately
-by audit-approvals. The live allowlists come from pulp-service, which gm-rh cannot
-push to, so the two sides of the comparison are both approver gated.
+The rule logic (members_for) is baked into this image, not loaded from any clone, so
+gm-rh (which can push to rh/cluster) cannot run code inside the auditor. Both sides of the
+comparison are read from fresh clones taken here, not from the pod's /state/repos clones:
+those clones are writable by the gm-rh session, and a git pull --ff-only keeps a session's
+uncommitted local edits, so reading config/platform.yaml or roster.json from them would
+let a compromised session tamper with the data the check compares and make it pass.
+config/platform.yaml and roster.json are read as data; an unapproved change to the former
+is caught separately by audit-approvals. The live allowlists come from pulp-service, which
+gm-rh cannot push to, so the two sides of the comparison are both approver gated.
 
-The repo locations are pinned constants, not read from the environment or argv, so a
-compromised session cannot point the check at data it controls and make it pass.
+The repo URLs are pinned constants, not read from the environment or argv, so a
+compromised session cannot point the check at data it controls and make it pass. The pure
+functions (members_for, managed_agents, live_allowlist) take a directory or config so the
+tests in render/tests/test_reach_check.py exercise them against fixtures offline.
 
 Prints "reach-check: ok" and exits 0 when everything lines up, 1 on any FAIL, 2 when
-the check itself could not run (clone, pull, config, parse).
+the check itself could not run (clone, config, parse).
 """
 import json
 import os
@@ -33,10 +39,10 @@ import tempfile
 
 import yaml
 
-# Pinned. Not overridable from the environment or argv: the running agent must not be
-# able to substitute its own repos. Tests load this module and override these globals.
-REPO = "/state/repos/cluster"
-AGENTS_REPO = "/state/repos/agents"
+# Pinned. Not overridable from the environment or argv: the running agent must not be able
+# to substitute its own repos, and a fresh clone cannot carry a session's local edits.
+CLUSTER_URL = "https://gitea.bouterse.casa/rh/cluster.git"
+AGENTS_URL = "https://gitea.bouterse.casa/rh/agents.git"
 PULP_SERVICE_REPO = "https://github.com/pulp/pulp-service.git"
 
 GIT_TIMEOUT = 120
@@ -48,14 +54,19 @@ def die(msg):
 
 
 def norm(k):
+    """Normalise a key for comparison. Raises TypeError on a non-string, so a malformed
+    principal or role key in config/platform.yaml surfaces as a setup failure (exit 2)
+    through the callers' handlers, not an uncaught AttributeError (exit 1)."""
+    if not isinstance(k, str):
+        raise TypeError(f"expected a string key, got {type(k).__name__}")
     return k.strip().lower()
 
 
 def members_for(chief_id, cfg):
     """Intended keys a chief hears from the reporting-line rule: principals, owner,
-    staff roles, named extras. Baked here, not imported from the rh/cluster clone, so
-    no pushable code runs. Raises KeyError/TypeError on a malformed config, which the
-    caller turns into a setup failure (exit 2)."""
+    staff roles, named extras. Baked here, not imported from any clone, so no pushable
+    code runs. Raises KeyError/TypeError on a malformed config, which the caller turns
+    into a setup failure (exit 2)."""
     chief = cfg["chiefs"][chief_id]
     roles = cfg.get("roles", {})
     keys = set()
@@ -92,20 +103,31 @@ def live_allowlist(agents_dir, chief_id):
     return None, d.get("respond_to"), keys
 
 
-def managed_agents():
+def managed_agents(agents_repo):
     """Roster entries managed by a chief: (managing_role, slug, key). The roster is an
-    object keyed by slug. Empty if there is no roster."""
-    path = os.path.join(AGENTS_REPO, "staff", "roster.json")
+    object keyed by slug and lives at staff/roster.json in the agents repo. Returns [] when
+    there is no roster file. A roster that exists but does not parse, or is not an object,
+    is a setup failure (exit 2): silently returning [] would drop every managed agent from
+    the intended set and mislabel the deployed ones as 'extra'. Malformed individual
+    entries are skipped (the roster is cos-rh writable data, not the rule)."""
+    path = os.path.join(agents_repo, "staff", "roster.json")
     try:
         with open(path) as f:
             roster = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
         return []
+    except (OSError, json.JSONDecodeError) as e:
+        die(f"staff/roster.json does not parse ({e})")
+    if not isinstance(roster, dict):
+        die("staff/roster.json is not an object keyed by slug")
     out = []
-    if isinstance(roster, dict):
-        for slug, e in roster.items():
-            if isinstance(e, dict) and e.get("managed_by") and e.get("pubkey"):
-                out.append((norm(e["managed_by"]), slug, norm(e["pubkey"])))
+    for slug, e in roster.items():
+        if not isinstance(e, dict):
+            continue
+        mb = e.get("managed_by")
+        pk = e.get("pubkey")
+        if isinstance(mb, str) and mb and isinstance(pk, str) and pk:
+            out.append((norm(mb), slug, norm(pk)))
     return out
 
 
@@ -116,58 +138,42 @@ def git(args, **kw):
                           capture_output=True, text=True, **kw)
 
 
-def pull_or_die(repo):
-    """A fresh pull, or a setup failure. A failed or timed out pull means the data
-    cannot be trusted as current, so the check does not run on stale data."""
-    if not os.path.isdir(os.path.join(repo, ".git")):
-        die(f"no clone at {repo}; the entrypoint should clone it at boot")
+def clone_fresh(url, parent, name):
+    """Shallow read-only clone of url into parent/name, or a setup failure. A fresh clone
+    cannot carry a session's uncommitted local edits, unlike a pull into /state/repos. The
+    pod's global credential helper supplies the Gitea token; never a token in the URL."""
+    dest = os.path.join(parent, name)
     try:
-        r = git(["-C", repo, "pull", "--ff-only", "--quiet"])
+        git(["clone", "--quiet", "--depth", "1", url, dest], check=True)
     except subprocess.TimeoutExpired:
-        die(f"git pull timed out for {repo}; not running on stale data")
-    if r.returncode != 0:
-        die(f"git pull failed for {repo} ({(r.stderr or '').strip()[:200]}); not running on stale data")
+        die(f"cloning {name} timed out; not running on stale data")
+    except subprocess.CalledProcessError as e:
+        die(f"cannot clone {name} ({(e.stderr or '').strip()[:200]})")
+    if not os.path.isdir(os.path.join(dest, ".git")):
+        die(f"clone of {name} produced no working tree")
+    return dest
 
 
-def checkout_pulp_service():
-    """Return (agents_dir, tmp_to_clean). Clones pulp-service read-only from the pinned
+def checkout_pulp_service(parent):
+    """Return the agents dir inside a read-only clone of pulp-service from the pinned
     public URL, shallow and sparse to the agent definitions only."""
-    tmp = tempfile.mkdtemp()
-    dest = os.path.join(tmp, "ps")
+    dest = os.path.join(parent, "ps")
     try:
         git(["clone", "--quiet", "--depth", "1", "--filter=blob:none", "--sparse",
              PULP_SERVICE_REPO, dest], check=True)
         git(["-C", dest, "sparse-checkout", "set", ".buzz/agents"], check=True)
     except subprocess.TimeoutExpired:
-        shutil.rmtree(tmp, ignore_errors=True)
         die("cloning pulp-service timed out")
     except subprocess.CalledProcessError as e:
-        shutil.rmtree(tmp, ignore_errors=True)
         die(f"cannot clone pulp-service ({(e.stderr or '').strip()[:200]})")
-    # git() does not raise on non-zero without check=True; verify the checkout landed.
     adir = os.path.join(dest, ".buzz", "agents")
     if not os.path.isdir(adir):
-        shutil.rmtree(tmp, ignore_errors=True)
         die("pulp-service clone has no .buzz/agents")
-    return adir, tmp
+    return adir
 
 
 def main():
-    pull_or_die(REPO)
-    if os.path.isdir(os.path.join(AGENTS_REPO, ".git")):
-        pull_or_die(AGENTS_REPO)
-
-    cfg_path = os.path.join(REPO, "config", "platform.yaml")
-    try:
-        with open(cfg_path) as f:
-            cfg = yaml.safe_load(f)
-    except (OSError, yaml.YAMLError) as e:
-        die(f"cannot read config/platform.yaml ({e})")
-    if not isinstance(cfg, dict) or not isinstance(cfg.get("chiefs"), dict):
-        die("config/platform.yaml has no chiefs mapping")
-
-    managed = managed_agents()
-    agents_dir, tmp = checkout_pulp_service()
+    tmp = tempfile.mkdtemp()
     fails = []
 
     def fail(msg):
@@ -175,6 +181,21 @@ def main():
         print(f"FAIL {msg}")
 
     try:
+        cluster_dir = clone_fresh(CLUSTER_URL, tmp, "cluster")
+        agents_dir_repo = clone_fresh(AGENTS_URL, tmp, "agents")
+
+        cfg_path = os.path.join(cluster_dir, "config", "platform.yaml")
+        try:
+            with open(cfg_path) as f:
+                cfg = yaml.safe_load(f)
+        except (OSError, yaml.YAMLError) as e:
+            die(f"cannot read config/platform.yaml ({e})")
+        if not isinstance(cfg, dict) or not isinstance(cfg.get("chiefs"), dict):
+            die("config/platform.yaml has no chiefs mapping")
+
+        managed = managed_agents(agents_dir_repo)
+        agents_dir = checkout_pulp_service(tmp)
+
         for chief_id in cfg["chiefs"]:
             try:
                 intended = members_for(chief_id, cfg)
