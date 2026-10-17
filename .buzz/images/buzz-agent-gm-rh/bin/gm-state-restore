@@ -25,7 +25,9 @@ repo=${GM_STATE_REPO:-https://gitea.bouterse.casa/rh/gm-rh-state.git}
 tmp=$(mktemp -d) || { log "mktemp failed, skipping"; exit 0; }
 trap 'rm -rf "$tmp"' EXIT
 
-if ! git clone --depth 1 "$repo" "$tmp/state" >/dev/null 2>&1; then
+# Bounded, so an unreachable or stalled state repo cannot hold the pod's start.
+if ! timeout 90 git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 \
+    clone --depth 1 "$repo" "$tmp/state" >/dev/null 2>&1; then
   log "clone of $repo failed, will retry next boot"
   exit 0
 fi
