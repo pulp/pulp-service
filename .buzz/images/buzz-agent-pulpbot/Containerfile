@@ -77,6 +77,15 @@ RUN apk add --no-cache gcompat tar \
 # entrypoint shim, the DM poll helper, the OpenShift login wrapper, the AWS credential
 # parser, the GABI query wrapper, the per thread worktree tool, the Jira MCP wrapper and
 # the secret-guard hook. managed-settings.json wires secret-guard into Claude Code.
+# gitlab.cee.redhat.com and other Red Hat internal hosts serve a chain under Red
+# Hat IT's Internal Root CA, which the base trust store lacks. Add it to the system
+# store, and point Python and Node clients at that store too.
+COPY rh-internal-root-ca.crt /usr/local/share/ca-certificates/rh-internal-root-ca.crt
+RUN update-ca-certificates 2>/dev/null \
+ && grep -q "$(sed -n '5p' /usr/local/share/ca-certificates/rh-internal-root-ca.crt)" /etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/rh-internal-root-ca.crt
 COPY bin/ /usr/local/bin/
 COPY managed-settings.json /opt/agent/
 RUN chmod 0755 /usr/local/bin/pulpbot-entrypoint /usr/local/bin/dm-watch \
