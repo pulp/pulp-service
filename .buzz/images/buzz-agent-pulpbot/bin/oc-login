@@ -1,0 +1,70 @@
+#!/bin/bash
+# oc-login: log in to one OpenShift cluster from a token a requester sent by DM, into
+# a per requester per cluster kubeconfig, without the token ever reaching argv or the
+# screen. It replaces a plain `oc login --token=...`, which puts the token in argv.
+#
+# dm-watch writes the reply (the sha256~ token) to /run/agent-session/<requester>/<file>
+# (memory, mode 600, emptied at pod start). oc-login reads that file, builds a minimal
+# kubeconfig with the token embedded via printf (a bash builtin, so the value never
+# appears in `ps`), verifies it with `oc whoami` (which prints the username, not the
+# token), and on success deletes the token file. The kubeconfig stays under the same
+# per requester memory directory, so one person's token is never reused for another,
+# and nothing survives a restart.
+#
+# Usage: oc-login --requester <hex> --cluster <name> --token-file <name>
+#   <name> is the dm-watch --name file under /run/agent-session/<requester>/.
+#   On success prints: logged in to <cluster> as <user>; kubeconfig <path>
+#   Pass that kubeconfig on every oc command: oc <cmd> --kubeconfig <path>
+set -uo pipefail
+
+requester=""; cluster=""; tokenfile=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --requester)  requester="$2"; shift 2 ;;
+    --cluster)    cluster="$2";   shift 2 ;;
+    --token-file) tokenfile="$2"; shift 2 ;;
+    *) echo "oc-login: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
+[ -n "$requester" ] && [ -n "$cluster" ] && [ -n "$tokenfile" ] || {
+  echo "usage: oc-login --requester <hex> --cluster <name> --token-file <name>" >&2; exit 2; }
+case "$requester" in *[!0-9a-f]*|"") echo "oc-login: --requester must be 64 hex" >&2; exit 2 ;; esac
+[ ${#requester} -eq 64 ] || { echo "oc-login: --requester must be 64 hex" >&2; exit 2; }
+case "$tokenfile" in */*|"") echo "oc-login: --token-file must be a plain filename" >&2; exit 2 ;; esac
+
+# Cluster API servers, baked here (from the token request pages), so the caller names
+# a cluster, not a URL. Public openshiftapps.com certs are valid, so no CA is needed.
+case "$cluster" in
+  prod)          server="https://api.crcp01ue1.o9m8.p1.openshiftapps.com:6443" ;;
+  prod-workers)  server="https://api.pulpp01ue1.ugjo.p3.openshiftapps.com:443" ;;
+  stage)         server="https://api.crcs02ue1.urby.p1.openshiftapps.com:6443" ;;
+  stage-workers) server="https://api.pulps01ue1.59uj.p3.openshiftapps.com:443" ;;
+  ephemeral)     server="https://api.crc-eph.r9lp.p1.openshiftapps.com:6443" ;;
+  *) echo "oc-login: unknown cluster '$cluster' (prod|prod-workers|stage|stage-workers|ephemeral)" >&2; exit 2 ;;
+esac
+
+dir="/run/agent-session/$requester"
+tok="$dir/$tokenfile"
+[ -s "$tok" ] || { echo "oc-login: no token at the session file for $requester/$tokenfile" >&2; exit 3; }
+kc="$dir/kube-$cluster"
+
+# Build the kubeconfig with the token embedded through printf (a builtin, so the value
+# is never in argv and never on the screen). mode 600, in the per requester memory dir.
+( umask 077
+  { printf 'apiVersion: v1\nkind: Config\n'
+    printf 'clusters:\n- name: %s\n  cluster:\n    server: %s\n' "$cluster" "$server"
+    printf 'contexts:\n- name: %s\n  context:\n    cluster: %s\n    user: %s-user\n' "$cluster" "$cluster" "$cluster"
+    printf 'current-context: %s\n' "$cluster"
+    printf 'users:\n- name: %s-user\n  user:\n    token: %s\n' "$cluster" "$(tr -d '\r\n' < "$tok")"
+  } > "$kc" )
+
+# Verify the login. `oc whoami` prints the username, never the token. On failure the
+# kubeconfig is useless, so remove it and leave the token file for the caller to see.
+if ! who="$(oc whoami --kubeconfig "$kc" --request-timeout=10s 2>/dev/null)"; then
+  rm -f "$kc"
+  echo "oc-login: the token for $cluster was rejected (expired, wrong cluster, or malformed)" >&2
+  exit 4
+fi
+# The token is now in the kubeconfig; the dm reply file has served its purpose.
+rm -f "$tok"
+echo "logged in to $cluster as $who; kubeconfig $kc"

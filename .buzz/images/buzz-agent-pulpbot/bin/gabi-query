@@ -1,0 +1,59 @@
+#!/bin/bash
+# gabi-query: run one read-only SQL query against the Pulp production database through
+# GABI, authorized by a prod OpenShift token the requester already logged in with
+# (oc-login into kube-prod). The token never reaches argv or the screen: it is read
+# from the kubeconfig with `oc whoami -t` (captured, not printed) and fed to curl's
+# config on stdin, the same way transcripts-get handles its bearer.
+#
+# Only someone on the GABI users list can query (today only Brian), so pass that
+# person's --requester and their prod kubeconfig is used. SELECT (or WITH) only; any
+# write verb is refused. The 30s route timeout means slow queries return HTTP 503, so
+# keep queries small (see the charter).
+#
+# Usage: gabi-query --requester <hex>        with the SQL on stdin
+set -uo pipefail
+
+GABI_URL="https://gabi-pulp-prod.apps.crcp01ue1.o9m8.p1.openshiftapps.com/query"
+
+requester=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --requester) requester="$2"; shift 2 ;;
+    *) echo "gabi-query: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
+[ -n "$requester" ] || { echo "usage: gabi-query --requester <hex>   (SQL on stdin)" >&2; exit 2; }
+case "$requester" in *[!0-9a-f]*|"") echo "gabi-query: --requester must be 64 hex" >&2; exit 2 ;; esac
+[ ${#requester} -eq 64 ] || { echo "gabi-query: --requester must be 64 hex" >&2; exit 2; }
+
+kc="/run/agent-session/$requester/kube-prod"
+[ -s "$kc" ] || { echo "gabi-query: no prod login for this requester; run oc-login --cluster prod first" >&2; exit 3; }
+
+sql="$(cat)"
+[ -n "${sql//[[:space:]]/}" ] || { echo "gabi-query: no SQL on stdin" >&2; exit 2; }
+# SELECT or WITH only; refuse any write or DDL verb anywhere in the text.
+first="$(printf '%s' "$sql" | tr '[:lower:]' '[:upper:]' | grep -oE '[A-Z]+' | head -n1)"
+case "$first" in SELECT|WITH) : ;; *) echo "gabi-query: only SELECT or WITH queries are allowed" >&2; exit 2 ;; esac
+if printf '%s' "$sql" | tr '[:lower:]' '[:upper:]' | grep -qwE 'INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|GRANT|REVOKE|TRUNCATE|MERGE|CALL|COPY'; then
+  echo "gabi-query: the query contains a write or DDL keyword; SELECT only" >&2; exit 2
+fi
+
+# Token from the kubeconfig, captured not printed.
+tok="$(oc whoami -t --kubeconfig "$kc" --request-timeout=10s 2>/dev/null)" || {
+  echo "gabi-query: could not read the prod token (login may have expired); run oc-login --cluster prod again" >&2; exit 4; }
+[ -n "$tok" ] || { echo "gabi-query: the prod login has no token; run oc-login --cluster prod again" >&2; exit 4; }
+
+# Build the JSON body with jq (safe quoting) into a mode 600 file in the memory dir,
+# so the SQL never has to be quoted onto a command line. The bearer goes through curl's
+# stdin config; the URL and the body file path are not secret and stay on argv.
+dir="/run/agent-session/$requester"
+( umask 077; mkdir -p "$dir" )
+body=$(mktemp "$dir/.gabi-body.XXXXXX") || { echo "gabi-query: no temp file" >&2; exit 2; }
+( umask 077; jq -n --arg q "$sql" '{query:$q}' > "$body" ) || { echo "gabi-query: could not build the request body" >&2; exit 2; }
+
+printf 'header = "Authorization: Bearer %s"\n' "$tok" \
+  | curl -q -fsS --max-time 35 -K - \
+      -H 'Content-Type: application/json' --data @"$body" "$GABI_URL"
+rc=$?
+rm -f "$body"
+exit $rc

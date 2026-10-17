@@ -1,0 +1,143 @@
+#!/bin/bash
+# pulpbot-wt: one git worktree per thread, off a shared bare clone per repo, with a
+# per repo lock so parallel threads cannot collide. This is the pod form of the earlier laptop
+# worktree tool. On the pod the worktree area lives under the pod's persistent state
+# (PULPBOT_WT_ROOT, default /state/pulpbot-wt), never a laptop home path.
+#
+#   pulpbot-wt new <repo> <thread>        print a fresh worktree at the latest default
+#                                         branch for <thread> (reuses an existing one)
+#   pulpbot-wt branch <W> <branch>        create and switch to <branch> in worktree W
+#   pulpbot-wt done <W> [--force]         remove worktree W (refuses if it has
+#                                         uncommitted changes unless --force)
+#   pulpbot-wt repos                      list the known repos
+#
+# <thread> is the first 12 characters of the thread root event id. Fetch and push
+# authenticate from the pod's git credential store (alcove-bot on gitlab.cee,
+# hosted-pulp-bot on github.com), set up by pulpbot-entrypoint.
+set -uo pipefail
+
+WT_ROOT=${PULPBOT_WT_ROOT:-/state/pulpbot-wt}
+BARE_DIR="$WT_ROOT/bare"
+WORK_DIR="$WT_ROOT/wt"
+LOCK_DIR="$WT_ROOT/locks"
+
+# Known repos. Ask Brian before adding others (charter).
+repo_url() {
+  case "$1" in
+    pulp-docs)     echo "https://gitlab.cee.redhat.com/hosted-pulp/pulp-docs.git" ;;
+    app-interface) echo "https://gitlab.cee.redhat.com/service/app-interface.git" ;;
+    pulp-service)  echo "https://github.com/pulp/pulp-service.git" ;;
+    pulpcore)      echo "https://github.com/pulp/pulpcore.git" ;;
+    pulp_maven)    echo "https://github.com/pulp/pulp_maven.git" ;;
+    *) return 1 ;;
+  esac
+}
+KNOWN="pulp-docs app-interface pulp-service pulpcore pulp_maven"
+
+die() { echo "pulpbot-wt: $*" >&2; exit 2; }
+
+ensure_bare() {
+  # Clone the bare repo if missing, else fetch. Remote-tracking refs only, so a branch
+  # a worktree creates in refs/heads never collides with the fetched origin/* refs.
+  local repo="$1" url bare
+  url="$(repo_url "$repo")" || die "unknown repo '$repo' (known: $KNOWN)"
+  bare="$BARE_DIR/$repo.git"
+  if [ ! -d "$bare" ]; then
+    mkdir -p "$BARE_DIR"
+    timeout 300 git clone --quiet --bare "$url" "$bare" || die "clone of $repo failed or timed out"
+    git -C "$bare" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+  fi
+  timeout 300 git -C "$bare" fetch --quiet --prune origin || die "fetch of $repo failed or timed out"
+}
+
+default_branch() {
+  # The repo's default branch name (main, master, ...), from origin/HEAD.
+  local bare="$1" d
+  d="$(git -C "$bare" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)" || {
+    git -C "$bare" remote set-head origin --auto >/dev/null 2>&1
+    d="$(git -C "$bare" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)"
+  }
+  echo "${d#origin/}"
+}
+
+prune_old() {
+  # Opportunistic cleanup: prune removed worktrees and delete clean worktrees older
+  # than 7 days, so the state dir does not grow without bound.
+  local repo="$1" bare="$BARE_DIR/$repo.git" w
+  git -C "$bare" worktree prune >/dev/null 2>&1 || true
+  if [ -d "$WORK_DIR/$repo" ]; then
+    find "$WORK_DIR/$repo" -maxdepth 1 -mindepth 1 -type d -mtime +7 2>/dev/null | while read -r w; do
+      # Only remove clean worktrees; a dirty one older than 7 days keeps its
+      # uncommitted work until the thread finishes with it (charter).
+      [ -z "$(git -C "$w" status --porcelain 2>/dev/null)" ] || continue
+      git -C "$bare" worktree remove "$w" >/dev/null 2>&1 || true
+    done
+  fi
+}
+
+cmd_new() {
+  local repo="${1:-}" thread="${2:-}"
+  [ -n "$repo" ] && [ -n "$thread" ] || die "usage: pulpbot-wt new <repo> <thread>"
+  repo_url "$repo" >/dev/null || die "unknown repo '$repo' (known: $KNOWN)"
+  case "$thread" in *[!0-9a-f]*|"") die "<thread> must be hex (first 12 chars of the root event id)" ;; esac
+  [ ${#thread} -ge 7 ] && [ ${#thread} -le 64 ] || die "<thread> must be 7 to 64 hex chars"
+  local bare="$BARE_DIR/$repo.git" wt="$WORK_DIR/$repo/$thread"
+  mkdir -p "$LOCK_DIR" "$WORK_DIR/$repo"
+  exec 9>"$LOCK_DIR/$repo.lock"
+  flock 9 || die "could not lock $repo"
+  ensure_bare "$repo"
+  prune_old "$repo"
+  if [ -d "$wt" ]; then echo "$wt"; return 0; fi
+  local def; def="$(default_branch "$bare")"; [ -n "$def" ] || die "cannot find the default branch of $repo"
+  git -C "$bare" worktree add --quiet --detach "$wt" "origin/$def" || die "could not create a worktree for $repo"
+  echo "$wt"
+}
+
+valid_wt() {
+  # A path under WORK_DIR that is an actual worktree.
+  local w="$1" real root
+  real="$(cd "$w" 2>/dev/null && pwd -P)" || die "no such worktree '$w'"
+  root="$(cd "$WORK_DIR" 2>/dev/null && pwd -P)" || die "no worktree area yet"
+  case "$real/" in "$root/"*) : ;; *) die "'$w' is not under the worktree area" ;; esac
+  git -C "$real" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "'$w' is not a git worktree"
+  echo "$real"
+}
+
+cmd_branch() {
+  local w="${1:-}" branch="${2:-}"
+  [ -n "$w" ] && [ -n "$branch" ] || die "usage: pulpbot-wt branch <W> <branch>"
+  case "$branch" in *" "*|*".."*|/*|*/) die "bad branch name '$branch'" ;; esac
+  local real; real="$(valid_wt "$w")" || exit 2
+  git -C "$real" show-ref --verify --quiet "refs/heads/$branch" && die "branch '$branch' already exists"
+  git -C "$real" checkout -q -b "$branch" || die "could not create branch '$branch'"
+  echo "on branch $branch in $real"
+}
+
+cmd_done() {
+  local w="${1:-}" force="${2:-}"
+  [ -n "$w" ] || die "usage: pulpbot-wt done <W> [--force]"
+  local real; real="$(valid_wt "$w")" || exit 2
+  if [ "$force" != "--force" ]; then
+    [ -z "$(git -C "$real" status --porcelain)" ] || die "worktree has uncommitted changes; commit or push first, or pass --force to discard"
+  fi
+  # Find the owning bare repo so worktree remove runs against it.
+  local gitdir bare
+  gitdir="$(git -C "$real" rev-parse --git-common-dir)" || die "cannot resolve the bare repo for '$w'"
+  bare="$(cd "$gitdir" && pwd -P)"
+  if [ "$force" = "--force" ]; then
+    git -C "$bare" worktree remove --force "$real" || die "could not remove the worktree"
+  else
+    git -C "$bare" worktree remove "$real" || die "could not remove the worktree"
+  fi
+  echo "removed $real"
+}
+
+cmd_repos() { for r in $KNOWN; do echo "$r"; done; }
+
+case "${1:-}" in
+  new)    shift; cmd_new "$@" ;;
+  branch) shift; cmd_branch "$@" ;;
+  done)   shift; cmd_done "$@" ;;
+  repos)  shift; cmd_repos ;;
+  *) echo "usage: pulpbot-wt {new <repo> <thread>|branch <W> <branch>|done <W> [--force]|repos}" >&2; exit 2 ;;
+esac

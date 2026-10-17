@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Edit|Write|NotebookEdit|Grep|Glob",
+        "hooks": [{ "type": "command", "command": "/usr/local/bin/secret-guard", "timeout": 10 }]
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+# PulpBot, the Red Hat Hosted Pulp team agent, on OpenShift (pulp-agents-stage).
+# cos-rh reviews changes to this definition. Keys never live here: its existing
+# nsec and auth-tag (identity 849e1ead) arrive as the Secret agent-pulpbot. Runtime env the template sets per target and
+# NOT here: AGENT_PUBKEY, the Vertex vars, AGENT_GIT_NAME/EMAIL, BUZZ_GIT_IDENTITY.
+display_name: PulpBot
+description: 'PulpBot, the Red Hat Hosted Pulp team SRE and ops agent: an AI agent (Claude).'
+# Owner is Brian: the auth-tag (identity 849e1ead) was signed by Brian's key, so
+# owner_pubkey must match that signer. cos-rh
+# manages PulpBot (reviews, benchmarks, proposes charter changes); re-owning the
+# identity to cos-rh, if wanted, is a relay operation for cos-rh at cutover.
+owner: Brian Bouterse
+owner_pubkey: 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian
+managed_by: cos-rh
+parallelism: 3
+session_policy: thread
+effort: medium
+model: opus
+relay: wss://buzz-rh.bouterse.casa
+# Request driven today: no heartbeat.md ships with this definition. If cos-rh wants
+# periodic work (credential-expiry sweeps, a fleet post), it adds a heartbeat.md as
+# a reviewed change. The interval below is the base default and arms nothing on its
+# own without a heartbeat note.
+heartbeat_interval: 3600
+respond_to: allowlist
+# The team Buzz lets through. Matches staff/pulpbot/charter.md. Decko de Brito's
+# pubkey is not known yet; add it here (a reviewed change) once Brian supplies it.
+# The tester key 61020f75 is PulpBot's own test identity, distinct from the
+# platform approver e5abab3a. cos-rh is not on this list yet: Brian adds it when he
+# wants cos-rh to benchmark or interview PulpBot live.
+allowlist:
+  - 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian Bouterse (bmbouter)
+  - 643fc9b6baf936feaa6b8dc3951948de4fb3bc16eef0ec08b5f00b11db84d710   # Dennis Kliban (dkliban)
+  - 61020f758e350106a9d0445a9722241d069cc6794eee505185a5f3efce1c45a2   # Brian's Claude (tester)
+  # - <ddebrito pubkey, not known yet>                                 # Decko de Brito (ddebrito)
+channels: []   # channel membership (its #pulpbot-bench and team channels) is on the relay

@@ -1,0 +1,97 @@
+# buzz-agent-pulpbot: the Red Hat Hosted Pulp team agent image for OpenShift
+# (pulp-agents-stage). It is the shared buzz-agent-base (Alpine, buzz + buzz-acp +
+# Claude Code) plus the tools PulpBot reaches its systems with, baked root owned so the
+# running agent (an arbitrary OpenShift UID in group 0) cannot rewrite its own tools or
+# the secret-guard hook. Charter, config, mcp.json and any heartbeat come from the git
+# definition at .buzz/agents/pulpbot/, so a charter edit is a push, not a rebuild. Keys
+# never live in the image: nsec and auth-tag (identity 849e1ead) arrive as
+# the Secret agent-pulpbot; the standing creds (SPLUNK_TOKEN, GLITCHTIP_TOKEN, TBR_*, the
+# Pulp netrc, GITLAB_TOKEN, GH_TOKEN, the Atlassian token and JIRA_USERNAME) mount from
+# the agent secret. Built by pulp-service CI to ghcr.io/pulp/buzz-agent-pulpbot.
+#
+# v0.2.5 carries the /run/agent-session memory mount (pulp-service #1592); the base
+# entrypoint empties it at start. dm-watch, oc-login, aws-creds and gabi-query keep per
+# requester DM tokens there (mode 600), so a secret never lands on the persistent state
+# volume the transcripts sidecar mounts. Bump the tag and digest below deliberately.
+FROM ghcr.io/pulp/buzz-agent-base:v0.2.5@sha256:8d3f0a38e1c29293827d28f3ed584d8e032bf524f75bc3defe8bc8820b6cfe98
+USER root
+
+# Pinned tool versions and tarball checksums. The base image itself is pinned by digest
+# above; these pin the tools layered on top. Bump deliberately. CI on the Alpine/musl
+# base is the validator: if an apk version has moved off the base's branch, or a tarball
+# checksum or download path has changed, the build fails here.
+#   - oc / kubectl   downloaded, tarball verified against OC_SHA256
+#   - uv             downloaded, tarball verified against UV_SHA256
+#   - glab, gh, aws  Alpine v3.22 community packages, pinned to exact versions
+#   - mcp-atlassian  uv tool, pinned version
+ARG OC_VERSION=4.16.20
+ARG OC_SHA256=7762c0ad23897772887f0d74e7593005565738fa660765a7e8110974fa4a12d8
+ARG UV_VERSION=0.5.14
+ARG UV_SHA256=e1ccdfe1691c1f791d84bb6e1697e49416ca4b62103dcdf3b63772f03834f113
+ARG GLAB_VERSION=1.58.0-r5
+ARG GH_VERSION=2.72.0-r6
+ARG AWSCLI_VERSION=2.27.25-r0
+ARG MCP_ATLASSIAN_VERSION=0.11.9
+
+# Tools PulpBot uses, by the system each one reaches:
+#   - oc / kubectl   OpenShift (tokens collected per person by DM, via oc-login)
+#   - glab           GitLab gitlab.cee.redhat.com (alcove-bot token)
+#   - gh             GitHub as hosted-pulp-bot
+#   - aws            CloudWatch, RDS Performance Insights (AWS creds collected by DM)
+#   - uv             runs the pulp-docs skill scripts (uv run --script)
+#   - mcp-atlassian  Jira via the Atlassian MCP (see mcp.json and the jira-mcp wrapper)
+#   - curl, jq, git  Pulp API (netrc), GABI, general use (already in the base)
+# rh-aws-saml-login is NOT installed: it needs the person's SSO and a browser, so it
+# runs on the requester's own machine; the pod only receives the AWS env lines by DM.
+#
+# gcompat lets the glibc-linked oc/kubectl binaries run on this musl (Alpine) base.
+# glab and github-cli come from the Alpine community repo; aws-cli is the Alpine
+# community package, which is the AWS CLI v2 client (not the old Python v1 client). The
+# oc/kubectl and uv tarballs are checksum-verified before extraction. uv is the static
+# musl build from Astral; it installs mcp-atlassian into /usr/local/bin.
+RUN apk add --no-cache gcompat tar \
+      "glab=${GLAB_VERSION}" "github-cli=${GH_VERSION}" "aws-cli=${AWSCLI_VERSION}" \
+ && curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/${OC_VERSION}/openshift-client-linux-${OC_VERSION}.tar.gz" \
+      -o /tmp/oc.tar.gz \
+ && echo "${OC_SHA256}  /tmp/oc.tar.gz" | sha256sum -c - \
+ && tar -xzf /tmp/oc.tar.gz -C /usr/local/bin oc kubectl \
+ && rm -f /tmp/oc.tar.gz \
+ && curl -fsSL "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-musl.tar.gz" \
+      -o /tmp/uv.tar.gz \
+ && echo "${UV_SHA256}  /tmp/uv.tar.gz" | sha256sum -c - \
+ && tar -xzf /tmp/uv.tar.gz --strip-components=1 -C /usr/local/bin \
+ && rm -f /tmp/uv.tar.gz \
+ && UV_TOOL_BIN_DIR=/usr/local/bin UV_TOOL_DIR=/opt/uv-tools \
+      uv tool install "mcp-atlassian==${MCP_ATLASSIAN_VERSION}" \
+ && chmod -R go-w /opt/uv-tools \
+ # Smoke-check each client so a broken download or a musl mismatch fails the build.
+ && oc version --client \
+ && kubectl version --client \
+ && glab --version \
+ && gh --version \
+ && aws --version \
+ && uv --version \
+ && mcp-atlassian --help >/dev/null
+
+# PulpBot's baked tools onto PATH, root owned. buzz lives in the base; these are the
+# entrypoint shim, the DM poll helper, the OpenShift login wrapper, the AWS credential
+# parser, the GABI query wrapper, the per thread worktree tool, the Jira MCP wrapper and
+# the secret-guard hook. managed-settings.json wires secret-guard into Claude Code.
+COPY bin/ /usr/local/bin/
+COPY managed-settings.json /opt/agent/
+RUN chmod 0755 /usr/local/bin/pulpbot-entrypoint /usr/local/bin/dm-watch \
+      /usr/local/bin/oc-login /usr/local/bin/aws-creds /usr/local/bin/gabi-query \
+      /usr/local/bin/pulpbot-wt /usr/local/bin/jira-mcp /usr/local/bin/secret-guard \
+ && chmod 0644 /opt/agent/managed-settings.json \
+ && chmod -R go-w /opt/agent \
+ # Claude Code loads enterprise-managed settings from this path; root owned and read
+ # only so the session cannot disable its own secret-guard hook.
+ && install -D -m 644 -o root -g root /opt/agent/managed-settings.json /etc/claude-code/managed-settings.json
+
+USER 1000
+WORKDIR /home/agent
+# pulpbot-entrypoint turns the mounted standing secrets into the environment and git
+# setup PulpBot's tools expect, then execs the base agent-entrypoint. PulpBot has no
+# tamper-proof approver list of its own: it manages no platform and approves nothing,
+# so there is no baked approval-check.
+ENTRYPOINT ["/usr/local/bin/pulpbot-entrypoint"]

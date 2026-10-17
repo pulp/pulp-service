@@ -1,0 +1,68 @@
+#!/bin/bash
+# dm-watch: poll one DM conversation for a credential reply from a requester, write
+# the value straight to the in memory session area, and print only "received".
+#
+# PulpBot is not woken by DM replies, so after it DMs someone for an OpenShift token,
+# AWS credentials or a GABI token it polls the DM itself. This is the pod port of the
+# earlier laptop dm-watch. Two things changed from that version:
+#   - the reply is written under /run/agent-session/<requester>/ (memory, 16Mi,
+#     emptied at pod start, agent container only), never under a persistent path:
+#     a secret must not survive a restart or reach the transcripts sidecar, which
+#     mounts the persistent state;
+#   - the per requester 0700 subdirectory also scopes a session to its requester, so
+#     one person's token is never reused for another person's request.
+# The value is never printed. On a reply dm-watch prints "received" and exits 0; on
+# no reply within the window it prints "timeout" and exits 2.
+#
+# Usage: dm-watch --channel <dm-uuid> --from <requester-hex> --since <unix> --name <file>
+#        [--poll 30] [--max 240]
+# The written file is /run/agent-session/<requester-hex>/<file>, mode 600. The caller
+# passes the same <requester-hex> and <file> to oc-login or gabi-query, so dm-watch
+# never has to print the path.
+set -uo pipefail
+
+channel=""; from=""; since=""; name=""; poll=30; max=240
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --channel) channel="$2"; shift 2 ;;
+    --from)    from="$2";    shift 2 ;;
+    --since)   since="$2";   shift 2 ;;
+    --name)    name="$2";    shift 2 ;;
+    --poll)    poll="$2";    shift 2 ;;
+    --max)     max="$2";     shift 2 ;;
+    *) echo "dm-watch: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
+[ -n "$channel" ] && [ -n "$from" ] && [ -n "$since" ] && [ -n "$name" ] || {
+  echo "usage: dm-watch --channel <dm-uuid> --from <hex> --since <unix> --name <file>" >&2; exit 2; }
+case "$from" in *[!0-9a-f]*|"") echo "dm-watch: --from must be 64 hex" >&2; exit 2 ;; esac
+[ ${#from} -eq 64 ] || { echo "dm-watch: --from must be 64 hex" >&2; exit 2; }
+case "$name" in */*|"") echo "dm-watch: --name must be a plain filename" >&2; exit 2 ;; esac
+case "$since" in *[!0-9]*|"") echo "dm-watch: --since must be a unix timestamp" >&2; exit 2 ;; esac
+
+dir="/run/agent-session/$from"
+( umask 077; mkdir -p "$dir" )
+out="$dir/$name"
+
+deadline=$(( $(date +%s) + max ))
+while :; do
+  msgs=$(timeout 30 buzz messages get --channel "$channel" --since "$since" --limit 50 2>/dev/null) || msgs=""
+  if [ -n "$msgs" ]; then
+    # Newest reply from the requester after --since is the credential: if they send
+    # "one sec" and then the token, the token is the later message. Write its content
+    # to the mode 600 file with jq, so the value never passes through a shell variable
+    # or the screen.
+    found=$(printf '%s' "$msgs" | jq -r --arg f "$from" --argjson s "$since" \
+      '[.[] | select(.pubkey==$f and .created_at >= $s)] | sort_by(.created_at) | .[-1] // empty | .id' 2>/dev/null)
+    if [ -n "$found" ]; then
+      ( umask 077
+        printf '%s' "$msgs" | jq -r --arg id "$found" '.[] | select(.id==$id) | .content' > "$out" )
+      if [ -s "$out" ]; then
+        echo "received"
+        exit 0
+      fi
+    fi
+  fi
+  [ "$(date +%s)" -lt "$deadline" ] || { echo "timeout"; exit 2; }
+  sleep "$poll"
+done
