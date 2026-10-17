@@ -11,7 +11,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Test boot-resume (shared with cos-rh)
         # A resumed turn must be visible to the stop hold; prove it before shipping.
         run: bash .buzz/images/buzz-agent-gm-rh/boot-resume_test.sh
