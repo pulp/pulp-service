@@ -245,6 +245,11 @@ objects:
             mountPath: /state
           - name: home
             mountPath: /home/agent
+          # Short lived credentials a person hands the agent for one task (an oc
+          # token by DM): memory only, gone at restart, and never on the state
+          # volume, which the transcripts sidecar can read.
+          - name: session
+            mountPath: /run/agent-session
           - name: agent-secret
             mountPath: /run/secrets/agent
             readOnly: true
@@ -328,6 +333,10 @@ objects:
             claimName: buzz-agent-${AGENT_SLUG}-state
         - name: home
           emptyDir: {}
+        - name: session
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
         - name: agent-secret
           secret:
             secretName: agent-${AGENT_SLUG}
