@@ -17,6 +17,11 @@ WATCH_SECONDS=${AGENT_DEFINITION_WATCH_SECONDS:-300}
 mkdir -p "$CLAUDE_CONFIG_DIR" "$AGENT_WORKDIR" "$STATE"
 
 # Keys from the mounted Vault secret; absent means do not start.
+# Short lived credentials handed over for one task live in memory here; a
+# container restart keeps the pod's emptyDir, so clear it so nothing outlives the
+# process it was given to.
+SESSION_DIR=${AGENT_SESSION_DIR:-/run/agent-session}
+[ -d "$SESSION_DIR" ] && find "$SESSION_DIR" -mindepth 1 -delete 2>/dev/null
 SEC=${AGENT_SECRET_DIR:-/run/secrets/agent}
 if [ -s "$SEC/nsec" ]; then export BUZZ_PRIVATE_KEY="$(cat "$SEC/nsec")"; else echo "agent-entrypoint: $SEC/nsec missing"; exit 1; fi
 # The owner tag is public. The definition's auth-tag file wins when present, so
