@@ -11,7 +11,7 @@
 # (patches/agent-base-heartbeat.diff), tzdata, the mcp.json fix (no /dev/fd) and
 # the empty-channels fix, so cos-rh's heartbeat arms. Bump the tag and digest
 # below deliberately (same rule as the base).
-FROM ghcr.io/pulp/buzz-agent-base:v0.2.4@sha256:d79a6ffbf9be22586af8d067f41b10c3eafcb1c09d0f453ba5573cac9b7ef8ef
+FROM ghcr.io/pulp/buzz-agent-base:v0.2.5@sha256:8d3f0a38e1c29293827d28f3ed584d8e032bf524f75bc3defe8bc8820b6cfe98
 USER root
 # Tools onto PATH; config into /opt/agent. Root owned so the running agent (an
 # arbitrary OpenShift UID in group 0) cannot rewrite its own approver list.
