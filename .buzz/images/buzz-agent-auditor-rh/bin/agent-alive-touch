@@ -1,0 +1,11 @@
+#!/bin/bash
+# Liveness marker. Write the current time to alive-at every 30 seconds so that a
+# crash or OOM (which never runs the preStop hook) still leaves a recent floor for
+# the next boot to replay from. Backgrounded by the entrypoint.
+set -uo pipefail
+dir=${AGENT_RESTART_DIR:-/state/restart}
+mkdir -p "$dir" 2>/dev/null || true
+while :; do
+  date +%s > "$dir/alive-at" 2>/dev/null || true
+  sleep 30
+done

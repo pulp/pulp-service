@@ -1,0 +1,55 @@
+#!/bin/bash
+# audit-approvals: run the approval-check (determinism items 2 and 9) over a fresh
+# clone of rh/cluster and rh/agents since yesterday, for the daily audit. Prints
+# every MISSING or BAD commit, labelled by repo. Warn mode: this only lists, it
+# never blocks (nothing here can block a push anyway).
+#
+# Pinned judge (Brian's Claude's yes 35612f6c): the check this runs is /usr/local/bin/
+# approval-check, the copy baked into this image at build and held byte for byte to
+# tools/approval-check by render/tests/test_approval_check_pinned.py. It is NOT the
+# copy inside the clone, so a change to a repo's own tools/approval-check cannot change
+# the Auditor's judge; the drift test makes any such change visible instead.
+#
+# One read only identity (auditor-rh), the Gitea token for the clones and its own relay
+# membership for the yes lookups. It only reads.
+set -uo pipefail
+
+run_repo() {
+  # $1 repo slug, $2 config env file
+  local repo=$1 envf=$2 tmp out rc flags
+  tmp=$(mktemp -d) || { echo "$repo: no tmp dir"; return 1; }
+  # The pod's global credential helper supplies the Gitea token; never a token in the URL.
+  # A timeout so a hung clone fails the check (reported as CHECK FAILED) instead of
+  # blocking the daily audit forever.
+  if ! timeout 120 git clone --quiet "https://gitea.bouterse.casa/rh/$repo.git" "$tmp/$repo" 2>/dev/null; then
+    rm -rf "$tmp"; echo "$repo: clone failed or timed out"; return 1
+  fi
+  # Approver list, GM key and channels come from this repo's config file; MODE=warn is
+  # this check's behaviour, not a principal. The pinned check runs with the clone as its
+  # working directory so git log reads the clone, but the file itself is the image's.
+  # EXEMPT_PATHS, CLOCK_SLACK and BUZZ are approval-check knobs that otherwise read from
+  # the ambient environment, so a compromised session could set EXEMPT_PATHS='*' and
+  # exempt every commit. Unset them here so approval-check uses its own baked defaults;
+  # the env file only sets the approver list, GM key and channels.
+  ( set -a; . "$envf"; set +a; export MODE=warn
+    unset EXEMPT_PATHS CLOCK_SLACK BUZZ
+    cd "$tmp/$repo" && /usr/local/bin/approval-check --since yesterday )
+  rc=$?
+  rm -rf "$tmp"
+  return $rc
+}
+
+overall=0
+for pair in "cluster:/opt/agent/approval-check-cluster.env" "agents:/opt/agent/approval-check-agents.env"; do
+  repo=${pair%%:*}; envf=${pair#*:}
+  echo "== $repo =="
+  out=$(run_repo "$repo" "$envf" 2>&1); rc=$?
+  # MODE=warn: the check exits 0 even with findings, so any non-zero is a real failure
+  # (clone, git, relay or missing config), never a finding.
+  if [ "$rc" -ne 0 ]; then
+    echo "CHECK FAILED ($repo): ${out:0:300}"; overall=1; continue
+  fi
+  flags=$(printf '%s\n' "$out" | grep -E '^(MISSING|BAD) ')
+  if [ -n "$flags" ]; then printf '%s\n' "$flags"; else echo none; fi
+done
+exit $overall

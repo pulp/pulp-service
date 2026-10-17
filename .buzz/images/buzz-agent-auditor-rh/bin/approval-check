@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""approval-check: every commit that needs a yes names one that holds up.
+
+Determinism backlog item 2, one definition for every instance (Personal, RH).
+Runs in CI on each push to main, and the Auditor reruns it over git log.
+
+For each commit in the range (merges skipped):
+  EXEMPT  only documentation changed, or only image digests were bumped.
+  OK      "Approved by ... <64 hex event id>" names an event that
+          1. the relay returns from one of APPROVAL_CHANNELS,
+          2. has the id its content hashes to and a valid BIP-340 signature
+             (checked here, the relay is not trusted),
+          3. is signed by one of APPROVER_KEYS,
+          4. was created before the commit (plus CLOCK_SLACK seconds),
+          5. sits in a thread where GM_KEY has posted (it answers the GM).
+  MISSING no "Approved by" line, or only short ids.
+  BAD     every named id failed one of the checks above; the reason is printed.
+
+MODE=warn always exits 0 (the first week). MODE=block exits 1 on any
+MISSING or BAD. Exit 2 means the check itself could not run (relay, git).
+
+Usage: approval-check <base> <head>      commits in base..head
+       approval-check --since <date>     commits on HEAD since a date (Auditor)
+
+Configuration, all from the environment:
+  APPROVER_KEYS      comma separated hex pubkeys whose yes counts
+  GM_KEY             hex pubkey of this instance's GM
+  APPROVAL_CHANNELS  comma separated channel UUIDs to look the yes up in
+  MODE               warn (default) or block
+  EXEMPT_PATHS       comma separated globs that never need a yes (default:
+                     docs/*,README.md,*/README.md,RESTORE.md,VERSIONS.md).
+                     Charters and skills are .md too and do need a yes.
+  CLOCK_SLACK        seconds a yes may postdate its commit (default 300)
+  BUZZ               path to the buzz CLI (default: buzz); it needs
+                     BUZZ_RELAY_URL and BUZZ_PRIVATE_KEY for an identity that
+                     can read APPROVAL_CHANNELS. It only reads.
+"""
+import fnmatch
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+
+# ---- BIP-340 Schnorr verification (reference algorithm, stdlib only) ----
+P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+G = (0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+     0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8)
+
+
+def _add(a, b):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    if a[0] == b[0] and a[1] != b[1]:
+        return None
+    if a == b:
+        lam = 3 * a[0] * a[0] * pow(2 * a[1], P - 2, P) % P
+    else:
+        lam = (b[1] - a[1]) * pow(b[0] - a[0], P - 2, P) % P
+    x = (lam * lam - a[0] - b[0]) % P
+    return (x, (lam * (a[0] - x) - a[1]) % P)
+
+
+def _mul(pt, n):
+    r = None
+    while n:
+        if n & 1:
+            r = _add(r, pt)
+        pt = _add(pt, pt)
+        n >>= 1
+    return r
+
+
+def _lift_x(x):
+    if x >= P:
+        return None
+    y_sq = (pow(x, 3, P) + 7) % P
+    y = pow(y_sq, (P + 1) // 4, P)
+    if pow(y, 2, P) != y_sq:
+        return None
+    return (x, y if y % 2 == 0 else P - y)
+
+
+def _tagged(tag, msg):
+    t = hashlib.sha256(tag.encode()).digest()
+    return hashlib.sha256(t + t + msg).digest()
+
+
+def schnorr_verify(msg, pubkey, sig):
+    if len(msg) != 32 or len(pubkey) != 32 or len(sig) != 64:
+        return False
+    pt = _lift_x(int.from_bytes(pubkey, "big"))
+    r = int.from_bytes(sig[:32], "big")
+    s = int.from_bytes(sig[32:], "big")
+    if pt is None or r >= P or s >= N:
+        return False
+    e = int.from_bytes(_tagged("BIP0340/challenge", sig[:32] + pubkey + msg), "big") % N
+    R = _add(_mul(G, s), _mul(pt, N - e))
+    return R is not None and R[1] % 2 == 0 and R[0] == r
+
+
+def event_valid(ev):
+    """NIP-01: the id is the hash of the serialized event, the sig signs the id."""
+    ser = json.dumps([0, ev["pubkey"], ev["created_at"], ev["kind"], ev["tags"], ev["content"]],
+                     separators=(",", ":"), ensure_ascii=False)
+    if hashlib.sha256(ser.encode()).hexdigest() != ev["id"]:
+        return "id does not match the event content"
+    if not schnorr_verify(bytes.fromhex(ev["id"]), bytes.fromhex(ev["pubkey"]), bytes.fromhex(ev["sig"])):
+        return "signature does not verify"
+    return None
+
+
+# ---- configuration ----
+DEFAULT_EXEMPT = "docs/*,README.md,*/README.md,RESTORE.md,VERSIONS.md"
+
+def _keys(name):
+    return {k.strip().lower() for k in os.environ.get(name, "").split(",") if k.strip()}
+
+
+APPROVERS = _keys("APPROVER_KEYS")
+GM_KEYS = _keys("GM_KEY")
+CHANNELS = [c.strip() for c in os.environ.get("APPROVAL_CHANNELS", "").split(",") if c.strip()]
+MODE = os.environ.get("MODE", "warn")
+EXEMPT = [g.strip() for g in os.environ.get("EXEMPT_PATHS", DEFAULT_EXEMPT).split(",") if g.strip()]
+SLACK = int(os.environ.get("CLOCK_SLACK", "300"))
+BUZZ = os.environ.get("BUZZ", "buzz")
+
+HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
+SHORT = re.compile(r"\b[0-9a-f]{8,63}\b")
+DIGEST_LINE = re.compile(r"^\s*(-\s*)?(image|newDigest|digest):\s*\S*sha256:[0-9a-f]{64}\s*$")
+
+
+def die(msg):
+    print(f"approval-check: CHECK FAILED: {msg}")
+    sys.exit(2)
+
+
+def git(*args):
+    r = subprocess.run(["git", *args], capture_output=True, text=True)
+    if r.returncode:
+        die(f"git {' '.join(args)}: {r.stderr.strip()}")
+    return r.stdout
+
+
+# ---- per commit ----
+def exempt(sha):
+    files = [f for f in git("diff-tree", "--no-commit-id", "--name-only", "-r", sha).splitlines() if f]
+    if not files:
+        return "no file changes"
+    if all(any(fnmatch.fnmatch(f, g) for g in EXEMPT) for f in files):
+        return "documentation only"
+    changed = [l for l in git("show", "--format=", "--unified=0", sha).splitlines()
+               if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+    if changed and all(DIGEST_LINE.match(l[1:]) for l in changed):
+        return "digest bump only"
+    return None
+
+
+_cache = {}
+
+
+def fetch_thread(event_id):
+    """Return (event, thread) from the first channel that has it, or (None, why)."""
+    if event_id in _cache:
+        return _cache[event_id]
+    errors = []
+    result = (None, "not found in APPROVAL_CHANNELS")
+    for ch in CHANNELS:
+        r = subprocess.run([BUZZ, "messages", "thread", "--channel", ch, "--event", event_id],
+                           capture_output=True, text=True)
+        if r.returncode == 2:
+            errors.append(f"relay error on {ch}")
+            continue
+        if r.returncode:
+            continue
+        try:
+            thread = json.loads(r.stdout)
+        except ValueError:
+            continue
+        ev = next((e for e in thread if e.get("id") == event_id), None)
+        if ev:
+            result = (ev, thread)
+            break
+    if result[0] is None and errors and len(errors) == len(CHANNELS):
+        die("; ".join(errors))
+    _cache[event_id] = result
+    return result
+
+
+def check_yes(event_id, commit_time):
+    ev, thread = fetch_thread(event_id)
+    if ev is None:
+        return thread
+    why = event_valid(ev)
+    if why:
+        return why
+    if ev["pubkey"].lower() not in APPROVERS:
+        return f"signed by {ev['pubkey'][:8]}, not an approver"
+    if ev["created_at"] > commit_time + SLACK:
+        return "created after the commit"
+    if not any(e.get("pubkey", "").lower() in GM_KEYS and not event_valid(e) for e in thread):
+        return "no message from the GM in its thread"
+    return None
+
+
+def check_commit(sha):
+    subject = git("show", "-s", "--format=%s", sha).strip()
+    why = exempt(sha)
+    if why:
+        return "EXEMPT", why, subject
+    body = git("show", "-s", "--format=%B", sha)
+    commit_time = int(git("show", "-s", "--format=%ct", sha).strip())
+    lines = [l for l in body.splitlines() if "approved by" in l.lower()]
+    ids = sorted({i for l in lines for i in HEX64.findall(l.lower())})
+    if not ids:
+        if any(SHORT.search(l.lower()) for l in lines):
+            return "MISSING", "only short event ids; write the full 64 hex id", subject
+        return "MISSING", "no 'Approved by ... <event id>' line", subject
+    reasons = []
+    for i in ids:
+        why = check_yes(i, commit_time)
+        if why is None:
+            return "OK", f"yes {i[:8]}", subject
+        reasons.append(f"{i[:8]}: {why}")
+    return "BAD", "; ".join(reasons), subject
+
+
+def main(argv):
+    if not APPROVERS or not GM_KEYS or not CHANNELS:
+        die("APPROVER_KEYS, GM_KEY and APPROVAL_CHANNELS must all be set")
+    if MODE not in ("warn", "block"):
+        die("MODE must be warn or block")
+    if len(argv) == 3 and argv[1] == "--since":
+        shas = git("rev-list", "--no-merges", "--reverse", f"--since={argv[2]}", "HEAD").split()
+    elif len(argv) == 3:
+        base, head = argv[1], argv[2]
+        if not base.strip("0"):  # new branch: Gitea sends an all zero base
+            shas = [head]
+        else:
+            shas = git("rev-list", "--no-merges", "--reverse", f"{base}..{head}").split()
+    else:
+        print(__doc__)
+        sys.exit(2)
+    failed = 0
+    for sha in shas:
+        status, why, subject = check_commit(sha)
+        failed += status in ("MISSING", "BAD")
+        print(f"{status:7} {sha[:7]} {subject[:60]} ({why})")
+    print(f"approval-check: {len(shas)} commits, {failed} without a valid yes, mode {MODE}")
+    sys.exit(1 if failed and MODE == "block" else 0)
+
+
+if __name__ == "__main__":
+    main(sys.argv)

@@ -1,0 +1,48 @@
+#!/bin/bash
+# Before buzz-acp starts: standing instructions come from the image only (an
+# injected session must not persist itself in settings or memory across restarts).
+set -euo pipefail
+# The template sets CLAUDE_CONFIG_DIR, AGENT_WORKDIR and HOME only when it means to
+# override them; default all three off the state dir the same way agent-entrypoint
+# does, so the pod starts under set -u even when the template leaves them unset. HOME
+# must match the base's default so git finds the credentials written below.
+STATE=${AGENT_STATE_DIR:-/state}
+export CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-$STATE/claude}
+export AGENT_WORKDIR=${AGENT_WORKDIR:-$STATE/work}
+export HOME=${HOME:-/home/agent}
+mkdir -p "$CLAUDE_CONFIG_DIR" "$AGENT_WORKDIR" "$HOME"
+# RH #audit is fixed for this image, not a template param, so the daily audit and the
+# heartbeat always target the right channel even on a target that does not set it.
+export AUDIT_CHANNEL=${AUDIT_CHANNEL:-c26fd298-ead9-4a38-bb41-b135c812fdef}
+# AGENT_PUBKEY comes from the template param; the restart helpers need it, a missing
+# one is logged and that step skipped, not fatal.
+AGENT_PUBKEY=${AGENT_PUBKEY:-}
+rm -rf "$CLAUDE_CONFIG_DIR/settings.json" "$CLAUDE_CONFIG_DIR/settings.local.json" "$CLAUDE_CONFIG_DIR/memory" "$CLAUDE_CONFIG_DIR/projects"/*/memory 2>/dev/null || true
+# Gitea HTTPS auth for the two read-only clones, written once here from the mounted
+# token into HOME so the auditor's git pulls just work. The session never reads the
+# token itself: secret-guard blocks the secret path and the credentials file, and git
+# reads it from HOME internally. Rewritten every boot, so it needs no persistence.
+if [ -n "${GITEA_TOKEN_FILE:-}" ] && [ -s "${GITEA_TOKEN_FILE:-}" ]; then
+  git config --global credential.helper store
+  ( umask 077; printf 'https://auditor-rh:%s@gitea.bouterse.casa\n' "$(cat "$GITEA_TOKEN_FILE")" > "$HOME/.git-credentials" )
+fi
+# Clone the two read only repos the daily checks read (reach-check and skip-level-check),
+# if they are not already present, so the first heartbeat after a fresh pod has them.
+# Non-fatal and time limited: a failed clone just means the first check reports it could
+# not run, not a crashed pod. The checks pull on their own on later runs.
+mkdir -p /state/repos
+for r in cluster agents; do
+  if [ ! -d "/state/repos/$r/.git" ]; then
+    timeout 120 git clone --quiet "https://gitea.bouterse.casa/rh/$r.git" "/state/repos/$r" \
+      || echo "staff-entrypoint: could not clone rh/$r; the daily checks will report it" >&2
+  fi
+done
+# Graceful restart (items 13/14): replay mentions missed since the pod stopped,
+# keep a liveness floor so a crash is covered too, and answer the threads the
+# preStop hook announced the restart in. The floor must be read before the touch
+# loop recreates alive-at.
+floor="$(/usr/local/bin/agent-restart-floor || true)"
+[ -n "$floor" ] && export BUZZ_ACP_REPLAY_FLOOR="$floor"
+/usr/local/bin/agent-alive-touch &
+/usr/local/bin/agent-restart-back &
+exec /usr/local/bin/agent-entrypoint "$@"
