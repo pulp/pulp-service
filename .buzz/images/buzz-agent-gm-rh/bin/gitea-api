@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# gitea-api: an authenticated call to the RH Gitea, with the token read here, never
+# by the session (secret-guard blocks a session that reads /run/secrets itself).
+# The charter rule it serves: read a secret file only to hand it to the tool that
+# needs it. This file is that tool.
+#
+#   gitea-api <METHOD> <PATH> [extra curl args...]
+#
+# PATH starting with /v2/ hits the registry at the Gitea root; any other PATH is
+# an /api/v1 call (a leading /api/ is taken as given). For /api paths the account
+# token from GITEA_TOKEN_FILE is sent as `Authorization: token`; for /v2 registry
+# paths that token mints a pull-scoped bearer (as pin-digest does), since the
+# registry rejects the token scheme. Everything after PATH is passed to curl, so a
+# registry existence check can add -o /dev/null -w '%{http_code}' and an Accept header.
+# Extra args are screened first: -v/--verbose/--trace*/--url/-K/--config are rejected,
+# since they would dump the Authorization header, send the token to another host, or
+# read curl options from a file.
+#
+# Examples:
+#   gitea-api GET /repos/rh/cluster/actions/tasks?limit=2 | jq -r '.workflow_runs[].status'
+#   gitea-api GET /v2/rh/gm-rh/manifests/sha256:<digest> -o /dev/null -w '%{http_code}' \
+#     -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'
+set -euo pipefail
+base=${GITEA_URL:-https://gitea.bouterse.casa}
+tokfile=${GITEA_TOKEN_FILE:-/run/secrets/gitea/token}
+[ -s "$tokfile" ] || { echo "gitea-api: no token at $tokfile" >&2; exit 2; }
+[ $# -ge 2 ] || { echo "usage: gitea-api <METHOD> <PATH> [curl args...]" >&2; exit 2; }
+method=$1 path=$2; shift 2
+# Screen the extra curl args before any call runs: these would leak the token (print
+# the Authorization header) or redirect it to another host or a config file.
+for arg in "$@"; do
+  case $arg in
+    --verbose|--trace|--trace-*|--trace=*|--url|--url=*|--config|--config=*|--libcurl*|--netrc*)
+      echo "gitea-api: refusing curl arg $arg" >&2; exit 2 ;;
+    --*) ;;
+    # Short options can be bundled (-sv, -Kfile): refuse any containing v or K.
+    -*v*|-*K*)
+      echo "gitea-api: refusing curl arg $arg" >&2; exit 2 ;;
+  esac
+done
+case $path in
+  /v2/token*)   # the token endpoint itself: Basic auth with the account token
+    exec curl -sS -X "$method" -u "gm-rh:$(cat "$tokfile")" "$base$path" "$@" ;;
+  /v2/*)        # any other registry path: mint a pull-scoped bearer, then use it
+    rest=${path#/v2/}; owner=${rest%%/*}; rest=${rest#*/}; image=${rest%%/*}
+    bearer=$(curl -sS -u "gm-rh:$(cat "$tokfile")" \
+      "$base/v2/token?service=container_registry&scope=repository:$owner/$image:pull" \
+      | jq -r '.token // empty')
+    [ -n "$bearer" ] || { echo "gitea-api: no registry token for $owner/$image" >&2; exit 2; }
+    exec curl -sS -X "$method" -H "Authorization: Bearer $bearer" "$base$path" "$@" ;;
+  /api/*) url="$base$path" ;;
+  /*)     url="$base/api/v1$path" ;;
+  *)      url="$base/api/v1/$path" ;;
+esac
+exec curl -sS -X "$method" -H "Authorization: token $(cat "$tokfile")" "$url" "$@"

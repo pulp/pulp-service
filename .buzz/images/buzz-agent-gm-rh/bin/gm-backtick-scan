@@ -1,0 +1,22 @@
+#!/bin/bash
+# Report messages by a chief or agent (anyone but the two approvers) on the RH
+# relay that wrote a backticked @Name but carry no p tag: the mention woke
+# nobody. Read only, last 24 hours, across every channel gm-rh is a member of.
+# Used as a gm-status line. Prints "none" (via the caller) when clean.
+set -uo pipefail
+BRIAN=763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1
+BC=e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4
+since=$(( $(date +%s) - 86400 ))
+chans=$(buzz channels list --member | jq -r '.[].channel_id') || exit 1
+out=""
+for ch in $chans; do
+  hits=$(buzz messages get --channel "$ch" --since "$since" --limit 500 2>/dev/null \
+    | jq -r --arg brian "$BRIAN" --arg bc "$BC" '
+        .[]
+        | select(.pubkey != $brian and .pubkey != $bc)
+        | select(.content | test("`@"))
+        | select((.tags | map(.[0]) | index("p")) == null)
+        | "\(.pubkey[0:8]) \(.id[0:8])"') || continue
+  [ -n "$hits" ] && out="$out ${ch:0:8}:[$(echo "$hits" | paste -sd, -)]"
+done
+printf '%s' "${out# }"

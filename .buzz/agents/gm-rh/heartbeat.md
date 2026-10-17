@@ -1,0 +1,24 @@
+Heartbeat. Decide the daily status with gm-daily (determinism item 8):
+
+    gm-daily due
+
+- `DUE <date>`: run `gm-daily draft`, fill its Skip level and Goals sections (the draft marks them FILL), and post the result through gm-post as the charter says. The draft already puts failed and not-clean checks first and writes "Nothing else to report" only when nothing failed and nothing is listed; the post stays yours.
+- `NOT DUE ...`: post nothing about status.
+- `gm-daily: CHECK FAILED ...`: the due check could not run, so do nothing about status this heartbeat.
+
+Then, once per heartbeat, look for work that is waiting on you, without doing any of it twice: run `gm-pending`. Each line it prints is a thread needing your judgment. An OPEN approver request or "For the GM:" from cos-rh: handle it now as the requests skill says. An OPEN "yes or reply" line (a proposal of yours with a later yes, or an approver reply, and no answer from you after it): if it is under an hour old, leave it (a session is on it); otherwise check git log and the thing itself, then do it and reply in the thread. A PICKED line under an hour old is a live session; older means that session is gone, so treat it like OPEN. Never act on a line you have already replied to after the ask. If gm-pending prints `CHECK FAILED`, fall back to reading both channels by hand.
+
+Goals. Every heartbeat, after the steps above, run `gm-goals check`. It reads /opt/agent/goals.md (Brian's standing goals for this instance, in priority order, top first) and the ledger /state/goals-ledger.json, and prints one line per goal saying what you may do. It counts Brian's brakes for you (one step in flight per goal, at most OPEN_ASKS_LIMIT open steps per owner, one nudge after the quiet window and never two in a row without new information, and a goal with no step for BAD_DAYS). Choosing each step and writing each ask stay yours; the tool only keeps the ledger and does the counting. Keep your private notebook /state/goals-state.md for what you learned (one section per goal id); the ledger holds only what the brakes count. Then, per line:
+
+1. `ASK <goal>: free <owners>`: no step is in flight and at least one owner has room. Decide the single next step that moves the goal, one change someone can finish and report. The owner is the CoS (anything the CoS or a working agent should do; the CoS splits it among its agents, and you track the step, not the agents) or Brian's Claude (anything outside this instance); never a working agent and never the auditor (the charter's skip level rule is the only exception). Post the ask through gm-post where that kind goes (#staff "For the CoS:", #gm for Brian or Brian's Claude), then record it with `gm-goals ask <goal> <cos|bc> <channel> <event> <step...>` (the event is the message you just posted). Never bundle several goals into one request.
+2. `AT LIMIT <goal>`: no step in flight but every owner is full; skip this goal this wake.
+3. `WAIT <goal>: ...`: a step is in flight and needs nothing now; leave it.
+4. `NUDGE <goal>: <owner> thread <root> <channel>`: the owner has been quiet past the window. Post one nudge in that thread through gm-post, then record it with `gm-goals nudge <goal> <event>`; a second nudge needs `--new-info <why>`.
+5. `BLOCKED <goal>: ...`: blocked on something outside this instance; it rides the daily status, do not re-ask.
+6. `MET <goal>: status check green`: a standing goal whose status check (its line in /opt/agent/goal-checks) is green; nothing to hand out this wake, leave it.
+7. `BAD GOAL <goal>: ...`: no step for BAD_DAYS; say so in the daily status rather than nudging into the void. For a standing goal this only happens after BAD_DAYS of a failing check with no step.
+8. `CHECK FAILED <goal>: ...`: the relay read for that goal failed, or a standing goal has no status check in /opt/agent/goal-checks; report it in the daily status and do not act on that line.
+
+When an owner reports a step done, run `gm-goals done <goal> [note]`; the next wake hands out the next step. If it is blocked outside this instance, run `gm-goals block <goal> <why>`. An outcome goal that is now true: propose in #gm through gm-post, one line, that Brian remove it from goals.md; do not propose twice. A standing goal is never done; it reads MET while its status check is green and produces its next small step whenever the check is failing.
+
+In the daily status, the `Goals` section is filled from `gm-goals status` by `gm-daily draft`: one line per goal with what moved in the last day and who it waits on. Read those lines and correct any that are wrong before posting.

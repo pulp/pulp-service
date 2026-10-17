@@ -1,0 +1,31 @@
+# gm-rh, the Red Hat GM, as an always on Buzz agent on OpenShift. Staged in
+# rh/cluster; Brian's Claude copies it into pulp/pulp-service at .buzz/agents/gm-rh/.
+# Keys never live here: nsec and auth-tag come from Vault as the Secret agent-gm-rh.
+# Runtime env the template still sets per target and NOT here:
+# STAFF_CHANNEL, AGENT_PUBKEY, PENDING_ENV=/opt/agent/approval-check.env, the Vertex
+# vars, GITEA_TOKEN_FILE, AGENT_GIT_NAME/EMAIL, BUZZ_GIT_IDENTITY.
+display_name: gm-rh
+description: 'gm-rh, the Red Hat GM: an AI agent (Claude). General manager of the Red Hat agent platform.'
+owner: Brian Bouterse
+# gm-rh's owner is Brian (no ambiguity: the serrano gm-rh StatefulSet runs
+# BUZZ_ACP_AGENT_OWNER=763c8708 and the charter says Brian owns gm-rh). owner_pubkey
+# must match whoever signed the auth-tag written to Vault.
+owner_pubkey: 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian
+parallelism: 3
+session_policy: thread
+effort: medium
+model: opus
+relay: wss://buzz-rh.bouterse.casa
+heartbeat_interval: 3600
+respond_to: allowlist
+# DECISION 2 (same as cos-rh, flagged in #staff): on serrano this list is the
+# chief-allowlist ConfigMap rendered from config/platform.yaml (gm-rh owned, approver
+# gated). Here it physically sits in the git definition. These three keys are the exact
+# serrano gm-rh allowlist (Brian, Brian's Claude, cos-rh). Confirm this location, or we
+# keep the list in the template env instead to preserve "the definition can never
+# widen it".
+allowlist:
+  - 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian
+  - e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4   # Brian's Claude
+  - 6a14bf7b3d7259f77e5b40a4817a084b11002f54e585eda431c4befa5d150c0d   # cos-rh
+channels: []   # #gm and #staff membership is on the relay; gm-rh owns both

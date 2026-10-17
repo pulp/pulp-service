@@ -1,0 +1,37 @@
+# shellcheck shell=bash
+# Sourced, not executed. Sets BUZZ_PRIVATE_KEY, BUZZ_RELAY_URL and BUZZ_AUTH_TAG
+# for the helpers that run outside agent-entrypoint's process: the boot-resume
+# fork and agent-restart-back (forked by staff-entrypoint before it execs
+# agent-entrypoint) and agent-prestop (spawned fresh by the kubelet at shutdown).
+# agent-entrypoint exports these only into buzz-acp and its own children, so
+# those three would otherwise call buzz / buzz-acp with no key or relay and fail
+# silently. Mirrors agent-entrypoint's own setup. Call only once the definition
+# is present (after buzz-acp is up, or at shutdown); returns non-zero if the key
+# or definition is missing so the caller can log and skip. The key value is read
+# from the mounted file straight into the variable and never printed.
+_agent_runtime_env() {
+  local state def_dir sec
+  state=${AGENT_STATE_DIR:-/state}
+  def_dir=$state/definition/.buzz/agents/${AGENT_SLUG:?}
+  sec=${AGENT_SECRET_DIR:-/run/secrets/agent}
+  if [ -s "$sec/nsec" ]; then export BUZZ_PRIVATE_KEY="$(cat "$sec/nsec")"
+  else echo "agent-runtime-env: nsec missing" >&2; return 1; fi
+  [ -f "$def_dir/agent.yaml" ] || { echo "agent-runtime-env: no definition at $def_dir" >&2; return 1; }
+  eval "$(definition-env "$def_dir/agent.yaml")" || { echo "agent-runtime-env: definition-env failed" >&2; return 1; }
+  if [ -s "$def_dir/auth-tag" ]; then export BUZZ_AUTH_TAG="$(tr -d '\n' < "$def_dir/auth-tag")"
+  elif [ -s "$sec/auth-tag" ]; then export BUZZ_AUTH_TAG="$(tr -d '\n' < "$sec/auth-tag")"
+  else unset BUZZ_AUTH_TAG; fi
+  # Export the BUZZ_ACP_* that agent-entrypoint sets for buzz-acp, so the
+  # boot-resume fork's `buzz-acp run` can spawn the agent command. Without
+  # these (BUZZ_ACP_AGENT_COMMAND above all) the fork's spawn fails with
+  # agent_spawn_failed. Mirrors agent-entrypoint; the defaults do not
+  # override a value already set in the env.
+  export AGENT_DEF_DIR="$def_dir"
+  export BUZZ_ACP_SYSTEM_PROMPT_FILE="$def_dir/charter.md"
+  [ -f "$def_dir/heartbeat.md" ] && export BUZZ_ACP_HEARTBEAT_PROMPT_FILE="$def_dir/heartbeat.md"
+  export BUZZ_ACP_AGENT_COMMAND="${BUZZ_ACP_AGENT_COMMAND:-claude-agent-acp}"
+  export BUZZ_ACP_AGENT_ARGS="${BUZZ_ACP_AGENT_ARGS:-}"
+  export BUZZ_ACP_EXIT_AFTER_INACTIVITY="${BUZZ_ACP_EXIT_AFTER_INACTIVITY:-0}"
+  export BUZZ_ACP_CONTEXT_MESSAGE_LIMIT="${BUZZ_ACP_CONTEXT_MESSAGE_LIMIT:-100}"
+  return 0
+}

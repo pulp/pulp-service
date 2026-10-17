@@ -1,0 +1,24 @@
+#!/bin/bash
+# approvals: the shared approval-check (determinism item 2) over commits since
+# yesterday, for the daily status. Warn mode the first week, so nothing blocks a
+# push; this just lists every MISSING or BAD commit. One source of truth,
+# tools/approval-check in rh/cluster, the same file the Auditor reruns, run here
+# over a fresh clone of main with my own key (it only reads the relay).
+# Approved by Brian's Claude bde2145364e014e4270916a80aa93abee63176255ec3dc1e1016d3cac2c81b9a
+set -uo pipefail
+tmp=$(mktemp -d) || { echo "no tmp dir"; exit 1; }
+trap 'rm -rf "$tmp"' EXIT
+# The pod's global credential helper supplies the Gitea token; never a token in the URL.
+git clone --quiet https://gitea.bouterse.casa/rh/cluster.git "$tmp/cluster" 2>/dev/null \
+  || { echo "clone failed"; exit 1; }
+# Approver list, GM key and channels come from the one shared file (determinism
+# item 7's single source), auto-exported so tools/approval-check in the fresh clone
+# sees them. MODE=warn stays here (it is this daily check's behaviour, not a principal).
+set -a; . /opt/agent/approval-check.env; set +a
+export MODE=warn
+# This runs tools/approval-check from rh/cluster, which gm-rh can push to, so it is a
+# self-check: its backstop is the Auditor rerunning the same file independently.
+out=$(cd "$tmp/cluster" && tools/approval-check --since yesterday 2>&1); rc=$?
+[ "$rc" -eq 0 ] || { echo "${out:0:200}"; exit 1; }
+flags=$(printf '%s\n' "$out" | grep -E '^(MISSING|BAD) ')
+[ -n "$flags" ] && printf '%s\n' "$flags" | paste -sd ';' - || echo none

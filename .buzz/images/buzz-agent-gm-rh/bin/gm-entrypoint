@@ -1,0 +1,42 @@
+#!/bin/bash
+# Before buzz-acp starts: standing instructions come from the image only (an injected
+# session must not persist itself in settings or memory across restarts).
+set -euo pipefail
+# The template sets CLAUDE_CONFIG_DIR, AGENT_WORKDIR and HOME only when it means to
+# override them; default all three the same way the base agent-entrypoint does, so
+# the pod starts under set -u even when the template leaves them unset. HOME must
+# match the base's default so git finds the credentials this entrypoint writes:
+# the base execs buzz-acp with HOME=${HOME:-/home/agent} and reads git config and
+# ~/.git-credentials from there, so write them to the same HOME, not serrano's
+# /state/home.
+STATE=${AGENT_STATE_DIR:-/state}
+export CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR:-$STATE/claude}
+export AGENT_WORKDIR=${AGENT_WORKDIR:-$STATE/work}
+export HOME=${HOME:-/home/agent}
+mkdir -p "$CLAUDE_CONFIG_DIR" "$AGENT_WORKDIR" "$HOME"
+# AGENT_PUBKEY comes from the template param. Boot-resume and the profile set need
+# it; a missing one is logged and that step skipped, not fatal.
+AGENT_PUBKEY=${AGENT_PUBKEY:-}
+rm -rf "$CLAUDE_CONFIG_DIR/settings.json" "$CLAUDE_CONFIG_DIR/settings.local.json" "$CLAUDE_CONFIG_DIR/memory" "$CLAUDE_CONFIG_DIR/projects"/*/memory 2>/dev/null || true
+# Gitea HTTPS auth for the two clones, written once here from the mounted token into
+# the base's HOME so the session's git pull/push to rh/cluster and rh/agents just
+# works. The session never reads the token itself: secret-guard blocks /run/secrets,
+# and git reads $HOME/.git-credentials internally. gitea-api covers token-bearing
+# API calls. Rewritten every boot, so it needs no persistence.
+if [ -n "${GITEA_TOKEN_FILE:-}" ] && [ -s "${GITEA_TOKEN_FILE:-}" ]; then
+  git config --global credential.helper store
+  ( umask 077; printf 'https://gm-rh:%s@gitea.bouterse.casa\n' "$(cat "$GITEA_TOKEN_FILE")" > "$HOME/.git-credentials" )
+fi
+# Boot resume (see boot-resume), in the background once buzz-acp is up. Extracted
+# into its own script so the resumed turn writes start and end lines to the turn
+# log the stop hold reads (pulp-service #1586), the same as any other turn.
+/usr/local/bin/boot-resume &
+# Graceful restart (items 13/14): replay mentions missed since the pod stopped,
+# keep a liveness floor so a crash is covered too, and answer the threads the
+# preStop hook announced the restart in. The floor must be read before the touch
+# loop recreates alive-at.
+floor="$(/usr/local/bin/agent-restart-floor || true)"
+[ -n "$floor" ] && export BUZZ_ACP_REPLAY_FLOOR="$floor"
+/usr/local/bin/agent-alive-touch &
+/usr/local/bin/agent-restart-back &
+exec /usr/local/bin/agent-entrypoint "$@"

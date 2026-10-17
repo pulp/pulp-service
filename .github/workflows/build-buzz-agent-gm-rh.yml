@@ -1,0 +1,29 @@
+name: Build buzz-agent-gm-rh
+on:
+  push:
+    tags: ['buzz-agent-gm-rh-v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test boot-resume (shared with cos-rh)
+        # A resumed turn must be visible to the stop hold; prove it before shipping.
+        run: bash .buzz/images/buzz-agent-gm-rh/boot-resume_test.sh
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build
+        run: |
+          TAG="${GITHUB_REF_NAME#buzz-agent-gm-rh-}"
+          [ "${{ github.event_name }}" = "workflow_dispatch" ] && TAG="dev-${GITHUB_SHA::12}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          podman build -t "ghcr.io/${{ github.repository_owner }}/buzz-agent-gm-rh:$TAG" .buzz/images/buzz-agent-gm-rh
+      - name: Push
+        run: |
+          podman push --digestfile /tmp/digest "ghcr.io/${{ github.repository_owner }}/buzz-agent-gm-rh:$TAG"
+          echo "IMAGE ghcr.io/${{ github.repository_owner }}/buzz-agent-gm-rh:$TAG@$(cat /tmp/digest)" | tee -a "$GITHUB_STEP_SUMMARY"

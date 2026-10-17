@@ -1,0 +1,11 @@
+# Status checks for the standing goals in goals.md: "<goal>: <command>", one per line,
+# run with bash -o pipefail. Exit 0 printing "none" (or nothing) is green: the goal reads
+# MET while no step is in flight. Exit 0 printing anything else is failing, and that output
+# says what is wrong. Any other exit, or a standing goal with no line here, is CHECK FAILED.
+# Lines starting with # are ignored.
+#
+# determinism: green while the backlog of identified procedures-to-convert is empty or
+# absent (nothing earns a conversion right now); failing, and so handing out a step, once
+# I log one or more candidates into /state/determinism-backlog (one per line). The backlog
+# lives in /state so it survives rolls; it is my own notebook, not a secret.
+determinism: test -s /state/determinism-backlog && cat /state/determinism-backlog || echo none
