@@ -1,6 +1,6 @@
 # Serves an agent's own Claude Code transcripts, redacted, to the chief of staff.
 # Runs as a sidecar in every agent pod with the state volumes mounted read only.
-FROM docker.io/library/python:3.13-alpine3.22@sha256:7f7ee17311e0273954ffe76a7b84a2d8c8ecf16f9992e780e4d46c86175df431
+FROM docker.io/library/python:3.14-alpine3.22@sha256:1a5f0303fd8941565b5bbda3fac2345148a9fd8245d575c2971ccefcd77c78f6
 COPY transcripts_server.py /usr/local/bin/transcripts-server
 RUN chmod 755 /usr/local/bin/transcripts-server
 USER 1000:1000
