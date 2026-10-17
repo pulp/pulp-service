@@ -1,9 +1,11 @@
 """Integration test for the domainorg_rbac_report command.
 
-Creates a domain under an org identity -- which grants the creator and the rh-org-<org_id> group
-full domain roles -- then runs the command with --org-id --format json and asserts the derived
-org group reads as FULL (can GET and PUSH). A second case strips the org group's roles to the
-"locked out" shape and asserts the report flags it NONE. Mirrors test_domainorg_backfill_report.py.
+Creates a domain under an org identity, then grants the derived rh-org-<org_id> group the full
+domain roles explicitly (domain creation no longer does this -- a FULL-tier org group is now the
+backfilled/historical shape, mirroring migrations 0019/0022). Runs the command with --org-id
+--format json and asserts the org group reads as FULL (can GET and PUSH). A second case strips the
+org group's roles to the "locked out" shape and asserts the report flags it NONE. Mirrors
+test_domainorg_backfill_report.py.
 """
 
 import json
@@ -53,6 +55,26 @@ def _strip_org_group_roles(org_id):
     )
 
 
+def _grant_org_group_roles(org_id, domain_name):
+    """Grant the rh-org-<org_id> group the full domain roles, mirroring migrations 0019/0022.
+
+    Domain creation no longer grants the org group these roles, so FULL tier is the
+    backfilled/historical shape; reproduce it explicitly (the inverse of _strip_org_group_roles).
+    """
+    _shell(
+        "\n".join(
+            [
+                "from pulpcore.plugin.models import Domain, Group",
+                "from pulpcore.plugin.util import assign_role",
+                f"group, _ = Group.objects.get_or_create(name='rh-org-{org_id}')",
+                f"domain = Domain.objects.get(name='{domain_name}')",
+                "assign_role('core.domain_owner', group, obj=domain)",
+                "assign_role('service.domain_admin', group, domain=domain)",
+            ]
+        )
+    )
+
+
 def _report_json(*args):
     result = subprocess.run(  # noqa: S603
         ["django-admin", "domainorg_rbac_report", "--format", "json", *args],  # noqa: S607
@@ -74,6 +96,7 @@ def test_report_classifies_full_access_domain(create_service_domain):
     org = _rand_org()
     owner = _identity_header(org, f"owner-{uuid4().hex[:8]}")
     domain = create_service_domain(name=f"rbacreport-{uuid4().hex[:10]}", identity_header=owner)
+    _grant_org_group_roles(org, domain.name)
 
     row = _org_group_row(_report_json("--org-id", org), domain.name)
     assert row is not None, f"{domain.name} org group not in report"
@@ -104,6 +127,7 @@ def test_rbac_report_endpoint_produces_downloadable_json(create_service_domain, 
     org = _rand_org()
     owner = _identity_header(org, f"owner-{uuid4().hex[:8]}")
     domain = create_service_domain(name=f"rbacreport-api-{uuid4().hex[:10]}", identity_header=owner)
+    _grant_org_group_roles(org, domain.name)
 
     admin_auth = (bindings_cfg.username, bindings_cfg.password)
     endpoint = urljoin(bindings_cfg.host, "/api/pulp/debug/domainorg-rbac-report/")

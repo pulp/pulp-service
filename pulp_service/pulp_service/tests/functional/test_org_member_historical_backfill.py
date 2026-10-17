@@ -1,11 +1,10 @@
 """Regression for the calunga failure: the *historical* broken-state repair.
 
-The forward create path (a self-service create carrying ``internal.org_id`` grants
-``rh-org-<org_id>`` its roles) is covered by ``test_org_member_rbac_access.py``. This test
-covers the other half -- rows that were written *before* org_id capture / role dual-write and
-so ended up with ``DomainOrg.org_id = NULL`` and a ``rh-org-<org_id>`` group holding **zero
-roles**. That is exactly the ``public-trusted-libraries`` / ``calunga-internal`` shape that
-404'd repo reads and blocked PyPI uploads once RBAC became the default.
+This test covers rows that were written *before* org_id capture / role dual-write and so ended
+up with ``DomainOrg.org_id = NULL`` and a ``rh-org-<org_id>`` group holding **zero roles**. That
+is exactly the ``public-trusted-libraries`` / ``calunga-internal`` shape that 404'd repo reads
+and blocked PyPI uploads once RBAC became the default. (Domain creation no longer grants the
+``rh-org-<org_id>`` group any roles, so migration 0022 is the only path that grants them.)
 
 The API can no longer *produce* that shape (create always captures org_id), so we build an
 org-owned domain via the real HTTP flow, corrupt it to the historical shape through
