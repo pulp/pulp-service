@@ -92,6 +92,14 @@ parameters:
 # "false" is for local tests only.
 - name: TRANSCRIPTS_REQUIRE_TOKEN
   value: "true"
+# Kubernetes API access for the agent. Off by default: the pod runs as the
+# namespace's default ServiceAccount with no token mounted. An agent that reads
+# the namespace (gm-rh's status checks) names the ServiceAccount that
+# deploy/buzz-agents-view.yaml creates and sets the token on.
+- name: SERVICE_ACCOUNT
+  value: default
+- name: MOUNT_SA_TOKEN
+  value: "false"
 objects:
 - apiVersion: v1
   kind: PersistentVolumeClaim
@@ -128,7 +136,8 @@ objects:
           app: buzz-agent
           agent: ${AGENT_SLUG}
       spec:
-        automountServiceAccountToken: false
+        serviceAccountName: ${SERVICE_ACCOUNT}
+        automountServiceAccountToken: ${{MOUNT_SA_TOKEN}}
         securityContext:
           runAsNonRoot: true
           seccompProfile:
@@ -306,7 +315,14 @@ objects:
           - name: gitea-token
             mountPath: /run/secrets/gitea
             readOnly: true
+          # Hide the pod's ServiceAccount token (MOUNT_SA_TOKEN) from the
+          # sidecar: only the agent container reads the namespace.
+          - name: no-sa-token
+            mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+            readOnly: true
         volumes:
+        - name: no-sa-token
+          emptyDir: {}
         - name: state
           persistentVolumeClaim:
             claimName: buzz-agent-${AGENT_SLUG}-state

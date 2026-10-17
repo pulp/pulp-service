@@ -1,0 +1,40 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: buzz-agent-view
+  annotations:
+    description: >-
+      A ServiceAccount for one Buzz agent with the built-in read only "view"
+      role in its own namespace, so the agent can check pods, logs and
+      rollouts without a person's login. It cannot change anything; changes go
+      through app-interface. Used with deploy/buzz-agents.yaml's
+      SERVICE_ACCOUNT and MOUNT_SA_TOKEN parameters.
+parameters:
+- name: AGENT_SLUG
+  required: true
+- name: NAMESPACE
+  description: The namespace the agent runs in; a ServiceAccount subject needs it.
+  required: true
+objects:
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: buzz-agent-${AGENT_SLUG}
+    labels:
+      app: buzz-agent
+      agent: ${AGENT_SLUG}
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: buzz-agent-${AGENT_SLUG}-view
+    labels:
+      app: buzz-agent
+      agent: ${AGENT_SLUG}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: view
+  subjects:
+  - kind: ServiceAccount
+    name: buzz-agent-${AGENT_SLUG}
+    namespace: ${NAMESPACE}
