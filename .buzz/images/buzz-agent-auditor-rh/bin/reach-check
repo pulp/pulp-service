@@ -83,7 +83,12 @@ def live_allowlist(agents_dir, chief_id):
         return f"agent.yaml does not parse ({e})", None, set()
     if not isinstance(d, dict):
         return "agent.yaml is not a mapping", None, set()
-    keys = {norm(k) for k in (d.get("allowlist") or []) if isinstance(k, str)}
+    allow = d.get("allowlist") or []
+    # A list of pubkey strings and nothing else: a mapping (whose keys could look
+    # right) or a stray non-string entry is a malformed allowlist, not a pass.
+    if not isinstance(allow, list) or not all(isinstance(k, str) for k in allow):
+        return "allowlist is not a list of pubkey strings", d.get("respond_to"), set()
+    keys = {norm(k) for k in allow}
     return None, d.get("respond_to"), keys
 
 
