@@ -48,7 +48,7 @@ tok="$(oc whoami -t --kubeconfig "$kc" --request-timeout=10s 2>/dev/null)" || {
 # stdin config; the URL and the body file path are not secret and stay on argv.
 dir="/run/agent-session/$requester"
 ( umask 077; mkdir -p "$dir" )
-body="$dir/.gabi-body.json"
+body=$(mktemp "$dir/.gabi-body.XXXXXX") || { echo "gabi-query: no temp file" >&2; exit 2; }
 ( umask 077; jq -n --arg q "$sql" '{query:$q}' > "$body" ) || { echo "gabi-query: could not build the request body" >&2; exit 2; }
 
 printf 'header = "Authorization: Bearer %s"\n' "$tok" \

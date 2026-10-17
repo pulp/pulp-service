@@ -53,7 +53,7 @@ while :; do
     # to the mode 600 file with jq, so the value never passes through a shell variable
     # or the screen.
     found=$(printf '%s' "$msgs" | jq -r --arg f "$from" --argjson s "$since" \
-      '[.[] | select(.pubkey==$f and .created_at > $s)] | sort_by(.created_at) | .[-1] // empty | .id' 2>/dev/null)
+      '[.[] | select(.pubkey==$f and .created_at >= $s)] | sort_by(.created_at) | .[-1] // empty | .id' 2>/dev/null)
     if [ -n "$found" ]; then
       ( umask 077
         printf '%s' "$msgs" | jq -r --arg id "$found" '.[] | select(.id==$id) | .content' > "$out" )
