@@ -1,0 +1,49 @@
+#!/bin/bash
+# gm-state-restore: on first boot, lay gm-rh's durable working state down from the
+# state repo so a fresh pod (an empty PVC, as on OpenShift) starts with its goals
+# notes and workspace instead of nothing. gm-entrypoint runs it once, early, before
+# boot-resume and the heartbeat read that state.
+#
+# Three guarantees keep it safe to run on every boot:
+#   - marker gated: it does nothing once $STATE/.state-restored exists.
+#   - fill only: cp -n never overwrites a file the PVC already holds, so live state
+#     always wins over the repo snapshot.
+#   - non-fatal: any failure logs and returns 0 so the pod still boots; the marker is
+#     written only after a successful clone, so a failed boot retries next time.
+#
+# The repo defaults to the RH state repo; GM_STATE_REPO overrides it. The clone URL
+# carries no token: git reads $HOME/.git-credentials, which gm-entrypoint wrote.
+set -uo pipefail
+log() { printf 'gm-state-restore: %s\n' "$*" >&2; }
+STATE=${AGENT_STATE_DIR:-/state}
+WORKDIR=${AGENT_WORKDIR:-$STATE/work}
+marker="$STATE/.state-restored"
+repo=${GM_STATE_REPO:-https://gitea.bouterse.casa/rh/gm-rh-state.git}
+
+[ -e "$marker" ] && { log "marker present, nothing to restore"; exit 0; }
+
+tmp=$(mktemp -d) || { log "mktemp failed, skipping"; exit 0; }
+trap 'rm -rf "$tmp"' EXIT
+
+if ! git clone --depth 1 "$repo" "$tmp/state" >/dev/null 2>&1; then
+  log "clone of $repo failed, will retry next boot"
+  exit 0
+fi
+
+mkdir -p "$STATE" "$WORKDIR"
+# Fill only: cp -n skips any file that already exists, so the PVC's live copy wins.
+if [ -f "$tmp/state/goals-state.md" ]; then
+  cp -n "$tmp/state/goals-state.md" "$STATE/goals-state.md" 2>/dev/null || true
+fi
+# File by file: "cp -rn src/. dst/" copies nothing into an existing directory with
+# busybox cp, and the workspace directory always exists by now.
+if [ -d "$tmp/state/work" ]; then
+  (cd "$tmp/state/work" && find . -type f -print0) | while IFS= read -r -d '' f; do
+    [ -e "$WORKDIR/$f" ] && continue
+    mkdir -p "$WORKDIR/$(dirname "$f")" && cp "$tmp/state/work/$f" "$WORKDIR/$f" 2>/dev/null || true
+  done
+fi
+
+: > "$marker" 2>/dev/null || true
+log "restored from $repo into $STATE"
+exit 0
