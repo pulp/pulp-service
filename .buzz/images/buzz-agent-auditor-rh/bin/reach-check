@@ -108,8 +108,8 @@ def managed_agents(agents_repo):
     object keyed by slug and lives at staff/roster.json in the agents repo. Returns [] when
     there is no roster file. A roster that exists but does not parse, or is not an object,
     is a setup failure (exit 2): silently returning [] would drop every managed agent from
-    the intended set and mislabel the deployed ones as 'extra'. Malformed individual
-    entries are skipped (the roster is cos-rh writable data, not the rule)."""
+    the intended set and mislabel the deployed ones as 'extra'. Entries without managed_by
+    are not managed agents; a managed entry without a usable pubkey is a setup failure."""
     path = os.path.join(agents_repo, "staff", "roster.json")
     try:
         with open(path) as f:
@@ -123,11 +123,16 @@ def managed_agents(agents_repo):
     out = []
     for slug, e in roster.items():
         if not isinstance(e, dict):
-            continue
+            die(f"staff/roster.json entry {slug!r} is not an object")
         mb = e.get("managed_by")
+        if mb in (None, ""):
+            continue  # not a managed agent
         pk = e.get("pubkey")
-        if isinstance(mb, str) and mb and isinstance(pk, str) and pk:
-            out.append((norm(mb), slug, norm(pk)))
+        # A managed agent we cannot name a key for would silently drop out of the
+        # intended set, so an allowlist missing it would read as clean: refuse instead.
+        if not isinstance(mb, str) or not isinstance(pk, str) or not pk:
+            die(f"staff/roster.json entry {slug!r} is managed but has no usable managed_by and pubkey")
+        out.append((norm(mb), slug, norm(pk)))
     return out
 
 
