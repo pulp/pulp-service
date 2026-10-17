@@ -24,7 +24,7 @@ ENV PENDING_ENV=/opt/agent/approval-check.env
 RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
       /usr/local/bin/agent-register /usr/local/bin/agent-restart-back \
       /usr/local/bin/agent-restart-floor /usr/local/bin/agent-restart-stuck \
-      /usr/local/bin/staff-bench /usr/local/bin/cos-pending /usr/local/bin/staff-entrypoint \
+      /usr/local/bin/staff-bench /usr/local/bin/cos-pending /usr/local/bin/staff-entrypoint /usr/local/bin/boot-resume \
  && chmod 0644 /opt/agent/approval-check.env /opt/agent/boot-resume.md \
  && chmod -R go-w /opt/agent
 USER 1000

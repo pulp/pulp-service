@@ -14,27 +14,8 @@ mkdir -p "$CLAUDE_CONFIG_DIR" "$AGENT_WORKDIR"
 # helpers need it; a missing one is logged and that step skipped, not fatal.
 AGENT_PUBKEY=${AGENT_PUBKEY:-}
 rm -rf "$CLAUDE_CONFIG_DIR/settings.json" "$CLAUDE_CONFIG_DIR/settings.local.json" "$CLAUDE_CONFIG_DIR/memory" "$CLAUDE_CONFIG_DIR/projects"/*/memory 2>/dev/null || true
-# Boot resume: buzz-acp arms its heartbeat a full interval after start, so work a
-# session left half done before a roll (its own "next step") would wait for a mention.
-# Once buzz-acp is up, run one task that finds such work (cos-pending) and finishes it.
-# Not started when the pod stays stopped by the owner (buzz-acp never comes up).
-(
-  boot=$(date -u +%FT%TZ)
-  [ -n "$AGENT_PUBKEY" ] || { echo "boot-resume: no AGENT_PUBKEY, skipped" >&2; exit 0; }
-  for _ in $(seq 60); do pgrep -x buzz-acp >/dev/null && break; sleep 5; done
-  pgrep -x buzz-acp >/dev/null || { echo "boot-resume: buzz-acp not up, skipped" >&2; exit 0; }
-  # buzz-acp is up, so the definition is cloned: pull the key, relay and tag into
-  # this fork (agent-entrypoint exported them only into its own buzz-acp child).
-  . /usr/local/bin/agent-runtime-env
-  _agent_runtime_env || { echo "boot-resume: no runtime env, skipped" >&2; exit 0; }
-  sleep 20
-  t=$(mktemp -d) && chmod 700 "$t"
-  prompt=$(sed "s/BOOT_TIME/$boot/g" /opt/agent/boot-resume.md)
-  jq -n --arg id "boot-$(date -u +%s)" --arg pk "$AGENT_PUBKEY" --arg p "$prompt" \
-    '{version:1, taskId:$id, agentPubkey:$pk, prompt:$p, maxDurationMs:1200000}' > "$t/task.json"
-  cd "$AGENT_WORKDIR" && buzz-acp run --task "$t/task.json" 2>&1 | sed 's/^/boot-resume: /'
-  rm -rf "$t"
-) &
+# Boot resume (see boot-resume), in the background once buzz-acp is up.
+/usr/local/bin/boot-resume &
 # Graceful restart (items 13/14): replay mentions missed since the pod stopped,
 # keep a liveness floor so a crash is covered too, and answer the threads the
 # preStop hook announced the restart in. The floor must be read before the touch
