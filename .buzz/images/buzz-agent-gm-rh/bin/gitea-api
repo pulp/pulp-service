@@ -41,24 +41,25 @@ for arg in "$@"; do
   esac
 done
 # Credentials reach curl through a config on stdin, never its argument list,
-# where any process in the pod could read them.
+# where any process in the pod could read them. -q (first) makes curl skip
+# ~/.curlrc, which a session could write to log or redirect the request.
 auth() { printf '%s = "%s"\n' "$1" "$2"; }
 case $path in
   /v2/token*)   # the token endpoint itself: Basic auth with the account token
     # A pipeline runs curl in a subshell, so exit with its status here rather
     # than falling through to the /api call below.
-    auth user "gm-rh:$(cat "$tokfile")" | curl -sS -K - -X "$method" "$base$path" "$@"
+    auth user "gm-rh:$(cat "$tokfile")" | curl -q -sS -K - -X "$method" "$base$path" "$@"
     exit "${PIPESTATUS[1]}" ;;
   /v2/*)        # any other registry path: mint a pull-scoped bearer, then use it
     rest=${path#/v2/}; owner=${rest%%/*}; rest=${rest#*/}; image=${rest%%/*}
-    bearer=$(auth user "gm-rh:$(cat "$tokfile")" | curl -sS -K - \
+    bearer=$(auth user "gm-rh:$(cat "$tokfile")" | curl -q -sS -K - \
       "$base/v2/token?service=container_registry&scope=repository:$owner/$image:pull" \
       | jq -r '.token // empty')
     [ -n "$bearer" ] || { echo "gitea-api: no registry token for $owner/$image" >&2; exit 2; }
-    auth header "Authorization: Bearer $bearer" | curl -sS -K - -X "$method" "$base$path" "$@"
+    auth header "Authorization: Bearer $bearer" | curl -q -sS -K - -X "$method" "$base$path" "$@"
     exit "${PIPESTATUS[1]}" ;;
   /api/*) url="$base$path" ;;
   /*)     url="$base/api/v1$path" ;;
   *)      url="$base/api/v1/$path" ;;
 esac
-auth header "Authorization: token $(cat "$tokfile")" | exec curl -sS -K - -X "$method" "$url" "$@"
+auth header "Authorization: token $(cat "$tokfile")" | exec curl -q -sS -K - -X "$method" "$url" "$@"
