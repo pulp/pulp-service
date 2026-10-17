@@ -27,6 +27,11 @@ if [ -n "${GITEA_TOKEN_FILE:-}" ] && [ -s "${GITEA_TOKEN_FILE:-}" ]; then
   git config --global credential.helper store
   ( umask 077; printf 'https://gm-rh:%s@gitea.bouterse.casa\n' "$(cat "$GITEA_TOKEN_FILE")" > "$HOME/.git-credentials" )
 fi
+# First-boot state restore (see gm-state-restore): lay goals-state and the workspace
+# down from the state repo before boot-resume or the heartbeat read them. Marker
+# gated, fill-only and non-fatal, and it needs the git credentials written just above,
+# so it runs here, synchronously, before the background helpers.
+/usr/local/bin/gm-state-restore || true
 # Boot resume (see boot-resume), in the background once buzz-acp is up. Extracted
 # into its own script so the resumed turn writes start and end lines to the turn
 # log the stop hold reads (pulp-service #1586), the same as any other turn.

@@ -34,7 +34,7 @@ RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
       /usr/local/bin/agent-restart-back /usr/local/bin/agent-restart-floor \
       /usr/local/bin/agent-restart-stuck /usr/local/bin/boot-resume \
       /usr/local/bin/gitea-api /usr/local/bin/gm-approvals \
-      /usr/local/bin/gm-backtick-scan /usr/local/bin/gm-daily /usr/local/bin/gm-entrypoint \
+      /usr/local/bin/gm-backtick-scan /usr/local/bin/gm-daily /usr/local/bin/gm-entrypoint /usr/local/bin/gm-state-restore \
       /usr/local/bin/gm-goals /usr/local/bin/gm-pending /usr/local/bin/gm-post \
       /usr/local/bin/gm-status /usr/local/bin/pin-digest /usr/local/bin/secret-guard \
  && chmod 0644 /opt/agent/approval-check.env /opt/agent/boot-resume.md /opt/agent/goals.md \
