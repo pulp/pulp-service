@@ -1,0 +1,25 @@
+#!/bin/bash
+# jira-mcp: start the Atlassian MCP server (mcp-atlassian) for Jira only, reading the
+# standing API token and the account username from their mounted secret files instead
+# of the laptop's interactive login. mcp.json runs this wrapper, not mcp-atlassian
+# directly, so the token value never sits in mcp.json or in argv.
+#
+# Jira Cloud API-token auth needs the account email (JIRA_USERNAME) and the API token
+# (JIRA_API_TOKEN) together. Both come from the mounted agent secret. Confluence is
+# left entirely unconfigured, so mcp-atlassian registers no Confluence tools: PulpBot
+# uses Jira only.
+set -uo pipefail
+
+SEC=${AGENT_SECRET_DIR:-/run/secrets/agent}
+export JIRA_URL="${JIRA_URL:-https://redhat.atlassian.net}"
+
+[ -s "$SEC/atlassian-token" ] || { echo "jira-mcp: atlassian-token not mounted; Jira is unavailable" >&2; exit 3; }
+export JIRA_API_TOKEN="$(cat "$SEC/atlassian-token")"
+
+[ -s "$SEC/JIRA_USERNAME" ] || { echo "jira-mcp: JIRA_USERNAME not mounted; Jira is unavailable" >&2; exit 3; }
+export JIRA_USERNAME="$(cat "$SEC/JIRA_USERNAME")"
+
+# No CONFLUENCE_* env is set, and ENABLED_TOOLS_CONFLUENCE is emptied explicitly, so the
+# server registers no Confluence tools.
+export ENABLED_TOOLS_CONFLUENCE=""
+exec mcp-atlassian --transport stdio
