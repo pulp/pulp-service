@@ -1,0 +1,17 @@
+#!/bin/bash
+# Print the buzz-acp replay floor (unix seconds) for this boot and clear the
+# markers. Floor = stopping-at (a graceful preStop) if present, else alive-at (the
+# liveness touch, so a crash or OOM still gets a floor). Nothing printed on the
+# first ever boot, when neither file exists. buzz-acp clamps the floor to 15
+# minutes itself, so no clamp is needed here. Run before agent-alive-touch, which
+# recreates alive-at.
+set -uo pipefail
+dir=${AGENT_RESTART_DIR:-/state/restart}
+floor=""
+if [ -s "$dir/stopping-at" ]; then
+  floor=$(cat "$dir/stopping-at" 2>/dev/null || true)
+elif [ -s "$dir/alive-at" ]; then
+  floor=$(cat "$dir/alive-at" 2>/dev/null || true)
+fi
+rm -f "$dir/stopping-at" "$dir/alive-at" 2>/dev/null || true
+printf '%s' "$floor"

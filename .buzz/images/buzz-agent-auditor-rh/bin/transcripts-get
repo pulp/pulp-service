@@ -1,0 +1,47 @@
+#!/bin/bash
+# transcripts-get <slug> <path>: fetch one read-only transcripts endpoint for an agent
+# the auditor audits, with the bearer token kept off the command line and the screen.
+#
+# The token for the slug is fed into curl's config on stdin (curl -K -), so it never
+# appears in argv and `ps`, the Claude transcript and this helper's own output never
+# capture it. The host is fixed per slug here, not taken from the caller, and the path
+# is screened to the read-only transcripts endpoints, so the helper cannot be turned
+# into a general fetch. The session calls transcripts-get and never reads the token
+# file itself.
+#
+#   transcripts-get gm-rh /sessions?hours=24
+#   transcripts-get cos-rh "/session?id=<uuid>"
+#   transcripts-get gm-rh /healthz          # unauthenticated
+set -uo pipefail
+
+slug=${1:-}; path=${2:-}
+[ -n "$slug" ] && [ -n "$path" ] || { echo "usage: transcripts-get <gm-rh|cos-rh> <path>" >&2; exit 2; }
+
+case "$slug" in
+  gm-rh)  host="http://buzz-agent-gm-rh-transcripts.pulp-agents-stage.svc:8090" ;;
+  cos-rh) host="http://buzz-agent-cos-rh-transcripts.pulp-agents-stage.svc:8090" ;;
+  *) echo "transcripts-get: unknown slug '$slug' (gm-rh or cos-rh only)" >&2; exit 2 ;;
+esac
+
+# Screen the path as one whole string, anchored, with no ':' and no newline, so a
+# reply cannot smuggle a second URL or a curl directive past the check (a line split
+# used to slip through the old line-oriented grep). A query is only safe characters.
+re='^/(sessions|show|session)(\?[A-Za-z0-9=&_.~-]*)?$|^/healthz$'
+if ! [[ "$path" =~ $re ]]; then
+  echo "transcripts-get: path '$path' is not an allowed transcripts endpoint" >&2; exit 2
+fi
+
+# curl -q ignores ~/.curlrc (a session-written curlrc could otherwise add trace-ascii
+# and capture the bearer); --noproxy '*' ignores any http_proxy so the request cannot
+# be routed through a proxy. The URL is passed as an argument, never in the -K config,
+# so even a crafted path cannot become a second curl directive.
+# /healthz is unauthenticated; every other endpoint sends the per-slug bearer, fed
+# through curl's stdin config so the token never reaches argv or the screen.
+if [ "$path" = "/healthz" ]; then
+  exec curl -q --noproxy '*' -fsS --max-time 20 "$host$path"
+fi
+
+tokfile="/run/secrets/agent/transcripts-token-$slug"
+[ -s "$tokfile" ] || { echo "transcripts-get: no token for $slug at the mounted secret path" >&2; exit 3; }
+printf 'header = "Authorization: Bearer %s"\n' "$(cat "$tokfile")" \
+  | curl -q --noproxy '*' -fsS --max-time 20 -K - "$host$path"

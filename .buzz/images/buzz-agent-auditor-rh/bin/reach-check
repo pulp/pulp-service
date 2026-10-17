@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Independent check that each chief's live respond_to allowlist matches the rule.
+
+On OpenShift a chief's allowlist is the respond_to list in its own agent.yaml, deployed
+from the public pulp-service repo (an approver merges the PR). This check reads those
+LIVE allowlists from a fresh read-only clone of pulp-service, computes the intended
+allowlist for each chief from the reporting-line rule in config/platform.yaml
+(rh/cluster) plus the agents the roster says that chief manages, and prints one FAIL
+line per drift:
+  - a chief whose live allowlist differs from the rule (missing or extra keys),
+  - a chief agent.yaml missing or not using respond_to: allowlist.
+A managed agent is part of the intended set, so it is covered by the same missing/extra
+comparison; there is no separate rule that could contradict it.
+
+The rule logic (members_for) is baked into this image, not loaded from the rh/cluster
+clone, so gm-rh (which can push to rh/cluster) cannot run code inside the auditor.
+config/platform.yaml is read as data; an unapproved change to it is caught separately
+by audit-approvals. The live allowlists come from pulp-service, which gm-rh cannot
+push to, so the two sides of the comparison are both approver gated.
+
+The repo locations are pinned constants, not read from the environment or argv, so a
+compromised session cannot point the check at data it controls and make it pass.
+
+Prints "reach-check: ok" and exits 0 when everything lines up, 1 on any FAIL, 2 when
+the check itself could not run (clone, pull, config, parse).
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+import yaml
+
+# Pinned. Not overridable from the environment or argv: the running agent must not be
+# able to substitute its own repos. Tests load this module and override these globals.
+REPO = "/state/repos/cluster"
+AGENTS_REPO = "/state/repos/agents"
+PULP_SERVICE_REPO = "https://github.com/pulp/pulp-service.git"
+
+GIT_TIMEOUT = 120
+
+
+def die(msg):
+    print(f"reach-check: {msg}", file=sys.stderr)
+    sys.exit(2)
+
+
+def norm(k):
+    return k.strip().lower()
+
+
+def members_for(chief_id, cfg):
+    """Intended keys a chief hears from the reporting-line rule: principals, owner,
+    staff roles, named extras. Baked here, not imported from the rh/cluster clone, so
+    no pushable code runs. Raises KeyError/TypeError on a malformed config, which the
+    caller turns into a setup failure (exit 2)."""
+    chief = cfg["chiefs"][chief_id]
+    roles = cfg.get("roles", {})
+    keys = set()
+    for p in cfg.get("principals", []):
+        keys.add(norm(p["key"]))
+    owner = chief.get("owner")
+    if owner:
+        keys.add(norm(roles[owner]["key"]))
+    for s in chief.get("staff", []) or []:
+        keys.add(norm(roles[s]["key"]))
+    for e in chief.get("extra", []) or []:
+        keys.add(norm(e["key"]))
+    return keys
+
+
+def live_allowlist(agents_dir, chief_id):
+    """(error_or_None, respond_to, set(keys)) from the deployed agent.yaml."""
+    path = os.path.join(agents_dir, chief_id, "agent.yaml")
+    try:
+        with open(path) as f:
+            d = yaml.safe_load(f)
+    except FileNotFoundError:
+        return "agent.yaml not found in pulp-service", None, set()
+    except (OSError, yaml.YAMLError) as e:
+        return f"agent.yaml does not parse ({e})", None, set()
+    if not isinstance(d, dict):
+        return "agent.yaml is not a mapping", None, set()
+    keys = {norm(k) for k in (d.get("allowlist") or []) if isinstance(k, str)}
+    return None, d.get("respond_to"), keys
+
+
+def managed_agents():
+    """Roster entries managed by a chief: (managing_role, slug, key). The roster is an
+    object keyed by slug. Empty if there is no roster."""
+    path = os.path.join(AGENTS_REPO, "staff", "roster.json")
+    try:
+        with open(path) as f:
+            roster = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    out = []
+    if isinstance(roster, dict):
+        for slug, e in roster.items():
+            if isinstance(e, dict) and e.get("managed_by") and e.get("pubkey"):
+                out.append((norm(e["managed_by"]), slug, norm(e["pubkey"])))
+    return out
+
+
+def git(args, **kw):
+    """Run a git command with a timeout. Returns the CompletedProcess; raises
+    TimeoutExpired or CalledProcessError to the caller."""
+    return subprocess.run(["git", *args], timeout=GIT_TIMEOUT,
+                          capture_output=True, text=True, **kw)
+
+
+def pull_or_die(repo):
+    """A fresh pull, or a setup failure. A failed or timed out pull means the data
+    cannot be trusted as current, so the check does not run on stale data."""
+    if not os.path.isdir(os.path.join(repo, ".git")):
+        die(f"no clone at {repo}; the entrypoint should clone it at boot")
+    try:
+        r = git(["-C", repo, "pull", "--ff-only", "--quiet"])
+    except subprocess.TimeoutExpired:
+        die(f"git pull timed out for {repo}; not running on stale data")
+    if r.returncode != 0:
+        die(f"git pull failed for {repo} ({(r.stderr or '').strip()[:200]}); not running on stale data")
+
+
+def checkout_pulp_service():
+    """Return (agents_dir, tmp_to_clean). Clones pulp-service read-only from the pinned
+    public URL, shallow and sparse to the agent definitions only."""
+    tmp = tempfile.mkdtemp()
+    dest = os.path.join(tmp, "ps")
+    try:
+        git(["clone", "--quiet", "--depth", "1", "--filter=blob:none", "--sparse",
+             PULP_SERVICE_REPO, dest], check=True)
+        git(["-C", dest, "sparse-checkout", "set", ".buzz/agents"], check=True)
+    except subprocess.TimeoutExpired:
+        shutil.rmtree(tmp, ignore_errors=True)
+        die("cloning pulp-service timed out")
+    except subprocess.CalledProcessError as e:
+        shutil.rmtree(tmp, ignore_errors=True)
+        die(f"cannot clone pulp-service ({(e.stderr or '').strip()[:200]})")
+    # git() does not raise on non-zero without check=True; verify the checkout landed.
+    adir = os.path.join(dest, ".buzz", "agents")
+    if not os.path.isdir(adir):
+        shutil.rmtree(tmp, ignore_errors=True)
+        die("pulp-service clone has no .buzz/agents")
+    return adir, tmp
+
+
+def main():
+    pull_or_die(REPO)
+    if os.path.isdir(os.path.join(AGENTS_REPO, ".git")):
+        pull_or_die(AGENTS_REPO)
+
+    cfg_path = os.path.join(REPO, "config", "platform.yaml")
+    try:
+        with open(cfg_path) as f:
+            cfg = yaml.safe_load(f)
+    except (OSError, yaml.YAMLError) as e:
+        die(f"cannot read config/platform.yaml ({e})")
+    if not isinstance(cfg, dict) or not isinstance(cfg.get("chiefs"), dict):
+        die("config/platform.yaml has no chiefs mapping")
+
+    managed = managed_agents()
+    agents_dir, tmp = checkout_pulp_service()
+    fails = []
+
+    def fail(msg):
+        fails.append(msg)
+        print(f"FAIL {msg}")
+
+    try:
+        for chief_id in cfg["chiefs"]:
+            try:
+                intended = members_for(chief_id, cfg)
+            except (KeyError, TypeError) as e:
+                die(f"config/platform.yaml is malformed for {chief_id} ({e})")
+            # A managed agent is part of the chief's intended allowlist (reporting-line
+            # rule 4), so fold it in here and let the one missing/extra comparison cover
+            # it. members_for and this agree, so no key is both "missing" and "extra".
+            for role, _slug, key in managed:
+                if role == chief_id:
+                    intended.add(key)
+
+            err, respond_to, live = live_allowlist(agents_dir, chief_id)
+            if err:
+                fail(f"{chief_id}: {err}")
+                continue
+            if respond_to != "allowlist":
+                fail(f"{chief_id}: agent.yaml respond_to is {respond_to!r}, not 'allowlist'")
+                continue
+            missing = intended - live
+            extra = live - intended
+            if missing:
+                fail(f"{chief_id}: live allowlist is missing {sorted(k[:8] for k in missing)} (rule in config/platform.yaml)")
+            if extra:
+                fail(f"{chief_id}: live allowlist has extra {sorted(k[:8] for k in extra)} not in the rule")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    if fails:
+        print(f"reach-check: {len(fails)} problem(s)")
+        return 1
+    print("reach-check: ok")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

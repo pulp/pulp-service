@@ -1,0 +1,57 @@
+#!/bin/bash
+# Does gm-rh go past cos-rh to a working agent? (Brian, 2026-10-13, #gm 89447e8f, yes 440cf8bb)
+#   skip-level-check [--hours N]   (default 24)
+# Working agents: the entries in /state/repos/agents/staff/roster.json whose managed_by is cos-rh,
+# by their pubkey field. Pull that clone before you run this; the daily audit already does.
+# Scans every channel this identity can read for gm-rh events (kind 9) that p-tag a working agent
+# (a mention or --mention notifies it; a pubkey written in the text about an agent does not), and
+# prints one line each:
+#   <time> <channel> <event> agent=<slug> prefix=<ok|MISSING> staff_copy=<ok|MISSING>
+# prefix is ok when the content starts "Skip level ("; staff_copy is ok when gm-rh posted a message
+# starting "Skip level (" in #staff within an hour after it. Every MISSING is a finding; so is a skip
+# level with no line under "Skip level" in gm-rh's next daily status (check that by reading #gm).
+# It also prints "no pubkey: <slug>" for a roster entry without one: that agent cannot be checked.
+# It cannot see DMs or channels this identity is not in; the gm-transcripts read covers those.
+# If it exits non-zero, say so in the report instead of writing that all is clean.
+set -euo pipefail
+hours=24; [ "${1:-}" = "--hours" ] && hours=$2
+GM=6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93
+STAFF=ab32a1ee-7b21-4187-a556-de579d1c6a7a
+# Pinned. Not read from the environment or argv, so the running agent cannot point the
+# check at a roster it controls.
+AGENTS_REPO=/state/repos/agents
+ROSTER="$AGENTS_REPO/staff/roster.json"
+since=$(( $(date +%s) - hours * 3600 ))
+# Any channel that cannot be read leaves a gap, so the check exits non-zero and the
+# report says so rather than claiming a clean scan.
+rc=0
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+[ -f "$ROSTER" ] || { echo "skip-level-check: roster.json not found at $ROSTER; say so in the report" >&2; exit 3; }
+# Pubkeys lowercased here so the p-tag comparison below is case-insensitive (a tag or a
+# roster entry written in mixed case must still match).
+jq -r 'to_entries[] | select(.value.managed_by == "cos-rh") | "\(.key)\t\((.value.pubkey // "") | ascii_downcase)"' "$ROSTER" > "$tmp/roster" \
+  || { echo "skip-level-check: cannot parse roster.json; say so in the report" >&2; exit 3; }
+: > "$tmp/agents"
+while IFS=$'\t' read -r slug pk; do
+  if [ -n "$pk" ] && [ "$pk" != "null" ]; then echo "$pk $slug" >> "$tmp/agents"; else echo "no pubkey: $slug"; fi
+done < "$tmp/roster"
+channels=$(buzz channels list | jq -r '.[].channel_id') || { echo "skip-level-check: cannot list channels; say so in the report" >&2; exit 2; }
+buzz messages get --channel "$STAFF" --since "$since" --limit 1000 \
+  | jq -r --arg gm "$GM" '.[] | select(.pubkey == $gm and (.content | startswith("Skip level ("))) | .created_at' > "$tmp/copies" \
+  || { echo "skip-level-check: cannot read #staff; say so in the report" >&2; exit 2; }
+for ch in $channels; do
+  buzz messages get --channel "$ch" --since "$since" --limit 1000 > "$tmp/m" 2>/dev/null \
+    || { echo "skip-level-check: cannot read channel $ch; say so in the report" >&2; rc=2; continue; }
+  while read -r pk slug; do
+    jq -r --arg gm "$GM" --arg pk "$pk" '.[]
+      | select(.pubkey == $gm and .kind == 9)
+      | select([.tags[]? | select(.[0] == "p") | (.[1] | ascii_downcase)] | index($pk))
+      | "\(.created_at) \(.id) \(.content | startswith("Skip level ("))"' "$tmp/m" \
+    | while read -r t id pre; do
+        copy=MISSING
+        awk -v t="$t" '$1 >= t && $1 <= t + 3600 { f = 1 } END { exit !f }' "$tmp/copies" && copy=ok
+        echo "$(date -u -d "@$t" +%FT%TZ) $ch $id agent=$slug prefix=$([ "$pre" = true ] && echo ok || echo MISSING) staff_copy=$copy"
+      done
+  done < "$tmp/agents"
+done
+exit $rc

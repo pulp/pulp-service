@@ -1,0 +1,43 @@
+# buzz-agent-auditor-rh: the Red Hat auditor image for OpenShift. It is the
+# shared buzz-agent-base plus auditor-rh's tamper-proof half, baked root owned per
+# model C: its bin tools (buzz lives in the base; these are staff-entrypoint, the
+# auditor's own checks skip-level-check, reach-check, approval-check and
+# audit-approvals, the transcripts-get helper that fetches a transcripts endpoint
+# with the bearer token kept off argv, secret-guard, and the restart/alive/prestop
+# helpers), the two pinned approver-list configs the audit-approvals check reads
+# (approval-check-cluster.env for rh/cluster and approval-check-agents.env for
+# rh/agents), and the managed-settings.json that wires the secret-guard hook. Charter,
+# heartbeat.md and mcp.json come from the git definition at .buzz/agents/auditor-rh/,
+# so a charter or heartbeat edit is a push, not an image rebuild. Built by pulp-service
+# CI to ghcr.io/pulp/buzz-agent-auditor-rh.
+#
+# No PENDING_ENV here: audit-approvals reads its two baked approver lists from the
+# hardcoded paths /opt/agent/approval-check-cluster.env and
+# /opt/agent/approval-check-agents.env, root owned and read only, so the running
+# agent (an arbitrary OpenShift UID in group 0) cannot rewrite its own approver
+# lists and the paths are not overridable at runtime.
+#
+# v0.2.5 carries the /run/agent-session memory mount (pulp-service #1592); the base
+# entrypoint empties it at start. Bump the tag and digest below deliberately.
+FROM ghcr.io/pulp/buzz-agent-base:v0.2.5@sha256:8d3f0a38e1c29293827d28f3ed584d8e032bf524f75bc3defe8bc8820b6cfe98
+USER root
+# Tools onto PATH; config into /opt/agent. Root owned so the running agent (an
+# arbitrary OpenShift UID in group 0) cannot rewrite its own tools, approver lists or
+# the secret-guard hook.
+COPY bin/ /usr/local/bin/
+COPY approval-check-cluster.env approval-check-agents.env managed-settings.json /opt/agent/
+RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
+      /usr/local/bin/agent-restart-back /usr/local/bin/agent-restart-floor \
+      /usr/local/bin/agent-restart-stuck /usr/local/bin/staff-entrypoint \
+      /usr/local/bin/skip-level-check /usr/local/bin/reach-check \
+      /usr/local/bin/approval-check /usr/local/bin/audit-approvals \
+      /usr/local/bin/transcripts-get /usr/local/bin/secret-guard \
+ && chmod 0644 /opt/agent/approval-check-cluster.env /opt/agent/approval-check-agents.env \
+      /opt/agent/managed-settings.json \
+ && chmod -R go-w /opt/agent \
+ # Claude Code loads enterprise-managed settings from this path; root owned and read
+ # only so the session cannot disable its own secret-guard hook.
+ && install -D -m 644 -o root -g root /opt/agent/managed-settings.json /etc/claude-code/managed-settings.json
+USER 1000
+WORKDIR /home/agent
+ENTRYPOINT ["/usr/local/bin/staff-entrypoint"]

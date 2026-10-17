@@ -1,0 +1,24 @@
+# auditor-rh, the Red Hat auditor, as an always on Buzz agent on OpenShift.
+# Staged in rh/cluster for Brian's Claude to copy into pulp/pulp-service at
+# .buzz/agents/auditor-rh/. Keys never live here: nsec and auth-tag come from
+# Vault as the Secret agent-auditor-rh. owner is gm-rh, the key that signed the
+# auth tag and owns the identity; the auditor still answers only to the two
+# approvers below and takes instructions from no one else (not gm-rh, not
+# cos-rh, the two it audits).
+display_name: Auditor
+description: Auditor of the Red Hat agents platform; reads gm-rh and cos-rh and reports to Brian
+owner: gm-rh
+owner_pubkey: 6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93   # the key that signed its auth tag
+parallelism: 1
+session_policy: thread
+effort: medium
+relay: wss://buzz-rh.bouterse.casa
+# The daily audit arms off the hourly heartbeat (heartbeat.md decides once per day
+# whether to run). Without an interval the heartbeat never fires and the audit never
+# runs; gm-rh and cos-rh use the same 3600.
+heartbeat_interval: 3600
+respond_to: allowlist
+allowlist:
+  - 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian
+  - e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4   # Brian's Claude
+channels: []   # #audit membership is managed on the relay, not joined from here
