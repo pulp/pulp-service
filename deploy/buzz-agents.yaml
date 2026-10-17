@@ -62,7 +62,9 @@ parameters:
 - name: GITEA_SECRET_KEY
   value: token
 - name: VERTEX_PROJECT
-  value: hosted-pulp   # the project that owns the agents' service account and serves Claude
+  # The project that owns the agents' service account and serves Claude. Moved off
+  # hosted-pulp, which returned "model not found" on about 15% of calls (2026-10-16).
+  value: lightwell-devel
 - name: VERTEX_REGION
   value: global
 - name: CLAUDE_MODEL
@@ -84,8 +86,9 @@ parameters:
   # Defaulted (Brian's Claude, 2026-10-15) so the live Echo target keeps rendering
   # whichever order the SaaS edit and this template land in. Build buzz-transcripts
   # at this tag before the template merges so the sidecar image resolves; audited
-  # targets (cos-rh, gm-rh) override with their own pinned tag.
-  value: v0.1.0
+  # targets (cos-rh, gm-rh) override with their own pinned tag. v0.1.1 exits on
+  # SIGTERM instead of holding the pod for its whole grace period.
+  value: v0.1.1
 # Transcripts auth fails closed. With no transcripts-token key (Echo today) the
 # sidecar answers 503 to everything but /healthz, so the pod stays ready and serves
 # nothing. Once the key is written, dropping it later cannot silently turn auth off.
