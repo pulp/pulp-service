@@ -1,0 +1,207 @@
+# Rendered from deploy/buzz-agents.yaml by gm-rh. Do not edit by hand;
+# change the template or the per-agent values and re-render.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buzz-agent-pulpbot
+  labels:
+    app: buzz-agent
+    agent: pulpbot
+  annotations:
+    qontract.recycle: 'true'
+spec:
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: buzz-agent
+      agent: pulpbot
+  template:
+    metadata:
+      labels:
+        app: buzz-agent
+        agent: pulpbot
+    spec:
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 300
+      containers:
+      - name: agent
+        image: ghcr.io/pulp/buzz-agent-base:v0.1.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        env:
+        - name: AGENT_SLUG
+          value: pulpbot
+        - name: AGENT_REVISION
+          value: v0.1.0
+        - name: AGENT_DEFINITION_REPO
+          value: https://github.com/pulp/pulp-service.git
+        - name: AGENT_DEFINITION_REF
+          value: main
+        - name: AGENT_STATE_DIR
+          value: /state
+        - name: HOME
+          value: /home/agent
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: CLAUDE_CODE_USE_VERTEX
+          value: '1'
+        - name: CLOUD_ML_REGION
+          value: global
+        - name: ANTHROPIC_VERTEX_PROJECT_ID
+          value: lightwell-devel
+        - name: GOOGLE_CLOUD_QUOTA_PROJECT
+          value: lightwell-devel
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /run/secrets/vertex/application_default_credentials.json
+        - name: ANTHROPIC_MODEL
+          value: claude-opus-4-8
+        - name: ANTHROPIC_DEFAULT_OPUS_MODEL
+          value: claude-opus-4-8
+        - name: ANTHROPIC_DEFAULT_SONNET_MODEL
+          value: claude-opus-4-8
+        - name: ANTHROPIC_DEFAULT_HAIKU_MODEL
+          value: claude-opus-4-8
+        - name: HTTP_PROXY
+          value: ''
+        - name: HTTPS_PROXY
+          value: ''
+        - name: NO_PROXY
+          value: localhost,127.0.0.1,.svc,.cluster.local,10.128.0.0/14,172.30.0.0/16
+        - name: http_proxy
+          value: ''
+        - name: https_proxy
+          value: ''
+        - name: no_proxy
+          value: localhost,127.0.0.1,.svc,.cluster.local,10.128.0.0/14,172.30.0.0/16
+        - name: DISABLE_TELEMETRY
+          value: '1'
+        - name: GITEA_TOKEN_FILE
+          value: /run/secrets/gitea/token
+        - name: AGENT_PUBKEY
+          value: ''
+        - name: STAFF_CHANNEL
+          value: ''
+        - name: PRESTOP
+          value: ''
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - '[ -n "$PRESTOP" ] && exec /usr/local/bin/agent-prestop || true'
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+        volumeMounts:
+        - name: state
+          mountPath: /state
+        - name: home
+          mountPath: /home/agent
+        - name: session
+          mountPath: /run/agent-session
+        - name: agent-secret
+          mountPath: /run/secrets/agent
+          readOnly: true
+        - name: vertex
+          mountPath: /run/secrets/vertex
+          readOnly: true
+        - name: gitea-token
+          mountPath: /run/secrets/gitea
+          readOnly: true
+      - name: transcripts
+        image: ghcr.io/pulp/buzz-transcripts:v0.1.1
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - name: transcripts
+          containerPort: 8090
+        env:
+        - name: TRANSCRIPTS_ROOT
+          value: /state
+        - name: TRANSCRIPTS_TOKEN_FILE
+          value: /run/secrets/agent/transcripts-token
+        - name: TRANSCRIPTS_REQUIRE_TOKEN
+          value: 'true'
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64Mi
+          limits:
+            cpu: 20m
+            memory: 128Mi
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: state
+          mountPath: /state/rh
+          readOnly: true
+        - name: agent-secret
+          mountPath: /run/secrets/agent
+          readOnly: true
+        - name: vertex
+          mountPath: /run/secrets/vertex
+          readOnly: true
+        - name: gitea-token
+          mountPath: /run/secrets/gitea
+          readOnly: true
+        - name: no-sa-token
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          readOnly: true
+      volumes:
+      - name: no-sa-token
+        emptyDir: {}
+      - name: state
+        persistentVolumeClaim:
+          claimName: buzz-agent-pulpbot-state
+      - name: home
+        emptyDir: {}
+      - name: session
+        emptyDir:
+          medium: Memory
+          sizeLimit: 16Mi
+      - name: agent-secret
+        secret:
+          secretName: agent-pulpbot
+          defaultMode: 0440
+      - name: vertex
+        secret:
+          secretName: vertex-ai
+          defaultMode: 0440
+      - name: gitea-token
+        secret:
+          secretName: gitea-none
+          optional: true
+          defaultMode: 0440
+          items:
+          - key: token
+            path: token

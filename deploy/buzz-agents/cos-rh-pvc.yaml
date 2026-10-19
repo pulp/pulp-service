@@ -1,0 +1,15 @@
+# Rendered from deploy/buzz-agents.yaml by gm-rh. Do not edit by hand;
+# change the template or the per-agent values and re-render.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: buzz-agent-cos-rh-state
+  labels:
+    app: buzz-agent
+    agent: cos-rh
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

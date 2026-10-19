@@ -1,0 +1,18 @@
+# Rendered from deploy/buzz-agents.yaml by gm-rh. Do not edit by hand;
+# change the template or the per-agent values and re-render.
+apiVersion: v1
+kind: Service
+metadata:
+  name: buzz-agent-echo-transcripts
+  labels:
+    app: buzz-agent
+    agent: echo
+spec:
+  selector:
+    app: buzz-agent
+    agent: echo
+  ports:
+  - name: transcripts
+    protocol: TCP
+    port: 8090
+    targetPort: 8090
