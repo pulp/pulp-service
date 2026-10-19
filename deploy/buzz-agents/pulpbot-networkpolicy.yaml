@@ -1,0 +1,25 @@
+# Rendered from deploy/buzz-agents.yaml by gm-rh. Do not edit by hand;
+# change the template or the per-agent values and re-render.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: buzz-agent-pulpbot-transcripts
+  labels:
+    app: buzz-agent
+    agent: pulpbot
+spec:
+  podSelector:
+    matchLabels:
+      app: buzz-agent
+      agent: pulpbot
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: buzz-agent
+          agent: auditor-rh
+    ports:
+    - protocol: TCP
+      port: 8090
