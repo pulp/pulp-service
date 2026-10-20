@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: agent
-        image: ghcr.io/pulp/buzz-agent-pulpbot:v0.1.7
+        image: ghcr.io/pulp/buzz-agent-pulpbot:v0.1.8
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -43,7 +43,7 @@ spec:
         - name: AGENT_SLUG
           value: pulpbot
         - name: AGENT_REVISION
-          value: v0.1.7
+          value: v0.1.8
         - name: AGENT_DEFINITION_REPO
           value: https://github.com/pulp/pulp-service.git
         - name: AGENT_DEFINITION_REF
