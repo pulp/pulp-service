@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+# jira-selftest: start the Jira MCP (via the jira-mcp wrapper, so it uses the mounted
+# atlassian-token and JIRA_USERNAME exactly as a real session does) and run ONE real
+# JQL search against Jira through those creds. This is the real-search half of the
+# smoke test: a build only proves the server imports and starts (no Vault creds exist
+# at build time), so the live search can only be exercised in the pod, where the agent
+# secret is mounted. pulpbot-entrypoint runs this once at start, non-fatal and logged,
+# so every pod start proves Jira is actually reachable and the search endpoint works,
+# rather than discovering a broken MCP the first time someone asks for an issue.
+#
+# It drives the stdio MCP server with newline-delimited JSON-RPC 2.0 using only the
+# stdlib, so it needs nothing from the mcp-atlassian venv. It never prints a secret:
+# jira-mcp reads the token files itself, and this script only ever sees the search
+# result. Exit 0 PASS, 2 FAIL (reached Jira but the search did not succeed), 3 SKIP
+# (creds not mounted). The caller treats any non-zero as "Jira unverified" and logs it.
+import json
+import os
+import select
+import subprocess
+import sys
+
+TIMEOUT = 60  # whole exchange budget, seconds; a hung server must not wedge boot
+JQL = "ORDER BY created DESC"  # cheapest valid query: no project assumed, newest first
+
+
+def log(msg):
+    print(f"jira-selftest: {msg}", file=sys.stderr, flush=True)
+
+
+def fail(code, msg):
+    log(msg)
+    sys.exit(code)
+
+
+def main():
+    sec = os.environ.get("AGENT_SECRET_DIR", "/run/secrets/agent")
+    # jira-mcp exits 3 when a cred file is missing; check here too so a missing token
+    # reads as SKIP (expected when Jira is not provisioned) rather than a scary FAIL.
+    for name in ("atlassian-token", "JIRA_USERNAME"):
+        p = os.path.join(sec, name)
+        if not (os.path.isfile(p) and os.path.getsize(p) > 0):
+            fail(3, f"{name} not mounted; skipping Jira self-test")
+
+    proc = subprocess.Popen(
+        ["/usr/local/bin/jira-mcp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=sys.stderr,
+        text=True,
+        bufsize=1,
+    )
+
+    next_id = [0]
+
+    def send(method, params=None, notify=False):
+        msg = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            msg["params"] = params
+        if not notify:
+            next_id[0] += 1
+            msg["id"] = next_id[0]
+        proc.stdin.write(json.dumps(msg) + "\n")
+        proc.stdin.flush()
+        return None if notify else next_id[0]
+
+    def read_reply(want_id):
+        # read newline-delimited JSON until we see the response for want_id, honouring
+        # the overall timeout and ignoring unrelated notifications the server emits.
+        import time
+
+        deadline = time.monotonic() + TIMEOUT
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                fail(2, "timed out waiting for the MCP server to reply")
+            r, _, _ = select.select([proc.stdout], [], [], remaining)
+            if not r:
+                fail(2, "timed out waiting for the MCP server to reply")
+            line = proc.stdout.readline()
+            if line == "":
+                fail(2, "MCP server closed stdout before replying (see its log above)")
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # server log noise on stdout, skip it
+            if obj.get("id") == want_id:
+                return obj
+
+    try:
+        rid = send(
+            "initialize",
+            {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "jira-selftest", "version": "1"},
+            },
+        )
+        init = read_reply(rid)
+        if "error" in init:
+            fail(2, f"initialize failed: {init['error']}")
+        send("notifications/initialized", {}, notify=True)
+
+        # discover the Jira search tool rather than hard-coding its name, so a future
+        # mcp-atlassian rename does not silently break the self-test.
+        rid = send("tools/list")
+        tools = read_reply(rid)
+        names = [t.get("name", "") for t in tools.get("result", {}).get("tools", [])]
+        search_tool = next(
+            (n for n in names if "search" in n.lower() and "jira" in n.lower()), None
+        )
+        if not search_tool:
+            search_tool = "jira_search" if "jira_search" in names else None
+        if not search_tool:
+            fail(2, f"no Jira search tool registered; tools seen: {names}")
+
+        rid = send(
+            "tools/call",
+            {"name": search_tool, "arguments": {"jql": JQL, "limit": 1}},
+        )
+        resp = read_reply(rid)
+    finally:
+        try:
+            proc.stdin.close()
+        except Exception:
+            pass
+        try:
+            proc.terminate()
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
+
+    if "error" in resp:
+        fail(2, f"search call returned a protocol error: {resp['error']}")
+    result = resp.get("result", {})
+    if result.get("isError"):
+        text = ""
+        for c in result.get("content", []):
+            if c.get("type") == "text":
+                text += c.get("text", "")
+        fail(2, f"search tool reported an error: {text[:300]}")
+
+    # pull the text payload the search tool returned and sanity-check it. the exact bug
+    # we are guarding against (legacy /rest/api/2/search, removed by Atlassian) surfaced
+    # as total == -1; treat that, or an unparseable/empty body, as a failure.
+    text = ""
+    for c in result.get("content", []):
+        if c.get("type") == "text":
+            text += c.get("text", "")
+    if not text.strip():
+        fail(2, "search returned an empty body")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        fail(2, f"search body was not JSON: {text[:200]}")
+
+    total = data.get("total")
+    issues = data.get("issues")
+    if total == -1:
+        fail(2, "search returned total=-1 (legacy /search endpoint; version too old)")
+    count = len(issues) if isinstance(issues, list) else (total if isinstance(total, int) else "?")
+    log(f"PASS: {search_tool} returned a real result (issues={count}) via {JQL!r}")
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as e:  # never let an unexpected error wedge the entrypoint
+        log(f"unexpected error: {e!r}")
+        sys.exit(2)

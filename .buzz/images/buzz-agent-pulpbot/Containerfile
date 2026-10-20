@@ -91,13 +91,22 @@ RUN apk add --no-cache gcompat tar \
  # dummy Jira env gets it past servers import (the crash site) without a live call.
  && JIRA_URL=https://example.atlassian.net JIRA_API_TOKEN=smoke \
       JIRA_USERNAME=smoke@example.com ENABLED_TOOLS_CONFLUENCE="" \
-      timeout 30 mcp-atlassian --transport stdio </dev/null
+      timeout 30 mcp-atlassian --transport stdio </dev/null \
+ # Assert the installed Cloud search really uses the v3 /rest/api/3/search/jql endpoint,
+ # so a version predating #769 (which called the removed legacy /rest/api/2/search and
+ # reported total=-1) cannot pass the build even though it imports and starts. A real
+ # search needs live creds, which exist only in the pod, so that half runs at start via
+ # jira-selftest; this is the strongest check possible without creds at build time.
+ && search_py="$(find /opt/uv-tools -path '*/mcp_atlassian/jira/search.py' | head -1)" \
+ && test -n "$search_py" \
+ && grep -q 'rest/api/3/search/jql' "$search_py"
 
 # PulpBot's baked tools onto PATH, root owned. buzz lives in the base; these are the
 # entrypoint shim, the DM poll helper, the OpenShift login wrapper, the AWS credential
 # parser, the GABI query wrapper, the per thread worktree tool, the Jira MCP wrapper, the
-# Pulp API wrapper (reads the TBR netrc, host pinned to packages.redhat.com) and the
-# secret-guard hook. managed-settings.json wires secret-guard into Claude Code.
+# Jira self-test (one real search at pod start), the Pulp API wrapper (reads the TBR
+# netrc, host pinned to packages.redhat.com) and the secret-guard hook.
+# managed-settings.json wires secret-guard into Claude Code.
 # gitlab.cee.redhat.com and other Red Hat internal hosts serve a chain under Red
 # Hat IT's Internal Root CA, which the base trust store lacks. Add it to the system
 # store, and point Python and Node clients at that store too.
@@ -111,8 +120,8 @@ COPY bin/ /usr/local/bin/
 COPY managed-settings.json /opt/agent/
 RUN chmod 0755 /usr/local/bin/pulpbot-entrypoint /usr/local/bin/dm-watch \
       /usr/local/bin/oc-login /usr/local/bin/aws-creds /usr/local/bin/gabi-query \
-      /usr/local/bin/pulpbot-wt /usr/local/bin/jira-mcp /usr/local/bin/pulp-api \
-      /usr/local/bin/secret-guard \
+      /usr/local/bin/pulpbot-wt /usr/local/bin/jira-mcp /usr/local/bin/jira-selftest \
+      /usr/local/bin/pulp-api /usr/local/bin/secret-guard \
  && chmod 0644 /opt/agent/managed-settings.json \
  && chmod -R go-w /opt/agent \
  # Claude Code loads enterprise-managed settings from this path; root owned and read
