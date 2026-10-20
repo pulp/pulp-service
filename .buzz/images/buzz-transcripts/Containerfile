@@ -4,5 +4,5 @@ FROM docker.io/library/python:3.13-alpine3.22@sha256:7f7ee17311e0273954ffe76a7b8
 COPY transcripts_server.py /usr/local/bin/transcripts-server
 RUN chmod 755 /usr/local/bin/transcripts-server
 USER 1000:1000
-EXPOSE 8090
+EXPOSE 8090 8091
 ENTRYPOINT ["/usr/local/bin/transcripts-server"]
