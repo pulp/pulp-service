@@ -14,15 +14,23 @@
 # packages.redhat.com with a leading slash, e.g.
 #   pulp-api GET /api/pulp/default/api/v3/status/
 # Everything after PATH is passed to curl, but screened by an allowlist first: only a
-# few read-only flags are accepted (-s, -S, -f, -o <file>, -w <format>, -H with an
-# Accept header), and everything else that starts with a dash, plus any stray token
-# such as a second URL, is rejected. An allowlist is used, not a denylist, so a new
-# curl flag that could dump the credential, redirect it, override auth, or weaken TLS
-# cannot slip through by being unlisted.
+# few read-only flags are accepted (-s, -S, -f, and -H with an Accept header), and
+# everything else that starts with a dash, plus any stray token such as a second URL,
+# is rejected. An allowlist is used, not a denylist, so a new curl flag that could dump
+# the credential, redirect it, override auth, or weaken TLS cannot slip through by being
+# unlisted. In particular neither -o nor -w is accepted: curl reads a -w value that
+# starts with @ from a file (@- from stdin), which would turn this credential-holding
+# wrapper into an arbitrary file-read, and -o could clobber an arbitrary file. The
+# script supplies the status line itself (a baked -w below), so no caller-supplied
+# format or output path ever reaches curl.
+#
+# The response body goes to stdout (so it pipes cleanly to jq); the HTTP status is
+# printed to stderr as "pulp-api: HTTP <code>" after the body, from a fixed baked
+# format, so a caller can see the status without it corrupting the body stream.
 #
 # Examples:
 #   pulp-api GET /api/pulp/default/api/v3/status/ | jq '.online_workers | length'
-#   pulp-api HEAD /pulp/content/ -o /dev/null -w '%{http_code}\n'
+#   pulp-api HEAD /pulp/content/        # headers on stdout, status on stderr
 set -euo pipefail
 
 # The host is a literal here, never ${VAR:-...} and never from an argument, so the
@@ -65,11 +73,12 @@ esac
 
 # Screen the extra curl args with an allowlist before any call runs. Only these flags
 # are accepted; everything else that starts with a dash, and any stray token (a second
-# URL, a value with no flag), is refused. Value-taking flags consume the next token:
-# -o/--output (output file), -w/--write-out (format string), -H/--header (an Accept
-# header only). Boolean flags carry no value: -s, -S, -f, their long forms, and bundles
-# of those short forms (-sS, -sSf). An allowlist, not a denylist: a new leak/redirect/
-# TLS-weakening flag cannot slip through unlisted (a denylist missed -X).
+# URL, a value with no flag), is refused. The only value-taking flag is -H/--header,
+# which must carry an Accept header. Boolean flags carry no value: -s, -S, -f, their
+# long forms, and bundles of those short forms (-sS, -sSf). -o and -w are deliberately
+# NOT accepted (see the header comment): the script bakes the output path and the status
+# format itself, so no caller-supplied path or format reaches curl. An allowlist, not a
+# denylist: a new leak/redirect/TLS-weakening flag cannot slip through unlisted.
 want=""   # when set, the next token is the value for this flag
 for arg in "$@"; do
   if [ -n "$want" ]; then
@@ -84,17 +93,14 @@ for arg in "$@"; do
   case $arg in
     -s|-S|-f|--silent|--show-error|--fail) ;;
     -[sSf][sSf]|-[sSf][sSf][sSf]) ;;        # bundled booleans, e.g. -sS, -sSf
-    -o|--output)    want=output ;;
-    -w|--write-out) want=writeout ;;
     -H|--header)    want=header ;;
-    --output=*|--write-out=*) ;;
     --header=[Aa]ccept:*) ;;
     --header=*)
       echo "pulp-api: refusing header '$arg' (only an Accept header is allowed)" >&2; exit 2 ;;
     http://*|https://*)
       echo "pulp-api: refusing extra URL $arg" >&2; exit 2 ;;
     *)
-      echo "pulp-api: refusing arg '$arg' (allowed: -s -S -f, -o <file>, -w <format>, -H 'Accept: ...')" >&2; exit 2 ;;
+      echo "pulp-api: refusing arg '$arg' (allowed: -s -S -f, -H 'Accept: ...'; -o and -w are not accepted)" >&2; exit 2 ;;
   esac
 done
 [ -z "$want" ] || { echo "pulp-api: $want flag given with no value" >&2; exit 2; }
@@ -105,6 +111,10 @@ if [ "$method" = HEAD ]; then req=(-I); else req=(); fi
 
 # -q makes curl skip ~/.curlrc (which a session could write to log or redirect the
 # request). The credential reaches curl only through --netrc-file, so its value never
-# appears on a command line where another process could read it.
+# appears on a command line where another process could read it. The -w format is a
+# fixed literal here, never from a caller: %{stderr} routes it to stderr (so the body on
+# stdout stays clean for jq), and it prints the HTTP status after the body. Because -w is
+# not in the allowlist above, a caller cannot supply its own format.
 exec curl -q -sS --connect-timeout 15 --cacert "$cafile" --netrc-file "$netrc" \
+  -w '%{stderr}pulp-api: HTTP %{http_code}\n' \
   "${req[@]}" "$base$path" "$@"
