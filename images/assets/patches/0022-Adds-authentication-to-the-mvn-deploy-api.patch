@@ -1,40 +1,25 @@
-From 6aa08023114dd69f35eff9f9adeee5d14342c21d Mon Sep 17 00:00:00 2001
+From 1a489c14b28cf383b0f811c4bbe2cf989f29be5b Mon Sep 17 00:00:00 2001
 From: Dennis Kliban <dkliban@redhat.com>
 Date: Fri, 4 Apr 2025 14:33:08 -0400
 Subject: [PATCH] Adds authentication to the mvn deploy api.
 
 Also re-roots the mvn deploy API to match console.redhat.com deployment
 ---
- pulp_maven/app/maven_deploy_api.py | 4 ----
- pulp_maven/app/urls.py             | 2 +-
- 2 files changed, 1 insertion(+), 5 deletions(-)
+ pulp_maven/app/urls.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/pulp_maven/app/maven_deploy_api.py b/pulp_maven/app/maven_deploy_api.py
-index ffa9b46..c32581b 100644
---- a/pulp_maven/app/maven_deploy_api.py
-+++ b/pulp_maven/app/maven_deploy_api.py
-@@ -73,10 +73,6 @@ class MavenApiViewSet(APIView):
- 
-     lookup_field = "name"
- 
--    # Authentication disabled for now
--    authentication_classes = []
--    permission_classes = []
--
-     def redirect_to_content_app(self, distribution, relative_path, request):
-         scheme = request.META.get("HTTP_X_FORWARDED_PROTO", request.scheme)
-         hostname = request.META.get("HTTP_X_FORWARDED_HOST", request.get_host())
 diff --git a/pulp_maven/app/urls.py b/pulp_maven/app/urls.py
-index e3da821..5c6750b 100644
+index f7853bb..345f7c3 100644
 --- a/pulp_maven/app/urls.py
 +++ b/pulp_maven/app/urls.py
-@@ -8,5 +8,5 @@ else:
-     path_re = r"(?P<name>[\w-]+)/(?P<path>.*)"
+@@ -10,6 +10,6 @@ else:
  
  urlpatterns = [
--    re_path(rf"^pulp/maven/{path_re}$", MavenApiViewSet.as_view()),
-+    re_path(rf"^api/pulp/maven/{path_re}$", MavenApiViewSet.as_view()),
+     re_path(
+-        rf"^pulp/maven/{path_re}$", MavenApiViewSet.as_view({"get": "retrieve", "put": "create"})
++        rf"^api/pulp/maven/{path_re}$", MavenApiViewSet.as_view({"get": "retrieve", "put": "create"})
+     ),
  ]
 -- 
-2.49.0
+2.55.0
 
