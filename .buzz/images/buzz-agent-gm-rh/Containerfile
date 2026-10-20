@@ -1,9 +1,10 @@
 # buzz-agent-gm-rh: the Red Hat GM image for OpenShift. It is the shared
 # buzz-agent-base plus gm-rh's tamper-proof half, baked root owned per model C: its
-# bin tools (buzz lives in the base; these are the gm tools gitea-api, gm-approvals,
-# gm-backtick-scan, gm-daily, gm-goals, gm-pending, gm-post, gm-status, pin-digest,
-# secret-guard, the gm-entrypoint, the sourceable agent-runtime-env, and the
-# restart/alive/prestop helpers), the baked approver list and goal files
+# bin tools (buzz lives in the base; these are the gm tools gitea-api, github-api,
+# gm-approvals, gm-backtick-scan, gm-daily, gm-goals, gm-pending, gm-post, gm-status,
+# pin-digest, secret-guard, the gm-entrypoint, the sourceable agent-runtime-env, and
+# the restart/alive/prestop helpers), glab (the GitLab CLI, installed below), the
+# baked approver list and goal files
 # (approval-check.env, goals.md, goal-checks), the boot resume prompt, and the
 # managed-settings.json that wires the secret-guard hook. Charter, heartbeat.md,
 # skills and mcp.json come from the git definition at .buzz/agents/gm-rh/, so a
@@ -20,6 +21,20 @@
 # Bump the tag and digest below deliberately (same rule as the base).
 FROM ghcr.io/pulp/buzz-agent-base:v0.2.5@sha256:8d3f0a38e1c29293827d28f3ed584d8e032bf524f75bc3defe8bc8820b6cfe98
 USER root
+# glab (GitLab CLI) for app-interface MRs and /lgtm as alcove-bot, pinned to a release
+# and verified against its published checksum. Fetched at build time (the build host
+# has egress); the static linux amd64 binary runs on this Alpine base. To bump, change
+# both ARGs together from the release's checksums.txt.
+ARG GLAB_VERSION=1.123.0
+ARG GLAB_SHA256=9c9ac4c2b74ec8709dec4819a4041050f3680c6aaa18f0ed30434081f4fe9bef
+RUN set -eux; \
+      url="https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/packages/generic/glab/${GLAB_VERSION}/glab_${GLAB_VERSION}_linux_amd64.tar.gz"; \
+      curl -sSL -o /tmp/glab.tgz "$url"; \
+      echo "${GLAB_SHA256}  /tmp/glab.tgz" | sha256sum -c -; \
+      tar -xzf /tmp/glab.tgz -C /tmp bin/glab; \
+      install -m 0755 /tmp/bin/glab /usr/local/bin/glab; \
+      rm -rf /tmp/glab.tgz /tmp/bin; \
+      glab --version
 # Tools onto PATH; config into /opt/agent. Root owned so the running agent (an
 # arbitrary OpenShift UID in group 0) cannot rewrite its own approver list, goals,
 # or the secret-guard hook. agent-runtime-env is sourced, not executed, so it stays
@@ -33,8 +48,8 @@ ENV PENDING_ENV=/opt/agent/approval-check.env
 RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
       /usr/local/bin/agent-restart-back /usr/local/bin/agent-restart-floor \
       /usr/local/bin/agent-restart-stuck /usr/local/bin/boot-resume \
-      /usr/local/bin/gitea-api /usr/local/bin/gm-approvals \
-      /usr/local/bin/gm-backtick-scan /usr/local/bin/gm-daily /usr/local/bin/gm-entrypoint /usr/local/bin/gm-state-restore \
+      /usr/local/bin/gitea-api /usr/local/bin/github-api /usr/local/bin/gm-approvals \
+      /usr/local/bin/gm-backtick-scan /usr/local/bin/gm-daily /usr/local/bin/gm-entrypoint \
       /usr/local/bin/gm-goals /usr/local/bin/gm-pending /usr/local/bin/gm-post \
       /usr/local/bin/gm-status /usr/local/bin/pin-digest /usr/local/bin/secret-guard \
  && chmod 0644 /opt/agent/approval-check.env /opt/agent/boot-resume.md /opt/agent/goals.md \

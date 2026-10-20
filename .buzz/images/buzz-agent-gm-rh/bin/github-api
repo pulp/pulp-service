@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# github-api: an authenticated call to GitHub as hosted-pulp-bot, with the token read
+# here, never by the session (secret-guard blocks a session that reads the secret
+# mount itself). The charter rule it serves: read a secret file only to hand it to the
+# tool that needs it. This file is that tool. It is how gm-rh opens and merges
+# pulp-service PRs once the enabling image is live.
+#
+#   github-api <METHOD> <PATH> [extra curl args...]
+#
+# PATH is an api.github.com path with a leading slash (e.g.
+# /repos/pulp/pulp-service/pulls). The token from GITHUB_TOKEN_FILE is sent as
+# `Authorization: Bearer`. Everything after PATH is passed to curl, so a request body
+# comes through curl's own args (--data @file or -d '...'), never stdin, since stdin
+# carries the credential config. Extra args are screened first: -v/--verbose/--trace*/
+# --url/-K/--config/--netrc are rejected, since they would dump the Authorization
+# header, send the token to another host, or read curl options from a file.
+#
+# Examples:
+#   github-api GET /repos/pulp/pulp-service/pulls?state=open | jq -r '.[].number'
+#   github-api POST /repos/pulp/pulp-service/pulls --data @/tmp/pr.json
+#   github-api PUT  /repos/pulp/pulp-service/pulls/1610/merge -d '{"merge_method":"merge"}'
+set -euo pipefail
+# The host is fixed here, not taken from the environment, so the token can only ever
+# go to GitHub.
+base=https://api.github.com
+tokfile=${GITHUB_TOKEN_FILE:-/run/secrets/github/token}
+[ -s "$tokfile" ] || { echo "github-api: no token at $tokfile" >&2; exit 2; }
+[ $# -ge 2 ] || { echo "usage: github-api <METHOD> <PATH> [curl args...]" >&2; exit 2; }
+method=$1 path=$2; shift 2
+# Screen the extra curl args before any call runs: these would leak the token (print
+# the Authorization header) or redirect it to another host or a config file.
+for arg in "$@"; do
+  case $arg in
+    --verbose|--trace|--trace-*|--trace=*|--url|--url=*|--config|--config=*|--libcurl*|--netrc*)
+      echo "github-api: refusing curl arg $arg" >&2; exit 2 ;;
+    --*) ;;
+    # Short options can be bundled (-sv, -Kfile): refuse any containing v or K.
+    -*v*|-*K*)
+      echo "github-api: refusing curl arg $arg" >&2; exit 2 ;;
+  esac
+done
+case $path in
+  /*) url="$base$path" ;;
+  *)  url="$base/$path" ;;
+esac
+# Credentials and the fixed headers reach curl through a config on stdin, never its
+# argument list, where any process in the pod could read them.
+auth() { printf '%s = "%s"\n' "$1" "$2"; }
+{ auth header "Authorization: Bearer $(cat "$tokfile")"
+  auth header "Accept: application/vnd.github+json"
+  auth header "X-GitHub-Api-Version: 2022-11-28"
+  auth header "User-Agent: gm-rh"
+} | exec curl -sS -K - -X "$method" "$url" "$@"
