@@ -60,6 +60,16 @@ hosts:
 GLAB
   )
 fi
+# Vault AppRole login (pulp-buzz-agents-gm-rh) so the session can read and write the agent
+# secrets under app-interface/pulp/stage/agents/* on vault.devshift.net without ever
+# reading the mounted role_id/secret_id itself. Same pattern as the credentials above:
+# gm-vault-login reads the ids here and writes only the resulting token to the vault CLI's
+# token helper ($HOME/.vault-token); the session re-runs gm-vault-login to refresh the
+# 30-min AppRole token. VAULT_ADDR is exported (not a secret) so `vault` just works for
+# the session. Optional and non-fatal: an absent id file (the mount is optional: true) or
+# a login failure only skips it, so the pod still boots before the secret lands.
+export VAULT_ADDR=${VAULT_ADDR:-https://vault.devshift.net}
+/usr/local/bin/gm-vault-login || echo "gm-entrypoint: vault approle login skipped/failed (non-fatal)" >&2
 # First-boot state restore (see gm-state-restore): lay goals-state and the workspace
 # down from the state repo before boot-resume or the heartbeat read them. Marker
 # gated, fill-only and non-fatal, and it needs the git credentials written just above,

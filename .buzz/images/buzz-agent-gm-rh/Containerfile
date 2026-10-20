@@ -35,6 +35,23 @@ RUN set -eux; \
       install -m 0755 /tmp/bin/glab /usr/local/bin/glab; \
       rm -rf /tmp/glab.tgz /tmp/bin; \
       glab --version
+# vault (HashiCorp CLI) for the AppRole login at boot and for the session's token lookup,
+# KV metadata/version reads and token placements on vault.devshift.net, pinned to a
+# release and verified against its published SHA256SUMS. Fetched at build time (the build
+# host has egress); the static linux amd64 binary runs on this Alpine base. To bump,
+# change both ARGs together from that release's vault_<version>_SHA256SUMS. Pinned to
+# match the vault.devshift.net server version (1.19.5) to avoid CLI/server skew.
+ARG VAULT_VERSION=1.19.5
+ARG VAULT_SHA256=5192111920b3f745c10f8fea9988c46b91414a69bcf49df1f7c87880d80a3755
+RUN set -eux; \
+      apk add --no-cache unzip; \
+      url="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip"; \
+      curl -sSL -o /tmp/vault.zip "$url"; \
+      echo "${VAULT_SHA256}  /tmp/vault.zip" | sha256sum -c -; \
+      unzip -o /tmp/vault.zip vault -d /tmp; \
+      install -m 0755 /tmp/vault /usr/local/bin/vault; \
+      rm -rf /tmp/vault.zip /tmp/vault; \
+      vault version
 # gitlab.cee.redhat.com serves a chain under Red Hat IT's Internal Root CA, which the
 # base trust store lacks, so git push and glab to the app-interface fork fail on TLS
 # without it. Add it to the system store and point Python and Node clients at that
@@ -61,7 +78,8 @@ RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
       /usr/local/bin/gitea-api /usr/local/bin/github-api /usr/local/bin/gm-approvals \
       /usr/local/bin/gm-backtick-scan /usr/local/bin/gm-daily /usr/local/bin/gm-entrypoint \
       /usr/local/bin/gm-goals /usr/local/bin/gm-pending /usr/local/bin/gm-post \
-      /usr/local/bin/gm-status /usr/local/bin/pin-digest /usr/local/bin/secret-guard \
+      /usr/local/bin/gm-status /usr/local/bin/gm-vault-login /usr/local/bin/pin-digest \
+      /usr/local/bin/secret-guard \
  && chmod 0644 /opt/agent/approval-check.env /opt/agent/boot-resume.md /opt/agent/goals.md \
       /opt/agent/goal-checks /opt/agent/managed-settings.json \
  && chmod -R go-w /opt/agent \
