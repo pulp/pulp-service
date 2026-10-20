@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: agent
-        image: ghcr.io/pulp/buzz-agent-gm-rh:v0.1.4
+        image: ghcr.io/pulp/buzz-agent-gm-rh:v0.1.5
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -43,7 +43,7 @@ spec:
         - name: AGENT_SLUG
           value: gm-rh
         - name: AGENT_REVISION
-          value: v0.1.4
+          value: v0.1.5
         - name: AGENT_DEFINITION_REPO
           value: https://github.com/pulp/pulp-service.git
         - name: AGENT_DEFINITION_REF
@@ -94,6 +94,10 @@ spec:
           value: '1'
         - name: GITEA_TOKEN_FILE
           value: /run/secrets/gitea/token
+        - name: GITHUB_TOKEN_FILE
+          value: /run/secrets/github/token
+        - name: GITLAB_TOKEN_FILE
+          value: /run/secrets/gitlab/token
         - name: AGENT_PUBKEY
           value: 6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93
         - name: STAFF_CHANNEL
