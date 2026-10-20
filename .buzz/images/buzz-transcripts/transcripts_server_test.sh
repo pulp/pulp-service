@@ -1,8 +1,8 @@
 #!/bin/bash
 # Starts the server on a fixture tree and checks listing, rendering, redaction and input checks.
 set -u
-D=$(mktemp -d); X=$(mktemp -d); trap 'kill $P $P4 $P5 2>/dev/null; rm -rf $D $X' EXIT
-P4= P5=
+D=$(mktemp -d); X=$(mktemp -d); DU=$(mktemp -d); trap 'kill $P $P4 $P5 $PU $PUF $PS 2>/dev/null; rm -rf $D $X $DU' EXIT
+P4= P5= PU= PUF= PS=
 SRV="$(dirname "$0")/transcripts_server.py"
 S=11111111-2222-3333-4444-555555555555
 # Every credential below is a fake fixture value. They are assembled from pieces at
@@ -49,7 +49,7 @@ cp "$D/personal/claude/projects/-state-work/$S.jsonl" "$D5/personal/claude/proje
 cp "$D/personal/claude/projects/-state-work/$S.jsonl" "$D5/personal/claude/projects/-state-work/33333333-2222-3333-4444-555555555555.jsonl"
 
 # The main server opts out of the token check (local tests only).
-PORT=18090 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets TRANSCRIPTS_REQUIRE_TOKEN=false python3 "$SRV" & P=$!
+PORT=18090 USAGE_PORT=0 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets TRANSCRIPTS_REQUIRE_TOKEN=false python3 "$SRV" & P=$!
 for i in $(seq 1 30); do curl -s localhost:18090/healthz >/dev/null && break; sleep 0.2; done
 pass=0 fail=0
 check() { if eval "$2"; then pass=$((pass+1)); else fail=$((fail+1)); echo "FAIL: $1"; fi; }
@@ -99,7 +99,7 @@ check "old sessions drop out of the window" '[ -z "$(touch -d "-3 hours" "$D/per
 # Bearer-token check: a second server with TRANSCRIPTS_TOKEN_FILE set requires the token.
 TOKV="s3cret-""transcripts-token"; AUTH="Author""ization"
 TOK=$D/secrets/transcripts-token; printf '%s' "$TOKV" > "$TOK"
-PORT=18091 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets TRANSCRIPTS_TOKEN_FILE=$TOK python3 "$SRV" & P2=$!
+PORT=18091 USAGE_PORT=0 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets TRANSCRIPTS_TOKEN_FILE=$TOK python3 "$SRV" & P2=$!
 for i in $(seq 1 30); do curl -s localhost:18091/healthz >/dev/null && break; sleep 0.2; done
 check "healthz needs no token even when the check is on" '[ "$(code localhost:18091/healthz)" = 200 ]'
 check "a request without a token is 401" '[ "$(code "localhost:18091/sessions?hours=1")" = 401 ]'
@@ -109,21 +109,21 @@ check "the right token is accepted" '[ "$(code -H "$AUTH: Bearer $TOKV" "localho
 kill $P2 2>/dev/null
 
 # Fail closed: REQUIRE_TOKEN=true with no token file means 503 for everything but /healthz.
-PORT=18092 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets TRANSCRIPTS_TOKEN_FILE=$D/no-such-token TRANSCRIPTS_REQUIRE_TOKEN=true python3 "$SRV" & P3=$!
+PORT=18092 USAGE_PORT=0 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets TRANSCRIPTS_TOKEN_FILE=$D/no-such-token TRANSCRIPTS_REQUIRE_TOKEN=true python3 "$SRV" & P3=$!
 for i in $(seq 1 30); do curl -s localhost:18092/healthz >/dev/null && break; sleep 0.2; done
 check "fail closed: healthz still answers when the token file is missing" '[ "$(code localhost:18092/healthz)" = 200 ]'
 check "fail closed: a request is 503 when the required token file is missing" '[ "$(code "localhost:18092/sessions?hours=1")" = 503 ]'
 kill $P3 2>/dev/null
 
 # Fail closed by default: no token file and no TRANSCRIPTS_REQUIRE_TOKEN at all.
-PORT=18093 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets python3 "$SRV" & P4=$!
+PORT=18093 USAGE_PORT=0 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets python3 "$SRV" & P4=$!
 for i in $(seq 1 30); do curl -s localhost:18093/healthz >/dev/null && break; sleep 0.2; done
 check "default: healthz answers without a token file" '[ "$(code localhost:18093/healthz)" = 200 ]'
 check "default: transcripts are 503 without a token file" '[ "$(code "localhost:18093/show?hours=1")" = 503 ]'
 kill $P4 2>/dev/null
 
 # Limits: sessions listed, bytes read per transcript, bytes per response.
-PORT=18094 TRANSCRIPTS_ROOT=$D5 SECRETS_DIR=$D/secrets TRANSCRIPTS_REQUIRE_TOKEN=false TRANSCRIPTS_MAX_SESSIONS=2 \
+PORT=18094 USAGE_PORT=0 TRANSCRIPTS_ROOT=$D5 SECRETS_DIR=$D/secrets TRANSCRIPTS_REQUIRE_TOKEN=false TRANSCRIPTS_MAX_SESSIONS=2 \
   TRANSCRIPTS_MAX_READ_BYTES=400 TRANSCRIPTS_MAX_RESPONSE_BYTES=300 python3 "$SRV" & P5=$!
 for i in $(seq 1 30); do curl -s localhost:18094/healthz >/dev/null && break; sleep 0.2; done
 check "lists at most MAX_SESSIONS sessions" '[ "$(curl -s "localhost:18094/sessions?hours=1" | grep -c .)" = 2 ]'
@@ -136,10 +136,84 @@ kill $P5 2>/dev/null
 # SIGTERM: the server handles it itself and exits 0. As a container's PID 1 a
 # process with no handler ignores SIGTERM, which holds the pod for its whole
 # termination grace period.
-PORT=18095 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets python3 "$SRV" & P6=$!
+PORT=18095 USAGE_PORT=0 TRANSCRIPTS_ROOT=$D SECRETS_DIR=$D/secrets python3 "$SRV" & P6=$!
 for i in $(seq 1 30); do curl -s localhost:18095/healthz >/dev/null && break; sleep 0.2; done
 kill -TERM $P6; for i in $(seq 1 15); do kill -0 $P6 2>/dev/null || break; sleep 0.2; done
 wait $P6 2>/dev/null; RC6=$?
 check "exits 0 on SIGTERM within 3s" '[ "$RC6" = 0 ]'
+
+# Usage listener: per day, per model token counts on its own port, behind its own token,
+# with the two tokens refusing each other. Timestamps come from python so the fixture lands
+# in the window on any platform.
+NOWTS=$(python3 -c 'import datetime;print(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"))')
+TODAY=${NOWTS%%T*}
+OLDTS=$(python3 -c 'import datetime;print((datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S.000Z"))')
+OLDDAY=${OLDTS%%T*}
+UTOKV="us4ge-""token-value-xyz"; TTOKV="tr4nscript-""token-value-xyz"
+mkdir -p "$DU/rh/claude/projects/-state-work" "$DU/secrets"
+cat > "$DU/rh/claude/projects/-state-work/$S.jsonl" <<J
+{"timestamp":"$NOWTS","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":10,"cache_creation_input_tokens":100,"cache_read_input_tokens":1000,"output_tokens":5}}}
+{"timestamp":"$NOWTS","message":{"role":"user","content":"a user turn carries no usage and must not count"}}
+{"timestamp":"$NOWTS","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":20,"cache_creation_input_tokens":200,"cache_read_input_tokens":2000,"output_tokens":7}}}
+{"timestamp":"$NOWTS","message":{"role":"assistant","model":"mdl-$TTOKV-end","usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}}
+{"timestamp":"$NOWTS","message":{"role":"assistant","model":{"evil":"object"},"usage":{"input_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}}
+{"timestamp":"$OLDTS","message":{"role":"assistant","model":"claude-opus-4-8","usage":{"input_tokens":99999,"cache_creation_input_tokens":99999,"cache_read_input_tokens":99999,"output_tokens":99999}}}
+J
+UTOK=$DU/secrets/usage-token; printf '%s' "$UTOKV" > "$UTOK"
+TTOK=$DU/secrets/transcripts-token; printf '%s' "$TTOKV" > "$TTOK"
+PORT=18096 USAGE_PORT=18097 TRANSCRIPTS_ROOT=$DU SECRETS_DIR=$DU/secrets \
+  TRANSCRIPTS_TOKEN_FILE=$TTOK USAGE_TOKEN_FILE=$UTOK python3 "$SRV" & PU=$!
+for i in $(seq 1 30); do curl -s localhost:18097/healthz >/dev/null && break; sleep 0.2; done
+# Content: the two assistant turns in the window sum per day and model; the user turn and the
+# turn two days old are not in a 1h window.
+U=$(curl -s -H "$AUTH: Bearer $UTOKV" "localhost:18097/usage?hours=1")
+RU=$(printf '%s' "$U" | python3 -c 'import sys,json
+d=json.load(sys.stdin)
+b=d["days"]["'$TODAY'"]["claude-opus-4-8"]
+exp={"input_tokens":30,"cache_creation_input_tokens":300,"cache_read_input_tokens":3000,"output_tokens":12,"turns":2}
+ok = b==exp and "'$OLDDAY'" not in d["days"] and set(d)=={"generated","hours","root","days"}
+print("OK" if ok else "BAD "+repr(d))')
+check "usage sums the four counts per day and model, window and roles respected" '[ "$RU" = OK ]'
+# A wider window reaches the older day without double counting today.
+U2=$(curl -s -H "$AUTH: Bearer $UTOKV" "localhost:18097/usage?hours=96")
+RU2=$(printf '%s' "$U2" | python3 -c 'import sys,json
+d=json.load(sys.stdin)["days"]
+ok = d["'$OLDDAY'"]["claude-opus-4-8"]["input_tokens"]==99999 and d["'$TODAY'"]["claude-opus-4-8"]["input_tokens"]==30
+print("OK" if ok else "BAD "+repr(d))')
+check "a wider usage window reaches the older day and keeps today exact" '[ "$RU2" = OK ]'
+# The model id is the one free-text field in the counts; a value injected into it is redacted
+# the same way transcript text is, so it cannot reach the counts reader, and a non-string model
+# is coerced to a string key rather than crashing the per-model bucketing.
+check "usage redacts a secret injected into the model id" '[[ "$U" != *"$TTOKV"* ]] && [[ "$U" == *"mdl-[REDACTED]-end"* ]]'
+check "usage coerces a non-string model to a string key without crashing" '[ "$(code -H "$AUTH: Bearer $UTOKV" "localhost:18097/usage?hours=1")" = 200 ] && [[ "$U" == *evil* ]]'
+check "usage rejects a zero hours window" '[ "$(code -H "$AUTH: Bearer $UTOKV" "localhost:18097/usage?hours=0")" = 400 ]'
+check "usage healthz needs no token" '[ "$(code localhost:18097/healthz)" = 200 ]'
+check "usage without a token is 401" '[ "$(code "localhost:18097/usage?hours=1")" = 401 ]'
+# Cross rejection: each listener accepts only its own token, so a leak stays bounded.
+check "usage listener refuses the transcript token" '[ "$(code -H "$AUTH: Bearer $TTOKV" "localhost:18097/usage?hours=1")" = 401 ]'
+check "usage listener serves no transcript route even with its own token" '[ "$(code -H "$AUTH: Bearer $UTOKV" "localhost:18097/sessions?hours=1")" = 404 ] && [ "$(code -H "$AUTH: Bearer $UTOKV" "localhost:18097/show?hours=1")" = 404 ] && [ "$(code -H "$AUTH: Bearer $UTOKV" "localhost:18097/session?id=$S")" = 404 ]'
+check "transcript listener accepts its own token" '[ "$(code -H "$AUTH: Bearer $TTOKV" "localhost:18096/sessions?hours=1")" = 200 ]'
+check "transcript listener refuses the usage token" '[ "$(code -H "$AUTH: Bearer $UTOKV" "localhost:18096/sessions?hours=1")" = 401 ]'
+check "transcript listener serves no /usage route" '[ "$(code -H "$AUTH: Bearer $TTOKV" "localhost:18096/usage?hours=1")" = 404 ]'
+kill $PU 2>/dev/null
+
+# Usage fails closed on its own: a missing usage token file is 503 on /usage while the
+# transcript listener on the same process keeps serving with its own token.
+PORT=18098 USAGE_PORT=18099 TRANSCRIPTS_ROOT=$DU SECRETS_DIR=$DU/secrets \
+  TRANSCRIPTS_TOKEN_FILE=$TTOK USAGE_TOKEN_FILE=$DU/no-such-usage-token python3 "$SRV" & PUF=$!
+for i in $(seq 1 30); do curl -s localhost:18099/healthz >/dev/null && break; sleep 0.2; done
+check "fail closed: usage is 503 when its token file is missing" '[ "$(code "localhost:18099/usage?hours=1")" = 503 ]'
+check "fail closed: usage healthz still answers" '[ "$(code localhost:18099/healthz)" = 200 ]'
+check "the transcript listener is unaffected by the missing usage token" '[ "$(code -H "$AUTH: Bearer $TTOKV" "localhost:18098/sessions?hours=1")" = 200 ]'
+kill $PUF 2>/dev/null
+
+# The two listeners are only as separate as their tokens: if both files hold the same value the
+# process refuses to start, so a single leaked token can never open both listeners at once.
+SAME=$DU/secrets/same-token; printf '%s' "same-token-value-abc" > "$SAME"
+PORT=18100 USAGE_PORT=18101 TRANSCRIPTS_ROOT=$DU SECRETS_DIR=$DU/secrets \
+  TRANSCRIPTS_TOKEN_FILE=$SAME USAGE_TOKEN_FILE=$SAME python3 "$SRV" & PS=$!
+sleep 1
+check "refuses to start when the transcript and usage tokens are identical" '! curl -s localhost:18101/healthz >/dev/null && ! curl -s localhost:18100/healthz >/dev/null'
+kill $PS 2>/dev/null; PS=
 
 echo "transcripts server tests: $pass passed, $fail failed"; [ $fail -eq 0 ]

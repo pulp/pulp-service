@@ -87,8 +87,9 @@ parameters:
   # whichever order the SaaS edit and this template land in. Build buzz-transcripts
   # at this tag before the template merges so the sidecar image resolves; audited
   # targets (cos-rh, gm-rh) override with their own pinned tag. v0.1.1 exits on
-  # SIGTERM instead of holding the pod for its whole grace period.
-  value: v0.1.1
+  # SIGTERM instead of holding the pod for its whole grace period; v0.1.2 adds the
+  # counts-only usage listener on 8091.
+  value: v0.1.2
 # Transcripts auth fails closed. With no transcripts-token key (Echo today) the
 # sidecar answers 503 to everything but /healthz, so the pod stays ready and serves
 # nothing. Once the key is written, dropping it later cannot silently turn auth off.
@@ -281,6 +282,10 @@ objects:
           ports:
           - name: transcripts
             containerPort: 8090
+          # gm-rh addition (metering): the usage listener, counts only, on its own
+          # port so the chief of staff can be let in here without reaching 8090.
+          - name: usage
+            containerPort: 8091
           env:
           - name: TRANSCRIPTS_ROOT
             value: /state
@@ -295,6 +300,17 @@ objects:
             value: /run/secrets/agent/transcripts-token
           - name: TRANSCRIPTS_REQUIRE_TOKEN
             value: ${TRANSCRIPTS_REQUIRE_TOKEN}
+          # gm-rh addition (metering): the usage listener and the token it alone
+          # accepts. Counts only, so it never touches redaction. Its token is the
+          # key usage-token in this agent's own agent-<slug> vault-secret, distinct
+          # from transcripts-token, so the usage token never opens 8090 and the
+          # transcripts token never opens 8091. Only cos-rh holds a copy of each
+          # usage token (as usage-token-<slug> in its own secret). Fail closed like
+          # the transcript listener: no key means 503 on /usage.
+          - name: USAGE_PORT
+            value: "8091"
+          - name: USAGE_TOKEN_FILE
+            value: /run/secrets/agent/usage-token
           resources:
             requests:
               cpu: 20m
@@ -378,6 +394,11 @@ objects:
       protocol: TCP
       port: 8090
       targetPort: 8090
+    # gm-rh addition (metering): the usage listener, reached by cos-rh.
+    - name: usage
+      protocol: TCP
+      port: 8091
+      targetPort: 8091
 # gm-rh addition (piece c): the auditor gate. All staff share the one
 # pulp-agents-stage namespace, so the podSelector names this agent's pod and the
 # only ingress THIS policy permits is from the auditor-rh pod to 8090. Because it
@@ -412,3 +433,14 @@ objects:
       ports:
       - protocol: TCP
         port: 8090
+    # gm-rh addition (metering): the chief of staff reaches the usage listener only,
+    # on 8091, never 8090. As with the auditor rule above this documents intent and
+    # is additive, not an exclusive allowlist; the usage token on 8091 is the gate.
+    - from:
+      - podSelector:
+          matchLabels:
+            app: buzz-agent
+            agent: cos-rh
+      ports:
+      - protocol: TCP
+        port: 8091
