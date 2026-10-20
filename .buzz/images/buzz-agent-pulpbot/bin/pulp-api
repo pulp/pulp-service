@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# pulp-api: a read-only call to the Pulp API on packages.redhat.com, with the TBR
+# netrc read here, never by the session. secret-guard blocks a session that passes
+# the netrc path, `curl -u`, or the credential value itself; this is the tool that
+# holds it. The charter rule it serves: read a secret file only to hand it to the
+# tool that needs it. This file is that tool. It mirrors gitea-api and gm-vault-login:
+# the host is pinned here, not taken from the environment or the arguments, so the
+# TBR credential can only ever go to packages.redhat.com.
+#
+#   pulp-api <METHOD> <PATH> [extra curl args...]
+#
+# METHOD is GET or HEAD only: the TBR account is read only, and the wrapper refuses
+# any write verb so a typo or a confused request cannot attempt one. PATH is a path on
+# packages.redhat.com with a leading slash, e.g.
+#   pulp-api GET /api/pulp/default/api/v3/status/
+# Everything after PATH is passed to curl, so a call can add -o /dev/null -w
+# '%{http_code}' or an Accept header. Extra args are screened first: anything that
+# would dump the credential, send it to another host, override the netrc or host, read
+# curl options from a file, or disable TLS verification is rejected.
+#
+# Examples:
+#   pulp-api GET /api/pulp/default/api/v3/status/ | jq '.online_workers | length'
+#   pulp-api HEAD /pulp/content/ -o /dev/null -w '%{http_code}\n'
+set -euo pipefail
+
+# The host is a literal here, never ${VAR:-...} and never from an argument, so the
+# credential's destination cannot be redirected. This is the point gm-vault-login
+# missed and gitea-api gets right.
+base="https://packages.redhat.com"
+
+# Clear every proxy and CA-override knob curl honours from the environment, so the
+# session cannot route the request through a proxy that would see the credential, nor
+# point curl at a CA that would let a man in the middle present a fake packages cert.
+# The baked system trust store (SSL_CERT_FILE in the image) still verifies the real
+# host; -q below also makes curl ignore ~/.curlrc.
+unset HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy CURL_CA_BUNDLE
+
+# The netrc path defaults to the mounted secret and may be overridden by NETRC (the
+# entrypoint sets it); the value is never read by this script, only handed to curl via
+# --netrc-file, and the pinned host means curl only ever sends the packages.redhat.com
+# entry. An override cannot leak anything: a wrong netrc just fails auth.
+netrc="${NETRC:-/run/secrets/agent/pulp-netrc}"
+[ -s "$netrc" ] || { echo "pulp-api: no Pulp netrc at $netrc; Pulp API calls have no credentials" >&2; exit 2; }
+
+[ $# -ge 2 ] || { echo "usage: pulp-api <GET|HEAD> <PATH> [curl args...]" >&2; exit 2; }
+method=$1 path=$2; shift 2
+
+case $method in
+  GET|HEAD) ;;
+  *) echo "pulp-api: refusing method $method (read only: GET or HEAD)" >&2; exit 2 ;;
+esac
+case $path in
+  /*) ;;
+  *) echo "pulp-api: PATH must start with / (a path on $base)" >&2; exit 2 ;;
+esac
+
+# Screen the extra curl args before any call runs. These would leak the credential
+# (print the request), send it to another host (a second URL, --url), read the
+# credential or curl options from a file (-K/--config, --netrc*), override auth
+# (-u/--user), or disable TLS verification (-k/--insecure).
+for arg in "$@"; do
+  case $arg in
+    http://*|https://*)
+      echo "pulp-api: refusing extra URL $arg" >&2; exit 2 ;;
+    --verbose|--trace|--trace-*|--trace=*|--url|--url=*|--config|--config=*|--libcurl*|\
+    --netrc|--netrc-*|--user|--user=*|--insecure|--proxy|--proxy=*|--proxy-*|--cacert|--cacert=*|--capath|--capath=*)
+      echo "pulp-api: refusing curl arg $arg" >&2; exit 2 ;;
+    --*) ;;
+    # Short options can be bundled (-sv, -Kfile, -ku): refuse any containing v, K, k, u or x.
+    -*[vKkux]*)
+      echo "pulp-api: refusing curl arg $arg" >&2; exit 2 ;;
+  esac
+done
+
+# HEAD uses -I, not -X HEAD: with -X HEAD curl waits for a response body that never
+# comes and hangs until timeout. GET is curl's default, so it needs no -X.
+if [ "$method" = HEAD ]; then req=(-I); else req=(); fi
+
+# -q makes curl skip ~/.curlrc (which a session could write to log or redirect the
+# request). The credential reaches curl only through --netrc-file, so its value never
+# appears on a command line where another process could read it.
+exec curl -q -sS --connect-timeout 15 --netrc-file "$netrc" \
+  "${req[@]}" "$base$path" "$@"
