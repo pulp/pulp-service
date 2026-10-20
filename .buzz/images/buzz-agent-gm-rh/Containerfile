@@ -44,6 +44,7 @@ RUN set -eux; \
 ARG VAULT_VERSION=1.19.5
 ARG VAULT_SHA256=5192111920b3f745c10f8fea9988c46b91414a69bcf49df1f7c87880d80a3755
 RUN set -eux; \
+      apk add --no-cache unzip; \
       url="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip"; \
       curl -sSL -o /tmp/vault.zip "$url"; \
       echo "${VAULT_SHA256}  /tmp/vault.zip" | sha256sum -c -; \

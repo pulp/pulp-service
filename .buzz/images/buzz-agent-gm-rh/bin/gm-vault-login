@@ -15,12 +15,20 @@
 #   vault kv metadata get -mount=app-interface pulp/stage/agents/gm-rh   # version, no values
 # Prints a status line only, never the ids or the token.
 set -euo pipefail
-# Host fixed here, not taken as an argument, so the AppRole ids can only ever go to this
-# Vault. VAULT_ADDR is also exported by gm-entrypoint for the session's own `vault` calls.
-export VAULT_ADDR=${VAULT_ADDR:-https://vault.devshift.net}
-# Bound the login so an unreachable Vault cannot hang the pod's boot (the entrypoint
-# calls this synchronously); the default client timeout is 60s.
-export VAULT_CLIENT_TIMEOUT=${VAULT_CLIENT_TIMEOUT:-15}
+# The session invokes this helper and controls its environment, and this is the only
+# place the AppRole ids are read, so every knob that could redirect them off this Vault
+# or weaken the TLS to it is fixed here, NOT taken from the environment (a ${VAR:-default}
+# would let the session override it). This mirrors gitea-api's hardcoded host. So: drop
+# any TLS-verify, custom-CA and proxy settings the vault CLI honours, then pin the
+# address unconditionally.
+unset VAULT_SKIP_VERIFY VAULT_CACERT VAULT_CAPATH VAULT_CLIENT_CERT VAULT_CLIENT_KEY \
+      VAULT_TLS_SERVER_NAME VAULT_PROXY_ADDR VAULT_HTTP_PROXY \
+      HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy
+export VAULT_ADDR=https://vault.devshift.net
+# Bound the login so an unreachable Vault cannot hang the pod's boot (the entrypoint calls
+# this synchronously): a short per-request timeout AND no retries (the CLI otherwise
+# retries ~2x with backoff on a 60s-per-request default, so boot could stall for minutes).
+export VAULT_CLIENT_TIMEOUT=15 VAULT_MAX_RETRIES=0
 ridf=${VAULT_ROLE_ID_FILE:-/run/secrets/vault-approle/role_id}
 sidf=${VAULT_SECRET_ID_FILE:-/run/secrets/vault-approle/secret_id}
 [ -s "$ridf" ] && [ -s "$sidf" ] \
