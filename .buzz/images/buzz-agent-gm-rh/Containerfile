@@ -35,6 +35,16 @@ RUN set -eux; \
       install -m 0755 /tmp/bin/glab /usr/local/bin/glab; \
       rm -rf /tmp/glab.tgz /tmp/bin; \
       glab --version
+# gitlab.cee.redhat.com serves a chain under Red Hat IT's Internal Root CA, which the
+# base trust store lacks, so git push and glab to the app-interface fork fail on TLS
+# without it. Add it to the system store and point Python and Node clients at that
+# store too, the same way the pulpbot image does.
+COPY rh-internal-root-ca.crt /usr/local/share/ca-certificates/rh-internal-root-ca.crt
+RUN update-ca-certificates 2>/dev/null \
+ && grep -q "$(sed -n '5p' /usr/local/share/ca-certificates/rh-internal-root-ca.crt)" /etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/rh-internal-root-ca.crt
 # Tools onto PATH; config into /opt/agent. Root owned so the running agent (an
 # arbitrary OpenShift UID in group 0) cannot rewrite its own approver list, goals,
 # or the secret-guard hook. agent-runtime-env is sourced, not executed, so it stays
