@@ -144,7 +144,7 @@ spec:
           mountPath: /run/secrets/vault-approle
           readOnly: true
       - name: transcripts
-        image: ghcr.io/pulp/buzz-transcripts:v0.1.1
+        image: ghcr.io/pulp/buzz-transcripts:v0.1.2
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -154,6 +154,8 @@ spec:
         ports:
         - name: transcripts
           containerPort: 8090
+        - name: usage
+          containerPort: 8091
         env:
         - name: TRANSCRIPTS_ROOT
           value: /state
@@ -161,6 +163,10 @@ spec:
           value: /run/secrets/agent/transcripts-token
         - name: TRANSCRIPTS_REQUIRE_TOKEN
           value: 'true'
+        - name: USAGE_PORT
+          value: '8091'
+        - name: USAGE_TOKEN_FILE
+          value: /run/secrets/agent/usage-token
         resources:
           requests:
             cpu: 20m
