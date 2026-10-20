@@ -68,6 +68,15 @@ export GIT_AUTHOR_EMAIL="${AGENT_GIT_EMAIL:-hosted-pulp-bot@users.noreply.github
 export GIT_COMMITTER_NAME="$GIT_AUTHOR_NAME"
 export GIT_COMMITTER_EMAIL="$GIT_AUTHOR_EMAIL"
 
+# Jira self-test: run ONE real JQL search through the mounted atlassian-token at start,
+# so every boot proves the MCP search path actually works (the build can only prove the
+# server imports and starts; no Vault creds exist at build time). Non-fatal and
+# backgrounded so it never delays or blocks boot, and never prints a secret: jira-mcp
+# reads the token files itself and jira-selftest only sees the search result. PASS/FAIL
+# is logged for the transcripts sidecar and anyone watching the pod. A missing token
+# reads as SKIP, so a pod without Jira creds starts clean.
+( jira-selftest || true ) &
+
 # The base entrypoint reads nsec, installs the git definition and starts buzz-acp.
 # The base v0.2.5 entrypoint also empties /run/agent-session (memory, 16Mi) at
 # start, where dm-watch keeps per requester session tokens.
