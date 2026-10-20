@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: agent
-        image: ghcr.io/pulp/buzz-agent-pulpbot:v0.1.8
+        image: ghcr.io/pulp/buzz-agent-pulpbot:v0.1.10
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
