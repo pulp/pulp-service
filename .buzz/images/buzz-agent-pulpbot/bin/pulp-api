@@ -13,10 +13,12 @@
 # any write verb so a typo or a confused request cannot attempt one. PATH is a path on
 # packages.redhat.com with a leading slash, e.g.
 #   pulp-api GET /api/pulp/default/api/v3/status/
-# Everything after PATH is passed to curl, so a call can add -o /dev/null -w
-# '%{http_code}' or an Accept header. Extra args are screened first: anything that
-# would dump the credential, send it to another host, override the netrc or host, read
-# curl options from a file, or disable TLS verification is rejected.
+# Everything after PATH is passed to curl, but screened by an allowlist first: only a
+# few read-only flags are accepted (-s, -S, -f, -o <file>, -w <format>, -H with an
+# Accept header), and everything else that starts with a dash, plus any stray token
+# such as a second URL, is rejected. An allowlist is used, not a denylist, so a new
+# curl flag that could dump the credential, redirect it, override auth, or weaken TLS
+# cannot slip through by being unlisted.
 #
 # Examples:
 #   pulp-api GET /api/pulp/default/api/v3/status/ | jq '.online_workers | length'
@@ -28,12 +30,19 @@ set -euo pipefail
 # missed and gitea-api gets right.
 base="https://packages.redhat.com"
 
-# Clear every proxy and CA-override knob curl honours from the environment, so the
-# session cannot route the request through a proxy that would see the credential, nor
-# point curl at a CA that would let a man in the middle present a fake packages cert.
-# The baked system trust store (SSL_CERT_FILE in the image) still verifies the real
-# host; -q below also makes curl ignore ~/.curlrc.
-unset HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy CURL_CA_BUNDLE
+# Pin the TLS trust the same way the host is pinned, not from the environment. The CA
+# bundle is a literal baked path, re-exported over any SSL_CERT_FILE the session set,
+# with SSL_CERT_DIR and CURL_CA_BUNDLE unset, and passed to curl as --cacert below. A
+# session that set SSL_CERT_FILE=/tmp/rogue.pem (or SSL_CERT_DIR, or CURL_CA_BUNDLE) to
+# a CA of its own could otherwise let a man in the middle present a fake
+# packages.redhat.com cert and capture the TBR credential; pinning the store here
+# blocks that. packages.redhat.com uses a public cert, so this base store verifies it.
+# Also clear every proxy knob so the request cannot be routed through a proxy that would
+# see the credential; -q below makes curl ignore ~/.curlrc.
+cafile="/etc/ssl/certs/ca-certificates.crt"
+export SSL_CERT_FILE="$cafile"
+unset SSL_CERT_DIR CURL_CA_BUNDLE \
+      HTTPS_PROXY HTTP_PROXY ALL_PROXY https_proxy http_proxy all_proxy
 
 # The netrc path defaults to the mounted secret and may be overridden by NETRC (the
 # entrypoint sets it); the value is never read by this script, only handed to curl via
@@ -54,23 +63,41 @@ case $path in
   *) echo "pulp-api: PATH must start with / (a path on $base)" >&2; exit 2 ;;
 esac
 
-# Screen the extra curl args before any call runs. These would leak the credential
-# (print the request), send it to another host (a second URL, --url), read the
-# credential or curl options from a file (-K/--config, --netrc*), override auth
-# (-u/--user), or disable TLS verification (-k/--insecure).
+# Screen the extra curl args with an allowlist before any call runs. Only these flags
+# are accepted; everything else that starts with a dash, and any stray token (a second
+# URL, a value with no flag), is refused. Value-taking flags consume the next token:
+# -o/--output (output file), -w/--write-out (format string), -H/--header (an Accept
+# header only). Boolean flags carry no value: -s, -S, -f, their long forms, and bundles
+# of those short forms (-sS, -sSf). An allowlist, not a denylist: a new leak/redirect/
+# TLS-weakening flag cannot slip through unlisted (a denylist missed -X).
+want=""   # when set, the next token is the value for this flag
 for arg in "$@"; do
+  if [ -n "$want" ]; then
+    if [ "$want" = header ]; then
+      case $arg in
+        [Aa]ccept:*) ;;
+        *) echo "pulp-api: refusing header '$arg' (only an Accept header is allowed)" >&2; exit 2 ;;
+      esac
+    fi
+    want=""; continue
+  fi
   case $arg in
+    -s|-S|-f|--silent|--show-error|--fail) ;;
+    -[sSf][sSf]|-[sSf][sSf][sSf]) ;;        # bundled booleans, e.g. -sS, -sSf
+    -o|--output)    want=output ;;
+    -w|--write-out) want=writeout ;;
+    -H|--header)    want=header ;;
+    --output=*|--write-out=*) ;;
+    --header=[Aa]ccept:*) ;;
+    --header=*)
+      echo "pulp-api: refusing header '$arg' (only an Accept header is allowed)" >&2; exit 2 ;;
     http://*|https://*)
       echo "pulp-api: refusing extra URL $arg" >&2; exit 2 ;;
-    --verbose|--trace|--trace-*|--trace=*|--url|--url=*|--config|--config=*|--libcurl*|\
-    --netrc|--netrc-*|--user|--user=*|--insecure|--proxy|--proxy=*|--proxy-*|--cacert|--cacert=*|--capath|--capath=*)
-      echo "pulp-api: refusing curl arg $arg" >&2; exit 2 ;;
-    --*) ;;
-    # Short options can be bundled (-sv, -Kfile, -ku): refuse any containing v, K, k, u or x.
-    -*[vKkux]*)
-      echo "pulp-api: refusing curl arg $arg" >&2; exit 2 ;;
+    *)
+      echo "pulp-api: refusing arg '$arg' (allowed: -s -S -f, -o <file>, -w <format>, -H 'Accept: ...')" >&2; exit 2 ;;
   esac
 done
+[ -z "$want" ] || { echo "pulp-api: $want flag given with no value" >&2; exit 2; }
 
 # HEAD uses -I, not -X HEAD: with -X HEAD curl waits for a response body that never
 # comes and hangs until timeout. GET is curl's default, so it needs no -X.
@@ -79,5 +106,5 @@ if [ "$method" = HEAD ]; then req=(-I); else req=(); fi
 # -q makes curl skip ~/.curlrc (which a session could write to log or redirect the
 # request). The credential reaches curl only through --netrc-file, so its value never
 # appears on a command line where another process could read it.
-exec curl -q -sS --connect-timeout 15 --netrc-file "$netrc" \
+exec curl -q -sS --connect-timeout 15 --cacert "$cafile" --netrc-file "$netrc" \
   "${req[@]}" "$base$path" "$@"
