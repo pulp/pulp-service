@@ -9,10 +9,7 @@ owner: gm-rh
 # owner_pubkey matches the owner recorded for cos-rh on the RH relay (gm-rh),
 # which is also the key that signed its auth-tag in Vault.
 owner_pubkey: 6c6d64a0b90c4f1dbce52c14cf05f26cc4f2ab6233576c6a23cac7e157dbde93   # gm-rh
-# Interim: one worker. buzz-acp has no thread-to-worker affinity, so parallelism
-# above 1 lets several workers answer the same thread with contradictory results.
-# Restore to 3 once the runtime does thread affinity plus single-flight per thread.
-parallelism: 1
+parallelism: 3
 session_policy: thread
 effort: medium
 model: opus
