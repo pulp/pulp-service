@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# gm-vault-login: log in to vault.devshift.net with the pod's AppRole and write ONLY the
+# resulting token to the vault CLI's token helper file ($HOME/.vault-token), so the
+# session can run `vault ...` without ever reading role_id/secret_id itself. secret-guard
+# blocks a session that reads the mount directly; this tool reads the ids here and hands
+# them to vault, the same way gitea-api reads the Gitea token. The charter rule it serves:
+# read a secret file only to hand it to the tool that needs it. This file is that tool.
+#
+#   gm-vault-login
+#
+# Run at boot by gm-entrypoint, and re-run any time from the session to refresh the token
+# (the pulp-buzz-agents-gm-rh AppRole token TTL is 30 min; the ids stay out of reach).
+# On success the token is in place for, e.g.:
+#   vault token lookup
+#   vault kv metadata get -mount=app-interface pulp/stage/agents/gm-rh   # version, no values
+# Prints a status line only, never the ids or the token.
+set -euo pipefail
+# Host fixed here, not taken as an argument, so the AppRole ids can only ever go to this
+# Vault. VAULT_ADDR is also exported by gm-entrypoint for the session's own `vault` calls.
+export VAULT_ADDR=${VAULT_ADDR:-https://vault.devshift.net}
+# Bound the login so an unreachable Vault cannot hang the pod's boot (the entrypoint
+# calls this synchronously); the default client timeout is 60s.
+export VAULT_CLIENT_TIMEOUT=${VAULT_CLIENT_TIMEOUT:-15}
+ridf=${VAULT_ROLE_ID_FILE:-/run/secrets/vault-approle/role_id}
+sidf=${VAULT_SECRET_ID_FILE:-/run/secrets/vault-approle/secret_id}
+[ -s "$ridf" ] && [ -s "$sidf" ] \
+  || { echo "gm-vault-login: no AppRole id files (mount not populated yet)" >&2; exit 2; }
+command -v vault >/dev/null 2>&1 \
+  || { echo "gm-vault-login: vault CLI not installed" >&2; exit 2; }
+# key=@file makes vault read the id values from the files, so they never appear on a
+# command line or in this shell's environment.
+if ! tok=$(vault write -field=token auth/approle/login \
+             role_id=@"$ridf" secret_id=@"$sidf" 2>/dev/null); then
+  echo "gm-vault-login: AppRole login to $VAULT_ADDR failed" >&2
+  exit 1
+fi
+( umask 077; printf '%s' "$tok" > "$HOME/.vault-token" )
+unset tok
+echo "gm-vault-login: token written for $VAULT_ADDR (vault CLI ready)"
