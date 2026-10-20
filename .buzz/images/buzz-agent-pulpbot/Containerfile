@@ -31,15 +31,19 @@ ARG UV_SHA256=e1ccdfe1691c1f791d84bb6e1697e49416ca4b62103dcdf3b63772f03834f113
 ARG GLAB_VERSION=1.58.0-r5
 ARG GH_VERSION=2.72.0-r6
 ARG AWSCLI_VERSION=2.27.25-r0
-ARG MCP_ATLASSIAN_VERSION=0.11.9
-# mcp-atlassian 0.11.9 declares pydantic>=2.10.6 with no upper bound, so an unpinned
-# build pulls the newest pydantic. pydantic 2.12+ turns "cannot specify both default and
-# default_factory" into a hard TypeError, which fastmcp's settings.py trips the moment
-# mcp_atlassian.servers imports, so the server never starts. Pin pydantic to 2.11.9 (the
-# last 2.11, satisfies mcp's >=2.11.0) and fastmcp to 2.3.5 (inside mcp-atlassian's own
-# <2.4.0,>=2.3.4 band) so the import set is deterministic. Bump deliberately.
-ARG FASTMCP_VERSION=2.3.5
-ARG PYDANTIC_VERSION=2.11.9
+ARG MCP_ATLASSIAN_VERSION=0.23.1
+# mcp-atlassian 0.11.9 (the old pin) built its Cloud search count from the removed
+# /rest/api/2/search endpoint, so every Jira search returned the -1 failure sentinel
+# (upstream #720). The migration to /rest/api/3/search/jql landed in #769 and first ships
+# in 0.13.0, so this bumps to the newest stable, 0.23.1, which carries it. 0.23.1 requires
+# fastmcp>=3.2.4,<4 and pydantic>=2.10.6,<3, so the old 2.3.5 / 2.11.9 pins no longer
+# apply; the pydantic 2.12 "cannot specify both default and default_factory" TypeError
+# that bit fastmcp 2.3.5 is handled in fastmcp 3.x, so pin to the current 3.x line and
+# the newest pydantic. The import set stays deterministic and the build smoke test below
+# (it actually starts the stdio server) is the gate: if these three do not import and
+# start together, the build fails here, not in the pod. Bump deliberately.
+ARG FASTMCP_VERSION=3.4.9
+ARG PYDANTIC_VERSION=2.14.1
 
 # Tools PulpBot uses, by the system each one reaches:
 #   - oc / kubectl   OpenShift (tokens collected per person by DM, via oc-login)
