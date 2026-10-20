@@ -16,3 +16,7 @@ spec:
     protocol: TCP
     port: 8090
     targetPort: 8090
+  - name: usage
+    protocol: TCP
+    port: 8091
+    targetPort: 8091
