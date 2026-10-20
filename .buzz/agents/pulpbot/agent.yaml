@@ -25,11 +25,14 @@ respond_to: allowlist
 # The team Buzz lets through. Matches staff/pulpbot/charter.md. Decko de Brito's
 # pubkey is not known yet; add it here (a reviewed change) once Brian supplies it.
 # The tester key 61020f75 is PulpBot's own test identity, distinct from the
-# platform approver e5abab3a. cos-rh is not on this list yet: Brian adds it when he
-# wants cos-rh to benchmark or interview PulpBot live.
+# platform approver e5abab3a. cos-rh (its owner) and the platform key e5abab3a were
+# added 2026-10-20 at Brian's direction (Brian's Claude counts as Brian for every
+# agent); cos-rh can bench and direct PulpBot live.
 allowlist:
   - 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian Bouterse (bmbouter)
   - 643fc9b6baf936feaa6b8dc3951948de4fb3bc16eef0ec08b5f00b11db84d710   # Dennis Kliban (dkliban)
   - 61020f758e350106a9d0445a9722241d069cc6794eee505185a5f3efce1c45a2   # Brian's Claude (tester)
+  - 6a14bf7b3d7259f77e5b40a4817a084b11002f54e585eda431c4befa5d150c0d   # cos-rh (RH chief of staff, PulpBot's owner)
+  - e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4   # Brian's Claude (platform key; counts as Brian)
   # - <ddebrito pubkey, not known yet>                                 # Decko de Brito (ddebrito)
 channels: []   # channel membership (its #pulpbot-bench and team channels) is on the relay
