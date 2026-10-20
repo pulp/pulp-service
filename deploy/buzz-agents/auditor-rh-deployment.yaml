@@ -10,7 +10,7 @@ metadata:
   annotations:
     qontract.recycle: 'true'
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: agent
-        image: ghcr.io/pulp/buzz-agent-base:v0.1.0
+        image: ghcr.io/pulp/buzz-agent-auditor-rh:v0.1.6
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -43,7 +43,7 @@ spec:
         - name: AGENT_SLUG
           value: auditor-rh
         - name: AGENT_REVISION
-          value: v0.1.0
+          value: v0.1.6
         - name: AGENT_DEFINITION_REPO
           value: https://github.com/pulp/pulp-service.git
         - name: AGENT_DEFINITION_REF
@@ -95,7 +95,7 @@ spec:
         - name: GITEA_TOKEN_FILE
           value: /run/secrets/gitea/token
         - name: AGENT_PUBKEY
-          value: ''
+          value: e6ad8099f7affaa771f33257067baf8a354706519f166947547f782ae290e74b
         - name: STAFF_CHANNEL
           value: ''
         - name: PRESTOP
