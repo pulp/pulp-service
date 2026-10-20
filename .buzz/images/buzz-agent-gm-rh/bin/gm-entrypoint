@@ -27,6 +27,39 @@ if [ -n "${GITEA_TOKEN_FILE:-}" ] && [ -s "${GITEA_TOKEN_FILE:-}" ]; then
   git config --global credential.helper store
   ( umask 077; printf 'https://gm-rh:%s@gitea.bouterse.casa\n' "$(cat "$GITEA_TOKEN_FILE")" > "$HOME/.git-credentials" )
 fi
+# GitHub auth (hosted-pulp-bot) for pushing branches and merging PRs on pulp-service,
+# and GitLab auth (alcove-bot) for app-interface MRs from the hosted-pulp group fork.
+# Same pattern as Gitea above: written here from the mounted tokens into the base's
+# HOME so the session's git push just works, with the session never reading the token
+# (secret-guard blocks the secret mount; git reads the credential store internally).
+# github-api and glab cover the token-bearing API calls. Appended with >>, so the
+# Gitea line above stays. Each block is optional: an absent or empty token file (the
+# mounts are optional: true) skips it, so the pod still boots before the secrets land.
+if [ -n "${GITHUB_TOKEN_FILE:-}" ] && [ -s "${GITHUB_TOKEN_FILE:-}" ]; then
+  git config --global credential.helper store
+  ghuser=$(cat "${GITHUB_USERNAME_FILE:-/run/secrets/github/username}" 2>/dev/null || true)
+  ( umask 077; printf 'https://%s:%s@github.com\n' "${ghuser:-hosted-pulp-bot}" "$(cat "$GITHUB_TOKEN_FILE")" >> "$HOME/.git-credentials" )
+fi
+if [ -n "${GITLAB_TOKEN_FILE:-}" ] && [ -s "${GITLAB_TOKEN_FILE:-}" ]; then
+  git config --global credential.helper store
+  gluser=$(cat "${GITLAB_USERNAME_FILE:-/run/secrets/gitlab/username}" 2>/dev/null || true)
+  ( umask 077; printf 'https://%s:%s@gitlab.cee.redhat.com\n' "${gluser:-alcove-bot}" "$(cat "$GITLAB_TOKEN_FILE")" >> "$HOME/.git-credentials" )
+  # glab reads its token from its config file, not the environment, so the token stays
+  # out of the session's process env (nothing to leak through a stray printenv).
+  glcfg="$HOME/.config/glab-cli"
+  mkdir -p "$glcfg"
+  ( umask 077; cat > "$glcfg/config.yml" <<GLAB
+hostname: gitlab.cee.redhat.com
+git_protocol: https
+hosts:
+    gitlab.cee.redhat.com:
+        token: $(cat "$GITLAB_TOKEN_FILE")
+        git_protocol: https
+        api_protocol: https
+        api_host: gitlab.cee.redhat.com
+GLAB
+  )
+fi
 # First-boot state restore (see gm-state-restore): lay goals-state and the workspace
 # down from the state repo before boot-resume or the heartbeat read them. Marker
 # gated, fill-only and non-fatal, and it needs the git credentials written just above,
