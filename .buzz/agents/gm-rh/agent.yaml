@@ -11,10 +11,7 @@ owner: Brian Bouterse
 # BUZZ_ACP_AGENT_OWNER=763c8708 and the charter says Brian owns gm-rh). owner_pubkey
 # must match whoever signed the auth-tag written to Vault.
 owner_pubkey: 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1   # Brian
-# Interim: one worker. buzz-acp has no thread-to-worker affinity, so parallelism
-# above 1 lets several workers answer the same thread with contradictory results.
-# Restore to 3 once the runtime does thread affinity plus single-flight per thread.
-parallelism: 1
+parallelism: 3
 session_policy: thread
 effort: medium
 model: opus
