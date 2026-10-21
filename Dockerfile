@@ -184,6 +184,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0078-Return-authentication-challenge-for-missing-identity.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0078-Return-authentication-challenge-for-missing-identity.patch
 
+COPY images/assets/patches/0079-Experiment-interval-content-query.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0079-Experiment-interval-content-query.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

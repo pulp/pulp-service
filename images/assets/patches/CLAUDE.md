@@ -39,6 +39,12 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
 
+### 0079 - Interval content query experiment
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/models/repository.py`
+- **Description:** Dispatches `RepositoryVersion.get_content()` through the always-on PULP-1996 experiment: variant A keeps the legacy `unnest(content_ids)` subquery, variant B joins `core_repositorycontent` on its `(version_added, version_removed)` interval so PostgreSQL plans against real tables and indexes instead of the set-returning function's hard-coded `rows=10` estimate. Both variants carry SQL marker comments for RDS Performance Insights attribution; the application log records only the dispatch (the returned queryset is lazy, so there is nothing to time at call time). See `docs/test_plans/0005-Interval_Content_Query.md`.
+
 ### 0078 - Return an authentication challenge for missing identity headers
 
 - **Package:** pulpcore
