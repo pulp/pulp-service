@@ -10,7 +10,7 @@ metadata:
   annotations:
     qontract.recycle: 'true'
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -205,7 +205,7 @@ spec:
           defaultMode: 0440
       - name: gitea-token
         secret:
-          secretName: gitea-none
+          secretName: gitea-auditor-rh
           optional: true
           defaultMode: 0440
           items:
