@@ -31,13 +31,13 @@
          return None
      key = descriptor(distribution)
      if key is None:
-+        log.info("Maven path index fallback: descriptor unavailable", extra={"path": path})
++        log.info("Maven path index fallback: descriptor unavailable", extra={"request_path": path})
          return None
      with cache().lease(key) as view:
          if view is None:
 +            log.info(
 +                "Maven path index fallback: view unavailable",
-+                extra={"path": path, "repository_version": str(key[1])},
++                extra={"request_path": path, "repository_version": str(key[1])},
 +            )
              return None
          entry = view.lookup(path)
