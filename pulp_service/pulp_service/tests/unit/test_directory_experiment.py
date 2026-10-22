@@ -121,6 +121,10 @@ def test_full_listing_equivalence(history, experiment_settings, caplog, mode, ve
         PublishedArtifact.objects.create(
             publication=publication, content_artifact=history.cas[0], relative_path="renamed/first"
         )
+        # Keep nonmember fallback dates below the known membership dates for the shared entry.
+        publication.published_artifact.exclude(content_artifact__content_id__in=version.content).update(
+            pulp_created=history.dates[0] - timedelta(days=1)
+        )
     args = (version if publication is None else None, publication, path)
     handler = Handler()
     experiment_settings.CONTENT_DIRECTORY_AB_ENABLED = False
@@ -131,6 +135,8 @@ def test_full_listing_equivalence(history, experiment_settings, caplog, mode, ve
             experiment_settings.CONTENT_DIRECTORY_AB_PROBABILITY = probability
             assert async_to_sync(handler.list_directory)(*args) == baseline
     entries, dates, sizes = baseline
+    if path == "":
+        assert dates["leaf/"] == history.dates[[1, 3, 4][version_index]]
     if path == "missing/":
         assert (entries, dates, sizes) == (set(), {}, {})
     if mode == "repository" and path == "leaf/":

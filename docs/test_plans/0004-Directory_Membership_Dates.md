@@ -30,6 +30,19 @@ lookup and do not emit an experiment event.
 Plugin directory handlers and cached responses are outside the measured section.
 The sample count is eligible lookups, not total content requests. No schema or stored-data changes are required.
 
+### Concurrent deletion limitation
+
+The listing and membership lookup read the artifact sources separately. If a publication
+is deleted after its entries are materialized but before B evaluates its source subquery,
+B can omit a membership timestamp for an entry already in the response. The handler then
+uses the artifact timestamp, while A can still return the repository membership timestamp.
+This race also exists for flat listings that were eligible before shared names were enabled.
+
+Shared-name eligibility does not fix this existing race. A consistency fix needs to preserve
+the originally listed content set or use a consistent snapshot across the reads, with its
+query and transaction costs measured separately from the current A/B comparison. Stable-data
+equivalence tests do not establish equivalence during concurrent deletion.
+
 ## Configuration
 
 The experiment is disabled by default. Build the service image with patch 0077
