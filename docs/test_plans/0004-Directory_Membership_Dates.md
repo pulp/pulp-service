@@ -30,18 +30,17 @@ lookup and do not emit an experiment event.
 Plugin directory handlers and cached responses are outside the measured section.
 The sample count is eligible lookups, not total content requests. No schema or stored-data changes are required.
 
-### Concurrent deletion limitation
+### Source-deletion interleaving
 
-The listing and membership lookup read the artifact sources separately. If a publication
-is deleted after its entries are materialized but before B evaluates its source subquery,
-B can omit a membership timestamp for an entry already in the response. The handler then
-uses the artifact timestamp, while A can still return the repository membership timestamp.
-This race also exists for flat listings that were eligible before shared names were enabled.
+The listing and membership lookup read the artifact sources separately. A diagnostic that
+forcibly deletes an undistributed publication between these reads makes B use artifact
+timestamps where A retains membership timestamps. This also occurs with distinct displayed
+names, so it predates the shared-name eligibility change.
 
-Shared-name eligibility does not fix this existing race. A consistency fix needs to preserve
-the originally listed content set or use a consistent snapshot across the reads, with its
-query and transaction costs measured separately from the current A/B comparison. Stable-data
-equivalence tests do not establish equivalence during concurrent deletion.
+This diagnostic does not establish a production cleanup race. Repository retention cleanup
+excludes versions protected by distributions, and the diagnostic had no distribution or
+normal cleanup path. Investigate a reachable deletion path before treating this interleaving
+as a blocker or changing the experiment's queries or transaction behavior.
 
 ## Configuration
 
