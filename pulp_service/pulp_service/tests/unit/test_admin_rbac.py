@@ -245,6 +245,61 @@ def test_role_change_page_renders_for_view_only_user():
     assert ur_page.status_code == 200, "view-only user must be able to open a UserRole change page"
 
 
+def test_group_member_sees_role_inline_rows():
+    """A non-superuser group member must see their group's role assignments on the
+    Group Change page, not an empty inline. Django's InlineModelAdmin.get_queryset
+    calls has_view_or_change_permission with obj=None to populate the inline's rows;
+    the GroupRoleInline override must allow that case or members see an empty inline
+    (superusers bypass it, so the superuser render test cannot catch this)."""
+    suffix = uuid4().hex[:10]
+    domain = _domain(f"memberinline-{suffix}")
+    member = User.objects.create(username=f"memberinline-{suffix}")
+    group = Group.objects.create(name=f"memberinline-grp-{suffix}")
+    group.user_set.add(member)
+    role = Role.objects.get(name="core.domain_owner")
+    GroupRole.objects.create(group=group, role=role, domain=domain)
+
+    client = Client()
+    client.force_login(member)
+    group_page = client.get(reverse("myadmin:core_group_change", args=[group.pk]))
+
+    assert group_page.status_code == 200, "a member must be able to open their group's change page"
+    assert "core.domain_owner" in group_page.content.decode(), (
+        "a member must see their group's role assignment rows, not an empty inline"
+    )
+
+
+def test_nonmember_cannot_open_other_groups_change_page():
+    """A non-superuser must not reach the Change page of a group they do not belong
+    to; PulpGroupAdmin scopes page access to membership. Guards the security side of
+    the obj=None inline fix, which is not itself an access boundary."""
+    suffix = uuid4().hex[:10]
+    member = User.objects.create(username=f"nonmember-{suffix}")
+    other_group = Group.objects.create(name=f"nonmember-other-{suffix}")
+
+    client = Client()
+    client.force_login(member)
+    page = client.get(reverse("myadmin:core_group_change", args=[other_group.pk]))
+
+    assert page.status_code != 200, "a non-member must not open another group's change page"
+
+
+def test_group_member_empty_role_inline_renders():
+    """A member's group with no role assignments renders the Change page and the
+    inline section without error (empty formset), not a 500."""
+    suffix = uuid4().hex[:10]
+    member = User.objects.create(username=f"emptyinline-{suffix}")
+    group = Group.objects.create(name=f"emptyinline-grp-{suffix}")
+    group.user_set.add(member)
+
+    client = Client()
+    client.force_login(member)
+    page = client.get(reverse("myadmin:core_group_change", args=[group.pk]))
+
+    assert page.status_code == 200, "a member must open their group's page even with no roles"
+    assert "Role assignments" in page.content.decode(), "the empty inline section still renders"
+
+
 def test_userrole_admin_form_scope_validation():
     """The UserRole admin form treats the scope fields as optional (a domain-scoped
     role is valid), requires content_type/object_id as a pair, and rejects setting
