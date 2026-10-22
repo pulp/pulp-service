@@ -91,13 +91,23 @@ def history(db):
     return SimpleNamespace(versions=[v1, v2, v3], units=units, cas=cas, dates=dates)
 
 
+@pytest.fixture(params=[False, True])
+def opposite_membership_order(monkeypatch, request):
+    marked_lookup = experiments._marked_lookup
+
+    def ordered_lookup(memberships, content_to_names, sources, variant):
+        descending = request.param if variant == "A" else not request.param
+        ordering = "-pulp_created" if descending else "pulp_created"
+        return marked_lookup(memberships.order_by(ordering), content_to_names, sources, variant)
+
+    monkeypatch.setattr(experiments, "_marked_lookup", ordered_lookup)
+
+
 @pytest.mark.parametrize("mode", ["repository", "publication", "pass_through"])
 @pytest.mark.parametrize("version_index", [0, 1, 2])
 @pytest.mark.parametrize("path", ["", "leaf/", "missing/", "renamed/"])
-@pytest.mark.parametrize("reverse_memberships", [False, True])
-def test_full_listing_equivalence(
-    history, experiment_settings, caplog, monkeypatch, mode, version_index, path, reverse_memberships
-):
+@pytest.mark.usefixtures("opposite_membership_order")
+def test_full_listing_equivalence(history, experiment_settings, caplog, mode, version_index, path):
     version = history.versions[version_index]
     publication = None
     if mode != "repository":
@@ -116,14 +126,6 @@ def test_full_listing_equivalence(
     experiment_settings.CONTENT_DIRECTORY_AB_ENABLED = False
     baseline = async_to_sync(handler.list_directory)(*args)
     experiment_settings.CONTENT_DIRECTORY_AB_ENABLED = True
-    marked_lookup = experiments._marked_lookup
-
-    def ordered_lookup(memberships, content_to_names, sources, variant):
-        descending = reverse_memberships if variant == "A" else not reverse_memberships
-        ordering = "-pulp_created" if descending else "pulp_created"
-        return marked_lookup(memberships.order_by(ordering), content_to_names, sources, variant)
-
-    monkeypatch.setattr(experiments, "_marked_lookup", ordered_lookup)
     with caplog.at_level("INFO", logger="pulp.experiment"):
         for probability in (0.0, 1.0):
             experiment_settings.CONTENT_DIRECTORY_AB_PROBABILITY = probability
