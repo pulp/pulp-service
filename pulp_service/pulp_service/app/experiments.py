@@ -87,9 +87,6 @@ def _ineligibility_reason(content_to_names, probability, revision):
         return "missing_revision"
     if not content_to_names:
         return "empty"
-    displayed_names = [name for names in content_to_names.values() for name in names]
-    if len(displayed_names) != len(set(displayed_names)):
-        return "shared_name"
     return None
 
 
