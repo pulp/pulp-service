@@ -1,0 +1,1 @@
+* Add the shared `core_contentartifact.relative_path` `text_pattern_ops` index needed to test optimized content file, index.html, and directory-listing queries.
