@@ -2,7 +2,9 @@ import json
 import logging
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
+from urllib.parse import urlparse
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 
 from pulpcore.app.authentication import JSONHeaderRemoteAuthentication
@@ -78,7 +80,8 @@ class OrgGroupAssignmentMixin:
         return result
 
     def authenticate_header(self, request):
-        return "Bearer"
+        hostname = urlparse(settings.CONTENT_ORIGIN).hostname or "packages.redhat.com"
+        return f'Basic realm="{hostname}"'
 
 
 class RHServiceAccountCertAuthentication(OrgGroupAssignmentMixin, JSONHeaderRemoteAuthentication):

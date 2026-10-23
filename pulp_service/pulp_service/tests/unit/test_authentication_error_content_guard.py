@@ -91,15 +91,16 @@ class _Cache:
 
 
 class TestHandlerAuthentication:
-    def test_permit_maps_authentication_error_to_401(self):
+    def test_permit_maps_authentication_error_to_401(self, settings):
         detail_guard = _detail_guard("identity", AuthenticationError("Authentication required."))
         request = MagicMock(path="/lightwell/osv/record")
+        settings.CONTENT_ORIGIN = "https://packages.stage.redhat.com"
 
         with pytest.raises(HTTPUnauthorized) as exc_info:
             Handler._permit(request, _distribution(detail_guard))
 
         assert exc_info.value.status == 401
-        assert exc_info.value.headers["WWW-Authenticate"] == 'Basic realm="packages.redhat.com"'
+        assert exc_info.value.headers["WWW-Authenticate"] == 'Basic realm="packages.stage.redhat.com"'
 
     def test_permit_keeps_permission_error_as_403(self):
         detail_guard = _detail_guard("feature", PermissionError("Access denied."))
