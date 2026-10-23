@@ -194,7 +194,7 @@ def test_unauthenticated_denied_on_guarded_pypi_simple_api(configure_guarded_pyp
     response = requests.get(pypi_url, timeout=30)
 
     assert response.status_code == 401
-    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.headers["WWW-Authenticate"].startswith("Basic realm=")
 
 
 def test_write_operations_unaffected_by_content_guard(configure_guarded_pypi_distribution):
