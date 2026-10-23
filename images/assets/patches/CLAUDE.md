@@ -49,7 +49,7 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 - **Package:** pulpcore
 - **Files:** `pulpcore/content/handler.py`
-- **Description:** Dispatches eligible HTML directory membership date lookups through the service's disabled-by-default PULP-2505 experiment. B filters in SQL and fetches only content IDs and creation dates. Both variants preserve pulpcore's newest-timestamp-wins behavior; shared displayed names retain A to keep the experiment scope conservative. JSON listings are unchanged. See `docs/test_plans/0004-Directory_Membership_Dates.md`.
+- **Description:** Dispatches HTML directory membership date lookups through the service's disabled-by-default PULP-2505 experiment. B filters in SQL and fetches only content IDs and creation dates. Shared displayed names participate: both variants return dates by content ID, and the handler aggregates the newest date per displayed entry. See `docs/test_plans/0004-Directory_Membership_Dates.md`.
 
 ### 0022 — Adds authentication to the mvn deploy api
 

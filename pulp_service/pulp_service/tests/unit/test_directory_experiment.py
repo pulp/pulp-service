@@ -91,9 +91,22 @@ def history(db):
     return SimpleNamespace(versions=[v1, v2, v3], units=units, cas=cas, dates=dates)
 
 
+@pytest.fixture(params=[False, True])
+def opposite_membership_order(monkeypatch, request):
+    marked_lookup = experiments._marked_lookup
+
+    def ordered_lookup(memberships, content_to_names, sources, variant):
+        descending = request.param if variant == "A" else not request.param
+        ordering = "-pulp_created" if descending else "pulp_created"
+        return marked_lookup(memberships.order_by(ordering), content_to_names, sources, variant)
+
+    monkeypatch.setattr(experiments, "_marked_lookup", ordered_lookup)
+
+
 @pytest.mark.parametrize("mode", ["repository", "publication", "pass_through"])
 @pytest.mark.parametrize("version_index", [0, 1, 2])
 @pytest.mark.parametrize("path", ["", "leaf/", "missing/", "renamed/"])
+@pytest.mark.usefixtures("opposite_membership_order")
 def test_full_listing_equivalence(history, experiment_settings, caplog, mode, version_index, path):
     version = history.versions[version_index]
     publication = None
@@ -108,6 +121,10 @@ def test_full_listing_equivalence(history, experiment_settings, caplog, mode, ve
         PublishedArtifact.objects.create(
             publication=publication, content_artifact=history.cas[0], relative_path="renamed/first"
         )
+        # Keep nonmember fallback dates below the known membership dates for the shared entry.
+        publication.published_artifact.exclude(content_artifact__content_id__in=version.content).update(
+            pulp_created=history.dates[0] - timedelta(days=1)
+        )
     args = (version if publication is None else None, publication, path)
     handler = Handler()
     experiment_settings.CONTENT_DIRECTORY_AB_ENABLED = False
@@ -118,6 +135,8 @@ def test_full_listing_equivalence(history, experiment_settings, caplog, mode, ve
             experiment_settings.CONTENT_DIRECTORY_AB_PROBABILITY = probability
             assert async_to_sync(handler.list_directory)(*args) == baseline
     entries, dates, sizes = baseline
+    if path == "":
+        assert dates["leaf/"] == history.dates[[1, 3, 4][version_index]]
     if path == "missing/":
         assert (entries, dates, sizes) == (set(), {}, {})
     if mode == "repository" and path == "leaf/":
@@ -129,10 +148,25 @@ def test_full_listing_equivalence(history, experiment_settings, caplog, mode, ve
             assert sizes["first"] == 0
             assert dates["first"] == history.dates[0 if version_index == 0 else 4]
     records = [json.loads(record.message) for record in caplog.records if record.name == "pulp.experiment"]
-    if path == "leaf/":
+    if path in {"", "leaf/"}:
         assert {record.get("variant") for record in records} == {"A", "B"}
-    elif path == "":
-        assert all(record["reason"] == "shared_name" for record in records)
+
+
+@pytest.mark.parametrize("version_index", [0, 1, 2])
+@pytest.mark.parametrize("reverse_memberships", [False, True])
+def test_shared_name_membership_dates_are_order_independent(history, version_index, reverse_memberships):
+    version = history.versions[version_index]
+    names = {history.units[i].pk: {"leaf/"} for i in (0, 1, 3, 4)}
+    sources = [(ContentArtifact.objects.filter(relative_path__startswith="leaf/"), "content_id")]
+    memberships = version._content_relationships()
+    ordering = "-pulp_created" if reverse_memberships else "pulp_created"
+    opposite_ordering = "pulp_created" if reverse_memberships else "-pulp_created"
+    control = experiments.control_membership_dates(memberships.order_by(ordering), names)
+    candidate = experiments.candidate_membership_dates(memberships.order_by(opposite_ordering), names, sources)
+    expected_members = [{0: 0, 1: 1}, {1: 1, 3: 3}, {0: 4, 1: 1, 3: 3}][version_index]
+    expected = {history.units[i].pk: history.dates[date_index] for i, date_index in expected_members.items()}
+    assert control == candidate == expected
+    assert max(control.values()) == history.dates[[1, 3, 4][version_index]]
 
 
 def test_multiple_artifacts_keep_existing_name_mapping(history, experiment_settings):
@@ -287,7 +321,6 @@ def test_errors_are_logged_without_fallback(caplog, monkeypatch):
     [
         (False, {1: {"file"}}, 1, "test", None),
         (True, {}, 1, "test", "empty"),
-        (True, {1: {"folder/"}, 2: {"folder/"}}, 1, "test", "shared_name"),
         (True, {1: {"file"}}, -1, "test", "invalid_probability"),
         (True, {1: {"file"}}, 2, "test", "invalid_probability"),
         (True, {1: {"file"}}, float("nan"), "test", "invalid_probability"),

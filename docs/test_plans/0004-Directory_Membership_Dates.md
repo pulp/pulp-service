@@ -20,15 +20,27 @@ Both preserve the version's historical membership predicate. Published paths and
 pass-through paths remain separate sources. Each eligible call runs one variant;
 failed B calls propagate their exception without retrying A.
 
-Calls are eligible only when the content-to-name mapping is nonempty and each
-displayed name occurs once. Several contents can collapse into one directory name.
-Such calls retain A and emit `ab_experiment_skipped` with `reason=shared_name` to
-keep the experiment scope conservative. Empty directory listings never reach the
-membership lookup and do not emit an experiment event.
+Calls are eligible when the content-to-name mapping is nonempty and the experiment
+configuration is valid. Several contents can collapse into one displayed directory
+name: both variants return dates keyed by content ID, and the handler aggregates
+the newest date for each displayed entry after the lookup. Shared names therefore
+participate in the experiment. Empty directory listings never reach the membership
+lookup and do not emit an experiment event.
 
-JSON `list_directory_flat()`, plugin directory handlers, and cached responses are
-outside the measured section. The sample count is eligible lookups, not total
-content requests. No schema or stored-data changes are required.
+Plugin directory handlers and cached responses are outside the measured section.
+The sample count is eligible lookups, not total content requests. No schema or stored-data changes are required.
+
+### Source-deletion interleaving
+
+The listing and membership lookup read the artifact sources separately. A diagnostic that
+forcibly deletes an undistributed publication between these reads makes B use artifact
+timestamps where A retains membership timestamps. This also occurs with distinct displayed
+names, so it predates the shared-name eligibility change.
+
+This diagnostic does not establish a production cleanup race. Repository retention cleanup
+excludes versions protected by distributions, and the diagnostic had no distribution or
+normal cleanup path. Investigate a reachable deletion path before treating this interleaving
+as a blocker or changing the experiment's queries or transaction behavior.
 
 ## Configuration
 
@@ -104,6 +116,10 @@ fields @message
 Inspect `ab_experiment_skipped` events separately to assess coverage and detect
 configuration errors. These events are currently unsampled. Use application logs
 for A/B attribution and RDS Performance Insights for supporting query evidence.
+Older images also logged `reason=shared_name`; those calls are measured on images
+with the expanded eligibility. Start a new analysis window on the new image, set
+the revision to that image's Git SHA, and compare workload and size buckets rather
+than pooling the expanded sample with historical timings.
 
 ## Validation and decision
 
@@ -111,9 +127,10 @@ Run `pulp_service/tests/unit/test_directory_experiment.py` through `oci-env` in
 an image with the hosted patch stack applied. The tests compare full directory
 results across direct repositories, publications, and pass-through publications;
 historical removal/re-addition; rewritten and shared paths; domain isolation;
-on-demand sizes and empty files. A separate 65,536-content test checks membership
-lookup equivalence without a large parameter list. Dispatch, error logging,
-database alias selection, and JSON bypass also have focused checks.
+on-demand sizes and empty files. Shared directory listings must dispatch both A
+and B, and the checks reverse membership iteration order between variants. A
+separate 65,536-content test checks membership lookup equivalence without a large parameter list. Dispatch, error logging,
+database alias selection also have focused checks.
 
 For an `oci-env` environment with `pulp_service` installed from this checkout and
 the hosted patches applied:
