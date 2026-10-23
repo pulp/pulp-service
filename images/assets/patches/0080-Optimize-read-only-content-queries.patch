@@ -1,0 +1,121 @@
+--- a/pulpcore/app/settings.py
++++ b/pulpcore/app/settings.py
+@@ -288,6 +288,10 @@
+ CONTENT_ORIGIN = None
+ CONTENT_PATH_PREFIX = "/pulp/content/"
+ 
++# Maximum number of entries rendered in a content app directory listing. Listings with more
++# entries are truncated and a "…" marker is shown. Set to 0 to disable the limit.
++DIRECTORY_LISTING_LIMIT = 10000
++
+ API_APP_TTL = 120  # The heartbeat is called from gunicorn notify (defaulting to 45 sec).
+ CONTENT_APP_TTL = 30
+ WORKER_TTL = 30
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -48,6 +48,7 @@
+     models,
+     transaction,
+ )
++from django.db.models import Exists, OuterRef  # noqa: E402
+ from jinja2 import Template  # noqa: E402
+ 
+ from pulp_service.app.experiments import directory_membership_dates  # noqa: E402
+@@ -733,6 +734,8 @@
+ 
+         Returns:
+             Set of strings representing the files and directories in the directory listing.
++            If DIRECTORY_LISTING_LIMIT is set and the listing exceeds it, the listing is
++            truncated and a "…" marker entry is included.
+         """
+ 
+         def update_date(dates, name, timestamp):
+@@ -784,10 +787,23 @@
+ 
+             if repo_version or publication.pass_through:
+                 cas = ContentArtifact.objects.select_related("artifact").filter(
+-                    content__in=content_repo_ver.content, relative_path__startswith=path
++                    Exists(
++                        content_repo_ver._content_relationships().filter(
++                            content_id=OuterRef("content_id")
++                        )
++                    ),
++                    relative_path__startswith=path,
+                 )
+                 content_sources.append((cas, "content_id"))
++                listing_limit = settings.DIRECTORY_LISTING_LIMIT
++                if listing_limit:
++                    # Fetch one extra row so truncation can be detected without a count query.
++                    cas = cas[: listing_limit + 1]
+                 for ca in cas:
++                    if listing_limit and len(directory_list) >= listing_limit:
++                        # Too many entries to render; mark the listing as truncated.
++                        directory_list.add("…")
++                        break
+                     name = file_or_directory_name(path, ca.relative_path)
+                     directory_list.add(name)
+                     update_content_date(content_dates, ca.content_id, ca.pulp_created)
+@@ -980,9 +996,14 @@
+                             "artifact", "artifact__pulp_domain"
+                         )
+                         .filter(
+-                            content__in=publication.repository_version.content,
++                            Exists(
++                                publication.repository_version._content_relationships().filter(
++                                    content_id=OuterRef("content_id")
++                                )
++                            ),
++                            relative_path=original_rel_path,
+                         )
+-                        .aget(relative_path=original_rel_path)
++                        .aget()
+                     )
+ 
+                 except MultipleObjectsReturned:
+@@ -1020,11 +1041,23 @@
+             # Look for index.html or list the directory
+             index_path = "{}index.html".format(rel_path)
+ 
+-            contentartifact_exists = await self._retry_content_artifact_query(
+-                lambda: ContentArtifact.objects.filter(
+-                    content__in=repo_version.content, relative_path=index_path
+-                ).aexists()
+-            )
++            # File-ish paths (no trailing slash, dot in the last segment, e.g. "a-1.0.0.jar")
++            # cannot have a ContentArtifact at "<path>/index.html", so skip the probe. A dotted
++            # directory name without a slash falls through to list_directory(), which redirects.
++            last_segment = rel_path.rstrip("/").rsplit("/", 1)[-1]
++            if not ends_in_slash and "." in last_segment:
++                contentartifact_exists = False
++            else:
++                contentartifact_exists = await self._retry_content_artifact_query(
++                    lambda: ContentArtifact.objects.filter(
++                        Exists(
++                            repo_version._content_relationships().filter(
++                                content_id=OuterRef("content_id")
++                            )
++                        ),
++                        relative_path=index_path,
++                    ).aexists()
++                )
+             if contentartifact_exists:
+                 original_rel_path = index_path
+                 headers = self.response_headers(original_rel_path, distro)
+@@ -1048,7 +1081,16 @@
+                 ca = await self._retry_content_artifact_query(
+                     lambda: ContentArtifact.objects.select_related(
+                         "artifact", "artifact__pulp_domain"
+-                    ).aget(content__in=repo_version.content, relative_path=original_rel_path)
++                    )
++                    .filter(
++                        Exists(
++                            repo_version._content_relationships().filter(
++                                content_id=OuterRef("content_id")
++                            )
++                        ),
++                        relative_path=original_rel_path,
++                    )
++                    .aget()
+                 )
+ 
+             except MultipleObjectsReturned:
