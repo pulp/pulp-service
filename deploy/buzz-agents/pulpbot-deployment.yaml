@@ -43,7 +43,7 @@ spec:
         - name: AGENT_SLUG
           value: pulpbot
         - name: AGENT_REVISION
-          value: v0.1.8
+          value: v0.1.10
         - name: AGENT_DEFINITION_REPO
           value: https://github.com/pulp/pulp-service.git
         - name: AGENT_DEFINITION_REF
