@@ -16,14 +16,14 @@ MARKER_B = f"/* pexp={EXPERIMENT_ID} v=B */"
 
 
 @pytest.fixture
-def repository(db):
+def repository(db):  # noqa: ARG001
     repository = Repository.objects.create(name=uuid4())
     repository.CONTENT_TYPES = [Content]
     return repository
 
 
 @pytest.fixture
-def content_pks(db):
+def content_pks(db):  # noqa: ARG001
     contents = [Content(pulp_type="core.content") for _ in range(5)]
     Content.objects.bulk_create(contents)
     return sorted([content.pk for content in contents])
@@ -129,7 +129,7 @@ def test_get_content_experiment_dispatch(repository, content_pks, add_content, m
     assert all(dispatch.get("correlation_id") for dispatch in dispatches)
 
 
-def test_get_content_marks_sql_per_variant(repository, content_pks, add_content, monkeypatch):
+def test_get_content_marks_sql_per_variant(repository, content_pks, add_content, monkeypatch):  # noqa: ARG001
     """Both variants must reach the database with their RDS Performance Insights marker."""
     with repository.new_version() as version:
         add_content(version, (1, 1, 1, 1, 1))
