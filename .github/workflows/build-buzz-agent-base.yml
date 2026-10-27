@@ -11,7 +11,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Test the stop path
         # A turn in flight at a pod stop must get to finish; prove it before shipping.
         run: |
