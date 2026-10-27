@@ -6,7 +6,7 @@ import pytest
 from aiohttp.web_exceptions import HTTPForbidden, HTTPUnauthorized
 from asgiref.sync import async_to_sync
 
-from pulpcore.app.models import CompositeContentGuard
+from pulpcore.app.models import CompositeContentGuard, HeaderContentGuard
 from pulpcore.content.handler import Handler
 
 from pulp_service.app.access_policy import PulpServiceAccessPolicy
@@ -33,6 +33,36 @@ def _distribution(detail_guard):
     distribution.content_guard.name = detail_guard.name
     distribution.content_guard.cast.return_value = detail_guard
     return distribution
+
+
+class TestHeaderContentGuardAuthentication:
+    def _make_guard(self, header_name="x-rh-identity"):
+        guard = HeaderContentGuard()
+        guard.header_name = header_name
+        guard.header_value = ""
+        guard.jq_filter = '""'
+        return guard
+
+    def test_missing_identity_header_raises_authentication_error(self):
+        guard = self._make_guard(header_name="x-rh-identity")
+        request = MagicMock()
+        request.headers.get.return_value = None
+
+        with pytest.raises(AuthenticationError, match="Authentication required"):
+            guard.permit(request)
+
+    def test_missing_non_identity_header_raises_permission_error(self):
+        guard = self._make_guard(header_name="x-custom-header")
+        request = MagicMock()
+        request.headers.get.return_value = None
+
+        with pytest.raises(PermissionError):
+            guard.permit(request)
+
+        with pytest.raises(PermissionError) as exc_info:
+            guard.permit(request)
+
+        assert not isinstance(exc_info.value, AuthenticationError)
 
 
 class TestCompositeContentGuardAuthentication:
@@ -101,6 +131,16 @@ class TestHandlerAuthentication:
 
         assert exc_info.value.status == 401
         assert exc_info.value.headers["WWW-Authenticate"] == 'Basic realm="packages.stage.redhat.com"'
+
+    def test_permit_derives_realm_from_content_origin(self, settings):
+        detail_guard = _detail_guard("identity", AuthenticationError("Authentication required."))
+        request = MagicMock(path="/lightwell/osv/record")
+        settings.CONTENT_ORIGIN = "https://packages.redhat.com"
+
+        with pytest.raises(HTTPUnauthorized) as exc_info:
+            Handler._permit(request, _distribution(detail_guard))
+
+        assert exc_info.value.headers["WWW-Authenticate"] == 'Basic realm="packages.redhat.com"'
 
     def test_permit_keeps_permission_error_as_403(self):
         detail_guard = _detail_guard("feature", PermissionError("Access denied."))
