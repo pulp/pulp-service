@@ -30,7 +30,7 @@
          """
  
          def update_date(dates, name, timestamp):
-@@ -784,10 +787,23 @@
+@@ -784,11 +787,25 @@
  
              if repo_version or publication.pass_through:
                  cas = ContentArtifact.objects.select_related("artifact").filter(
@@ -44,18 +44,20 @@
                  )
                  content_sources.append((cas, "content_id"))
 +                listing_limit = settings.DIRECTORY_LISTING_LIMIT
-+                if listing_limit:
-+                    # Fetch one extra row so truncation can be detected without a count query.
-+                    cas = cas[: listing_limit + 1]
                  for ca in cas:
-+                    if listing_limit and len(directory_list) >= listing_limit:
-+                        # Too many entries to render; mark the listing as truncated.
+                     name = file_or_directory_name(path, ca.relative_path)
++                    # Limit distinct entries, not rows: many rows can share one displayed name.
++                    if (
++                        listing_limit
++                        and name not in directory_list
++                        and len(directory_list) >= listing_limit
++                    ):
 +                        directory_list.add("…")
 +                        break
-                     name = file_or_directory_name(path, ca.relative_path)
                      directory_list.add(name)
                      update_content_date(content_dates, ca.content_id, ca.pulp_created)
-@@ -980,9 +996,14 @@
+                     content_to_find.setdefault(ca.content_id, set()).add(name)
+@@ -980,9 +997,14 @@
                              "artifact", "artifact__pulp_domain"
                          )
                          .filter(
@@ -72,7 +74,7 @@
                      )
  
                  except MultipleObjectsReturned:
-@@ -1020,11 +1041,23 @@
+@@ -1020,11 +1042,23 @@
              # Look for index.html or list the directory
              index_path = "{}index.html".format(rel_path)
  
@@ -101,7 +103,7 @@
              if contentartifact_exists:
                  original_rel_path = index_path
                  headers = self.response_headers(original_rel_path, distro)
-@@ -1048,7 +1081,16 @@
+@@ -1048,7 +1082,16 @@
                  ca = await self._retry_content_artifact_query(
                      lambda: ContentArtifact.objects.select_related(
                          "artifact", "artifact__pulp_domain"
