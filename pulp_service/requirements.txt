@@ -1,7 +1,7 @@
 pulpcore==3.122.1
 pulp-rpm==3.39.2
 solv>=0.7.21,<0.7.38
-pulp-python==3.36.2
+pulp-python==3.37.1
 pulp-npm==0.10.2
 pulp-container==2.29.0
 pulp-maven==0.36.0
