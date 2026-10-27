@@ -18,6 +18,7 @@ from pulp_service.app.constants import (
     LEGACY_DEFAULT_IDENTITY_CONTENT_GUARD_NAME,
     VPN_VERIFIED_HEADER_NAME,
 )
+from pulp_service.exceptions import AuthenticationError
 
 # These tests exercise the RBAC dual-write in the post_create_domain signal
 # (pulp_service/app/signals.py) via the self-service create-domain endpoint
@@ -306,9 +307,9 @@ def test_composite_allows_identity_or_verified_vpn():
             )
         )
 
-        with pytest.raises(PermissionError):
+        with pytest.raises(AuthenticationError):
             composite_guard.permit(SimpleNamespace(headers={}))
-        with pytest.raises(PermissionError):
+        with pytest.raises(AuthenticationError):
             composite_guard.permit(SimpleNamespace(headers={VPN_VERIFIED_HEADER_NAME: "ZmFsc2U="}))
     finally:
         domain.delete()
