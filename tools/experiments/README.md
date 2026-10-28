@@ -42,8 +42,10 @@ digests need to be detected.
 ## Interpretation
 
 CloudWatch experiment events are nested inside the application log's `@message`,
-so the script parses those fields. Experiments that record `duration_ms` receive
-percentiles; lazy queryset experiments may only provide dispatch counts.
+so the script parses those fields. Results are printed as experiment → event →
+variant, with each variant's statistics grouped together. Experiments that record
+`duration_ms` receive percentiles; lazy queryset experiments may only provide
+dispatch counts.
 
 Performance Insights reports aggregate `db.load.avg` for SQL digests, not
 per-request latency. The script prints both per-digest rows and a rollup with

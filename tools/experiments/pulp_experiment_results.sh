@@ -96,9 +96,36 @@ run_logs_query "$CLOUDWATCH_QUERY" \
     | python3 -c '
 import json
 import sys
+from collections import defaultdict
 
 payload = json.load(sys.stdin)
-print(json.dumps(payload.get("results", []), indent=2))
+experiments = defaultdict(lambda: defaultdict(dict))
+
+for row in payload.get("results", []):
+    values = {item["field"]: item["value"] for item in row}
+    experiment = values.pop("exp_id", "unknown")
+    event = values.pop("event", "unknown")
+    variant = values.pop("variant", None)
+
+    for field in ("events", "timed"):
+        if field in values:
+            values[field] = int(values[field])
+    for field in ("avg_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms"):
+        if field in values:
+            values[field] = float(values[field])
+
+    # CloudWatch returns zero-like percentile values when no duration was
+    # recorded. Do not present those as measured latency statistics.
+    if values.get("timed") == 0:
+        for field in ("avg_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms"):
+            values.pop(field, None)
+
+    if variant:
+        experiments[experiment][event][variant] = values
+    else:
+        experiments[experiment][event]["statistics"] = values
+
+print(json.dumps(experiments, indent=2))
 print("CloudWatch status:", payload.get("status"))
 print("CloudWatch statistics:", json.dumps(payload.get("statistics", {})))
 '
