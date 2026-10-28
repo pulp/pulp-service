@@ -45,13 +45,15 @@ can be reduced when short-lived SQL digests need to be detected.
 
 CloudWatch experiment events are nested inside the application log's `@message`,
 so the script parses those fields. Results are printed as experiment → event →
-variant, with each variant's statistics grouped together. Experiments that record
-`duration_ms` receive percentiles; lazy queryset experiments may only provide
-dispatch counts.
+variant, with each variant's statistics grouped by repository when repository
+attribution is available. Experiments that record `duration_ms` receive
+percentiles; lazy queryset experiments may only provide dispatch counts.
 
 Performance Insights reports aggregate `db.load.avg` for SQL digests, not
 per-request latency. The script prints both per-digest rows and a rollup with
-the distinct SQL digest count and aggregate load for each experiment/variant.
+the distinct SQL digest count and aggregate load for each experiment,
+repository, and variant. Older SQL annotations without a repository marker are
+grouped under `unattributed`.
 The SQL results are limited to annotated digests that appear in the top 25 for
 at least one queried time window and should be normalized with experiment
 dispatch counts before drawing conclusions. The digest count is not an

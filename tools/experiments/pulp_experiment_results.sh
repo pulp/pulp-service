@@ -117,6 +117,7 @@ CLOUDWATCH_QUERY='fields @timestamp, @message
 | parse @message /exp_id\\": \\"(?<exp_id>[^\\"]+)/
 | parse @message /event\\": \\"(?<event>[^\\"]+)/
 | parse @message /variant\\": \\"(?<variant>[AB])/
+| parse @message /repository_id\\": \\"(?<repository_id>[^\\"]+)/
 | parse @message /duration_ms\\": (?<duration_ms>[0-9.]+)/
 | stats count() as events,
         count(duration_ms) as timed,
@@ -127,8 +128,8 @@ CLOUDWATCH_QUERY='fields @timestamp, @message
         max(duration_ms) as max_ms,
         min(@timestamp) as first,
         max(@timestamp) as last
-  by exp_id, event, variant
-| sort exp_id asc, event asc, variant asc'
+  by exp_id, event, variant, repository_id
+| sort exp_id asc, event asc, variant asc, repository_id asc'
 
 printf '=== CloudWatch experiment events (%s to %s UTC) ===\n' \
     "$(format_time "$START")" \
@@ -149,6 +150,7 @@ for row in payload.get("results", []):
     experiment = values.pop("exp_id", "unknown")
     event = values.pop("event", "unknown")
     variant = values.pop("variant", None)
+    repository = values.pop("repository_id", None) or "unattributed"
 
     for field in ("events", "timed"):
         if field in values:
@@ -163,10 +165,11 @@ for row in payload.get("results", []):
         for field in ("avg_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms"):
             values.pop(field, None)
 
+    event_data = experiments[experiment][event]
     if variant:
-        experiments[experiment][event][variant] = values
+        event_data.setdefault(variant, {"repositories": {}})["repositories"][repository] = values
     else:
-        experiments[experiment][event]["statistics"] = values
+        event_data.setdefault("statistics", {})[repository] = values
 
 print(json.dumps(experiments, indent=2))
 print("CloudWatch status:", payload.get("status"))
@@ -236,17 +239,21 @@ import sys
 from collections import defaultdict
 
 aggregate = defaultdict(lambda: {"total": 0.0, "windows": 0, "statement": ""})
+marker_re = re.compile(
+    r"/\*\s*pexp=(?P<experiment>[^ *]+)\s+v=(?P<variant>[AB])\s*\*/"
+    r"(?:\s*/\*\s*repo=(?P<repository>[^ *]+)\s*\*/)?"
+)
 for filename in glob.glob(sys.argv[1] + "/window-*.json"):
     payload = json.load(open(filename))
     for key in payload.get("Keys", []):
         dimensions = key.get("Dimensions", {})
         statement = dimensions.get("db.sql_tokenized.statement", "")
-        markers = re.findall(
-            r"/\*\s*pexp=([^ *]+)\s+v=([AB])\s*\*/", statement
-        )
-        for experiment, variant in markers:
+        for marker in marker_re.finditer(statement):
+            experiment = marker.group("experiment")
+            variant = marker.group("variant")
+            repository = marker.group("repository") or "unattributed"
             sql_id = dimensions.get("db.sql_tokenized.id")
-            item = aggregate[(experiment, variant, sql_id)]
+            item = aggregate[(experiment, variant, repository, sql_id)]
             item["total"] += float(key.get("Total") or 0)
             item["windows"] += 1
             item["statement"] = statement[:500]
@@ -254,13 +261,14 @@ for filename in glob.glob(sys.argv[1] + "/window-*.json"):
 if not aggregate:
     print("No annotated experiment SQL appeared in any hourly top-25 window.")
 else:
-    for (experiment, variant, sql_id), item in sorted(
+    for (experiment, variant, repository, sql_id), item in sorted(
         aggregate.items(),
-        key=lambda pair: (pair[0][0], pair[0][1], -pair[1]["total"]),
+        key=lambda pair: (pair[0][0], pair[0][1], pair[0][2], -pair[1]["total"]),
     ):
         print(json.dumps({
             "experiment": experiment,
             "variant": variant,
+            "repository_id": repository,
             "sql_id": sql_id,
             "db_load_total_sum": round(item["total"], 6),
             "windows_seen": item["windows"],
@@ -268,17 +276,18 @@ else:
         }))
 
     rollup = defaultdict(lambda: {"digest_count": 0, "load": 0.0, "windows": 0})
-    for (experiment, variant, _), item in aggregate.items():
-        summary = rollup[(experiment, variant)]
+    for (experiment, variant, repository, _), item in aggregate.items():
+        summary = rollup[(experiment, variant, repository)]
         summary["digest_count"] += 1
         summary["load"] += item["total"]
         summary["windows"] += item["windows"]
 
-    print("\\n=== Performance Insights rollup by experiment/variant ===")
-    for (experiment, variant), summary in sorted(rollup.items()):
+    print("\n=== Performance Insights rollup by experiment/variant/repository ===")
+    for (experiment, variant, repository), summary in sorted(rollup.items()):
         print(json.dumps({
             "experiment": experiment,
             "variant": variant,
+            "repository_id": repository,
             "sql_digest_count": summary["digest_count"],
             "db_load_total_sum": round(summary["load"], 6),
             "digest_window_observations": summary["windows"],
