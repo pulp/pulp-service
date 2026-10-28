@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 
 from django import forms
 from django.contrib import admin
+from django.contrib.admin.views.autocomplete import AutocompleteJsonView
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
 from django.contrib.auth.models import User
@@ -15,7 +16,7 @@ from django.utils.html import format_html, format_html_join
 from hijack.contrib.admin import HijackUserAdminMixin
 
 from pulpcore.app.models import Task
-from pulpcore.app.models.role import GroupRole, UserRole
+from pulpcore.app.models.role import GroupRole, Role, UserRole
 from pulpcore.plugin.models import Domain, Group
 
 from pulp_service.app.constants import CONTENT_SOURCES_LABEL_NAME
@@ -372,6 +373,19 @@ class PulpAuthenticationForm(AuthenticationForm):
         super().confirm_login_allowed(user)
 
 
+class PulpAutocompleteJsonView(AutocompleteJsonView):
+    """The autocomplete dropdown builds each option's text from ``str(obj)``. Role
+    inherits pulpcore's ``BaseModel.__str__`` (``"<Role: name>"``), so without this the
+    searchable Role dropdown shows the wrapper instead of the plain name the plain
+    ``<select>`` used to show (see ``RoleAdminMixin.formfield_for_dbfield``)."""
+
+    def serialize_result(self, obj, to_field_name):
+        result = super().serialize_result(obj, to_field_name)
+        if isinstance(obj, Role):
+            result["text"] = obj.name
+        return result
+
+
 class PulpAdminSite(admin.AdminSite):
     site_header = "Pulp administration"
     login_form = PulpAuthenticationForm
@@ -381,6 +395,11 @@ class PulpAdminSite(admin.AdminSite):
         Allow any authenticated user to access admin.
         """
         return request.user.is_authenticated and request.user.is_active
+
+    def autocomplete_view(self, request):
+        # Site-level endpoint shared by every autocomplete_fields widget; use our
+        # view so the Role dropdown renders plain names (see PulpAutocompleteJsonView).
+        return PulpAutocompleteJsonView.as_view(admin_site=self)(request)
 
 
 class ContentSourceDomainFilter(admin.SimpleListFilter):
@@ -423,6 +442,14 @@ ROLE_FIELD_HELP = {
         "instead of Content type/Object id. Leave blank for an object-level or global role."
     ),
 }
+
+
+def _role_target_content_types():
+    """Content types some role grants permissions on: the only valid targets for an
+    object-level role, and a far shorter list than every ContentType in the
+    deployment (hundreds). Used both to narrow the form field and to scope the
+    content_type autocomplete search (which reads ``ContentTypeAdmin.get_queryset``)."""
+    return ContentType.objects.filter(permission__role__isnull=False).distinct().order_by("app_label", "model")
 
 
 class RoleAdminForm(forms.ModelForm):
@@ -510,22 +537,20 @@ class RoleAdminMixin:
         if field is not None and db_field.name in ROLE_FIELD_HELP:
             field.help_text = ROLE_FIELD_HELP[db_field.name]
         if field is not None and db_field.name == "role":
-            # Show the plain role name in the dropdown; Role's inherited __str__
-            # wraps it as "<Role: name>", redundant in a field already labeled Role.
+            # These govern the SELECTED value shown on the form and validation; the
+            # role autocomplete *dropdown* list is handled separately (plain name via
+            # PulpAutocompleteJsonView, ordering via RoleAdmin.ordering). Role's inherited
+            # __str__ wraps the name as "<Role: name>", redundant in a Role-labeled field.
             field.label_from_instance = lambda role: role.name
-            # Role defines no default ordering, so the dropdown would otherwise be
-            # in arbitrary DB order. Sort by name to match the content_type dropdown
-            # and the RoleNameListFilter sidebar.
             field.queryset = field.queryset.order_by("name")
         if field is not None and db_field.name == "content_type":
-            # The raw dropdown lists every ContentType in the deployment (hundreds).
-            # Narrow it to content types some role grants permissions on, the only
-            # valid targets for an object-level role. Coarse (not specific to the
-            # role chosen on this same form) but a large usability win that blocks
-            # obviously-wrong targets at the admin boundary.
-            field.queryset = (
-                ContentType.objects.filter(permission__role__isnull=False).distinct().order_by("app_label", "model")
-            )
+            # Narrow to content types some role grants permissions on, the only valid
+            # targets for an object-level role (see _role_target_content_types). Coarse
+            # (not specific to the role chosen on this same form) but a large usability
+            # win that blocks obviously-wrong targets at the admin boundary. This bounds
+            # the form field's validation queryset; the autocomplete search uses
+            # ContentTypeAdmin.get_queryset, narrowed the same way.
+            field.queryset = _role_target_content_types()
         return field
 
     @admin.display(description="Role", ordering="role__name")
@@ -564,6 +589,10 @@ class RoleAdminMixin:
 
 class UserRoleAdmin(RoleAdminMixin, admin.ModelAdmin):
     form = UserRoleAdminForm
+    # Type-to-filter search boxes (Select2) instead of long, unsearchable <select>s.
+    # Each target is registered on admin_site with search_fields (User/Domain) or via
+    # the read-only RoleAdmin/ContentTypeAdmin below.
+    autocomplete_fields = ["user", "role", "domain", "content_type"]
     list_display = ["user", "role_name", "domain", "content_object"]
     list_select_related = ["user", "role", "domain"]  # content_object is a GFK, can't select_related
     list_filter = [("role", RoleNameListFilter), "domain"]
@@ -579,6 +608,7 @@ class UserRoleAdmin(RoleAdminMixin, admin.ModelAdmin):
 
 class GroupRoleAdmin(RoleAdminMixin, admin.ModelAdmin):
     form = GroupRoleAdminForm
+    autocomplete_fields = ["group", "role", "domain", "content_type"]
     list_display = ["group", "role_name", "domain", "content_object"]
     list_select_related = ["group", "role", "domain"]  # content_object is a GFK, can't select_related
     list_filter = [("role", RoleNameListFilter), "domain"]
@@ -617,6 +647,9 @@ class DomainAdmin(admin.ModelAdmin):
     list_display = ["name", "description", "storage_class"]
     list_filter = ["description", "storage_class", ContentSourceDomainFilter]
     search_fields = ["name"]
+    # Alphabetical by name, for both the changelist and the domain autocomplete
+    # dropdown on the role forms (Domain has no alphabetical default ordering).
+    ordering = ["name"]
     readonly_fields = ["domain_url", "role_assignments"]
 
     def domain_url(self, obj):
@@ -745,6 +778,43 @@ class TaskAdmin(admin.ModelAdmin):
         return request.user.is_superuser
 
 
+class _AutocompleteSourceAdmin(admin.ModelAdmin):
+    """Base for a model registered only to back an ``autocomplete_fields`` search
+    endpoint: read-only, superuser-only, and hidden from the admin index. The
+    autocomplete view requires the source admin's ``has_view_permission`` (role
+    add/change is already superuser-only, so this grants nothing extra)."""
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_module_permission(self, request):
+        return False
+
+
+class RoleAdmin(_AutocompleteSourceAdmin):
+    search_fields = ["name"]
+    # Orders the role autocomplete dropdown (Role has no default ordering).
+    ordering = ["name"]
+
+
+class ContentTypeAdmin(_AutocompleteSourceAdmin):
+    search_fields = ["app_label", "model"]
+
+    def get_queryset(self, request):
+        # Narrow the content_type autocomplete to role-granting types, matching the
+        # role form field's queryset (see _role_target_content_types).
+        return _role_target_content_types()
+
+
 admin_site = PulpAdminSite(name="myadmin")
 
 admin_site.register(UserRole, UserRoleAdmin)
@@ -753,3 +823,6 @@ admin_site.register(User, PulpUserAdmin)
 admin_site.register(Group, PulpGroupAdmin)
 admin_site.register(Domain, DomainAdmin)
 admin_site.register(Task, TaskAdmin)
+# Autocomplete sources for the role forms' Role / Content type search boxes.
+admin_site.register(Role, RoleAdmin)
+admin_site.register(ContentType, ContentTypeAdmin)

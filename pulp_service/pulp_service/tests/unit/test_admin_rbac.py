@@ -9,6 +9,7 @@ validation, and a ``Client`` for the User/Group/Domain page rendering.
 from uuid import uuid4
 
 import pytest
+from django.contrib.admin.widgets import AutocompleteSelect
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.test import Client, RequestFactory
@@ -19,9 +20,12 @@ from pulpcore.plugin.models import Domain, Group
 from pulpcore.plugin.util import assign_role
 
 from pulp_service.app.admin import (
+    ContentTypeAdmin,
     DomainAdmin,
     GroupRoleAdmin,
+    PulpAutocompleteJsonView,
     PulpUserAdmin,
+    RoleAdmin,
     UserRoleAdmin,
     UserRoleAdminForm,
     admin_site,
@@ -352,3 +356,73 @@ def test_user_group_domain_pages_render_role_sections():
     assert "core.domain_owner" in domain_page and user.username in domain_page and group.name in domain_page, (
         "Domain page must list the user and group role assignments targeting it"
     )
+
+
+def _su():
+    """Unsaved superuser. These admin methods only read ``request.user.is_superuser``,
+    so no DB row is needed; unsaved avoids the user-creation signal that assigns a role
+    (keeping these tests free of UserRole side effects)."""
+    return User(username="su", is_superuser=True, is_staff=True)
+
+
+# --- PULP-2583: searchable (autocomplete) dropdowns + alphabetical domains ---
+
+
+def test_admin_autocomplete_wiring_passes_system_checks():
+    """autocomplete_fields require every target model registered on the admin site
+    with search_fields; a missing registration raises admin.E039 and a missing
+    search_fields raises admin.E040. This catches both for the whole site."""
+    serious = [e for e in admin_site.check(None) if e.is_serious()]
+    assert serious == [], serious
+
+
+def test_userrole_and_grouprole_autocomplete_fields():
+    assert UserRoleAdmin.autocomplete_fields == ["user", "role", "domain", "content_type"]
+    assert GroupRoleAdmin.autocomplete_fields == ["group", "role", "domain", "content_type"]
+
+
+def test_role_admins_render_autocomplete_widgets():
+    """Each scoped FK on the UserRole/GroupRole add form uses the type-to-filter
+    AutocompleteSelect widget rather than a plain <select>."""
+    su = _su()
+    for admin_cls, model, user_field in ((UserRoleAdmin, UserRole, "user"), (GroupRoleAdmin, GroupRole, "group")):
+        form = admin_cls(model, admin_site).get_form(_request(su))()
+        for name in (user_field, "role", "domain", "content_type"):
+            # The admin wraps FK widgets in RelatedFieldWidgetWrapper (the +/edit icons);
+            # the autocomplete widget is the wrapped inner widget.
+            widget = form.fields[name].widget
+            inner = getattr(widget, "widget", widget)
+            assert isinstance(inner, AutocompleteSelect), f"{model.__name__}.{name}"
+
+
+def test_content_type_admin_narrowed_to_role_target_types():
+    """The content_type autocomplete search reads ContentTypeAdmin.get_queryset, so
+    it must stay narrowed to content types some role grants permissions on."""
+    expected = set(ContentType.objects.filter(permission__role__isnull=False).distinct())
+    assert expected, "seeded service roles must grant permissions on at least one content type"
+    qs = ContentTypeAdmin(ContentType, admin_site).get_queryset(_request(_su()))
+    assert set(qs) == expected
+    # Row count, not just membership: a ContentType can join to several role-granted
+    # permissions, so without distinct() the queryset would repeat it and set() would
+    # still match. The count catches a dropped distinct() that shows duplicate options.
+    assert qs.count() == len(expected), "queryset must be de-duplicated (distinct), no repeated content types"
+
+
+def test_domain_admin_ordered_by_name():
+    """Domains sort alphabetically (Domain has no alphabetical default ordering), so
+    both the changelist and the domain autocomplete dropdown are name-ordered."""
+    assert DomainAdmin.ordering == ["name"]
+
+
+def test_role_admin_ordered_by_name():
+    """Role has no default ordering, so the role autocomplete dropdown would come back
+    in arbitrary DB order without this (label_from_instance does not reach the ajax list)."""
+    assert RoleAdmin.ordering == ["name"]
+
+
+def test_role_autocomplete_shows_plain_name():
+    """The autocomplete dropdown builds its text from str(obj); Role inherits
+    BaseModel.__str__ ('<Role: name>'), so the view must substitute the plain name."""
+    view = PulpAutocompleteJsonView()
+    role = Role(name="rbac-plain-name")
+    assert view.serialize_result(role, "pk")["text"] == "rbac-plain-name"
