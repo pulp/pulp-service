@@ -127,10 +127,11 @@ def test_get_content_experiment_dispatch(repository, content_pks, add_content, m
         dispatch["event"] == "ab_experiment_dispatch" and dispatch["exp_id"] == EXPERIMENT_ID for dispatch in dispatches
     )
     assert all(dispatch.get("correlation_id") for dispatch in dispatches)
+    assert all(dispatch.get("repository_id") == str(repository.pk) for dispatch in dispatches)
 
 
 def test_get_content_marks_sql_per_variant(repository, content_pks, add_content, monkeypatch):  # noqa: ARG001
-    """Both variants must reach the database with their RDS Performance Insights marker."""
+    """Both variants reach the database with their variant and repository markers."""
     with repository.new_version() as version:
         add_content(version, (1, 1, 1, 1, 1))
 
@@ -139,3 +140,5 @@ def test_get_content_marks_sql_per_variant(repository, content_pks, add_content,
         with CaptureQueriesContext(connection) as ctx:
             assert list(version.get_content())
         assert any(marker in query["sql"] for query in ctx.captured_queries), marker
+        repo_marker = f"/* repo={repository.pk} */"
+        assert any(repo_marker in query["sql"] for query in ctx.captured_queries), repo_marker
