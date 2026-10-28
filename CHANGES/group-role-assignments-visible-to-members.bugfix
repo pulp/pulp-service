@@ -1,0 +1,1 @@
+Fixed the Django admin Group page showing an empty "Role Assignments" inline to non-superuser members; a group member now sees the role assignments of groups they belong to, matching what a superuser sees.
