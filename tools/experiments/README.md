@@ -27,7 +27,8 @@ export PULP_PI_DB_INSTANCES=<primary-db-instance>,<read-replica-db-instance>
 tools/experiments/pulp_experiment_results.sh
 ```
 
-The default time range is the previous 24 hours. Override it with Unix timestamps:
+The default time range is the previous 24 hours. Override it with Unix timestamps
+between 0 and 4102444800 (through 2100):
 
 ```bash
 START_TIME=$(date -u -d '6 hours ago' +%s) \
@@ -35,9 +36,10 @@ END_TIME=$(date -u +%s) \
 tools/experiments/pulp_experiment_results.sh
 ```
 
-Set `OUT_DIR` to preserve the raw CloudWatch and Performance Insights JSON files.
-`PI_WINDOW_SECONDS` defaults to one hour and can be reduced when short-lived SQL
-digests need to be detected.
+Each invocation creates a private run directory under `OUT_DIR` and prints its
+path. Set `OUT_DIR` to choose the parent directory for raw CloudWatch and
+Performance Insights JSON files. `PI_WINDOW_SECONDS` defaults to one hour and
+can be reduced when short-lived SQL digests need to be detected.
 
 ## Interpretation
 

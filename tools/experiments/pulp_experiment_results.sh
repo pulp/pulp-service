@@ -14,6 +14,7 @@
 #   PI_WINDOW_SECONDS       Performance Insights window size; defaults to 3600
 #   OUT_DIR                 Output directory; defaults to /tmp/pulp-experiment-results
 set -euo pipefail
+umask 077
 
 : "${PULP_LOG_GROUP:?Set PULP_LOG_GROUP to the CloudWatch Logs group}"
 : "${AWS_LOG_PROFILE:?Set AWS_LOG_PROFILE to the AWS CLI CloudWatch profile}"
@@ -21,18 +22,51 @@ set -euo pipefail
 : "${AWS_REGION:?Set AWS_REGION to the AWS region}"
 : "${PULP_PI_DB_INSTANCES:?Set PULP_PI_DB_INSTANCES to comma-separated RDS instance identifiers}"
 
-START=${START_TIME:-$(date -u -d '24 hours ago' +%s)}
-END=${END_TIME:-$(date -u +%s)}
-PI_WINDOW_SECONDS=${PI_WINDOW_SECONDS:-3600}
-OUT_DIR=${OUT_DIR:-/tmp/pulp-experiment-results}
-mkdir -p "$OUT_DIR"
-
-for command in aws date python3; do
+for command in aws mktemp python3; do
     command -v "$command" >/dev/null || {
         printf 'Missing required command: %s\n' "$command" >&2
         exit 1
     }
 done
+
+current_epoch=$(python3 -c 'import time; print(int(time.time()))')
+START=${START_TIME:-$((current_epoch - 86400))}
+END=${END_TIME:-$current_epoch}
+PI_WINDOW_SECONDS=${PI_WINDOW_SECONDS:-3600}
+OUTPUT_ROOT=${OUT_DIR:-/tmp/pulp-experiment-results}
+
+validate_epoch() {
+    local name=$1 value=$2
+    if ! [[ "$value" =~ ^[0-9]+$ ]] || (( ${#value} > 10 )) || (( value > 4102444800 )); then
+        printf '%s must be a Unix timestamp between 0 and 4102444800\n' "$name" >&2
+        exit 1
+    fi
+}
+
+validate_epoch START_TIME "$START"
+validate_epoch END_TIME "$END"
+if ! [[ "$PI_WINDOW_SECONDS" =~ ^[1-9][0-9]*$ ]] ||
+    (( ${#PI_WINDOW_SECONDS} > 5 )) || (( PI_WINDOW_SECONDS > 86400 )); then
+    printf 'PI_WINDOW_SECONDS must be a positive integer no greater than 86400\n' >&2
+    exit 1
+fi
+if (( START >= END )); then
+    printf 'START_TIME must be earlier than END_TIME\n' >&2
+    exit 1
+fi
+
+mkdir -p "$OUTPUT_ROOT"
+chmod 700 "$OUTPUT_ROOT"
+OUT_DIR=$(mktemp -d "$OUTPUT_ROOT/run.XXXXXX")
+
+format_time() {
+    python3 - "$1" <<'PY'
+import datetime
+import sys
+
+print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
+PY
+}
 
 run_logs_query() {
     local query=$1
@@ -56,15 +90,23 @@ run_logs_query() {
             --output json)
         status=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' <<<"$output")
         case "$status" in
-            Complete|Failed|Cancelled|Timeout)
+            Complete)
                 printf '%s\n' "$output"
                 return 0
+                ;;
+            Failed|Cancelled|Timeout)
+                printf 'CloudWatch query %s: %s\n' "$status" "$output" >&2
+                return 1
                 ;;
         esac
         sleep 2
     done
 
-    printf '%s\n' "$output"
+    aws logs stop-query \
+        --profile "$AWS_LOG_PROFILE" \
+        --region "$AWS_REGION" \
+        --query-id "$query_id" >/dev/null 2>&1 || true
+    printf 'CloudWatch query timed out after 180 seconds: %s\n' "$query_id" >&2
     return 1
 }
 
@@ -89,8 +131,9 @@ CLOUDWATCH_QUERY='fields @timestamp, @message
 | sort exp_id asc, event asc, variant asc'
 
 printf '=== CloudWatch experiment events (%s to %s UTC) ===\n' \
-    "$(date -u -d "@$START" '+%F %T')" \
-    "$(date -u -d "@$END" '+%F %T')"
+    "$(format_time "$START")" \
+    "$(format_time "$END")"
+printf 'Results directory: %s\n' "$OUT_DIR"
 run_logs_query "$CLOUDWATCH_QUERY" \
     | tee "$OUT_DIR/cloudwatch.json" \
     | python3 -c '
@@ -116,7 +159,7 @@ for row in payload.get("results", []):
 
     # CloudWatch returns zero-like percentile values when no duration was
     # recorded. Do not present those as measured latency statistics.
-    if values.get("timed") == 0:
+    if not values.get("timed"):
         for field in ("avg_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms"):
             values.pop(field, None)
 
@@ -136,12 +179,20 @@ print("CloudWatch statistics:", json.dumps(payload.get("statistics", {})))
 IFS=',' read -r -a db_instances <<< "$PULP_PI_DB_INSTANCES"
 for db_instance in "${db_instances[@]}"; do
     db_instance=${db_instance//[[:space:]]/}
+    if ! [[ "$db_instance" =~ ^[A-Za-z0-9-]+$ ]]; then
+        printf 'Invalid RDS instance identifier: %s\n' "$db_instance" >&2
+        exit 1
+    fi
     resource_id=$(aws rds describe-db-instances \
         --profile "$AWS_PI_PROFILE" \
         --region "$AWS_REGION" \
         --db-instance-identifier "$db_instance" \
         --query 'DBInstances[0].DbiResourceId' \
         --output text)
+    if [[ -z "$resource_id" || "$resource_id" == "None" ]]; then
+        printf 'Could not resolve RDS resource ID for %s\n' "$db_instance" >&2
+        exit 1
+    fi
 
     pi_dir="$OUT_DIR/pi-$db_instance"
     mkdir -p "$pi_dir"
@@ -154,7 +205,7 @@ for db_instance in "${db_instances[@]}"; do
         [ "$window_end" -gt "$END" ] && window_end=$END
         pi_file="$pi_dir/window-$window_number.json"
 
-        aws pi describe-dimension-keys \
+        if ! aws pi describe-dimension-keys \
             --profile "$AWS_PI_PROFILE" \
             --region "$AWS_REGION" \
             --service-type RDS \
@@ -164,7 +215,12 @@ for db_instance in "${db_instances[@]}"; do
             --period-in-seconds 60 \
             --metric db.load.avg \
             --group-by '{"Group":"db.sql_tokenized","Dimensions":["db.sql_tokenized.id","db.sql_tokenized.statement"],"Limit":25}' \
-            --output json >"$pi_file" 2>"$pi_file.err" || rm -f "$pi_file"
+            --output json >"$pi_file" 2>"$pi_file.err"; then
+            printf 'Performance Insights query failed for %s, window %s-%s:\n' \
+                "$db_instance" "$window_start" "$window_end" >&2
+            cat "$pi_file.err" >&2
+            exit 1
+        fi
 
         window_start=$window_end
         window_number=$((window_number + 1))
