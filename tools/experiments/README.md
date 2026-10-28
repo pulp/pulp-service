@@ -31,8 +31,8 @@ The default time range is the previous 24 hours. Override it with Unix timestamp
 between 0 and 4102444800 (through 2100):
 
 ```bash
-START_TIME=$(date -u -d '6 hours ago' +%s) \
-END_TIME=$(date -u +%s) \
+START_TIME=$(python3 -c 'import time; print(int(time.time()) - 21600)') \
+END_TIME=$(python3 -c 'import time; print(int(time.time()))') \
 tools/experiments/pulp_experiment_results.sh
 ```
 
