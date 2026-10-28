@@ -1,6 +1,6 @@
 --- a/pulpcore/app/models/repository.py
 +++ b/pulpcore/app/models/repository.py
-@@ -31,6 +31,7 @@ from pulpcore.cache import Cache
+@@ -31,6 +31,7 @@
  from pulpcore.constants import ALL_KNOWN_CONTENT_CHECKSUMS, PROTECTED_REPO_VERSION_MESSAGE
  from pulpcore.download.factory import DownloaderFactory
  from pulpcore.exceptions import ContentOverwriteError, ResourceImmutableError
@@ -8,7 +8,7 @@
  
  from .base import BaseModel, MasterModel
  from .content import Artifact, Content, ContentArtifact, RemoteArtifact
-@@ -1029,7 +1030,16 @@ class RepositoryVersion(BaseModel):
+@@ -1064,7 +1065,16 @@
          if content_qs is None:
              content_qs = Content.objects
  
@@ -26,7 +26,7 @@
  
      def content_ids_subquery(self):
          """
-@@ -1044,10 +1054,43 @@ class RepositoryVersion(BaseModel):
+@@ -1079,10 +1089,49 @@
          """
          return (
              RepositoryVersion.objects.filter(pk=self.pk)
@@ -35,8 +35,11 @@
 +                cids=Func(
 +                    F("content_ids"),
 +                    function="unnest",
-+                    # Marker so variant A is identifiable in RDS Performance Insights Top SQL
-+                    template="unnest(%(expressions)s) /* pexp=PULP-1996-CONTENT-MEMBERSHIP v=A */",
++                    # Variant A and target repo markers, read from RDS Performance Insights
++                    template=(
++                        "unnest(%(expressions)s) /* pexp=PULP-1996-CONTENT-MEMBERSHIP v=A */"
++                        f" /* repo={self.repository_id} */"
++                    ),
 +                )
 +            )
              .values_list("cids", flat=True)
@@ -61,8 +64,11 @@
 +            .annotate(
 +                cid=Func(
 +                    F("content_id"),
-+                    # Marker so variant B is identifiable in RDS Performance Insights Top SQL
-+                    template="%(expressions)s /* pexp=PULP-1996-CONTENT-MEMBERSHIP v=B */",
++                    # Variant B and target repo markers, read from RDS Performance Insights
++                    template=(
++                        "%(expressions)s /* pexp=PULP-1996-CONTENT-MEMBERSHIP v=B */"
++                        f" /* repo={self.repository_id} */"
++                    ),
 +                )
 +            )
 +            .values_list("cid", flat=True)
