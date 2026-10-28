@@ -46,6 +46,9 @@ so the script parses those fields. Experiments that record `duration_ms` receive
 percentiles; lazy queryset experiments may only provide dispatch counts.
 
 Performance Insights reports aggregate `db.load.avg` for SQL digests, not
-per-request latency. The SQL results are limited to annotated digests that appear
-in the top 25 for at least one queried time window and should be normalized with
-experiment dispatch counts before drawing conclusions.
+per-request latency. The script prints both per-digest rows and a rollup with
+the distinct SQL digest count and aggregate load for each experiment/variant.
+The SQL results are limited to annotated digests that appear in the top 25 for
+at least one queried time window and should be normalized with experiment
+dispatch counts before drawing conclusions. The digest count is not an
+execution count, and the aggregate load is not a latency percentile.

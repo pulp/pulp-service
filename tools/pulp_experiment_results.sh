@@ -183,5 +183,22 @@ else:
             "windows_seen": item["windows"],
             "statement_prefix": item["statement"],
         }))
+
+    rollup = defaultdict(lambda: {"digest_count": 0, "load": 0.0, "windows": 0})
+    for (experiment, variant, _), item in aggregate.items():
+        summary = rollup[(experiment, variant)]
+        summary["digest_count"] += 1
+        summary["load"] += item["total"]
+        summary["windows"] += item["windows"]
+
+    print("\\n=== Performance Insights rollup by experiment/variant ===")
+    for (experiment, variant), summary in sorted(rollup.items()):
+        print(json.dumps({
+            "experiment": experiment,
+            "variant": variant,
+            "sql_digest_count": summary["digest_count"],
+            "db_load_total_sum": round(summary["load"], 6),
+            "digest_window_observations": summary["windows"],
+        }))
 PY
 done
