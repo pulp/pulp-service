@@ -127,6 +127,7 @@ def test_get_content_experiment_dispatch(repository, content_pks, add_content, m
         dispatch["event"] == "ab_experiment_dispatch" and dispatch["exp_id"] == EXPERIMENT_ID for dispatch in dispatches
     )
     assert all(dispatch.get("correlation_id") for dispatch in dispatches)
+    assert all(dispatch.get("repository_id") == str(repository.pk) for dispatch in dispatches)
 
 
 def test_get_content_marks_sql_per_variant(repository, content_pks, add_content, monkeypatch):  # noqa: ARG001
