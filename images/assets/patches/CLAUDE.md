@@ -43,7 +43,7 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 - **Package:** pulpcore
 - **Files:** `pulpcore/app/models/publication.py`, `pulpcore/content/handler.py`
-- **Description:** Preserves an authentication-required result while evaluating composite content guards, then maps it to `401 Unauthorized` with a TBR Basic challenge in the content app. Ordinary authorization denials remain `403 Forbidden`. The patch also keeps guard-presence caching safe for both responses and unexpected guard exceptions.
+- **Description:** Makes both `HeaderContentGuard` and `FeatureContentGuard` raise `AuthenticationError` (instead of `PermissionError`) when the `x-rh-identity` header is missing, preserves that result through composite content guards, and maps it to `401 Unauthorized` with a `WWW-Authenticate: Basic` challenge (realm derived from `CONTENT_ORIGIN`) in the content app. Ordinary authorization denials remain `403 Forbidden`. The patch also keeps guard-presence caching safe for both responses and unexpected guard exceptions.
 
 ### 0077 - Directory membership timestamp experiment
 

@@ -1,5 +1,5 @@
 diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
-index 8c9535d..8d3690e 100644
+index 8c9535d31..c66c235c7 100644
 --- a/pulpcore/app/models/publication.py
 +++ b/pulpcore/app/models/publication.py
 @@ -26,6 +26,7 @@ from pulpcore.app.models import AutoAddObjPermsMixin
@@ -10,7 +10,21 @@ index 8c9535d..8d3690e 100644
  from pulpcore.responses import ArtifactResponse
  
  from .base import BaseModel, MasterModel
-@@ -665,6 +666,7 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
+@@ -529,6 +530,13 @@ class HeaderContentGuard(ContentGuard, AutoAddObjPermsMixin):
+     def permit(self, request):
+         header_content = request.headers.get(self.header_name)
+         if not header_content:
++            if self.header_name.casefold() == "x-rh-identity":
++                _logger.info(
++                    "Authentication required. Header %s not found.",
++                    self.header_name,
++                )
++                raise AuthenticationError(_("Authentication required."))
++
+             _logger.debug(
+                 "Access not allowed. Header {header_name} not found.".format(
+                     header_name=self.header_name
+@@ -665,6 +673,7 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
          Permit if ANY content-guard allows (OR permissions).
          """
          errors = []
@@ -18,7 +32,7 @@ index 8c9535d..8d3690e 100644
          if not self.guards.all():
              # No guards specified? PASS
              return
-@@ -674,6 +676,13 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
+@@ -674,6 +683,13 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
              try:
                  detail_guard.permit(request)
                  return  # success on first-pass
@@ -32,7 +46,7 @@ index 8c9535d..8d3690e 100644
              except PermissionError as pe:
                  guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
                      detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
-@@ -681,6 +690,8 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
+@@ -681,6 +697,8 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
                  errors.append(guard_error)
  
          # If we get here - FAIL
@@ -42,7 +56,7 @@ index 8c9535d..8d3690e 100644
          raise PermissionError(msg)
  
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 5abe50f..fbccce4 100644
+index 5abe50f80..13eae096e 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
 @@ -20,6 +20,7 @@ from aiohttp.web_exceptions import (
@@ -53,15 +67,16 @@ index 5abe50f..fbccce4 100644
  )
  from asgiref.sync import sync_to_async
  from django.utils import timezone
-@@ -68,6 +69,7 @@ from pulpcore.exceptions import (  # noqa: E402
+@@ -68,6 +69,8 @@ from pulpcore.exceptions import (  # noqa: E402
      UnsupportedDigestValidationError,
  )
  from pulpcore.metrics import artifacts_size_counter  # noqa: E402
 +from pulp_service.exceptions import AuthenticationError  # noqa: E402
++from urllib.parse import urlparse  # noqa: E402
  
  log = logging.getLogger(__name__)
  _current_distribution = ContextVar("current_distribution", default=None)
-@@ -269,6 +271,7 @@ class Handler:
+@@ -269,6 +272,7 @@ class Handler:
          """
          guard_key = "DISTRO#GUARD#PRESENT"
          present = await cached.get(guard_key, base_key=base_key)
@@ -69,7 +84,7 @@ index 5abe50f..fbccce4 100644
          if present == b"True" or present is None:
              path = request.match_info["path"]
              if not (distro := _current_distribution.get()):
-@@ -278,11 +281,11 @@ class Handler:
+@@ -278,11 +282,11 @@ class Handler:
                  _current_distribution.set(distro)
              try:
                  guard = await sync_to_async(cls._permit)(request, distro)
@@ -83,7 +98,7 @@ index 5abe50f..fbccce4 100644
                      await cached.set(guard_key, str(guard), base_key=base_key)
  
      @AsyncContentCache(
-@@ -517,6 +520,15 @@ class Handler:
+@@ -517,6 +521,16 @@ class Handler:
              return False
          try:
              guard.cast().permit(request)
@@ -92,9 +107,10 @@ index 5abe50f..fbccce4 100644
 +                'Path: %(p)s requires authentication for guard: "%(g)s" reason: %(r)s',
 +                {"p": request.path, "g": guard.name, "r": str(ae)},
 +            )
++            realm = urlparse(settings.CONTENT_ORIGIN).hostname or "pulp-content"
 +            raise HTTPUnauthorized(
 +                reason=str(ae),
-+                headers={"WWW-Authenticate": 'Basic realm="packages.redhat.com"'},
++                headers={"WWW-Authenticate": f'Basic realm="{realm}"'},
 +            )
          except PermissionError as pe:
              log.debug(
