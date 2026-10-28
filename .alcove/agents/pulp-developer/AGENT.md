@@ -70,10 +70,11 @@ Four auth classes, all extend `JSONHeaderRemoteAuthentication` with different `j
 | `TurnpikeTermsBasedRegistryAuthentication` | Checks `.identity.auth_type == "registry-auth"` then extracts from `.identity.registry` | Registry-auth via Turnpike proxy |
 | `RHSamlAuthentication` | `.identity.associate.email` | SAML for /pulp-mgmt/ admin |
 
-### Multi-tenancy (app/models.py, app/authorization.py)
-- `DomainOrg` model links `org_id`, `user` (FK), or `group` (FK) to Pulp domains (M2M).
-  Access is granted by matching org_id, direct user FK, or group membership.
-- `DomainBasedPermission` extracts org_id from `.identity.internal.org_id`
+### Multi-tenancy (app/access_policy.py, app/signals.py)
+- Authorization is RBAC via `PulpServiceAccessPolicy`. Access is scoped per Pulp domain.
+- Domain creation (`post_create_domain` signal) grants `core.domain_owner` (object-level) and
+  `service.domain_admin` (domain-scoped) roles to the creator, team group, and `rh-org-<org_id>`
+  org group; read-only groups get the `*_viewer` roles.
 - `AllowUnauthPull` permission class allows safe methods (GET/HEAD/OPTIONS) without authentication
 - ContextVars bridge permission checks to signal handlers:
   - `org_id_var` — set in permission check, read in post_save signal

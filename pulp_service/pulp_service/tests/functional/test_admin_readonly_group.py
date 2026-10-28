@@ -18,7 +18,7 @@ from django.conf import settings
 
 ADMIN_READONLY_ORG_ID = "888888888"
 # A distinct org that owns the domains created below, so an admin-readonly member
-# (ADMIN_READONLY_ORG_ID) never gets access through an org_id or DomainOrg match.
+# (ADMIN_READONLY_ORG_ID) never gets access through an org_id or domain-role match.
 DOMAIN_OWNER_ORG_ID = "777777777"
 
 
@@ -190,7 +190,7 @@ class TestAdminReadonlyDomainScopedRead:
         resp = requests.get(url, headers=headers, timeout=30)
         # Under RBAC the repository list allows any authenticated user and scopes results by
         # role: a non-member with no role on this domain sees an empty 200 (no leak), not the
-        # 403 the old DomainBasedPermission returned.
+        # 403 the legacy authorization returned.
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
 

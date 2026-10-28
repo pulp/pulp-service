@@ -1,5 +1,4 @@
 import logging
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,7 +9,6 @@ from pulpcore.app.models import CompositeContentGuard, HeaderContentGuard
 from pulpcore.content.handler import Handler
 
 from pulp_service.app.access_policy import PulpServiceAccessPolicy
-from pulp_service.app.authorization import DomainBasedPermission
 from pulp_service.exceptions import AuthenticationError
 
 
@@ -192,34 +190,6 @@ class TestPermissionPolicyAuthentication:
 
         with caplog.at_level(logging.WARNING):
             result = policy._evaluate_content_guard(guard, MagicMock(), org_id=None, user=None)
-
-        assert result is False
-        assert not any(
-            "unexpected error evaluating content guard" in record.getMessage().lower() for record in caplog.records
-        )
-
-    def test_domain_based_permission_treats_authentication_error_as_denial(self, caplog):
-        from pulp_python.app.pypi.views import PyPIMixin
-
-        permission = DomainBasedPermission()
-        request = SimpleNamespace(
-            method="GET",
-            user=SimpleNamespace(is_authenticated=True),
-            META={},
-        )
-        domain = SimpleNamespace(pk=1, name="lightwell")
-        view = MagicMock(spec=PyPIMixin)
-        view.distribution.content_guard.cast.return_value.permit.side_effect = AuthenticationError(
-            "Authentication required."
-        )
-
-        with (
-            patch.object(permission, "_has_domain_access", return_value=False),
-            patch.object(permission, "get_decoded_identity_header", return_value=None),
-            patch.object(permission, "get_org_id", return_value=None),
-            caplog.at_level(logging.WARNING),
-        ):
-            result = permission._check_pypi_safe_method_access(request, view, domain)
 
         assert result is False
         assert not any(
