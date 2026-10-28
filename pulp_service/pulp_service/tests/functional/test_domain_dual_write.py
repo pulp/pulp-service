@@ -122,6 +122,21 @@ def _assert_owns_domain(assignments, domain_href):
     assert admin, f"missing domain-scoped service.domain_admin on {domain_href}"
 
 
+def _assert_org_group_not_granted(pulpcore_bindings, domain_href, org_id=ORG_ID):
+    """Domain creation must not grant the rh-org-<org_id> group access to the new domain.
+
+    The auth flow still adds authenticated users to rh-org-<org_id>, so the group may exist;
+    what must not happen is the signal granting it either domain role. If the group exists,
+    assert it holds neither role on this domain.
+    """
+    for group in pulpcore_bindings.GroupsApi.list(name=f"rh-org-{org_id}").results:
+        assignments = _group_role_assignments(pulpcore_bindings, group.pulp_href)
+        owner = any(a.role == "core.domain_owner" and a.content_object == domain_href for a in assignments)
+        admin = any(a.role == "service.domain_admin" and a.domain == domain_href for a in assignments)
+        assert not owner, f"rh-org-{org_id} must not own {domain_href}"
+        assert not admin, f"rh-org-{org_id} must not admin {domain_href}"
+
+
 def _create_domain(create_service_domain, username, group_name=None):
     # Under RBAC non-admins create domains via the self-service endpoint, which drives the
     # same post_create_domain dual-write. Role introspection below uses admin auth (bindings
@@ -130,20 +145,22 @@ def _create_domain(create_service_domain, username, group_name=None):
     return create_service_domain(str(uuid4()), identity_header=_auth_header(_identity(username)), group_name=group_name)
 
 
-def test_dual_write_grants_creator_and_org_group(pulpcore_bindings, create_service_domain):
-    """Creator with no explicit team group: creator gets direct roles, rh-org-<org_id> gets the pair."""
+def test_dual_write_grants_creator_not_org_group(pulpcore_bindings, create_service_domain):
+    """Default path (no team group): creator gets direct roles, the auto-created domain-<name>
+    group gets the pair, and rh-org-<org_id> is NOT granted."""
     username = str(uuid4())
     domain = _create_domain(create_service_domain, username)
 
     _assert_owns_domain(_user_role_assignments(pulpcore_bindings, username), domain.pulp_href)
-
-    org_groups = pulpcore_bindings.GroupsApi.list(name=f"rh-org-{ORG_ID}")
-    assert org_groups.count == 1, f"expected the signal to create group rh-org-{ORG_ID}"
-    _assert_owns_domain(_group_role_assignments(pulpcore_bindings, org_groups.results[0].pulp_href), domain.pulp_href)
+    # No group_name was passed, so CreateDomainView auto-creates and grants the domain-<name> group.
+    domain_groups = pulpcore_bindings.GroupsApi.list(name=f"domain-{domain.name}").results
+    assert len(domain_groups) == 1, f"expected exactly one domain-{domain.name} group, got {len(domain_groups)}"
+    _assert_owns_domain(_group_role_assignments(pulpcore_bindings, domain_groups[0].pulp_href), domain.pulp_href)
+    _assert_org_group_not_granted(pulpcore_bindings, domain.pulp_href)
 
 
 def test_dual_write_grants_team_group(pulpcore_bindings, gen_group, gen_object_with_cleanup, create_service_domain):
-    """Creator in a team group: the team group AND the org group get the pair, creator keeps direct roles."""
+    """Creator in a team group: the team group gets the pair, creator keeps direct roles, rh-org is NOT granted."""
     team_group = gen_group(name=f"test-team-{uuid4()}")
 
     username = str(uuid4())
@@ -162,10 +179,7 @@ def test_dual_write_grants_team_group(pulpcore_bindings, gen_group, gen_object_w
     # Creator always gets direct roles, even when the domain is group-scoped (signals.py divergence).
     _assert_owns_domain(_user_role_assignments(pulpcore_bindings, username), domain.pulp_href)
     _assert_owns_domain(_group_role_assignments(pulpcore_bindings, team_group.pulp_href), domain.pulp_href)
-
-    org_groups = pulpcore_bindings.GroupsApi.list(name=f"rh-org-{ORG_ID}")
-    assert org_groups.count == 1
-    _assert_owns_domain(_group_role_assignments(pulpcore_bindings, org_groups.results[0].pulp_href), domain.pulp_href)
+    _assert_org_group_not_granted(pulpcore_bindings, domain.pulp_href)
 
 
 @pytest.fixture
@@ -192,7 +206,7 @@ def template_domain_s3(pulpcore_bindings, gen_object_with_cleanup):
 
 @pytest.mark.usefixtures("template_domain_s3")
 def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, request):
-    """Self-service create-domain endpoint: creator, the group_name group, and the org group get the pair.
+    """Self-service create-domain endpoint: creator and the group_name group get the pair; rh-org is NOT granted.
 
     This is the production path (CreateDomainView) that sets group_var and wraps the save
     in transaction.atomic(), exercising the signal's explicit_group +
@@ -220,10 +234,7 @@ def test_dual_write_self_service_create_domain(pulpcore_bindings, bindings_cfg, 
 
     _assert_owns_domain(_user_role_assignments(pulpcore_bindings, username), domain_href)
     _assert_owns_domain(_group_role_assignments(pulpcore_bindings, team_group.pulp_href), domain_href)
-
-    org_groups = pulpcore_bindings.GroupsApi.list(name=f"rh-org-{ORG_ID}")
-    assert org_groups.count == 1
-    _assert_owns_domain(_group_role_assignments(pulpcore_bindings, org_groups.results[0].pulp_href), domain_href)
+    _assert_org_group_not_granted(pulpcore_bindings, domain_href)
 
 
 def test_domain_with_automatic_identity_guard_bundle_can_be_deleted(

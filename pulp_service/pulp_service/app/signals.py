@@ -64,22 +64,6 @@ def assign_domain_creator_role(sender, instance, created, **kwargs):  # noqa: AR
         assign_role("core.domain_creator", instance)
 
 
-def _derive_org_id_from_user(user):
-    """Derive an org_id from the user's rh-org-<org_id> group membership, or None.
-
-    Fallback for a domain create whose request carried no identity.internal.org_id
-    (the calunga null-org_id shape). Users are auto-added to rh-org-<org_id> at auth
-    time, so a user in exactly one such group unambiguously identifies their org.
-    Return None for zero or multiple org groups -- never guess for a mixed-org user.
-    Single-user analogue of migration 0022's _derive_org_id.
-    """
-    org_ids = {
-        name[len(ORG_GROUP_PREFIX) :]
-        for name in user.groups.filter(name__startswith=ORG_GROUP_PREFIX).values_list("name", flat=True)
-    }
-    return next(iter(org_ids)) if len(org_ids) == 1 else None
-
-
 def _assign_domain_roles(entity, domain):
     """
     Assign the following RBAC roles for the passed entity:
@@ -183,7 +167,6 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
     if kwargs["created"]:
         from pulp_service.app.authorization import org_id_var, user_id_var
 
-        org_id = org_id_var.get(None)
         org_id_var.set(None)
         user_id = user_id_var.get(None)
         user_id_var.set(None)
@@ -202,17 +185,11 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
             with transaction.atomic():
                 if user_id:
                     user = get_user_model().objects.get(pk=user_id)
-                    # When the create request carried no identity.internal.org_id, org_id_var
-                    # is None -- the calunga null-org_id shape that leaves the rh-org-<org_id>
-                    # group role-less. Recover it from the creator's own rh-org membership so
-                    # the rh-org role grant below still happens. `or` (not an `if`) keeps this
-                    # function under the branch-count lint ceiling.
-                    org_id = org_id or _derive_org_id_from_user(user)
                     # The creator always gets direct roles, even when the domain is group-scoped.
                     _assign_domain_roles(user, domain)
                     # An explicit "team" group scopes domain visibility to a group; otherwise fall
                     # back to the user's first non-org group. Auto-assigned rh-org-<org_id> groups are
-                    # excluded -- they are per-org and get their own role grant below via org_group.
+                    # excluded here and no longer get a domain role grant at create time.
                     # Query through the pulpcore Group proxy (not user.groups, which yields base
                     # auth.Group instances) so assign_role classifies it as a Group.
                     group = explicit_group or (
@@ -220,10 +197,6 @@ def post_create_domain(sender, **kwargs):  # noqa: ARG001
                     )
                     if group is not None:
                         _assign_domain_roles(group, domain)
-                    if org_id:
-                        org_group, _ = Group.objects.get_or_create(name=f"{ORG_GROUP_PREFIX}{org_id}")
-                        if org_group != group:
-                            _assign_domain_roles(org_group, domain)
 
                 _provision_domain_content_guards(domain)
         except Exception:
