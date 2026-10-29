@@ -1826,7 +1826,7 @@ parameters:
     value: ""
   - name: PULP_CONTENT_QUERY_AB_ENABLED
     description: Enable the PULP-2346 read-only content query A/B experiment (content app).
-    value: "false"
+    value: "true"
   - name: PULP_CONTENT_QUERY_AB_PROBABILITY
     description: Probability of running candidate variant B for PULP-2346.
     value: "0.5"
