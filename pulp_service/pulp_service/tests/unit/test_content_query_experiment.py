@@ -32,12 +32,6 @@ def version(db):  # noqa: ARG001
 
 
 @pytest.fixture
-def experiment_on(settings):
-    settings.CONTENT_QUERY_AB_ENABLED = True
-    settings.CONTENT_QUERY_AB_PROBABILITY = 0.5
-
-
-@pytest.fixture
 def force_variant(monkeypatch):
     def _force(variant):
         # random() < p_candidate (0.5) selects B, otherwise A.
@@ -58,7 +52,7 @@ LOOKUPS = [
 
 
 @pytest.mark.parametrize(("filters", "limit", "skip"), LOOKUPS)
-def test_variants_return_same_rows(version, experiment_on, force_variant, filters, limit, skip):  # noqa: ARG001
+def test_variants_return_same_rows(version, force_variant, filters, limit, skip):  # noqa: ARG001
     """Variant A (stock) and variant B (EXISTS) must return identical content artifacts."""
     results = {}
     for variant in ("A", "B"):
@@ -70,7 +64,7 @@ def test_variants_return_same_rows(version, experiment_on, force_variant, filter
     assert results["A"] == results["B"]
 
 
-def test_skip_candidate_returns_no_rows_without_querying(version, experiment_on, force_variant):  # noqa: ARG001
+def test_skip_candidate_returns_no_rows_without_querying(version, force_variant):
     force_variant("B")
     with CaptureQueriesContext(connection) as ctx:
         rows, _ = content_query_experiment(
@@ -85,20 +79,7 @@ def test_skip_candidate_returns_no_rows_without_querying(version, experiment_on,
     assert not ctx.captured_queries
 
 
-def test_disabled_runs_stock_query_only_and_logs_nothing(version, settings, caplog, force_variant):
-    settings.CONTENT_QUERY_AB_ENABLED = False
-    force_variant("B")
-    with CaptureQueriesContext(connection) as ctx:
-        rows, _ = content_query_experiment(
-            "test", version, ContentArtifact.objects.all(), filters={"relative_path__startswith": "org/a/"}
-        )
-    assert sorted(row.relative_path for row in rows) == ["org/a/a-1.0.jar", "org/a/a-1.0.pom"]
-    assert not [record for record in caplog.records if record.name == "pulp.experiment"]
-    assert not any("pexp=" in query["sql"] for query in ctx.captured_queries)
-    assert any("content_ids" in query["sql"] for query in ctx.captured_queries)
-
-
-def test_enabled_logs_variant_query_and_repository(version, experiment_on, caplog, force_variant):  # noqa: ARG001
+def test_logs_variant_query_and_repository(version, caplog, force_variant):
     caplog.set_level("INFO", logger="pulp.experiment")
     for variant in ("B", "A"):
         force_variant(variant)
@@ -117,7 +98,7 @@ def test_enabled_logs_variant_query_and_repository(version, experiment_on, caplo
         assert record["duration_ms"] >= 0
 
 
-def test_sql_carries_variant_and_repository_markers(version, experiment_on, force_variant):  # noqa: ARG001
+def test_sql_carries_variant_and_repository_markers(version, force_variant):
     for variant in ("A", "B"):
         force_variant(variant)
         with CaptureQueriesContext(connection) as ctx:

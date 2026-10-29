@@ -14,6 +14,7 @@ from django_guid import get_guid
 logger = logging.getLogger("pulp.experiment")
 DIRECTORY_EXPERIMENT = "PULP-2505"
 CONTENT_QUERY_EXPERIMENT = "PULP-2346"
+CONTENT_QUERY_P_CANDIDATE = 0.5
 
 
 def run_experiment(exp_id, control, candidate, *, p_candidate, context):
@@ -151,11 +152,11 @@ def content_query_experiment(query, version, queryset, *, filters, limit=None, s
 
     Variant A is stock pulpcore (``content__in=version.content``). Variant B checks repository
     membership per matching row with a correlated EXISTS, and with ``skip_candidate`` skips the
-    query. Both return the same rows. Disabled by default; then only variant A runs, unmarked.
+    query. Both return the same rows. Always on: half of the calls run variant B.
     """
 
     def build(variant):
-        if variant == "A" or not settings_enabled():
+        if variant == "A":
             return queryset.filter(content__in=version.content, **filters)
         if skip_candidate:
             return queryset.none()
@@ -174,23 +175,14 @@ def content_query_experiment(query, version, queryset, *, filters, limit=None, s
 
         return evaluate
 
-    if not settings_enabled():
-        used["queryset"] = build("A")
-        return list(used["queryset"] if limit is None else used["queryset"][:limit]), used["queryset"]
-
     rows = run_experiment(
         CONTENT_QUERY_EXPERIMENT,
         run("A"),
         run("B"),
-        p_candidate=getattr(settings, "CONTENT_QUERY_AB_PROBABILITY", 0.5),
+        p_candidate=CONTENT_QUERY_P_CANDIDATE,
         context={"query": query, "repository_id": str(version.repository_id)},
     )
     return rows, used["queryset"]
-
-
-def settings_enabled():
-    """Whether the PULP-2346 content query experiment is switched on."""
-    return bool(getattr(settings, "CONTENT_QUERY_AB_ENABLED", False))
 
 
 def single_or_raise(model, rows):

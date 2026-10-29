@@ -621,11 +621,6 @@ objects:
             value: ${PULP_CONTENT_DIRECTORY_AB_PROBABILITY}
           - name: PULP_CONTENT_DIRECTORY_AB_REVISION
             value: ${PULP_CONTENT_DIRECTORY_AB_REVISION}
-          # PULP-2346 A/B experiment: read-only content queries (content app only).
-          - name: PULP_CONTENT_QUERY_AB_ENABLED
-            value: ${PULP_CONTENT_QUERY_AB_ENABLED}
-          - name: PULP_CONTENT_QUERY_AB_PROBABILITY
-            value: ${PULP_CONTENT_QUERY_AB_PROBABILITY}
           - name: PULP_FEATURE_SERVICE_API_CERT_PATH
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_FEATURE_SERVICE_API_URL
@@ -1824,12 +1819,6 @@ parameters:
   - name: PULP_CONTENT_DIRECTORY_AB_REVISION
     description: Deployed image git SHA tagged on PULP-2505 experiment log lines (required when enabled).
     value: ""
-  - name: PULP_CONTENT_QUERY_AB_ENABLED
-    description: Enable the PULP-2346 read-only content query A/B experiment (content app).
-    value: "true"
-  - name: PULP_CONTENT_QUERY_AB_PROBABILITY
-    description: Probability of running candidate variant B for PULP-2346.
-    value: "0.5"
   - name: PULP_AWS_DEFAULT_ACL
     description: AWS default ACL
     value: "@none None"
