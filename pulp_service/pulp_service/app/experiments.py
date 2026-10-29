@@ -39,7 +39,7 @@ def run_experiment(exp_id, control, candidate, *, p_candidate, context):
         logger.info(json.dumps(record))
 
 
-def run_lazy_experiment(exp_id, control, candidate, *, p_candidate=0.5, repository_id=None):
+def run_lazy_experiment(exp_id, control, candidate, *, p_candidate=0.5):
     """Dispatch one variant of an A/B experiment over lazily evaluated querysets.
 
     control and candidate are zero-argument callables returning equivalent lazy
@@ -47,8 +47,7 @@ def run_lazy_experiment(exp_id, control, candidate, *, p_candidate=0.5, reposito
     building the queryset does not execute it, and callers may chain further
     filters before evaluation. Latency is attributed per variant through the SQL
     marker comments in RDS Performance Insights; this log line records only the
-    dispatch decision for volume and correlation analysis, plus the target
-    repository when the caller passes repository_id.
+    dispatch decision for volume and correlation analysis.
     """
     variant = "B" if random.random() < p_candidate else "A"  # noqa: S311
     logger.info(
@@ -58,7 +57,6 @@ def run_lazy_experiment(exp_id, control, candidate, *, p_candidate=0.5, reposito
                 "exp_id": exp_id,
                 "variant": variant,
                 "p_candidate": p_candidate,
-                "repository_id": str(repository_id) if repository_id else None,
                 "correlation_id": get_guid(),
             }
         )
