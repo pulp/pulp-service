@@ -1,0 +1,1 @@
+Fixed the pulp-mgmt admin User page timing out for users with many direct role assignments by replacing the per-row role inline with a one-line summary that links to the UserRole changelist filtered to the user.
