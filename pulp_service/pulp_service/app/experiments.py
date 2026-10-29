@@ -39,31 +39,6 @@ def run_experiment(exp_id, control, candidate, *, p_candidate, context):
         logger.info(json.dumps(record))
 
 
-def run_lazy_experiment(exp_id, control, candidate, *, p_candidate=0.5):
-    """Dispatch one variant of an A/B experiment over lazily evaluated querysets.
-
-    control and candidate are zero-argument callables returning equivalent lazy
-    querysets. Unlike run_experiment(), no duration or result count is recorded:
-    building the queryset does not execute it, and callers may chain further
-    filters before evaluation. Latency is attributed per variant through the SQL
-    marker comments in RDS Performance Insights; this log line records only the
-    dispatch decision for volume and correlation analysis.
-    """
-    variant = "B" if random.random() < p_candidate else "A"  # noqa: S311
-    logger.info(
-        json.dumps(
-            {
-                "event": "ab_experiment_dispatch",
-                "exp_id": exp_id,
-                "variant": variant,
-                "p_candidate": p_candidate,
-                "correlation_id": get_guid(),
-            }
-        )
-    )
-    return (candidate if variant == "B" else control)()
-
-
 def control_membership_dates(memberships, content_to_names):
     """Keep the existing membership iteration and Python filtering."""
     dates = {}
