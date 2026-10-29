@@ -41,18 +41,18 @@ def force_variant(monkeypatch):
 
 
 LOOKUPS = [
-    pytest.param({"relative_path__startswith": "org/"}, None, False, id="directory-listing"),
-    pytest.param({"relative_path__startswith": "org/a/"}, None, False, id="specific-folder"),
-    pytest.param({"relative_path__startswith": "nothing/"}, None, False, id="missing-folder"),
-    pytest.param({"relative_path": "org/b/index.html"}, 1, False, id="index-probe-hit"),
-    pytest.param({"relative_path": "org/a/index.html"}, 1, False, id="index-probe-miss"),
-    pytest.param({"relative_path": "org/a/a-1.0.jar"}, 2, False, id="file-lookup-hit"),
-    pytest.param({"relative_path": "org/b/b-2.0.jar"}, 2, False, id="file-lookup-not-in-version"),
+    pytest.param({"relative_path__startswith": "org/"}, None, id="directory-listing"),
+    pytest.param({"relative_path__startswith": "org/a/"}, None, id="specific-folder"),
+    pytest.param({"relative_path__startswith": "nothing/"}, None, id="missing-folder"),
+    pytest.param({"relative_path": "org/b/index.html"}, 1, id="index-probe-hit"),
+    pytest.param({"relative_path": "org/a/index.html"}, 1, id="index-probe-miss"),
+    pytest.param({"relative_path": "org/a/a-1.0.jar"}, 2, id="file-lookup-hit"),
+    pytest.param({"relative_path": "org/b/b-2.0.jar"}, 2, id="file-lookup-not-in-version"),
 ]
 
 
-@pytest.mark.parametrize(("filters", "limit", "skip"), LOOKUPS)
-def test_variants_return_same_rows(version, force_variant, filters, limit, skip):  # noqa: ARG001
+@pytest.mark.parametrize(("filters", "limit"), LOOKUPS)
+def test_variants_return_same_rows(version, force_variant, filters, limit):
     """Variant A (stock) and variant B (EXISTS) must return identical content artifacts."""
     results = {}
     for variant in ("A", "B"):
@@ -64,19 +64,18 @@ def test_variants_return_same_rows(version, force_variant, filters, limit, skip)
     assert results["A"] == results["B"]
 
 
-def test_skip_candidate_returns_no_rows_without_querying(version, force_variant):
+def test_candidate_index_probe_executes_membership_query(version, force_variant):
     force_variant("B")
     with CaptureQueriesContext(connection) as ctx:
         rows, _ = content_query_experiment(
             "index_probe",
             version,
             ContentArtifact.objects.all(),
-            filters={"relative_path": "org/a/a-1.0.jarindex.html"},
+            filters={"relative_path": "org/b/index.html"},
             limit=1,
-            skip_candidate=True,
         )
-    assert rows == []
-    assert not ctx.captured_queries
+    assert [row.relative_path for row in rows] == ["org/b/index.html"]
+    assert any("EXISTS" in query["sql"] for query in ctx.captured_queries)
 
 
 def test_logs_variant_query_and_repository(version, caplog, force_variant):

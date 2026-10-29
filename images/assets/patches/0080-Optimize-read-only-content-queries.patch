@@ -65,8 +65,6 @@
 -                lambda: ContentArtifact.objects.filter(
 -                    content__in=repo_version.content, relative_path=index_path
 -                ).aexists()
-+            # File-ish paths (no trailing slash, dotted last segment) have no index.html to find.
-+            last_segment = rel_path.rstrip("/").rsplit("/", 1)[-1]
 +            probe_rows, _ = await self._retry_content_artifact_query(
 +                lambda: sync_to_async(content_query_experiment)(
 +                    "index_probe",
@@ -74,7 +72,6 @@
 +                    ContentArtifact.objects.all(),
 +                    filters={"relative_path": index_path},
 +                    limit=1,
-+                    skip_candidate=not ends_in_slash and "." in last_segment,
 +                )
              )
 +            contentartifact_exists = bool(probe_rows)

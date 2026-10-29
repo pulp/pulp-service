@@ -158,8 +158,6 @@ def content_query_experiment(query, version, queryset, *, filters, limit=None, s
     def build(variant):
         if variant == "A":
             return queryset.filter(content__in=version.content, **filters)
-        if skip_candidate:
-            return queryset.none()
         membership = version._content_relationships().filter(content_id=OuterRef("content_id"))
         return queryset.filter(Exists(membership), **filters)
 
