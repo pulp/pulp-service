@@ -57,7 +57,7 @@
  
                  except MultipleObjectsReturned:
                      log.error(
-@@ -1022,11 +1032,19 @@
+@@ -1022,11 +1032,16 @@
              # Look for index.html or list the directory
              index_path = "{}index.html".format(rel_path)
  
@@ -69,7 +69,7 @@
 +                lambda: sync_to_async(content_query_experiment)(
 +                    "index_probe",
 +                    repo_version,
-+                    ContentArtifact.objects.all(),
++                    ContentArtifact.objects.values_list("pk", flat=True),
 +                    filters={"relative_path": index_path},
 +                    limit=1,
 +                )
@@ -78,7 +78,7 @@
              if contentartifact_exists:
                  original_rel_path = index_path
                  headers = self.response_headers(original_rel_path, distro)
-@@ -1047,11 +1065,16 @@
+@@ -1047,11 +1062,16 @@
                      )
  
              try:

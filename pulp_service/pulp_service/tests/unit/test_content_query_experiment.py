@@ -41,19 +41,27 @@ def force_variant(monkeypatch):
 
 
 LOOKUPS = [
-    pytest.param({"relative_path__startswith": "org/"}, None, id="directory-listing"),
-    pytest.param({"relative_path__startswith": "org/a/"}, None, id="specific-folder"),
-    pytest.param({"relative_path__startswith": "nothing/"}, None, id="missing-folder"),
-    pytest.param({"relative_path": "org/b/index.html"}, 1, id="index-probe-hit"),
-    pytest.param({"relative_path": "org/a/index.html"}, 1, id="index-probe-miss"),
-    pytest.param({"relative_path": "org/a/a-1.0.jar"}, 2, id="file-lookup-hit"),
-    pytest.param({"relative_path": "org/b/b-2.0.jar"}, 2, id="file-lookup-not-in-version"),
+    pytest.param(
+        {"relative_path__startswith": "org/"},
+        None,
+        ["org/a/a-1.0.jar", "org/a/a-1.0.pom", "org/b/index.html"],
+        id="directory-listing",
+    ),
+    pytest.param(
+        {"relative_path__startswith": "org/a/"}, None, ["org/a/a-1.0.jar", "org/a/a-1.0.pom"], id="specific-folder"
+    ),
+    pytest.param({"relative_path__startswith": "nothing/"}, None, [], id="missing-folder"),
+    pytest.param({"relative_path": "org/b/index.html"}, 1, ["org/b/index.html"], id="index-probe-hit"),
+    pytest.param({"relative_path": "org/a/index.html"}, 1, [], id="index-probe-miss"),
+    pytest.param({"relative_path": "org/a/a-1.0.jar"}, 2, ["org/a/a-1.0.jar"], id="file-lookup-hit"),
+    # Exists as a ContentArtifact, but its content is not in the version.
+    pytest.param({"relative_path": "org/b/b-2.0.jar"}, 2, [], id="file-lookup-not-in-version"),
 ]
 
 
-@pytest.mark.parametrize(("filters", "limit"), LOOKUPS)
-def test_variants_return_same_rows(version, force_variant, filters, limit):
-    """Variant A (stock) and variant B (EXISTS) must return identical content artifacts."""
+@pytest.mark.parametrize(("filters", "limit", "expected"), LOOKUPS)
+def test_variants_return_expected_rows(version, force_variant, filters, limit, expected):
+    """Both variants return exactly the version's matching artifacts, not just each other's rows."""
     results = {}
     for variant in ("A", "B"):
         force_variant(variant)
@@ -61,7 +69,21 @@ def test_variants_return_same_rows(version, force_variant, filters, limit):
             "test", version, ContentArtifact.objects.select_related("artifact"), filters=filters, limit=limit
         )
         results[variant] = sorted(row.relative_path for row in rows)
-    assert results["A"] == results["B"]
+    assert results["A"] == results["B"] == expected
+
+
+def test_variants_use_their_own_query_shape(version, force_variant):
+    """A is the stock unnest(content_ids) query; B is the correlated EXISTS and never unnests."""
+    sql = {}
+    for variant in ("A", "B"):
+        force_variant(variant)
+        with CaptureQueriesContext(connection) as ctx:
+            content_query_experiment(
+                "test", version, ContentArtifact.objects.all(), filters={"relative_path": "org/a/a-1.0.jar"}, limit=2
+            )
+        sql[variant] = " ".join(query["sql"] for query in ctx.captured_queries)
+    assert "unnest" in sql["A"] and "EXISTS" not in sql["A"]
+    assert "EXISTS" in sql["B"] and "unnest" not in sql["B"]
 
 
 def test_candidate_index_probe_executes_membership_query(version, force_variant):

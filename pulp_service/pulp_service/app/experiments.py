@@ -147,12 +147,12 @@ def _marked_content_query(variant, repository_id):
     return mark
 
 
-def content_query_experiment(query, version, queryset, *, filters, limit=None, skip_candidate=False):
+def content_query_experiment(query, version, queryset, *, filters, limit=None):
     """Run one content app lookup as PULP-2346 and return ``(rows, queryset used)``.
 
     Variant A is stock pulpcore (``content__in=version.content``). Variant B checks repository
-    membership per matching row with a correlated EXISTS, and with ``skip_candidate`` skips the
-    query. Both return the same rows. Always on: half of the calls run variant B.
+    membership per matching row with a correlated EXISTS. Both return the same rows. Always on:
+    half of the calls run variant B.
     """
 
     def build(variant):
