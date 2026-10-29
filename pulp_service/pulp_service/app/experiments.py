@@ -4,14 +4,16 @@ import json
 import logging
 import random
 from time import perf_counter
+from uuid import UUID
 
 from django.conf import settings
 from django.db import connections
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django_guid import get_guid
 
 logger = logging.getLogger("pulp.experiment")
 DIRECTORY_EXPERIMENT = "PULP-2505"
+CONTENT_QUERY_EXPERIMENT = "PULP-2346"
 
 
 def run_experiment(exp_id, control, candidate, *, p_candidate, context):
@@ -130,3 +132,71 @@ def directory_membership_dates(version, content_to_names, sources, *, serving_mo
         p_candidate=probability,
         context=context,
     )
+
+
+def _marked_content_query(variant, repository_id):
+    """Prefix each executed statement with its experiment, variant and repository (for RDS Performance Insights)."""
+    repository = UUID(str(repository_id))
+
+    def mark(execute, sql, params, many, context):
+        return execute(
+            f"/* pexp={CONTENT_QUERY_EXPERIMENT} v={variant} */ /* repo={repository} */ {sql}", params, many, context
+        )
+
+    return mark
+
+
+def content_query_experiment(query, version, queryset, *, filters, limit=None, skip_candidate=False):
+    """Run one content app lookup as PULP-2346 and return ``(rows, queryset used)``.
+
+    Variant A is stock pulpcore (``content__in=version.content``). Variant B checks repository
+    membership per matching row with a correlated EXISTS, and with ``skip_candidate`` skips the
+    query. Both return the same rows. Disabled by default; then only variant A runs, unmarked.
+    """
+
+    def build(variant):
+        if variant == "A" or not settings_enabled():
+            return queryset.filter(content__in=version.content, **filters)
+        if skip_candidate:
+            return queryset.none()
+        membership = version._content_relationships().filter(content_id=OuterRef("content_id"))
+        return queryset.filter(Exists(membership), **filters)
+
+    used = {}
+
+    def run(variant):
+        def evaluate():
+            used["queryset"] = build(variant)
+            with connections[used["queryset"].db].execute_wrapper(
+                _marked_content_query(variant, version.repository_id)
+            ):
+                return list(used["queryset"] if limit is None else used["queryset"][:limit])
+
+        return evaluate
+
+    if not settings_enabled():
+        used["queryset"] = build("A")
+        return list(used["queryset"] if limit is None else used["queryset"][:limit]), used["queryset"]
+
+    rows = run_experiment(
+        CONTENT_QUERY_EXPERIMENT,
+        run("A"),
+        run("B"),
+        p_candidate=getattr(settings, "CONTENT_QUERY_AB_PROBABILITY", 0.5),
+        context={"query": query, "repository_id": str(version.repository_id)},
+    )
+    return rows, used["queryset"]
+
+
+def settings_enabled():
+    """Whether the PULP-2346 content query experiment is switched on."""
+    return bool(getattr(settings, "CONTENT_QUERY_AB_ENABLED", False))
+
+
+def single_or_raise(model, rows):
+    """Return the only row, raising what ``QuerySet.get()`` would for none or several."""
+    if not rows:
+        raise model.DoesNotExist(f"{model.__name__} matching query does not exist.")
+    if len(rows) > 1:
+        raise model.MultipleObjectsReturned(f"get() returned more than one {model.__name__}.")
+    return rows[0]
