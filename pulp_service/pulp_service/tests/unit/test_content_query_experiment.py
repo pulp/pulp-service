@@ -128,6 +128,8 @@ def test_sql_carries_variant_and_repository_markers(version, force_variant):
             )
         marker = f"/* pexp={CONTENT_QUERY_EXPERIMENT} v={variant} */ /* repo={version.repository_id} */"
         assert any(marker in query["sql"] for query in ctx.captured_queries), marker
+        # Once per statement: the collector adds a digest's load once for every marker it finds.
+        assert all(query["sql"].count("pexp=") == 1 for query in ctx.captured_queries)
 
 
 def test_lazy_queryset_keeps_variant_marker(version, force_variant):

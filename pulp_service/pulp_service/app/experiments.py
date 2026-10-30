@@ -141,20 +141,10 @@ def _content_query_marker(variant, repository_id):
     return f"/* pexp={CONTENT_QUERY_EXPERIMENT} v={variant} */ /* repo={repository} */"
 
 
-def _marked_content_query(variant, repository_id):
-    """Prefix each executed statement with its experiment, variant and repository (for RDS Performance Insights)."""
-    marker = _content_query_marker(variant, repository_id)
-
-    def mark(execute, sql, params, many, context):
-        return execute(f"{marker} {sql}", params, many, context)
-
-    return mark
-
-
 def mark_lazy_queryset(queryset, marker):
-    """Keep an experiment marker when a queryset is evaluated later."""
-    # An execute_wrapper cannot survive lazy evaluation, so retain the marker in SQL.
-    return queryset.extra(where=[f"1 = 1 {marker}"])
+    """Embed an experiment marker in the SQL, so it also survives later evaluation (e.g. ``.values()``)."""
+    # The marker is built from constants and a UUID-validated repository id, never from user input.
+    return queryset.extra(where=[f"1 = 1 {marker}"])  # noqa: S610
 
 
 def content_query_experiment(query, version, queryset, *, filters, limit=None):
@@ -178,10 +168,7 @@ def content_query_experiment(query, version, queryset, *, filters, limit=None):
     def run(variant):
         def evaluate():
             used["queryset"] = build(variant)
-            with connections[used["queryset"].db].execute_wrapper(
-                _marked_content_query(variant, version.repository_id)
-            ):
-                return list(used["queryset"] if limit is None else used["queryset"][:limit])
+            return list(used["queryset"] if limit is None else used["queryset"][:limit])
 
         return evaluate
 
