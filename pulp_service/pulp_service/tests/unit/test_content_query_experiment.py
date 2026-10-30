@@ -130,6 +130,22 @@ def test_sql_carries_variant_and_repository_markers(version, force_variant):
         assert any(marker in query["sql"] for query in ctx.captured_queries), marker
 
 
+def test_lazy_queryset_keeps_variant_marker(version, force_variant):
+    """A later subquery evaluation must retain the PULP-2346 marker."""
+    for variant in ("A", "B"):
+        force_variant(variant)
+        _, queryset = content_query_experiment(
+            "directory_listing",
+            version,
+            ContentArtifact.objects.all(),
+            filters={"relative_path__startswith": "org/"},
+        )
+        marker = f"/* pexp={CONTENT_QUERY_EXPERIMENT} v={variant} */ /* repo={version.repository_id} */"
+        with CaptureQueriesContext(connection) as ctx:
+            list(queryset.values("content_id"))
+        assert any(marker in query["sql"] for query in ctx.captured_queries), marker
+
+
 def test_single_or_raise_matches_get_semantics(version):  # noqa: ARG001
     rows = list(ContentArtifact.objects.filter(relative_path="top.txt"))
     assert single_or_raise(ContentArtifact, rows) == rows[0]
