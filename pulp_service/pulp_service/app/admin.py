@@ -152,24 +152,6 @@ class ReadOnlyRoleInline(admin.TabularInline):
         return request.user.is_superuser
 
 
-class UserRoleInline(ReadOnlyRoleInline):
-    model = UserRole
-    fk_name = "user"
-    verbose_name_plural = "Direct role assignments"
-
-    def has_view_permission(self, request, obj=None):
-        # obj is the parent User. Non-superusers see only their own roles,
-        # matching UserRoleAdmin's queryset scoping.
-        if request.user.is_superuser:
-            return True
-        # NOTE: this carries the same obj=None defect fixed in GroupRoleInline
-        # below (Django's InlineModelAdmin.get_queryset passes obj=None and would
-        # empty the inline). Left unfixed because PulpUserAdmin gates the User page
-        # to superusers, so a non-superuser never reaches this inline today. Fix
-        # alongside enabling member self-view of the User page.
-        return obj is not None and obj.pk == request.user.pk
-
-
 class GroupRoleInline(ReadOnlyRoleInline):
     model = GroupRole
     fk_name = "group"
@@ -192,22 +174,54 @@ class GroupRoleInline(ReadOnlyRoleInline):
 class PulpUserAdmin(HijackUserAdminMixin, UserAdmin):
     form = PulpUserChangeForm
     add_form = PulpUserCreationForm
-    inlines = [UserRoleInline]
-    readonly_fields = ("roles_via_groups",)
-    fieldsets = (*UserAdmin.fieldsets, ("Roles via groups", {"fields": ("roles_via_groups",)}))
+    readonly_fields = ("direct_roles", "roles_via_groups")
+    fieldsets = (
+        *UserAdmin.fieldsets,
+        ("Direct role assignments", {"fields": ("direct_roles",)}),
+        ("Roles via groups", {"fields": ("roles_via_groups",)}),
+    )
 
-    def get_inline_instances(self, request, obj=None):
-        # No object yet (add page) means there are no role rows to show.
-        if obj is None:
-            return []
-        return super().get_inline_instances(request, obj)
+    def get_readonly_fields(self, request, obj=None):
+        # Admin display methods receive only ``obj``; stash the request so
+        # direct_roles() can scope its count to the viewer. Pulp runs sync
+        # gunicorn workers (one request per process), so a shared instance
+        # attribute is safe here.
+        self._request = request
+        return super().get_readonly_fields(request, obj)
+
+    @admin.display(description="Direct role assignments")
+    def direct_roles(self, obj):
+        """Summarize this user's directly-assigned roles and link to the UserRole
+        changelist filtered to them, rather than rendering every assignment inline.
+        The changelist handles sorting, search, and pagination, so a user holding
+        roles across many domains renders one link instead of thousands of rows,
+        which is what keeps the User page from timing out."""
+        if not obj or not obj.pk:
+            return "-"
+        # Match UserRoleAdmin.get_queryset: a non-superuser only sees their own
+        # assignments on the linked changelist, so don't surface another user's
+        # count and link here.
+        request = getattr(self, "_request", None)
+        if request is not None and not request.user.is_superuser and request.user.pk != obj.pk:
+            return "-"
+        count = UserRole.objects.filter(user_id=obj.pk).count()
+        if not count:
+            return "-"
+        query = urlencode({"user__id__exact": obj.pk})
+        return format_html(
+            '{} direct role assignment{} - <a href="{}?{}">view in UserRole admin</a>',
+            count,
+            "" if count == 1 else "s",
+            reverse("myadmin:core_userrole_changelist"),
+            query,
+        )
 
     @admin.display(description="Roles inherited from group memberships")
     def roles_via_groups(self, obj):
         """Summarize the GroupRole assignments this user inherits through group
         membership and link to the GroupRole changelist filtered to those groups,
-        rather than rendering every assignment inline (direct roles are in the
-        inline above). The changelist handles sorting, search, and pagination, so
+        rather than rendering every assignment inline (direct roles are summarized
+        in the section above). The changelist handles sorting, search, and pagination, so
         this scales to a user in an org-wide group that spans many domains."""
         if not obj or not obj.pk:
             return "-"

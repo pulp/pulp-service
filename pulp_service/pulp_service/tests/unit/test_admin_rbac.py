@@ -164,6 +164,100 @@ def test_roles_via_groups_empty_when_no_inherited_roles():
     assert admin.roles_via_groups(None) == "-", "no object (add page) renders '-'"
 
 
+def test_direct_roles_summarizes_and_links_to_filtered_changelist():
+    """Direct role assignments render as a one-line summary plus a link to the
+    UserRole changelist filtered to the user, rather than every assignment inline.
+    A user holding roles across many domains gets a count and a link, not N rows,
+    which is what keeps the User page from timing out."""
+    suffix = uuid4().hex[:10]
+    domain_a = _domain(f"direct-a-{suffix}")
+    domain_b = _domain(f"direct-b-{suffix}")
+    user = User.objects.create(username=f"direct-{suffix}")
+    # Drop the global role the user-creation signal auto-assigns, so the count
+    # reflects only the roles this test sets up.
+    UserRole.objects.filter(user=user).delete()
+    owner = Role.objects.get(name="core.domain_owner")
+    viewer = Role.objects.get(name="core.domain_viewer")
+    UserRole.objects.create(user=user, role=owner, domain=domain_a)
+    UserRole.objects.create(user=user, role=viewer, domain=domain_a)
+    UserRole.objects.create(user=user, role=owner, domain=domain_b)
+
+    html = str(PulpUserAdmin(User, admin_site).direct_roles(user))
+
+    assert "3 direct role assignments" in html, "summary states the direct assignment count"
+    changelist = reverse("myadmin:core_userrole_changelist")
+    assert f'href="{changelist}?user__id__exact={user.pk}"' in html, "link filters the changelist to the user"
+    assert html.isascii(), "summary uses only regular-keyboard characters"
+
+
+def test_direct_roles_singular_grammar():
+    """A single direct assignment reads in the singular (no stray 's')."""
+    suffix = uuid4().hex[:10]
+    domain = _domain(f"direct-one-{suffix}")
+    user = User.objects.create(username=f"direct-one-{suffix}")
+    UserRole.objects.filter(user=user).delete()  # drop the auto-assigned signal role
+    UserRole.objects.create(user=user, role=Role.objects.get(name="core.domain_owner"), domain=domain)
+
+    html = str(PulpUserAdmin(User, admin_site).direct_roles(user))
+
+    assert "1 direct role assignment" in html, "singular grammar for a single assignment"
+    assert "assignments" not in html, "no plural 's' in the singular case"
+
+
+def test_direct_roles_empty_when_none():
+    """A user with no direct roles (and the add page, obj=None) renders '-'."""
+    admin = PulpUserAdmin(User, admin_site)
+    loner = User.objects.create(username=f"direct-none-{uuid4().hex[:10]}")
+    UserRole.objects.filter(user=loner).delete()  # drop the auto-assigned signal role
+    assert admin.direct_roles(loner) == "-", "a user with no direct roles has nothing to summarize"
+    assert admin.direct_roles(None) == "-", "no object (add page) renders '-'"
+
+
+def test_direct_roles_link_opens_filtered_changelist():
+    """The ?user__id__exact link must resolve (no DisallowedModelAdminLookup) and
+    show only the target user's rows. A broken link would defeat the fix."""
+    suffix = uuid4().hex[:10]
+    domain = _domain(f"direct-link-{suffix}")
+    user = User.objects.create(username=f"direct-link-{suffix}")
+    other = User.objects.create(username=f"direct-link-other-{suffix}")
+    UserRole.objects.create(user=user, role=Role.objects.get(name="core.domain_owner"), domain=domain)
+    UserRole.objects.create(user=other, role=Role.objects.get(name="core.domain_viewer"), domain=domain)
+    su = User.objects.create(username=f"direct-link-su-{suffix}", is_superuser=True)
+
+    client = Client()
+    client.force_login(su)
+    page = client.get(reverse("myadmin:core_userrole_changelist"), {"user__id__exact": user.pk})
+    content = page.content.decode()
+
+    assert page.status_code == 200, "the filtered UserRole changelist link must resolve"
+    assert user.username in content, "the filtered changelist shows the target user's rows"
+    assert other.username not in content, "the filter excludes other users' rows"
+
+
+def test_direct_roles_scoped_to_viewer():
+    """direct_roles must not surface another user's role count to a non-superuser
+    viewer. The linked changelist scopes a non-superuser to their own rows
+    (UserRoleAdmin.get_queryset), so the count shown here must do the same; a
+    superuser sees any user's count."""
+    suffix = uuid4().hex[:10]
+    domain = _domain(f"direct-scope-{suffix}")
+    viewer = User.objects.create(username=f"direct-scope-{suffix}")
+    other = User.objects.create(username=f"direct-scope-other-{suffix}")
+    UserRole.objects.filter(user__in=[viewer, other]).delete()  # drop the auto-assigned signal roles
+    UserRole.objects.create(user=other, role=Role.objects.get(name="core.domain_owner"), domain=domain)
+
+    admin = PulpUserAdmin(User, admin_site)
+
+    admin._request = _request(viewer)
+    assert admin.direct_roles(other) == "-", "a non-superuser must not see another user's direct role count"
+
+    admin._request = _request(other)
+    assert "1 direct role assignment" in str(admin.direct_roles(other)), "a user sees their own direct role count"
+
+    admin._request = _request(_su())
+    assert "1 direct role assignment" in str(admin.direct_roles(other)), "a superuser sees any user's count"
+
+
 def test_role_admin_form_rejects_nonexistent_object_id():
     """The role admin form resolves object_id against the selected content type: a
     nonexistent id (and a malformed one for a typed primary key) is rejected rather
@@ -330,8 +424,8 @@ def test_userrole_admin_form_scope_validation():
 
 
 def test_user_group_domain_pages_render_role_sections():
-    """The User change page shows direct roles inline plus the 'Roles via groups'
-    section; the Group page shows its role inline; the Domain page lists the
+    """The User change page shows a direct-roles summary link plus the 'Roles via
+    groups' section; the Group page shows its role inline; the Domain page lists the
     UserRole/GroupRole assignments targeting it. Rendered via the admin Client.
     """
     suffix = uuid4().hex[:10]
@@ -350,8 +444,14 @@ def test_user_group_domain_pages_render_role_sections():
     group_page = client.get(reverse("myadmin:core_group_change", args=[group.pk])).content.decode()
     domain_page = client.get(reverse("myadmin:core_domain_change", args=[domain.pk])).content.decode()
 
-    assert "Direct role assignments" in user_page, "User page must show a direct role assignments inline"
-    assert "Roles via groups" in user_page and "core.domain_owner" in user_page, "User page must list inherited roles"
+    assert "view in UserRole admin" in user_page, "User page must link to the user's direct roles"
+    assert "core.domain_owner" not in user_page, (
+        "the User page must summarize direct roles, not render each assignment as an inline "
+        "row (a re-added UserRoleInline would list role names and reintroduce the timeout)"
+    )
+    assert "Roles via groups" in user_page and "view in GroupRole admin" in user_page, (
+        "User page must show the inherited-roles section and link to it"
+    )
     assert "Role assignments" in group_page and "core.domain_owner" in group_page, "Group page must show a role inline"
     assert "core.domain_owner" in domain_page and user.username in domain_page and group.name in domain_page, (
         "Domain page must list the user and group role assignments targeting it"
