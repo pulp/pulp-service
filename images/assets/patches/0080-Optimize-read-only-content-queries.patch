@@ -1,0 +1,101 @@
+--- a/pulpcore/content/handler.py
++++ b/pulpcore/content/handler.py
+@@ -50,7 +50,11 @@
+ )
+ from jinja2 import Template  # noqa: E402
+ 
+-from pulp_service.app.experiments import directory_membership_dates  # noqa: E402
++from pulp_service.app.experiments import (  # noqa: E402
++    content_query_experiment,
++    directory_membership_dates,
++    single_or_raise,
++)
+ 
+ from pulpcore.app import mime_types  # noqa: E402
+ from pulpcore.app.models import (  # noqa: E402
+@@ -785,11 +789,14 @@
+                             artifacts_to_find[pa.content_artifact.pk] = name
+ 
+             if repo_version or publication.pass_through:
+-                cas = ContentArtifact.objects.select_related("artifact").filter(
+-                    content__in=content_repo_ver.content, relative_path__startswith=path
++                ca_rows, cas = content_query_experiment(
++                    "directory_listing",
++                    content_repo_ver,
++                    ContentArtifact.objects.select_related("artifact"),
++                    filters={"relative_path__startswith": path},
+                 )
+                 content_sources.append((cas, "content_id"))
+-                for ca in cas:
++                for ca in ca_rows:
+                     name = file_or_directory_name(path, ca.relative_path)
+                     directory_list.add(name)
+                     update_content_date(content_dates, ca.content_id, ca.pulp_created)
+@@ -977,15 +984,18 @@
+             # pass-through
+             if publication.pass_through:
+                 try:
+-                    ca = await self._retry_content_artifact_query(
+-                        lambda: ContentArtifact.objects.select_related(
+-                            "artifact", "artifact__pulp_domain"
+-                        )
+-                        .filter(
+-                            content__in=publication.repository_version.content,
++                    rows, _ = await self._retry_content_artifact_query(
++                        lambda: sync_to_async(content_query_experiment)(
++                            "pass_through_file_lookup",
++                            publication.repository_version,
++                            ContentArtifact.objects.select_related(
++                                "artifact", "artifact__pulp_domain"
++                            ),
++                            filters={"relative_path": original_rel_path},
++                            limit=2,
+                         )
+-                        .aget(relative_path=original_rel_path)
+                     )
++                    ca = single_or_raise(ContentArtifact, rows)
+ 
+                 except MultipleObjectsReturned:
+                     log.error(
+@@ -1022,11 +1032,16 @@
+             # Look for index.html or list the directory
+             index_path = "{}index.html".format(rel_path)
+ 
+-            contentartifact_exists = await self._retry_content_artifact_query(
+-                lambda: ContentArtifact.objects.filter(
+-                    content__in=repo_version.content, relative_path=index_path
+-                ).aexists()
++            probe_rows, _ = await self._retry_content_artifact_query(
++                lambda: sync_to_async(content_query_experiment)(
++                    "index_probe",
++                    repo_version,
++                    ContentArtifact.objects.values_list("pk", flat=True),
++                    filters={"relative_path": index_path},
++                    limit=1,
++                )
+             )
++            contentartifact_exists = bool(probe_rows)
+             if contentartifact_exists:
+                 original_rel_path = index_path
+                 headers = self.response_headers(original_rel_path, distro)
+@@ -1047,11 +1062,16 @@
+                     )
+ 
+             try:
+-                ca = await self._retry_content_artifact_query(
+-                    lambda: ContentArtifact.objects.select_related(
+-                        "artifact", "artifact__pulp_domain"
+-                    ).aget(content__in=repo_version.content, relative_path=original_rel_path)
++                rows, _ = await self._retry_content_artifact_query(
++                    lambda: sync_to_async(content_query_experiment)(
++                        "file_lookup",
++                        repo_version,
++                        ContentArtifact.objects.select_related("artifact", "artifact__pulp_domain"),
++                        filters={"relative_path": original_rel_path},
++                        limit=2,
++                    )
+                 )
++                ca = single_or_raise(ContentArtifact, rows)
+ 
+             except MultipleObjectsReturned:
+                 log.error(
