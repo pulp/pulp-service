@@ -135,16 +135,26 @@ def directory_membership_dates(version, content_to_names, sources, *, serving_mo
     )
 
 
+def _content_query_marker(variant, repository_id):
+    """Return the PULP-2346 marker for a variant and repository."""
+    repository = UUID(str(repository_id))
+    return f"/* pexp={CONTENT_QUERY_EXPERIMENT} v={variant} */ /* repo={repository} */"
+
+
 def _marked_content_query(variant, repository_id):
     """Prefix each executed statement with its experiment, variant and repository (for RDS Performance Insights)."""
-    repository = UUID(str(repository_id))
+    marker = _content_query_marker(variant, repository_id)
 
     def mark(execute, sql, params, many, context):
-        return execute(
-            f"/* pexp={CONTENT_QUERY_EXPERIMENT} v={variant} */ /* repo={repository} */ {sql}", params, many, context
-        )
+        return execute(f"{marker} {sql}", params, many, context)
 
     return mark
+
+
+def mark_lazy_queryset(queryset, marker):
+    """Keep an experiment marker when a queryset is evaluated later."""
+    # An execute_wrapper cannot survive lazy evaluation, so retain the marker in SQL.
+    return queryset.extra(where=[f"1 = 1 {marker}"])
 
 
 def content_query_experiment(query, version, queryset, *, filters, limit=None):
@@ -157,9 +167,11 @@ def content_query_experiment(query, version, queryset, *, filters, limit=None):
 
     def build(variant):
         if variant == "A":
-            return queryset.filter(content__in=version.content, **filters)
-        membership = version._content_relationships().filter(content_id=OuterRef("content_id"))
-        return queryset.filter(Exists(membership), **filters)
+            selected = queryset.filter(content__in=version.content, **filters)
+        else:
+            membership = version._content_relationships().filter(content_id=OuterRef("content_id"))
+            selected = queryset.filter(Exists(membership), **filters)
+        return mark_lazy_queryset(selected, _content_query_marker(variant, version.repository_id))
 
     used = {}
 
