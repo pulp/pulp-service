@@ -4,14 +4,17 @@ import json
 import logging
 import random
 from time import perf_counter
+from uuid import UUID
 
 from django.conf import settings
 from django.db import connections
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django_guid import get_guid
 
 logger = logging.getLogger("pulp.experiment")
 DIRECTORY_EXPERIMENT = "PULP-2505"
+CONTENT_QUERY_EXPERIMENT = "PULP-2346"
+CONTENT_QUERY_P_CANDIDATE = 0.5
 
 
 def run_experiment(exp_id, control, candidate, *, p_candidate, context):
@@ -130,3 +133,59 @@ def directory_membership_dates(version, content_to_names, sources, *, serving_mo
         p_candidate=probability,
         context=context,
     )
+
+
+def _content_query_marker(variant, repository_id):
+    """Return the PULP-2346 marker for a variant and repository."""
+    repository = UUID(str(repository_id))
+    return f"/* pexp={CONTENT_QUERY_EXPERIMENT} v={variant} */ /* repo={repository} */"
+
+
+def mark_lazy_queryset(queryset, marker):
+    """Embed an experiment marker in the SQL, so it also survives later evaluation (e.g. ``.values()``)."""
+    # The marker is built from constants and a UUID-validated repository id, never from user input.
+    return queryset.extra(where=[f"1 = 1 {marker}"])  # noqa: S610
+
+
+def content_query_experiment(query, version, queryset, *, filters, limit=None):
+    """Run one content app lookup as PULP-2346 and return ``(rows, queryset used)``.
+
+    Variant A is stock pulpcore (``content__in=version.content``). Variant B checks repository
+    membership per matching row with a correlated EXISTS. Both return the same rows. Always on:
+    half of the calls run variant B.
+    """
+
+    def build(variant):
+        if variant == "A":
+            selected = queryset.filter(content__in=version.content, **filters)
+        else:
+            membership = version._content_relationships().filter(content_id=OuterRef("content_id"))
+            selected = queryset.filter(Exists(membership), **filters)
+        return mark_lazy_queryset(selected, _content_query_marker(variant, version.repository_id))
+
+    used = {}
+
+    def run(variant):
+        def evaluate():
+            used["queryset"] = build(variant)
+            return list(used["queryset"] if limit is None else used["queryset"][:limit])
+
+        return evaluate
+
+    rows = run_experiment(
+        CONTENT_QUERY_EXPERIMENT,
+        run("A"),
+        run("B"),
+        p_candidate=CONTENT_QUERY_P_CANDIDATE,
+        context={"query": query, "repository_id": str(version.repository_id)},
+    )
+    return rows, used["queryset"]
+
+
+def single_or_raise(model, rows):
+    """Return the only row, raising what ``QuerySet.get()`` would for none or several."""
+    if not rows:
+        raise model.DoesNotExist(f"{model.__name__} matching query does not exist.")
+    if len(rows) > 1:
+        raise model.MultipleObjectsReturned(f"get() returned more than one {model.__name__}.")
+    return rows[0]
