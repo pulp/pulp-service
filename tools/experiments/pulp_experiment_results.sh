@@ -332,9 +332,10 @@ for db_instance in "${db_instances[@]}"; do
 
     printf '\n=== Performance Insights annotated SQL: %s (%s) ===\n' \
         "$db_instance" "$resource_id"
-    python3 - "$pi_dir" <<'PY'
+    OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 - "$pi_dir" <<'PY'
 import glob
 import json
+import os
 import re
 import sys
 from collections import defaultdict
@@ -362,20 +363,6 @@ for filename in glob.glob(sys.argv[1] + "/window-*.json"):
 if not aggregate:
     print("No annotated experiment SQL appeared in any hourly top-25 window.")
 else:
-    for (experiment, variant, repository, sql_id), item in sorted(
-        aggregate.items(),
-        key=lambda pair: (pair[0][0], pair[0][1], pair[0][2], -pair[1]["total"]),
-    ):
-        print(json.dumps({
-            "experiment": experiment,
-            "variant": variant,
-            "repository_id": repository,
-            "sql_id": sql_id,
-            "db_load_total_sum": round(item["total"], 6),
-            "windows_seen": item["windows"],
-            "statement_prefix": item["statement"],
-        }))
-
     rollup = defaultdict(lambda: {"digest_count": 0, "load": 0.0, "windows": 0})
     for (experiment, variant, repository, _), item in aggregate.items():
         summary = rollup[(experiment, variant, repository)]
@@ -383,15 +370,60 @@ else:
         summary["load"] += item["total"]
         summary["windows"] += item["windows"]
 
-    print("\n=== Performance Insights rollup by experiment/variant/repository ===")
-    for (experiment, variant, repository), summary in sorted(rollup.items()):
-        print(json.dumps({
-            "experiment": experiment,
-            "variant": variant,
-            "repository_id": repository,
-            "sql_digest_count": summary["digest_count"],
-            "db_load_total_sum": round(summary["load"], 6),
-            "digest_window_observations": summary["windows"],
-        }))
+    if os.environ.get("OUTPUT_FORMAT") == "json":
+        for (experiment, variant, repository, sql_id), item in sorted(
+            aggregate.items(),
+            key=lambda pair: (pair[0][0], pair[0][1], pair[0][2], -pair[1]["total"]),
+        ):
+            print(json.dumps({
+                "experiment": experiment,
+                "variant": variant,
+                "repository_id": repository,
+                "sql_id": sql_id,
+                "db_load_total_sum": round(item["total"], 6),
+                "windows_seen": item["windows"],
+                "statement_prefix": item["statement"],
+            }))
+
+        print("\n=== Performance Insights rollup by experiment/variant/repository ===")
+        for (experiment, variant, repository), summary in sorted(rollup.items()):
+            print(json.dumps({
+                "experiment": experiment,
+                "variant": variant,
+                "repository_id": repository,
+                "sql_digest_count": summary["digest_count"],
+                "db_load_total_sum": round(summary["load"], 6),
+                "digest_window_observations": summary["windows"],
+            }))
+    else:
+        comparison = []
+        experiment_repositories = {(experiment, repository) for experiment, _, repository in rollup}
+        for experiment, repository in sorted(experiment_repositories):
+            control = rollup.get((experiment, "A", repository), {})
+            candidate = rollup.get((experiment, "B", repository), {})
+            change = "-"
+            if control.get("load") and candidate.get("load") is not None:
+                change = f"{(candidate['load'] - control['load']) / control['load'] * 100:+.1f}%"
+            comparison.append([
+                experiment,
+                repository,
+                control.get("digest_count", "-"),
+                candidate.get("digest_count", "-"),
+                round(control["load"], 6) if control else "-",
+                round(candidate["load"], 6) if candidate else "-",
+                change,
+                control.get("windows", "-"),
+                candidate.get("windows", "-"),
+            ])
+        headers = ["Experiment", "Repository", "A digests", "B digests", "A load", "B load", "Change", "A windows", "B windows"]
+        print("\n=== Performance Insights rollup A/B comparison ===")
+        if comparison:
+            widths = [max(len(str(row[index])) for row in [headers, *comparison]) for index in range(len(headers))]
+            print("  ".join(header.ljust(widths[index]) for index, header in enumerate(headers)))
+            print("  ".join("-" * width for width in widths))
+            for row in comparison:
+                print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
+        else:
+            print("No A/B rollup rows were found.")
 PY
 done
