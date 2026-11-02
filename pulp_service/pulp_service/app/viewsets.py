@@ -59,9 +59,10 @@ from pulp_service.app.content_view_viewsets import (  # noqa: F401
     RpmContentViewPackageListViewSet,
     RpmContentViewPackageSearchViewSet,
 )
-from pulp_service.app.models import FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
+from pulp_service.app.models import AndGateContentGuard, FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
+    AndGateContentGuardSerializer,
     ContentScanSerializer,
     FeatureContentGuardSerializer,
     PublicDebugAuthenticationHeadersSerializer,
@@ -246,6 +247,77 @@ class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
             "service.manage_roles_featurecontentguard",
         ],
         "service.featurecontentguard_viewer": ["service.view_featurecontentguard"],
+    }
+
+
+class AndGateContentGuardViewSet(ContentGuardViewSet, RolesMixin):
+    """
+    Content guard that permits access only when all of its sub-guards permit.
+    """
+
+    endpoint_name = "andgate"
+    queryset = AndGateContentGuard.objects.all()
+    serializer_class = AndGateContentGuardSerializer
+    queryset_filtering_required_permission = "service.view_andgatecontentguard"
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["list", "my_permissions"], "principal": "authenticated", "effect": "allow"},
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_perms:service.add_andgatecontentguard",
+            },
+            {
+                "action": ["retrieve"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.view_andgatecontentguard",
+            },
+            {
+                "action": ["update", "partial_update"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.change_andgatecontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_andgatecontentguard",
+                ],
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.delete_andgatecontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_andgatecontentguard",
+                ],
+            },
+            {
+                "action": ["list_roles", "add_role", "remove_role"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.manage_roles_andgatecontentguard",
+            },
+        ],
+        "creation_hooks": [
+            {
+                "function": "add_roles_for_object_creator",
+                "parameters": {"roles": "service.andgatecontentguard_owner"},
+            }
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
+
+    LOCKED_ROLES = {
+        "service.andgatecontentguard_creator": ["service.add_andgatecontentguard"],
+        "service.andgatecontentguard_owner": [
+            "service.view_andgatecontentguard",
+            "service.change_andgatecontentguard",
+            "service.delete_andgatecontentguard",
+            "service.manage_roles_andgatecontentguard",
+        ],
+        "service.andgatecontentguard_viewer": ["service.view_andgatecontentguard"],
     }
 
 

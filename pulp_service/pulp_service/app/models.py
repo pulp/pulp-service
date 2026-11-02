@@ -10,7 +10,7 @@ from django.contrib.postgres.fields import ArrayField, HStoreField
 from django.db import models
 
 from pulpcore.app.models import HeaderContentGuard
-from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel
+from pulpcore.plugin.models import AutoAddObjPermsMixin, BaseModel, ContentGuard
 from pulpcore.plugin.util import get_domain_pk
 
 from pulp_service.app.content_view_models import ContentView, ContentViewSearchScope  # noqa: F401
@@ -77,6 +77,61 @@ class FeatureContentGuard(HeaderContentGuard, AutoAddObjPermsMixin):
             (
                 "manage_roles_featurecontentguard",
                 "Can manage role assignments on Feature ContentGuard",
+            ),
+        )
+
+
+class AndGateContentGuard(ContentGuard, AutoAddObjPermsMixin):
+    """
+    Content guard that permits access only when ALL of its sub-guards permit.
+
+    Unlike pulpcore's CompositeContentGuard (which permits if ANY guard permits),
+    every guard in ``guards`` must permit for access to be granted. With no guards
+    configured, access is denied (fail-closed).
+    """
+
+    TYPE = "andgate"
+
+    guards = models.ManyToManyField(ContentGuard, related_name="+", symmetrical=False)
+
+    def permit(self, request):
+        """
+        Permit only if every content-guard permits (AND).
+
+        Every guard is evaluated (no short-circuit) so the denial reason is independent of
+        guard order: an AuthenticationError (missing identity, answered with a 401 challenge)
+        is raised in preference to a plain PermissionError (403), letting an unauthenticated
+        client retry with credentials. This mirrors pulpcore's patched CompositeContentGuard.
+
+        Raises:
+            AuthenticationError: when a sub-guard needs authentication (takes precedence).
+            PermissionError: when any sub-guard denies, or when no guards are configured.
+        """
+        guards = self.guards.all()
+        if not guards:
+            raise PermissionError(_("Access denied. AndGateContentGuard has no guards configured."))
+        authentication_error = None
+        permission_error = None
+        for guard in guards:
+            try:
+                guard.cast().permit(request)
+            except AuthenticationError as ae:
+                if authentication_error is None:
+                    authentication_error = ae
+            except PermissionError as pe:
+                if permission_error is None:
+                    permission_error = pe
+        if authentication_error is not None:
+            raise authentication_error
+        if permission_error is not None:
+            raise permission_error
+
+    class Meta:
+        default_related_name = "%(app_label)s_%(model_name)s"
+        permissions = (
+            (
+                "manage_roles_andgatecontentguard",
+                "Can manage role assignments on AndGate ContentGuard",
             ),
         )
 
