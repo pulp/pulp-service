@@ -1,14 +1,5 @@
-From aa15b73667de977bf6f0caaab91d6909c431bb1e Mon Sep 17 00:00:00 2001
-From: Dennis Kliban <dkliban@redhat.com>
-Date: Wed, 11 Feb 2026 21:19:28 -0500
-Subject: [PATCH] Move content app's heartbeat to a thread.
-
----
- pulpcore/content/__init__.py | 33 +++++++++++++++++----------------
- 1 file changed, 17 insertions(+), 16 deletions(-)
-
 diff --git a/pulpcore/content/__init__.py b/pulpcore/content/__init__.py
-index 96e4f6a6d..9420c2abb 100644
+index f0c7720c5..dd4c38790 100644
 --- a/pulpcore/content/__init__.py
 +++ b/pulpcore/content/__init__.py
 @@ -1,6 +1,6 @@
@@ -19,14 +10,15 @@ index 96e4f6a6d..9420c2abb 100644
  from contextlib import suppress
  from importlib import import_module
  from importlib.util import find_spec
-@@ -15,5 +14,6 @@ django.setup()
+@@ -14,6 +14,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "pulpcore.app.settings")
+ django.setup()
  
  from django.conf import settings  # noqa: E402
 +from django.db import connection  # noqa: E402
  from django.db.utils import (  # noqa: E402
      DatabaseError,
      IntegrityError,
-@@ -48,7 +48,7 @@ if settings.UVLOOP_ENABLED:
+@@ -52,7 +53,7 @@ if settings.UVLOOP_ENABLED:
  CONTENT_MODULE_NAME = "content"
  
  
@@ -35,17 +27,18 @@ index 96e4f6a6d..9420c2abb 100644
      name = get_worker_name()
      heartbeat_interval = settings.CONTENT_APP_TTL // 4
      msg = "Content App '{name}' heartbeat written, sleeping for '{interarrival}' seconds".format(
-@@ -60,39 +60,40 @@ async def _heartbeat():
+@@ -61,7 +62,7 @@ async def _heartbeat():
+     fail_msg = f"Content App '{name}' failed to register or write a heartbeat to the database."
      versions = {app.label: app.version for app in pulp_plugin_configs()}
- 
      try:
 -        app_status = await AppStatus.objects.acreate(
 +        app_status = AppStatus.objects.create(
              name=name, app_type="content", versions=versions
          )
      except IntegrityError:
-         log.error(f"A content app with name {name} already exists in the database.")
-         exit(Arbiter.WORKER_BOOT_ERROR)
+@@ -71,32 +72,33 @@ async def _heartbeat():
+         log.error(f"Content App '{name}' failed to register with the database. Exception: {str(e)}")
+         os._exit(Arbiter.WORKER_BOOT_ERROR)
      try:
 -        while True:
 -            await asyncio.sleep(heartbeat_interval)
@@ -63,7 +56,7 @@ index 96e4f6a6d..9420c2abb 100644
                      log.debug(msg)
                  except (InterfaceError, DatabaseError) as e:
                      log.error(f"{fail_msg} Exception: {str(e)}")
-                     exit(Arbiter.WORKER_BOOT_ERROR)
+                     os._exit(Arbiter.WORKER_BOOT_ERROR)
      finally:
          if app_status:
 -            await app_status.adelete()
@@ -89,6 +82,3 @@ index 96e4f6a6d..9420c2abb 100644
  
  
  async def server(*args, **kwargs):
--- 
-2.52.0
-
