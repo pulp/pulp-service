@@ -23,7 +23,8 @@ relay: wss://buzz-rh.bouterse.casa
 heartbeat_interval: 3600
 respond_to: allowlist
 # The team Buzz lets through. Matches staff/pulpbot/charter.md. Decko de Brito's
-# pubkey is not known yet; add it here (a reviewed change) once Brian supplies it.
+# pubkey arrived 2026-11-02 (Brian via Brian's Claude, from Decko's own email reply
+# to Brian's Buzz invite) and is added below.
 # The tester key 61020f75 is PulpBot's own test identity, distinct from the
 # platform approver e5abab3a. cos-rh (its owner) and the platform key e5abab3a were
 # added 2026-10-20 at Brian's direction (Brian's Claude counts as Brian for every
@@ -34,5 +35,5 @@ allowlist:
   - 61020f758e350106a9d0445a9722241d069cc6794eee505185a5f3efce1c45a2   # Brian's Claude (tester)
   - 6a14bf7b3d7259f77e5b40a4817a084b11002f54e585eda431c4befa5d150c0d   # cos-rh (RH chief of staff, PulpBot's owner)
   - e5abab3a573180128c205fd9b7764511c81ee641b8594e6c7acbb2f90631a0a4   # Brian's Claude (platform key; counts as Brian)
-  # - <ddebrito pubkey, not known yet>                                 # Decko de Brito (ddebrito)
+  - 84fc6f8fd8b69388481a16467564845ed2d9d8f351a33e444453c81c6afa06bd   # Decko de Brito (ddebrito)
 channels: []   # channel membership (its #pulpbot-bench and team channels) is on the relay
