@@ -247,8 +247,34 @@ else:
         print("  ".join("-" * width for width in widths))
         for row in table:
             print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
-    else:
-        print("No repository-attributed A/B metrics were found.")
+
+    aggregate_table = []
+    for experiment, events in sorted(experiments.items()):
+        for event, variants in sorted(events.items()):
+            control = variants.get("A", {}).get("repositories", {}).get("unattributed", {})
+            candidate = variants.get("B", {}).get("repositories", {}).get("unattributed", {})
+            if not control and not candidate:
+                continue
+            a_events, b_events = value(control, "events"), value(candidate, "events")
+            a_avg, b_avg = value(control, "avg_ms"), value(candidate, "avg_ms")
+            a_p50, b_p50 = value(control, "p50_ms"), value(candidate, "p50_ms")
+            a_p95, b_p95 = value(control, "p95_ms"), value(candidate, "p95_ms")
+            a_p99, b_p99 = value(control, "p99_ms"), value(candidate, "p99_ms")
+            aggregate_table.append([
+                experiment, event, a_events, b_events, a_avg, b_avg,
+                percent_change(control, candidate), a_p50, b_p50, a_p95, b_p95,
+                a_p99, b_p99,
+            ])
+    if aggregate_table:
+        print("\\n=== CloudWatch aggregate A/B comparison (unattributed) ===")
+        aggregate_headers = ["Experiment", "Event", "A n", "B n", "A avg", "B avg", "Change", "A p50", "B p50", "A p95", "B p95", "A p99", "B p99"]
+        widths = [max(len(str(row[index])) for row in [aggregate_headers, *aggregate_table]) for index in range(len(aggregate_headers))]
+        print("  ".join(header.ljust(widths[index]) for index, header in enumerate(aggregate_headers)))
+        print("  ".join("-" * width for width in widths))
+        for row in aggregate_table:
+            print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
+    if not table and not aggregate_table:
+        print("No A/B metrics were found.")
 '
 
 # Performance Insights returns only the top SQL digests for a requested
