@@ -16,6 +16,31 @@
 set -euo pipefail
 umask 077
 
+OUTPUT_FORMAT=human
+if [[ "${1:-}" == "--output" ]]; then
+    if (( $# < 2 )); then
+        printf '%s requires json or human\n' "$1" >&2
+        exit 2
+    fi
+    OUTPUT_FORMAT=$2
+    shift 2
+fi
+case "$OUTPUT_FORMAT" in
+    json|human) ;;
+    *)
+        printf 'Invalid output format: %s (expected json or human)\n' "$OUTPUT_FORMAT" >&2
+        exit 2
+        ;;
+esac
+if (( $# > 0 )); then
+    if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+        printf 'Usage: %s [--output json|human]\n' "$0"
+        exit 0
+    fi
+    printf 'Unexpected argument: %s\nUsage: %s [--output json|human]\n' "$1" "$0" >&2
+    exit 2
+fi
+
 : "${PULP_LOG_GROUP:?Set PULP_LOG_GROUP to the CloudWatch Logs group}"
 : "${AWS_LOG_PROFILE:?Set AWS_LOG_PROFILE to the AWS CLI CloudWatch profile}"
 : "${AWS_PI_PROFILE:?Set AWS_PI_PROFILE to the AWS CLI Performance Insights profile}"
@@ -56,8 +81,8 @@ if (( START >= END )); then
 fi
 
 mkdir -p "$OUTPUT_ROOT"
-chmod 700 "$OUTPUT_ROOT"
 OUT_DIR=$(mktemp -d "$OUTPUT_ROOT/run.XXXXXX")
+chmod 700 "$OUT_DIR"
 
 format_time() {
     python3 - "$1" <<'PY'
@@ -72,7 +97,7 @@ run_logs_query() {
     local query=$1
     local query_id status output
 
-    query_id=$(aws logs start-query \
+    if ! query_id=$(aws logs start-query \
         --profile "$AWS_LOG_PROFILE" \
         --region "$AWS_REGION" \
         --log-group-name "$PULP_LOG_GROUP" \
@@ -80,14 +105,20 @@ run_logs_query() {
         --end-time "$END" \
         --query-string "$query" \
         --query queryId \
-        --output text)
+        --output text); then
+        printf 'CloudWatch start-query failed\n' >&2
+        return 1
+    fi
 
     for _ in $(seq 1 90); do
-        output=$(aws logs get-query-results \
+        if ! output=$(aws logs get-query-results \
             --profile "$AWS_LOG_PROFILE" \
             --region "$AWS_REGION" \
             --query-id "$query_id" \
-            --output json)
+            --output json); then
+            printf 'CloudWatch get-query-results failed for %s\n' "$query_id" >&2
+            return 1
+        fi
         status=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])' <<<"$output")
         case "$status" in
             Complete)
@@ -137,8 +168,9 @@ printf '=== CloudWatch experiment events (%s to %s UTC) ===\n' \
 printf 'Results directory: %s\n' "$OUT_DIR"
 run_logs_query "$CLOUDWATCH_QUERY" \
     | tee "$OUT_DIR/cloudwatch.json" \
-    | python3 -c '
+    | OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 -c '
 import json
+import os
 import sys
 from collections import defaultdict
 
@@ -171,9 +203,52 @@ for row in payload.get("results", []):
     else:
         event_data.setdefault("statistics", {})[repository] = values
 
-print(json.dumps(experiments, indent=2))
-print("CloudWatch status:", payload.get("status"))
-print("CloudWatch statistics:", json.dumps(payload.get("statistics", {})))
+if os.environ.get("OUTPUT_FORMAT") == "json":
+    print(json.dumps(experiments, indent=2))
+    print("CloudWatch status:", payload.get("status"))
+    print("CloudWatch statistics:", json.dumps(payload.get("statistics", {})))
+else:
+    def value(data, field):
+        return data.get(field, "-") if data else "-"
+
+    def percent_change(control, candidate):
+        control_avg = control.get("avg_ms") if control else None
+        candidate_avg = candidate.get("avg_ms") if candidate else None
+        if not control_avg or candidate_avg is None:
+            return "-"
+        return f"{(candidate_avg - control_avg) / control_avg * 100:+.1f}%"
+
+    print("\n=== CloudWatch repository-by-repository A/B comparison ===")
+    headers = ["Experiment", "Event", "Repository", "A n", "B n", "A avg", "B avg", "Change", "A p50", "B p50", "A p95", "B p95", "A p99", "B p99"]
+    table = []
+    for experiment, events in sorted(experiments.items()):
+        for event, variants in sorted(events.items()):
+            repositories = set()
+            for variant in ("A", "B"):
+                repositories.update(variants.get(variant, {}).get("repositories", {}))
+            for repository in sorted(repositories):
+                if repository == "unattributed":
+                    continue
+                control = variants.get("A", {}).get("repositories", {}).get(repository, {})
+                candidate = variants.get("B", {}).get("repositories", {}).get(repository, {})
+                a_events, b_events = value(control, "events"), value(candidate, "events")
+                a_avg, b_avg = value(control, "avg_ms"), value(candidate, "avg_ms")
+                a_p50, b_p50 = value(control, "p50_ms"), value(candidate, "p50_ms")
+                a_p95, b_p95 = value(control, "p95_ms"), value(candidate, "p95_ms")
+                a_p99, b_p99 = value(control, "p99_ms"), value(candidate, "p99_ms")
+                table.append([
+                    experiment, event, repository, a_events, b_events, a_avg, b_avg,
+                    percent_change(control, candidate), a_p50, b_p50, a_p95, b_p95,
+                    a_p99, b_p99,
+                ])
+    if table:
+        widths = [max(len(str(row[index])) for row in [headers, *table]) for index in range(len(headers))]
+        print("  ".join(header.ljust(widths[index]) for index, header in enumerate(headers)))
+        print("  ".join("-" * width for width in widths))
+        for row in table:
+            print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
+    else:
+        print("No repository-attributed A/B metrics were found.")
 '
 
 # Performance Insights returns only the top SQL digests for a requested
