@@ -162,51 +162,77 @@ CLOUDWATCH_QUERY='fields @timestamp, @message
   by exp_id, event, variant, repository_id
 | sort exp_id asc, event asc, variant asc, repository_id asc'
 
+CLOUDWATCH_OVERALL_QUERY='fields @timestamp, @message
+| filter @message like /ab_experiment/
+| parse @message /exp_id\\": \\"(?<exp_id>[^\\"]+)/
+| parse @message /event\\": \\"(?<event>[^\\"]+)/
+| parse @message /variant\\": \\"(?<variant>[AB])/
+| parse @message /duration_ms\\": (?<duration_ms>[0-9.]+)/
+| stats count() as events,
+        count(duration_ms) as timed,
+        avg(duration_ms) as avg_ms,
+        pct(duration_ms, 50) as p50_ms,
+        pct(duration_ms, 95) as p95_ms,
+        pct(duration_ms, 99) as p99_ms,
+        max(duration_ms) as max_ms,
+        min(@timestamp) as first,
+        max(@timestamp) as last
+  by exp_id, event, variant
+| sort exp_id asc, event asc, variant asc'
+
 printf '=== CloudWatch experiment events (%s to %s UTC) ===\n' \
     "$(format_time "$START")" \
     "$(format_time "$END")"
 printf 'Results directory: %s\n' "$OUT_DIR"
-run_logs_query "$CLOUDWATCH_QUERY" \
-    | tee "$OUT_DIR/cloudwatch.json" \
-    | OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 -c '
+run_logs_query "$CLOUDWATCH_QUERY" > "$OUT_DIR/cloudwatch.json"
+run_logs_query "$CLOUDWATCH_OVERALL_QUERY" > "$OUT_DIR/cloudwatch-overall.json"
+OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 - "$OUT_DIR/cloudwatch.json" "$OUT_DIR/cloudwatch-overall.json" <<'PY'
+
 import json
 import os
 import sys
 from collections import defaultdict
 
-payload = json.load(sys.stdin)
+payload = json.load(open(sys.argv[1]))
+overall_payload = json.load(open(sys.argv[2]))
 experiments = defaultdict(lambda: defaultdict(dict))
+overall = defaultdict(lambda: defaultdict(dict))
 
-for row in payload.get("results", []):
+def parse_values(row):
     values = {item["field"]: item["value"] for item in row}
     experiment = values.pop("exp_id", "unknown")
     event = values.pop("event", "unknown")
     variant = values.pop("variant", None)
     repository = values.pop("repository_id", None) or "unattributed"
-
     for field in ("events", "timed"):
         if field in values:
             values[field] = int(values[field])
     for field in ("avg_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms"):
         if field in values:
             values[field] = float(values[field])
-
-    # CloudWatch returns zero-like percentile values when no duration was
-    # recorded. Do not present those as measured latency statistics.
     if not values.get("timed"):
         for field in ("avg_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms"):
             values.pop(field, None)
+    return experiment, event, variant, repository, values
 
+for row in payload.get("results", []):
+    experiment, event, variant, repository, values = parse_values(row)
     event_data = experiments[experiment][event]
     if variant:
         event_data.setdefault(variant, {"repositories": {}})["repositories"][repository] = values
     else:
         event_data.setdefault("statistics", {})[repository] = values
 
+for row in overall_payload.get("results", []):
+    experiment, event, variant, _, values = parse_values(row)
+    if variant:
+        overall[experiment][event][variant] = values
+
 if os.environ.get("OUTPUT_FORMAT") == "json":
     print(json.dumps(experiments, indent=2))
     print("CloudWatch status:", payload.get("status"))
     print("CloudWatch statistics:", json.dumps(payload.get("statistics", {})))
+    print("CloudWatch overall statistics:", json.dumps(overall_payload.get("statistics", {})))
 else:
     def value(data, field):
         return data.get(field, "-") if data else "-"
@@ -241,6 +267,29 @@ else:
                     percent_change(control, candidate), a_p50, b_p50, a_p95, b_p95,
                     a_p99, b_p99,
                 ])
+    overall_table = []
+    for experiment, events in sorted(overall.items()):
+        for event, variants in sorted(events.items()):
+            control = variants.get("A", {})
+            candidate = variants.get("B", {})
+            if not control and not candidate:
+                continue
+            overall_table.append([
+                experiment,
+                event,
+                value(control, "events"),
+                value(candidate, "events"),
+                value(control, "avg_ms"),
+                value(candidate, "avg_ms"),
+                percent_change(control, candidate),
+                value(control, "p50_ms"),
+                value(candidate, "p50_ms"),
+                value(control, "p95_ms"),
+                value(candidate, "p95_ms"),
+                value(control, "p99_ms"),
+                value(candidate, "p99_ms"),
+            ])
+
     if table:
         widths = [max(len(str(row[index])) for row in [headers, *table]) for index in range(len(headers))]
         print("  ".join(header.ljust(widths[index]) for index, header in enumerate(headers)))
@@ -248,34 +297,18 @@ else:
         for row in table:
             print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
 
-    aggregate_table = []
-    for experiment, events in sorted(experiments.items()):
-        for event, variants in sorted(events.items()):
-            control = variants.get("A", {}).get("repositories", {}).get("unattributed", {})
-            candidate = variants.get("B", {}).get("repositories", {}).get("unattributed", {})
-            if not control and not candidate:
-                continue
-            a_events, b_events = value(control, "events"), value(candidate, "events")
-            a_avg, b_avg = value(control, "avg_ms"), value(candidate, "avg_ms")
-            a_p50, b_p50 = value(control, "p50_ms"), value(candidate, "p50_ms")
-            a_p95, b_p95 = value(control, "p95_ms"), value(candidate, "p95_ms")
-            a_p99, b_p99 = value(control, "p99_ms"), value(candidate, "p99_ms")
-            aggregate_table.append([
-                experiment, event, a_events, b_events, a_avg, b_avg,
-                percent_change(control, candidate), a_p50, b_p50, a_p95, b_p95,
-                a_p99, b_p99,
-            ])
-    if aggregate_table:
-        print("\n=== CloudWatch aggregate A/B comparison (unattributed) ===")
-        aggregate_headers = ["Experiment", "Event", "A n", "B n", "A avg", "B avg", "Change", "A p50", "B p50", "A p95", "B p95", "A p99", "B p99"]
-        widths = [max(len(str(row[index])) for row in [aggregate_headers, *aggregate_table]) for index in range(len(aggregate_headers))]
-        print("  ".join(header.ljust(widths[index]) for index, header in enumerate(aggregate_headers)))
+    if overall_table:
+        print("\n=== CloudWatch overall A/B comparison ===")
+        overall_headers = ["Experiment", "Event", "A n", "B n", "A avg", "B avg", "Change", "A p50", "B p50", "A p95", "B p95", "A p99", "B p99"]
+        widths = [max(len(str(row[index])) for row in [overall_headers, *overall_table]) for index in range(len(overall_headers))]
+        print("  ".join(header.ljust(widths[index]) for index, header in enumerate(overall_headers)))
         print("  ".join("-" * width for width in widths))
-        for row in aggregate_table:
+        for row in overall_table:
             print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
-    if not table and not aggregate_table:
+
+    if not table and not overall_table:
         print("No A/B metrics were found.")
-'
+PY
 
 # Performance Insights returns only the top SQL digests for a requested
 # window. Query hourly windows so short-lived annotated SQL is less likely to
