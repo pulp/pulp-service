@@ -150,6 +150,7 @@ CLOUDWATCH_QUERY='fields @timestamp, @message
 | parse @message /variant\\": \\"(?<variant>[AB])/
 | parse @message /repository_id\\": \\"(?<repository_id>[^\\"]+)/
 | parse @message /duration_ms\\": (?<duration_ms>[0-9.]+)/
+| parse @message /outcome\\": \\"(?<outcome>[^\\"]+)/
 | stats count() as events,
         count(duration_ms) as timed,
         avg(duration_ms) as avg_ms,
@@ -159,8 +160,8 @@ CLOUDWATCH_QUERY='fields @timestamp, @message
         max(duration_ms) as max_ms,
         min(@timestamp) as first,
         max(@timestamp) as last
-  by exp_id, event, variant, repository_id
-| sort exp_id asc, event asc, variant asc, repository_id asc'
+  by exp_id, event, variant, repository_id, outcome
+| sort exp_id asc, event asc, variant asc, repository_id asc, outcome asc'
 
 CLOUDWATCH_OVERALL_QUERY='fields @timestamp, @message
 | filter @message like /ab_experiment/
@@ -168,6 +169,7 @@ CLOUDWATCH_OVERALL_QUERY='fields @timestamp, @message
 | parse @message /event\\": \\"(?<event>[^\\"]+)/
 | parse @message /variant\\": \\"(?<variant>[AB])/
 | parse @message /duration_ms\\": (?<duration_ms>[0-9.]+)/
+| parse @message /outcome\\": \\"(?<outcome>[^\\"]+)/
 | stats count() as events,
         count(duration_ms) as timed,
         avg(duration_ms) as avg_ms,
@@ -177,16 +179,18 @@ CLOUDWATCH_OVERALL_QUERY='fields @timestamp, @message
         max(duration_ms) as max_ms,
         min(@timestamp) as first,
         max(@timestamp) as last
-  by exp_id, event, variant
-| sort exp_id asc, event asc, variant asc'
+  by exp_id, event, variant, outcome
+| sort exp_id asc, event asc, variant asc, outcome asc'
 
-printf '=== CloudWatch experiment events (%s to %s UTC) ===\n' \
-    "$(format_time "$START")" \
-    "$(format_time "$END")"
-printf 'Results directory: %s\n' "$OUT_DIR"
+if [[ "$OUTPUT_FORMAT" == human ]]; then
+    printf '=== CloudWatch experiment events (%s to %s UTC) ===\n' \
+        "$(format_time "$START")" \
+        "$(format_time "$END")"
+    printf 'Results directory: %s\n' "$OUT_DIR"
+fi
 run_logs_query "$CLOUDWATCH_QUERY" > "$OUT_DIR/cloudwatch.json"
 run_logs_query "$CLOUDWATCH_OVERALL_QUERY" > "$OUT_DIR/cloudwatch-overall.json"
-OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 - "$OUT_DIR/cloudwatch.json" "$OUT_DIR/cloudwatch-overall.json" <<'PY'
+OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 - "$OUT_DIR/cloudwatch.json" "$OUT_DIR/cloudwatch-overall.json" "$OUT_DIR/cloudwatch-summary.json" <<'PY'
 
 import json
 import os
@@ -204,6 +208,7 @@ def parse_values(row):
     event = values.pop("event", "unknown")
     variant = values.pop("variant", None)
     repository = values.pop("repository_id", None) or "unattributed"
+    outcome = values.pop("outcome", None) or "unknown"
     for field in ("events", "timed"):
         if field in values:
             values[field] = int(values[field])
@@ -213,26 +218,34 @@ def parse_values(row):
     if not values.get("timed"):
         for field in ("avg_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms"):
             values.pop(field, None)
-    return experiment, event, variant, repository, values
+    return experiment, event, variant, repository, outcome, values
 
 for row in payload.get("results", []):
-    experiment, event, variant, repository, values = parse_values(row)
+    experiment, event, variant, repository, outcome, values = parse_values(row)
     event_data = experiments[experiment][event]
     if variant:
-        event_data.setdefault(variant, {"repositories": {}})["repositories"][repository] = values
+        variant_data = event_data.setdefault(variant, {"repositories": {}, "failures": {}})
+        variant_data["failures" if outcome != "success" else "repositories"][repository] = values
     else:
         event_data.setdefault("statistics", {})[repository] = values
 
+overall_failures = defaultdict(lambda: defaultdict(dict))
 for row in overall_payload.get("results", []):
-    experiment, event, variant, _, values = parse_values(row)
+    experiment, event, variant, _, outcome, values = parse_values(row)
     if variant:
-        overall[experiment][event][variant] = values
+        if outcome == "success":
+            overall[experiment][event][variant] = values
+        else:
+            overall_failures[experiment][event][variant] = values
 
 if os.environ.get("OUTPUT_FORMAT") == "json":
-    print(json.dumps(experiments, indent=2))
-    print("CloudWatch status:", payload.get("status"))
-    print("CloudWatch statistics:", json.dumps(payload.get("statistics", {})))
-    print("CloudWatch overall statistics:", json.dumps(overall_payload.get("statistics", {})))
+    json.dump({
+        "experiments": experiments,
+        "overall": overall,
+        "overall_failures": overall_failures,
+        "cloudwatch_statistics": payload.get("statistics", {}),
+        "cloudwatch_overall_statistics": overall_payload.get("statistics", {}),
+    }, open(sys.argv[3], "w"), indent=2)
 else:
     def value(data, field):
         return data.get(field, "-") if data else "-"
@@ -306,7 +319,25 @@ else:
         for row in overall_table:
             print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
 
-    if not table and not overall_table:
+    failure_table = []
+    for experiment, events in sorted(overall_failures.items()):
+        for event, variants in sorted(events.items()):
+            failure_table.append([
+                experiment,
+                event,
+                value(variants.get("A", {}), "events"),
+                value(variants.get("B", {}), "events"),
+            ])
+    if failure_table:
+        print("\n=== CloudWatch failed calls ===")
+        failure_headers = ["Experiment", "Event", "A failures", "B failures"]
+        widths = [max(len(str(row[index])) for row in [failure_headers, *failure_table]) for index in range(len(failure_headers))]
+        print("  ".join(header.ljust(widths[index]) for index, header in enumerate(failure_headers)))
+        print("  ".join("-" * width for width in widths))
+        for row in failure_table:
+            print("  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)))
+
+    if not table and not overall_table and not failure_table:
         print("No A/B metrics were found.")
 PY
 
@@ -363,9 +394,11 @@ for db_instance in "${db_instances[@]}"; do
         window_number=$((window_number + 1))
     done
 
-    printf '\n=== Performance Insights annotated SQL: %s (%s) ===\n' \
-        "$db_instance" "$resource_id"
-    OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 - "$pi_dir" <<'PY'
+    if [[ "$OUTPUT_FORMAT" == human ]]; then
+        printf '\n=== Performance Insights annotated SQL: %s (%s) ===\n' \
+            "$db_instance" "$resource_id"
+    fi
+    OUTPUT_FORMAT="$OUTPUT_FORMAT" python3 - "$pi_dir" "$db_instance" "$resource_id" "$pi_dir/summary.json" <<'PY'
 import glob
 import json
 import os
@@ -394,7 +427,15 @@ for filename in glob.glob(sys.argv[1] + "/window-*.json"):
             item["statement"] = statement[:500]
 
 if not aggregate:
-    print("No annotated experiment SQL appeared in any hourly top-25 window.")
+    if os.environ.get("OUTPUT_FORMAT") == "json":
+        json.dump({
+            "db_instance": sys.argv[2],
+            "resource_id": sys.argv[3],
+            "digests": [],
+            "rollups": [],
+        }, open(sys.argv[4], "w"), indent=2)
+    else:
+        print("No annotated experiment SQL appeared in any hourly top-25 window.")
 else:
     rollup = defaultdict(lambda: {"digest_count": 0, "load": 0.0, "windows": 0})
     for (experiment, variant, repository, _), item in aggregate.items():
@@ -404,11 +445,12 @@ else:
         summary["windows"] += item["windows"]
 
     if os.environ.get("OUTPUT_FORMAT") == "json":
+        digests = []
         for (experiment, variant, repository, sql_id), item in sorted(
             aggregate.items(),
             key=lambda pair: (pair[0][0], pair[0][1], pair[0][2], -pair[1]["total"]),
         ):
-            print(json.dumps({
+            digests.append({
                 "experiment": experiment,
                 "variant": variant,
                 "repository_id": repository,
@@ -416,18 +458,23 @@ else:
                 "db_load_total_sum": round(item["total"], 6),
                 "windows_seen": item["windows"],
                 "statement_prefix": item["statement"],
-            }))
-
-        print("\n=== Performance Insights rollup by experiment/variant/repository ===")
+            })
+        rollups = []
         for (experiment, variant, repository), summary in sorted(rollup.items()):
-            print(json.dumps({
+            rollups.append({
                 "experiment": experiment,
                 "variant": variant,
                 "repository_id": repository,
                 "sql_digest_count": summary["digest_count"],
                 "db_load_total_sum": round(summary["load"], 6),
                 "digest_window_observations": summary["windows"],
-            }))
+            })
+        json.dump({
+            "db_instance": sys.argv[2],
+            "resource_id": sys.argv[3],
+            "digests": digests,
+            "rollups": rollups,
+        }, open(sys.argv[4], "w"), indent=2)
     else:
         comparison = []
         experiment_repositories = {(experiment, repository) for experiment, _, repository in rollup}
@@ -460,3 +507,22 @@ else:
             print("No A/B rollup rows were found.")
 PY
 done
+
+if [[ "$OUTPUT_FORMAT" == json ]]; then
+    python3 - "$OUT_DIR/cloudwatch-summary.json" "$OUT_DIR" <<'PY'
+import glob
+import json
+import sys
+
+cloudwatch = json.load(open(sys.argv[1]))
+performance_insights = []
+for filename in sorted(glob.glob(sys.argv[2] + "/pi-*/summary.json")):
+    performance_insights.append(json.load(open(filename)))
+
+json.dump({
+    "cloudwatch": cloudwatch,
+    "performance_insights": performance_insights,
+}, sys.stdout, indent=2)
+print()
+PY
+fi
