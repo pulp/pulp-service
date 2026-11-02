@@ -266,7 +266,7 @@ else:
                 a_p99, b_p99,
             ])
     if aggregate_table:
-        print("\\n=== CloudWatch aggregate A/B comparison (unattributed) ===")
+        print("\n=== CloudWatch aggregate A/B comparison (unattributed) ===")
         aggregate_headers = ["Experiment", "Event", "A n", "B n", "A avg", "B avg", "Change", "A p50", "B p50", "A p95", "B p95", "A p99", "B p99"]
         widths = [max(len(str(row[index])) for row in [aggregate_headers, *aggregate_table]) for index in range(len(aggregate_headers))]
         print("  ".join(header.ljust(widths[index]) for index, header in enumerate(aggregate_headers)))
