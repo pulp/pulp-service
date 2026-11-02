@@ -6,7 +6,7 @@ from jsonschema import ValidationError, validate
 from rest_framework import serializers
 
 from pulpcore.app.models import Repository
-from pulpcore.plugin.models import PulpTemporaryFile
+from pulpcore.plugin.models import ContentGuard, PulpTemporaryFile
 from pulpcore.plugin.serializers import (
     ContentGuardSerializer,
     DetailRelatedField,
@@ -34,6 +34,7 @@ from pulp_service.app.content_view_serializers import (  # noqa: F401
     ContentViewUpdateReferenceSerializer,
 )
 from pulp_service.app.models import (
+    AndGateContentGuard,
     FeatureContentGuard,
     PyPIYankMonitor,
     VulnerabilityReport,
@@ -66,6 +67,24 @@ class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerialize
     class Meta(ContentGuardSerializer.Meta):
         model = FeatureContentGuard
         fields = (*ContentGuardSerializer.Meta.fields, "header_name", "jq_filter", "features")
+
+
+class AndGateContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerializerMixin):
+    """
+    A serializer for AndGateContentGuard.
+    """
+
+    guards = DetailRelatedField(
+        many=True,
+        required=False,
+        help_text=_("List of ContentGuards; access is permitted only if ALL of them permit."),
+        view_name_pattern=r"contentguards(-.*/.*)?-detail",
+        queryset=ContentGuard.objects.all(),
+    )
+
+    class Meta(ContentGuardSerializer.Meta):
+        model = AndGateContentGuard
+        fields = (*ContentGuardSerializer.Meta.fields, "guards")
 
 
 class VulnerabilityReportSerializer(ModelSerializer):

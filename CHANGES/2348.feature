@@ -1,0 +1,1 @@
+Add an AndGateContentGuard that permits content access only when every one of its sub-guards permits (logical AND), complementing pulpcore's CompositeContentGuard. An AndGate with no guards configured denies access (fail-closed).
