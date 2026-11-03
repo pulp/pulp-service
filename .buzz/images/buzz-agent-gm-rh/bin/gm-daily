@@ -15,6 +15,8 @@ draft runs gm-status and prints the status body to post, with <date> the New Yor
   Daily status <date>
   Not right             every CHECK FAILED line first, then every check that is not clean
   Skip level            FILL: for the GM
+  Promises              the two gm-promises lines (overdue promises, Waiting on Brian), or a
+                        CHECK FAILED line if the shared list could not be read
   Unrequested work      the GM's commits on both clones' origin/main and its top level posts in
                         #gm since 00:00 New York yesterday: covered ones counted, the rest listed
                         as "check" for the GM to explain in a note
@@ -35,7 +37,7 @@ Configuration, from the environment or else from the approval-check env file
 first of APPROVAL_CHANNELS. Also BUZZ (default buzz), GM_STATUS (default gm-status),
 DUE_AT (default 0730), TZ_NAME (default America/New_York),
 CLONES (default /state/repos/cluster,/state/repos/agents), GM_AUTHOR (default
-"gm-rh (AI agent)").
+"gm-rh (AI agent)"), GM_PROMISES (default gm-promises).
 """
 import datetime
 import json
@@ -78,7 +80,8 @@ def config():
          "clones": [x.strip() for x in (conf.get("CLONES") or "/state/repos/cluster,/state/repos/agents").split(",")
                     if x.strip()],
          "author": conf.get("GM_AUTHOR") or "gm-rh (AI agent)",
-         "goals": conf.get("GM_GOALS") or "gm-goals"}
+         "goals": conf.get("GM_GOALS") or "gm-goals",
+         "promises": conf.get("GM_PROMISES") or "gm-promises"}
     if not c["gm"] or not c["channel"] or not re.fullmatch(r"\d{4}", c["due_at"]):
         raise CheckFailed(f"GM_KEY and GM_CHANNEL (or APPROVAL_CHANNELS) must be set, DUE_AT as HHMM (env or {path})")
     return c
@@ -195,6 +198,24 @@ def goals_lines(c, now):
     return lines
 
 
+def promises_lines(c, now):
+    """The Promises section, from `gm-promises status` (f0d94e2c, yes 68be7ee0).
+
+    gm-promises parses the shared staff/promises.md and prints the two summary lines the
+    heartbeat carries into the status: the overdue promises (none or the thread ids) and
+    the Waiting on Brian count with any past its check by. A read failure comes back as a
+    CHECK FAILED line so the status reports it under Not right, same as the goals read.
+    """
+    try:
+        r = subprocess.run([c["promises"], "status"], capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return [f"- gm-promises: CHECK FAILED: {e}"]
+    lines = [l for l in r.stdout.splitlines() if l.strip()]
+    if r.returncode or not lines:
+        return [f"- gm-promises: CHECK FAILED: exit {r.returncode}: {(r.stderr or r.stdout).strip()[:200]}"]
+    return [f"- {l}" for l in lines]
+
+
 def draft(c, now):
     date = datetime.datetime.fromtimestamp(now, c["tz"]).date().isoformat()
     failed, wrong = [], []
@@ -227,9 +248,12 @@ def draft(c, now):
     failed += work_failed
     glines = goals_lines(c, now)
     failed += [l for l in glines if "CHECK FAILED" in l]
+    plines = promises_lines(c, now)
+    failed += [l for l in plines if "CHECK FAILED" in l]
     out = [f"{PREFIX}{date}", "", "Not right"]
     out += [f"- {l}" for l in failed + wrong] or ["- none"]
     out += ["", "Skip level", "- FILL: one line per skip level message sent yesterday, or none",
+            "", "Promises", *plines,
             "", "Unrequested work", *work,
             "", "Goals", *glines, ""]
     if failed or wrong or check:
