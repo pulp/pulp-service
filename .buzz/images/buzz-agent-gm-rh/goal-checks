@@ -9,3 +9,11 @@
 # I log one or more candidates into /state/determinism-backlog (one per line). The backlog
 # lives in /state so it survives rolls; it is my own notebook, not a secret.
 determinism: test -s /state/determinism-backlog && cat /state/determinism-backlog || echo none
+#
+# self-sufficient: green while the backlog of removable dependencies on Brian's Claude is
+# empty or absent (every current dependency is either removed or a deliberate boundary /
+# genuinely Mac-only); failing, and so handing out a step, while /state/self-sufficient-backlog
+# lists one or more dependencies to remove (one per line). Logging a wait on Brian's Claude as
+# a line there is how a new defect enters the goal; deleting the line once removed closes it.
+# The backlog lives in /state so it survives rolls; it is my own notebook, not a secret.
+self-sufficient: test -s /state/self-sufficient-backlog && cat /state/self-sufficient-backlog || echo none
