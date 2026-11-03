@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""gm-promises: read the shared promise list and report what is overdue.
+
+Bakes the inline scan the heartbeat used to carry (the shell one-liner over
+staff/promises.md) into one tool, so the heartbeat and the daily status read the
+same parse. It only reads and decides nothing: the GM still checks each overdue
+line's dependency and acts (close it, or ping the owner and move the check by,
+posting what blocked it).
+
+  gm-promises overdue        one line per promise past its check by, oldest first (default)
+  gm-promises status         the two daily-status summary lines (Overdue promises / Waiting on Brian)
+
+A promise line is `- <promiser> | waiting on: ... | done when: ... | check by: <YYYY-MM-DD
+HH:MM> [UTC] | thread: <hex>`, under one of two section headers (## Waiting on Brian,
+## Other promises). The check by is read as UTC. A line with no parseable check by is
+skipped (it still shows in the file for a human to read).
+
+overdue prints, oldest check by first:
+  OVERDUE <check by> [<section>] <the line>
+and nothing when none are overdue (exit 0 either way).
+
+status prints exactly two lines for the daily status, e.g.:
+  Overdue promises: 2 (f0d94e2c, 0b45589)
+  Waiting on Brian: 3 open, 1 overdue
+
+Exit 0 when it ran. Exit 2 with `gm-promises: CHECK FAILED: <why>` when the file is
+missing or unreadable (so the heartbeat carries CHECK FAILED into the daily status
+rather than silently reporting zero).
+
+The file is PROMISES_FILE if set, else /state/repos/agents/staff/promises.md.
+"""
+import os
+import re
+import sys
+import time
+
+DEFAULT_FILE = "/state/repos/agents/staff/promises.md"
+WAITING_HEADER = "waiting on brian"
+CHECK_RE = re.compile(r"check by:\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})")
+THREAD_RE = re.compile(r"thread:\s*([0-9a-fA-F]+)")
+
+
+class CheckFailed(Exception):
+    pass
+
+
+def parse(path):
+    """Yield (check_by_epoch, check_by_text, section, thread, line) per promise line.
+
+    check_by_epoch is None when the line has no parseable check by.
+    """
+    try:
+        with open(path) as f:
+            raw = f.read().splitlines()
+    except OSError as e:
+        raise CheckFailed(f"cannot read {path}: {e}")
+    section = ""
+    for line in raw:
+        s = line.strip()
+        if s.startswith("##"):
+            section = "Waiting on Brian" if WAITING_HEADER in s.lower() else s.lstrip("# ").strip()
+            continue
+        if not s.startswith("- ") or "check by:" not in s:
+            continue
+        m = CHECK_RE.search(s)
+        epoch, text = None, ""
+        if m:
+            text = f"{m.group(1)} {m.group(2)}"
+            try:
+                epoch = int(time.mktime(time.strptime(text + " UTC", "%Y-%m-%d %H:%M %Z")))
+            except (ValueError, OverflowError):
+                # time.strptime ignores an unknown %Z on some libc; fall back to calendar UTC.
+                try:
+                    import calendar
+                    epoch = calendar.timegm(time.strptime(text, "%Y-%m-%d %H:%M"))
+                except (ValueError, OverflowError):
+                    epoch = None
+        tm = THREAD_RE.search(s)
+        thread = tm.group(1) if tm else "?"
+        yield epoch, text, section, thread, s
+
+
+def overdue(path, now):
+    rows = [(e, t, sec, th, ln) for (e, t, sec, th, ln) in parse(path) if e is not None and e < now]
+    rows.sort(key=lambda r: r[0])
+    return rows
+
+
+def status(path, now):
+    rows = list(parse(path))
+    over = [r for r in rows if r[0] is not None and r[0] < now]
+    waiting = [r for r in rows if r[2] == "Waiting on Brian"]
+    waiting_over = [r for r in waiting if r[0] is not None and r[0] < now]
+    threads = ", ".join(r[3] for r in over) if over else "none"
+    line1 = f"Overdue promises: {len(over)}" + (f" ({threads})" if over else "")
+    line2 = f"Waiting on Brian: {len(waiting)} open, {len(waiting_over)} overdue"
+    return [line1, line2]
+
+
+def main(argv):
+    cmd = argv[0] if argv else "overdue"
+    if cmd not in ("overdue", "status") or len(argv) > 1:
+        print("usage: gm-promises [overdue|status]", file=sys.stderr)
+        return 1
+    path = os.environ.get("PROMISES_FILE") or DEFAULT_FILE
+    now = int(time.time())
+    try:
+        if cmd == "status":
+            for line in status(path, now):
+                print(line)
+        else:
+            for e, t, sec, th, ln in overdue(path, now):
+                print(f"OVERDUE {t} [{sec}] {ln}")
+    except CheckFailed as e:
+        print(f"gm-promises: CHECK FAILED: {e}")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

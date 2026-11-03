@@ -1,8 +1,8 @@
 # buzz-agent-gm-rh: the Red Hat GM image for OpenShift. It is the shared
 # buzz-agent-base plus gm-rh's tamper-proof half, baked root owned per model C: its
 # bin tools (buzz lives in the base; these are the gm tools gitea-api, github-api,
-# gm-approvals, gm-backtick-scan, gm-daily, gm-goals, gm-pending, gm-post, gm-status,
-# pin-digest, secret-guard, the gm-entrypoint, the sourceable agent-runtime-env, and
+# gm-approvals, gm-backtick-scan, gm-daily, gm-goals, gm-pending, gm-post, gm-promises,
+# gm-status, pin-digest, secret-guard, the gm-entrypoint, the sourceable agent-runtime-env, and
 # the restart/alive/prestop helpers), glab (the GitLab CLI, installed below), the
 # baked approver list and goal files
 # (approval-check.env, goals.md, goal-checks), the boot resume prompt, and the
@@ -78,8 +78,8 @@ RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
       /usr/local/bin/gitea-api /usr/local/bin/github-api /usr/local/bin/gm-approvals \
       /usr/local/bin/gm-backtick-scan /usr/local/bin/gm-daily /usr/local/bin/gm-entrypoint \
       /usr/local/bin/gm-goals /usr/local/bin/gm-pending /usr/local/bin/gm-post \
-      /usr/local/bin/gm-status /usr/local/bin/gm-vault-login /usr/local/bin/pin-digest \
-      /usr/local/bin/secret-guard \
+      /usr/local/bin/gm-promises /usr/local/bin/gm-status /usr/local/bin/gm-vault-login \
+      /usr/local/bin/pin-digest /usr/local/bin/secret-guard \
  && chmod 0644 /opt/agent/approval-check.env /opt/agent/boot-resume.md /opt/agent/goals.md \
       /opt/agent/goal-checks /opt/agent/managed-settings.json \
  && chmod -R go-w /opt/agent \
