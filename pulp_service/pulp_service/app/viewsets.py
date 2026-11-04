@@ -48,7 +48,12 @@ from pulp_service.app.authorization import (
     set_domain_create_context,
     user_id_var,
 )
-from pulp_service.app.content_search_viewsets import RpmContentSearchPackagesViewSet  # noqa: F401
+from pulp_service.app.content_search_viewsets import (  # noqa: F401
+    RpmContentSearchErrataViewSet,
+    RpmContentSearchModuleStreamsViewSet,
+    RpmContentSearchPackageGroupsViewSet,
+    RpmContentSearchPackagesViewSet,
+)
 from pulp_service.app.content_view_viewsets import (  # noqa: F401
     ContentViewFilter,
     ContentViewViewSet,

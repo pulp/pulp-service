@@ -317,6 +317,55 @@ class RpmContentViewPackageSearchViewSet(ContentViewSearchViewSet):
         return Response({"results": serializer.data})
 
 
+def package_group_search(request, versions_by_domain):
+    """
+    Typeahead package-group search across ``versions_by_domain``: substring match, with the
+    ``packages`` list of same-keyed groups found in multiple domains/repository versions unioned
+    together.
+
+    Shared by the ContentView-backed ``search/rpm/package-groups`` endpoint and the ad-hoc
+    ``rpm/content-search/package-groups`` endpoint (content_search_viewsets.py).
+
+    Returns:
+        list: merged, sorted PackageGroup instances, ready for serialization.
+    """
+    search = request.query_params.get("search", "")
+    limit = _int_param(request, "limit", default=25, minimum=1, maximum=100)
+
+    def build_queryset(versions):
+        qs = content_for_versions(PackageGroup, versions)
+        if search:
+            qs = qs.filter(name__icontains=search)
+        return qs.order_by("name", "id")
+
+    merged = {}
+    order = []
+    for domain, versions in versions_by_domain.items():
+        with with_domain(domain):
+            base_qs = build_queryset(versions)
+            # This queryset intentionally isn't DB-deduplicated (unlike the packages/
+            # environments typeahead endpoints above) because duplicate (name, id) rows --
+            # from multiple repository versions linked in this domain -- need their
+            # `packages` lists unioned below, not discarded. So identify the true top
+            # `limit` *distinct* keys cheaply via DISTINCT ON first (same exact k-way-merge
+            # bound as above: any key ranked <= `limit` globally is ranked <= `limit` within
+            # every domain's own distinct, sorted key list), then re-fetch every row -- not
+            # just the first -- matching those specific keys to compute a correct union.
+            top_keys = list(base_qs.distinct("name", "id").values_list("name", "id")[:limit])
+            if not top_keys:
+                continue
+            key_filter = functools.reduce(operator.or_, (Q(name=name, id=id_) for name, id_ in top_keys))
+            for group in base_qs.filter(key_filter):
+                key = (group.name, group.id)
+                if key not in merged:
+                    merged[key] = group
+                    order.append(key)
+                else:
+                    merged[key].packages = _union_package_lists(merged[key].packages, group.packages)
+    order.sort(key=lambda key: key[0])
+    return [merged[key] for key in order[:limit]]
+
+
 @extend_schema_view(
     list=extend_schema(
         parameters=[
@@ -336,41 +385,7 @@ class RpmContentViewPackageGroupSearchViewSet(ContentViewSearchViewSet):
 
     def list(self, request, *args, **kwargs):
         versions_by_domain = self._versions_by_domain()
-        search = request.query_params.get("search", "")
-        limit = _int_param(request, "limit", default=25, minimum=1, maximum=100)
-
-        def build_queryset(versions):
-            qs = content_for_versions(PackageGroup, versions)
-            if search:
-                qs = qs.filter(name__icontains=search)
-            return qs.order_by("name", "id")
-
-        merged = {}
-        order = []
-        for domain, versions in versions_by_domain.items():
-            with with_domain(domain):
-                base_qs = build_queryset(versions)
-                # This queryset intentionally isn't DB-deduplicated (unlike the packages/
-                # environments typeahead endpoints above) because duplicate (name, id) rows --
-                # from multiple repository versions linked in this domain -- need their
-                # `packages` lists unioned below, not discarded. So identify the true top
-                # `limit` *distinct* keys cheaply via DISTINCT ON first (same exact k-way-merge
-                # bound as above: any key ranked <= `limit` globally is ranked <= `limit` within
-                # every domain's own distinct, sorted key list), then re-fetch every row -- not
-                # just the first -- matching those specific keys to compute a correct union.
-                top_keys = list(base_qs.distinct("name", "id").values_list("name", "id")[:limit])
-                if not top_keys:
-                    continue
-                key_filter = functools.reduce(operator.or_, (Q(name=name, id=id_) for name, id_ in top_keys))
-                for group in base_qs.filter(key_filter):
-                    key = (group.name, group.id)
-                    if key not in merged:
-                        merged[key] = group
-                        order.append(key)
-                    else:
-                        merged[key].packages = _union_package_lists(merged[key].packages, group.packages)
-        order.sort(key=lambda key: key[0])
-        page = [merged[key] for key in order[:limit]]
+        page = package_group_search(request, versions_by_domain)
         serializer = self.get_serializer(page, many=True)
         return Response({"results": serializer.data})
 
@@ -418,6 +433,74 @@ class RpmContentViewEnvironmentSearchViewSet(ContentViewSearchViewSet):
         return Response({"results": serializer.data})
 
 
+ERRATA_TYPE_PARAMETER = OpenApiParameter(
+    name="type",
+    description=(
+        "Comma-separated list of errata types to include "
+        f"(known values: {sorted(KNOWN_ERRATA_TYPES)}; anything else matches "
+        "as an 'other' catch-all bucket)."
+    ),
+    required=False,
+    type=str,
+)
+ERRATA_SEVERITY_PARAMETER = OpenApiParameter(
+    name="severity",
+    description=(
+        "Comma-separated list of errata severities to include "
+        f"(known values: {sorted(KNOWN_ERRATA_SEVERITIES)}; anything else matches "
+        "as an 'other' catch-all bucket)."
+    ),
+    required=False,
+    type=str,
+)
+
+
+def errata_search(request, versions_by_domain):
+    """
+    Full errata (advisory) search across ``versions_by_domain``: filter/sort/paginate, with CVE
+    references included.
+
+    Shared by the ContentView-backed ``search/rpm/errata`` endpoint and the ad-hoc
+    ``rpm/content-search/errata`` endpoint (content_search_viewsets.py).
+
+    Returns:
+        tuple: ``(page, total, limit, offset)``, ready for ``paginated_response``.
+    """
+    search = request.query_params.get("search", "")
+    types = _list_param(request, "type")
+    severities = _list_param(request, "severity")
+    limit = _int_param(request, "limit", default=100, minimum=1, maximum=1000)
+    offset = _int_param(request, "offset", default=0, minimum=0, maximum=MAX_OFFSET)
+
+    sort_by = request.query_params.get("sort_by", "id")
+    descending = sort_by.startswith("-")
+    sort_field = sort_by[1:] if descending else sort_by
+    if sort_field not in ERRATA_SORT_FIELDS:
+        sort_field = "id"
+
+    def build_queryset(versions):
+        qs = content_for_versions(UpdateRecord, versions).prefetch_related(
+            Prefetch("references", queryset=UpdateReference.objects.filter(ref_type="cve"))
+        )
+        if search:
+            qs = qs.filter(Q(id__icontains=search) | Q(title__icontains=search))
+        if types:
+            qs = qs.filter(_catch_all_filter("type", types, KNOWN_ERRATA_TYPES))
+        if severities:
+            qs = qs.filter(_catch_all_filter("severity", severities, KNOWN_ERRATA_SEVERITIES))
+        return qs.order_by(sort_field)
+
+    page, total = scatter_gather(
+        versions_by_domain,
+        build_queryset,
+        order_by=(sort_field,),
+        limit=limit,
+        offset=offset,
+        descending=descending,
+    )
+    return page, total, limit, offset
+
+
 @extend_schema_view(
     list=extend_schema(
         parameters=[
@@ -425,26 +508,8 @@ class RpmContentViewEnvironmentSearchViewSet(ContentViewSearchViewSet):
             LIMIT_PARAMETER,
             OFFSET_PARAMETER,
             SORT_BY_PARAMETER,
-            OpenApiParameter(
-                name="type",
-                description=(
-                    "Comma-separated list of errata types to include "
-                    f"(known values: {sorted(KNOWN_ERRATA_TYPES)}; anything else matches "
-                    "as an 'other' catch-all bucket)."
-                ),
-                required=False,
-                type=str,
-            ),
-            OpenApiParameter(
-                name="severity",
-                description=(
-                    "Comma-separated list of errata severities to include "
-                    f"(known values: {sorted(KNOWN_ERRATA_SEVERITIES)}; anything else matches "
-                    "as an 'other' catch-all bucket)."
-                ),
-                required=False,
-                type=str,
-            ),
+            ERRATA_TYPE_PARAMETER,
+            ERRATA_SEVERITY_PARAMETER,
         ],
     )
 )
@@ -456,40 +521,55 @@ class RpmContentViewErrataViewSet(ContentViewSearchViewSet):
 
     def list(self, request, *args, **kwargs):
         versions_by_domain = self._versions_by_domain()
-        search = request.query_params.get("search", "")
-        types = _list_param(request, "type")
-        severities = _list_param(request, "severity")
-        limit = _int_param(request, "limit", default=100, minimum=1, maximum=1000)
-        offset = _int_param(request, "offset", default=0, minimum=0, maximum=MAX_OFFSET)
-
-        sort_by = request.query_params.get("sort_by", "id")
-        descending = sort_by.startswith("-")
-        sort_field = sort_by[1:] if descending else sort_by
-        if sort_field not in ERRATA_SORT_FIELDS:
-            sort_field = "id"
-
-        def build_queryset(versions):
-            qs = content_for_versions(UpdateRecord, versions).prefetch_related(
-                Prefetch("references", queryset=UpdateReference.objects.filter(ref_type="cve"))
-            )
-            if search:
-                qs = qs.filter(Q(id__icontains=search) | Q(title__icontains=search))
-            if types:
-                qs = qs.filter(_catch_all_filter("type", types, KNOWN_ERRATA_TYPES))
-            if severities:
-                qs = qs.filter(_catch_all_filter("severity", severities, KNOWN_ERRATA_SEVERITIES))
-            return qs.order_by(sort_field)
-
-        page, total = scatter_gather(
-            versions_by_domain,
-            build_queryset,
-            order_by=(sort_field,),
-            limit=limit,
-            offset=offset,
-            descending=descending,
-        )
+        page, total, limit, offset = errata_search(request, versions_by_domain)
         serializer = self.get_serializer(page, many=True)
         return paginated_response(request, serializer.data, total, limit, offset)
+
+
+RPM_NAMES_PARAMETER = OpenApiParameter(
+    name="rpm_names",
+    description="Comma-separated list of RPM package names; only module streams "
+    "containing at least one of these packages are returned.",
+    required=False,
+    type=str,
+)
+
+
+def module_stream_search(request, versions_by_domain):
+    """
+    Module stream search across ``versions_by_domain``: name/stream substring match, optional RPM
+    name filter, capped.
+
+    Shared by the ContentView-backed ``search/rpm/module-streams`` endpoint and the ad-hoc
+    ``rpm/content-search/module-streams`` endpoint (content_search_viewsets.py).
+
+    Returns:
+        list: sorted Modulemd instances, ready for serialization.
+    """
+    search = request.query_params.get("search", "")
+    rpm_names = _list_param(request, "rpm_names")
+    limit = _int_param(request, "limit", default=100, minimum=1, maximum=MODULE_STREAMS_HARD_CAP)
+
+    sort_by = request.query_params.get("sort_by", "name")
+    descending = sort_by.startswith("-")
+    sort_field = sort_by[1:] if descending else sort_by
+    if sort_field not in MODULE_STREAM_SORT_FIELDS:
+        sort_field = "name"
+
+    def build_queryset(versions):
+        qs = content_for_versions(Modulemd, versions)
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(stream__icontains=search))
+        if rpm_names:
+            qs = qs.filter(packages__name__in=rpm_names).distinct()
+        return qs.order_by(sort_field)
+
+    rows = []
+    for domain, versions in versions_by_domain.items():
+        with with_domain(domain):
+            rows.extend(build_queryset(versions)[:limit])
+    rows.sort(key=lambda m: getattr(m, sort_field), reverse=descending)
+    return rows[:limit]
 
 
 @extend_schema_view(
@@ -498,13 +578,7 @@ class RpmContentViewErrataViewSet(ContentViewSearchViewSet):
             SEARCH_PARAMETER,
             LIMIT_PARAMETER,
             SORT_BY_PARAMETER,
-            OpenApiParameter(
-                name="rpm_names",
-                description="Comma-separated list of RPM package names; only module streams "
-                "containing at least one of these packages are returned.",
-                required=False,
-                type=str,
-            ),
+            RPM_NAMES_PARAMETER,
         ],
     )
 )
@@ -516,30 +590,7 @@ class RpmContentViewModuleStreamsViewSet(ContentViewSearchViewSet):
 
     def list(self, request, *args, **kwargs):
         versions_by_domain = self._versions_by_domain()
-        search = request.query_params.get("search", "")
-        rpm_names = _list_param(request, "rpm_names")
-        limit = _int_param(request, "limit", default=100, minimum=1, maximum=MODULE_STREAMS_HARD_CAP)
-
-        sort_by = request.query_params.get("sort_by", "name")
-        descending = sort_by.startswith("-")
-        sort_field = sort_by[1:] if descending else sort_by
-        if sort_field not in MODULE_STREAM_SORT_FIELDS:
-            sort_field = "name"
-
-        def build_queryset(versions):
-            qs = content_for_versions(Modulemd, versions)
-            if search:
-                qs = qs.filter(Q(name__icontains=search) | Q(stream__icontains=search))
-            if rpm_names:
-                qs = qs.filter(packages__name__in=rpm_names).distinct()
-            return qs.order_by(sort_field)
-
-        rows = []
-        for domain, versions in versions_by_domain.items():
-            with with_domain(domain):
-                rows.extend(build_queryset(versions)[:limit])
-        rows.sort(key=lambda m: getattr(m, sort_field), reverse=descending)
-        page = rows[:limit]
+        page = module_stream_search(request, versions_by_domain)
         serializer = self.get_serializer(page, many=True)
         return Response({"results": serializer.data})
 
