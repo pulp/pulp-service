@@ -1,9 +1,9 @@
 """
-Functional tests for the ad-hoc ``rpm/content-search/packages/`` endpoint -- the
-no-ContentView-required counterpart to ``content-views/{pk}/search/rpm/packages/list``.
+Functional tests for the ad-hoc ``rpm/content-search/...`` endpoints -- the no-ContentView-
+required counterparts to ``content-views/{pk}/search/rpm/...``.
 
-No client bindings exist for this endpoint (it isn't tied to a generated resource), so these
-hit it directly with ``requests``, mirroring the pattern used in test_rbac_endpoint_access.py.
+No client bindings exist for these endpoints (they aren't tied to a generated resource), so these
+hit them directly with ``requests``, mirroring the pattern used in test_rbac_endpoint_access.py.
 """
 
 from urllib.parse import urljoin
@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 import pytest
 import requests
 
-from pulp_rpm.tests.functional.constants import RPM_PACKAGE_COUNT
+from pulp_rpm.tests.functional.constants import RPM_ADVISORY_COUNT, RPM_PACKAGE_COUNT
 
 
 @pytest.fixture
@@ -19,8 +19,8 @@ def admin_auth(bindings_cfg):
     return (bindings_cfg.username, bindings_cfg.password)
 
 
-def _search_url(bindings_cfg, domain):
-    return urljoin(bindings_cfg.host, f"/api/pulp/{domain.name}/api/v3/rpm/content-search/packages/")
+def _search_url(bindings_cfg, domain, endpoint="packages"):
+    return urljoin(bindings_cfg.host, f"/api/pulp/{domain.name}/api/v3/rpm/content-search/{endpoint}/")
 
 
 @pytest.mark.parallel
@@ -97,6 +97,93 @@ class TestRpmContentSearchPackages:
             auth=admin_auth,
             timeout=60,
         )
+        assert resp.status_code == 400, resp.text
+
+
+@pytest.mark.parallel
+class TestRpmContentSearchPackageGroups:
+    def test_search_aggregates_across_domains(self, setup_domain, bindings_cfg, admin_auth):
+        domain_a, _remote_a, src_a, _dest_a = setup_domain()
+        _domain_b, _remote_b, src_b, _dest_b = setup_domain()
+
+        resp = requests.get(
+            _search_url(bindings_cfg, domain_a, endpoint="package-groups"),
+            params={"repository_version": [src_a.latest_version_href, src_b.latest_version_href]},
+            auth=admin_auth,
+            timeout=60,
+        )
+        assert resp.status_code == 200, resp.text
+        assert isinstance(resp.json()["results"], list)
+
+    def test_missing_repository_version_param_is_400(self, setup_domain, bindings_cfg, admin_auth):
+        domain, _remote, _src, _dest = setup_domain(sync=False)
+
+        resp = requests.get(_search_url(bindings_cfg, domain, endpoint="package-groups"), auth=admin_auth, timeout=60)
+        assert resp.status_code == 400, resp.text
+
+
+@pytest.mark.parallel
+class TestRpmContentSearchErrata:
+    def test_search_aggregates_across_domains(self, setup_domain, bindings_cfg, admin_auth):
+        domain_a, _remote_a, src_a, _dest_a = setup_domain()
+        _domain_b, _remote_b, src_b, _dest_b = setup_domain()
+
+        resp = requests.get(
+            _search_url(bindings_cfg, domain_a, endpoint="errata"),
+            params={"repository_version": [src_a.latest_version_href, src_b.latest_version_href]},
+            auth=admin_auth,
+            timeout=60,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["count"] == 2 * RPM_ADVISORY_COUNT
+
+    def test_type_filter(self, setup_domain, bindings_cfg, admin_auth):
+        domain, _remote, src, _dest = setup_domain()
+
+        all_errata = requests.get(
+            _search_url(bindings_cfg, domain, endpoint="errata"),
+            params={"repository_version": src.latest_version_href},
+            auth=admin_auth,
+            timeout=60,
+        ).json()
+        known_type = all_errata["results"][0]["type"]
+
+        filtered = requests.get(
+            _search_url(bindings_cfg, domain, endpoint="errata"),
+            params={"repository_version": src.latest_version_href, "type": known_type},
+            auth=admin_auth,
+            timeout=60,
+        )
+        assert filtered.status_code == 200, filtered.text
+        assert all(erratum["type"] == known_type for erratum in filtered.json()["results"])
+
+    def test_missing_repository_version_param_is_400(self, setup_domain, bindings_cfg, admin_auth):
+        domain, _remote, _src, _dest = setup_domain(sync=False)
+
+        resp = requests.get(_search_url(bindings_cfg, domain, endpoint="errata"), auth=admin_auth, timeout=60)
+        assert resp.status_code == 400, resp.text
+
+
+@pytest.mark.parallel
+class TestRpmContentSearchModuleStreams:
+    def test_search_responds_ok(self, setup_domain, bindings_cfg, admin_auth):
+        # The default fixture repo used by `setup_domain` has no module streams; this just
+        # verifies the endpoint responds correctly (empty results) rather than erroring.
+        domain, _remote, src, _dest = setup_domain()
+
+        resp = requests.get(
+            _search_url(bindings_cfg, domain, endpoint="module-streams"),
+            params={"repository_version": src.latest_version_href},
+            auth=admin_auth,
+            timeout=60,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["results"] == []
+
+    def test_missing_repository_version_param_is_400(self, setup_domain, bindings_cfg, admin_auth):
+        domain, _remote, _src, _dest = setup_domain(sync=False)
+
+        resp = requests.get(_search_url(bindings_cfg, domain, endpoint="module-streams"), auth=admin_auth, timeout=60)
         assert resp.status_code == 400, resp.text
 
 
