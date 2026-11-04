@@ -39,6 +39,13 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
 
+### 0081 - Fix task cancellation during graceful worker shutdown
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/tasking/worker.py`, `pulpcore/tasking/redis_worker.py`
+- **Description:** A graceful worker shutdown (SIGTERM, e.g. during a rollout) sets `task_grace_timeout = None` so the worker waits forever for the in-flight task. The cancel path reused that same field as its kill deadline, so canceling the task only logged `Wait for canceled task to abort.` forever and never sent SIGUSR1. The task stayed `canceling`, and the worker couldn't exit but kept heartbeating, so it held the task's exclusive resource locks indefinitely and blocked every task queued on them (seen in prod: a straggler pod wedged on a canceled `upload_group` task with 122 tasks queued behind its repository lock). Fix: a separate per-task `cancel_kill_deadline` so a cancel aborts the task whatever the shutdown grace setting. Also, once a task is being aborted, the shutdown branch no longer overrides its state, so it stays `canceled` instead of becoming `failed`.
+- **Upstream:** pulp/pulpcore#8304. Drop this patch once a pulpcore release with that fix is pinned.
+
 ### 0078 - Return an authentication challenge for missing identity headers
 
 - **Package:** pulpcore
