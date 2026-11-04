@@ -1,0 +1,1 @@
+Added Candlepin client-certificate validation to the VPN proxy and forwarded the verified subject/issuer DNs plus a dedicated proxy assertion to Akamai.
