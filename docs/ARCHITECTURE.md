@@ -750,7 +750,7 @@ This service is a Django plugin built on top of Pulp (Python-based repository ma
 
 ### Pulpcore
 
-- **Version**: 3.119.0 (see requirements.txt)
+- **Version**: 3.123.1 (see requirements.txt)
 - **Repository**: https://github.com/pulp/pulpcore
 - **Documentation**: https://docs.pulpproject.org/pulpcore/
 
