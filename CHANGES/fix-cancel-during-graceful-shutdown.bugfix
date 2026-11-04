@@ -1,0 +1,2 @@
+Added pulpcore patch 0081 so canceling a task while its worker is shutting down gracefully actually
+aborts the task, instead of wedging the worker and holding the task's resource locks indefinitely.
