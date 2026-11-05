@@ -387,8 +387,8 @@ objects:
             value: ${{PULP_API_ROOT}}
           - name: PULP_DB_ENCRYPTION_KEY
             value: ${{PULP_DB_ENCRYPTION_KEY}}
-          - name: PULP_ATTESTATION_VERIFICATION_KEY
-            value: ${{PULP_ATTESTATION_VERIFICATION_KEY}}
+          - name: PULP_ATTESTATION_VERIFICATION_KEYS
+            value: ${{PULP_ATTESTATION_VERIFICATION_KEYS}}
           - name: PULP_CACHE_ENABLED
             value: ${PULP_CACHE_ENABLED}
           - name: PULP_STORAGES__default__OPTIONS__default_acl
@@ -590,8 +590,8 @@ objects:
             value: ${{PULP_API_ROOT}}
           - name: PULP_DB_ENCRYPTION_KEY
             value: ${{PULP_DB_ENCRYPTION_KEY}}
-          - name: PULP_ATTESTATION_VERIFICATION_KEY
-            value: ${{PULP_ATTESTATION_VERIFICATION_KEY}}
+          - name: PULP_ATTESTATION_VERIFICATION_KEYS
+            value: ${{PULP_ATTESTATION_VERIFICATION_KEYS}}
           - name: PULP_CACHE_ENABLED
             value: ${PULP_CACHE_ENABLED}
           - name: PULP_STORAGES__default__OPTIONS__default_acl
@@ -748,8 +748,8 @@ objects:
             value: ${{PULP_API_ROOT}}
           - name: PULP_DB_ENCRYPTION_KEY
             value: ${{PULP_DB_ENCRYPTION_KEY}}
-          - name: PULP_ATTESTATION_VERIFICATION_KEY
-            value: ${{PULP_ATTESTATION_VERIFICATION_KEY}}
+          - name: PULP_ATTESTATION_VERIFICATION_KEYS
+            value: ${{PULP_ATTESTATION_VERIFICATION_KEYS}}
           - name: PULP_CACHE_ENABLED
             value: ${PULP_CACHE_ENABLED}
           - name: PULP_STORAGES__default__OPTIONS__default_acl
@@ -1804,9 +1804,10 @@ parameters:
   - name: PULP_DB_ENCRYPTION_KEY
     description: Path to DB encryption key
     value: "/etc/pulp/keys/database_fields.symmetric.key"
-  - name: PULP_ATTESTATION_VERIFICATION_KEY
-    description: Path to attestation verification key
-    value: "/etc/pki/sigstore/SIGSTORE-redhat-release3"
+  - name: PULP_ATTESTATION_VERIFICATION_KEYS
+    description: Per-domain map of domain name to attestation verification key file path (pulp_python 3.38.0+)
+    value: >
+      '@json {"public-trusted-libraries": "/etc/pki/sigstore/SIGSTORE-redhat-release3", "lightwell": "/etc/pki/sigstore/SIGSTORE-redhat-release3", "lightwell-stage": "/etc/pki/sigstore/SIGSTORE-redhat-release3"}'
   - name: PULP_CACHE_ENABLED
     description: Enable CACHE. Need REDIS installed.
     value: "true"
