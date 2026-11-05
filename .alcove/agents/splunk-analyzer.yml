@@ -1,6 +1,8 @@
 name: Splunk Log Analyzer
 description: |
-  Analyzes Splunk logs for 5xx errors and drafts Jira issues.
+  Analyzes Splunk (Akamai) logs for 5xx errors, traces sample requests through
+  the NSGW gateway and into Pulp via CloudWatch to determine which hop emitted
+  each error, and drafts Jira issues.
   Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
@@ -19,6 +21,9 @@ direct_outbound: true
 credentials:
   SPLUNK_TOKEN: splunk
   JIRA_API_TOKEN: jira
+  # Read-only app-sre-logs credentials: NSGW (*.openshift-ingress) and Pulp app log groups
+  AWS_ACCESS_KEY_ID: aws-access-key-id-log-readonly
+  AWS_SECRET_ACCESS_KEY: aws-secret-access-key-log-readonly
 
 schedule:
   cron: "0 * * * *"

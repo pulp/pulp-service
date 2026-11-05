@@ -23,13 +23,17 @@ func OpenJiraIssue(result, question string) string {
 			"  Instead, report that the analysis is incomplete due to Splunk access failure and stop.\n\n"+
 			"Step 1: Extract request attributes from the analysis.\n"+
 			"  Identify the following from the analysis:\n"+
-			"  a) The Pulp service/origin handling the request: pulp-api, pulp-content, or pulp-worker.\n"+
-			"     These are fundamentally different services. For example, pulp-api handles REST API\n"+
-			"     operations (POST /modify/, PUT /api/...) while pulp-content-app serves content downloads (GET requests).\n"+
+			"  a) The error origin, i.e. the hop that emitted the error, as determined by the request trace in the analysis:\n"+
+			"     pulp-api, pulp-content, pulp-worker, nsgw (north-south gateway), or akamai-edge.\n"+
+			"     These are fundamentally different components. For example, pulp-api handles REST API\n"+
+			"     operations (POST /modify/, PUT /api/...) while pulp-content-app serves content downloads (GET requests),\n"+
+			"     and an nsgw error (e.g. Envoy UH/UF/UT flags) was produced by the gateway, not by Pulp.\n"+
+			"     If the analysis reports the origin as unknown (trace unavailable), fall back to the Pulp service that the\n"+
+			"     endpoint routes to and say in the issue that the origin was not confirmed.\n"+
 			"  b) The HTTP method(s) involved (GET, POST, PUT, PATCH, DELETE, etc.).\n"+
 			"  c) The target domain(s) and endpoint path(s) (e.g. \"packages.redhat.com/api/pulp/...\").\n\n"+
 			"  HARD GROUPING RULES — an existing issue is only a match if ALL of these align:\n"+
-			"  1. SAME Pulp service/origin (pulp-api vs pulp-content vs pulp-worker are NEVER grouped together).\n"+
+			"  1. SAME error origin (pulp-api vs pulp-content vs pulp-worker vs nsgw vs akamai-edge are NEVER grouped together).\n"+
 			"  2. SAME HTTP method (GET vs POST vs PUT etc. are NEVER grouped together, even on the same endpoint).\n"+
 			"  3. Same or similar endpoint path (same base path differing only in IDs, query params, or trailing segments).\n\n"+
 			"  If ANY of these three dimensions differ, the issues are SEPARATE — do not group, comment, or treat them as related.\n\n"+
@@ -67,7 +71,10 @@ func OpenJiraIssue(result, question string) string {
 			"  - If no matching open issue is found for this service+method+endpoint group, create a new Jira issue using the jira_create_issue tool.\n"+
 			"    Include the Pulp service and HTTP method prominently in the issue summary\n"+
 			"    (e.g. \"[pulp-content-app] [GET] 504 timeouts on content serving endpoints\").\n"+
+			"    For errors emitted by the gateway or the edge, use the origin as the prefix instead (e.g. \"[nsgw] [GET] 503 UH no healthy upstream for pulp-content\").\n"+
 			"    Use the analysis to derive an appropriate description, grouping all similar endpoints for this service+method together.\n"+
+			"    The description MUST include the error origin, the confidence, and the per-hop trace evidence from the analysis\n"+
+			"    (Akamai, NSGW, and Pulp log lines with timestamps, Envoy flags/details, correlation id, and the Pulp error or traceback).\n"+
 			"    If the issue contains sensitive information (see Step 4), set the security level to make it visible only to the group \"Red Hat Employee\" (use visibility type \"group\", not \"role\").\n\n"+
 			"Step 4: Sensitive information check.\n"+
 			"  Before creating or commenting on an issue, inspect the content for sensitive information such as:\n"+
