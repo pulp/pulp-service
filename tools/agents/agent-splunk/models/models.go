@@ -28,7 +28,8 @@ func Run(ctx context.Context, llm llms.Model, cfg RunConfig) (string, error) {
 	// Apply a default timeout if the context has no deadline.
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 10*time.Minute)
+		// Tracing requests through CloudWatch adds several slow (5-30s) queries.
+		ctx, cancel = context.WithTimeout(ctx, 20*time.Minute)
 		defer cancel()
 	}
 

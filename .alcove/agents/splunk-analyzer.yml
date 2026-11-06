@@ -1,14 +1,14 @@
 name: Splunk Log Analyzer
 description: |
-  Analyzes Splunk logs for 5xx errors and drafts Jira issues.
+  Analyzes Akamai edge logs (Sumo Logic) for 5xx errors, traces sample requests through
+  the NSGW gateway and into Pulp via CloudWatch to determine which hop emitted
+  each error, and drafts Jira issues.
   Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
   url: https://github.com/pulp/pulp-service/releases/download/agent-splunk-20260429-7055927/agent-splunk
   args: ["--model", "claude-opus-4-6"]
   env:
-    SPLUNK_INSECURE_SKIP_VERIFY: "true"
-    SPLUNK_URL: "https://splunk-api.corp.redhat.com:8089/"
     JIRA_URL: "https://redhat.atlassian.net/"
 
 timeout: 1800
@@ -17,8 +17,13 @@ enforcement_mode: monitor
 direct_outbound: true
 
 credentials:
-  SPLUNK_TOKEN: splunk
+  SUMO_API_URL: SUMO_API_URL
+  SUMO_ACCESS_ID: SUMO_ACCESS_ID
+  SUMO_ACCESS_KEY: SUMO_ACCESS_KEY
   JIRA_API_TOKEN: jira
+  # Read-only app-sre-logs credentials: NSGW (*.openshift-ingress) and Pulp app log groups
+  AWS_ACCESS_KEY_ID: aws-access-key-id-log-readonly
+  AWS_SECRET_ACCESS_KEY: aws-secret-access-key-log-readonly
 
 schedule:
   cron: "0 * * * *"
