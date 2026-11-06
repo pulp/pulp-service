@@ -171,9 +171,12 @@ objects:
               echo "ERROR: PROXY_CERTAUTH_SECRET is empty" >&2
               exit 1
             fi
+            sed_escape() {
+              printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
+            }
             sed -e "s|NAMESERVER|${NAMESERVER}|g" \
-                -e "s|VPN_ACCESS_SECRET|${VPN_ACCESS_SECRET}|g" \
-                -e "s|PROXY_CERTAUTH_SECRET|${PROXY_CERTAUTH_SECRET}|g" \
+                -e "s|VPN_ACCESS_SECRET|$(sed_escape "${VPN_ACCESS_SECRET}")|g" \
+                -e "s|PROXY_CERTAUTH_SECRET|$(sed_escape "${PROXY_CERTAUTH_SECRET}")|g" \
                 /opt/nginx-template/nginx.conf.tpl > /opt/nginx-rendered/nginx.conf
             exec nginx -c /opt/nginx-rendered/nginx.conf -g 'daemon off;'
           ports:
