@@ -30,6 +30,19 @@ objects:
 
         resolver NAMESERVER valid=10s ipv6=off;
 
+        map $ssl_client_verify $client_cn {
+          SUCCESS $ssl_client_s_dn_legacy;
+          default "";
+        }
+        map $ssl_client_verify $client_issuer {
+          SUCCESS $ssl_client_i_dn_legacy;
+          default "";
+        }
+        map $ssl_client_verify $proxy_auth {
+          SUCCESS "PROXY_CERTAUTH_SECRET";
+          default "";
+        }
+
         server {
           listen 8080;
           server_name ${PROXY_SERVER_NAME};
@@ -51,6 +64,10 @@ objects:
           ssl_certificate /etc/nginx/tls/tls.crt;
           ssl_certificate_key /etc/nginx/tls/tls.key;
 
+          ssl_verify_client optional;
+          ssl_client_certificate /etc/nginx/client-ca/candlepin-chain.pem;
+          ssl_verify_depth 4;
+
           location / {
             client_max_body_size 0;
             client_body_timeout 60s;
@@ -71,6 +88,22 @@ objects:
             proxy_ssl_name ${PROXY_SERVER_NAME};
             proxy_set_header Host ${PROXY_SERVER_NAME};
             proxy_set_header X-Forwarded-Proto https;
+
+            # Drop client-supplied identity assertions before forwarding.
+            proxy_set_header x-rh-certauth-cn "";
+            proxy_set_header x-rh-certauth-issuer "";
+            proxy_set_header x-rh-certauth-host "";
+            proxy_set_header x-rh-identity "";
+            proxy_set_header X-Pulp-VPN-Verified "";
+            proxy_set_header X-Pulp-Proxy-Auth "";
+            proxy_set_header X-Pulp-Proxy-Cert-Subject-DN "";
+            proxy_set_header X-Pulp-Proxy-Cert-Issuer-DN "";
+
+            # Forward the verified client certificate identity to Akamai.
+            proxy_set_header X-Pulp-Proxy-Auth $proxy_auth;
+            proxy_set_header X-Pulp-Proxy-Cert-Subject-DN $client_cn;
+            proxy_set_header X-Pulp-Proxy-Cert-Issuer-DN $client_issuer;
+
             proxy_set_header X-Pulp-VPN-Access VPN_ACCESS_SECRET;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_connect_timeout 10s;
@@ -120,6 +153,11 @@ objects:
               secretKeyRef:
                 name: vpn-access-secret
                 key: vpn-access-secret
+          - name: PROXY_CERTAUTH_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: pulp-vpn-proxy-certauth
+                key: proxy-certauth-secret
           command:
           - /bin/bash
           - -c
@@ -129,8 +167,16 @@ objects:
               echo "ERROR: No nameserver found in /etc/resolv.conf" >&2
               exit 1
             fi
+            if [ -z "${PROXY_CERTAUTH_SECRET}" ]; then
+              echo "ERROR: PROXY_CERTAUTH_SECRET is empty" >&2
+              exit 1
+            fi
+            sed_escape() {
+              printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
+            }
             sed -e "s|NAMESERVER|${NAMESERVER}|g" \
-                -e "s|VPN_ACCESS_SECRET|${VPN_ACCESS_SECRET}|g" \
+                -e "s|VPN_ACCESS_SECRET|$(sed_escape "${VPN_ACCESS_SECRET}")|g" \
+                -e "s|PROXY_CERTAUTH_SECRET|$(sed_escape "${PROXY_CERTAUTH_SECRET}")|g" \
                 /opt/nginx-template/nginx.conf.tpl > /opt/nginx-rendered/nginx.conf
             exec nginx -c /opt/nginx-rendered/nginx.conf -g 'daemon off;'
           ports:
@@ -166,6 +212,9 @@ objects:
           - name: nginx-tls
             mountPath: /etc/nginx/tls
             readOnly: true
+          - name: nginx-client-ca
+            mountPath: /etc/nginx/client-ca
+            readOnly: true
           - name: nginx-cache
             mountPath: /var/cache/nginx
           - name: nginx-run
@@ -179,6 +228,17 @@ objects:
         - name: nginx-tls
           secret:
             secretName: ${TLS_SECRET_NAME}
+            items:
+            - key: tls.crt
+              path: tls.crt
+            - key: tls.key
+              path: tls.key
+        - name: nginx-client-ca
+          secret:
+            secretName: ${CLIENT_CA_SECRET_NAME}
+            items:
+            - key: candlepin-chain.pem
+              path: candlepin-chain.pem
         - name: nginx-cache
           emptyDir: {}
         - name: nginx-run
@@ -235,6 +295,9 @@ parameters:
 - name: TLS_SECRET_NAME
   description: Secret containing the RHCS server certificate for nginx TLS termination
   value: pulp-vpn-proxy-tls
+- name: CLIENT_CA_SECRET_NAME
+  description: Secret containing the Candlepin client CA chain for mTLS validation
+  value: pulp-vpn-proxy-client-ca
 - name: CPU_REQUEST
   description: CPU request
   value: 100m
