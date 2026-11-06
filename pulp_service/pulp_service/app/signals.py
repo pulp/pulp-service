@@ -146,10 +146,14 @@ def remove_service_content_guards_before_domain_delete(domain):
 
 
 def _delete_guard_if_unreferenced(guard):
-    """Keep guards referenced by distributions or composites to avoid detaching authorization."""
+    """Keep guards referenced by distributions, composites, or AndGates to avoid detaching authorization."""
+    from pulp_service.app.models import AndGateContentGuard
+
     if Distribution.objects.filter(content_guard=guard).exists():
         return
     if CompositeContentGuard.objects.filter(guards=guard).exists():
+        return
+    if AndGateContentGuard.objects.filter(guards=guard).exists():
         return
     guard.delete()
 
