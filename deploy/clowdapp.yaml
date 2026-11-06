@@ -1805,9 +1805,9 @@ parameters:
     description: Path to DB encryption key
     value: "/etc/pulp/keys/database_fields.symmetric.key"
   - name: PULP_ATTESTATION_VERIFICATION_KEYS
-    description: Per-domain map of domain name to attestation verification key file path (pulp_python 3.38.0+)
+    description: Per-domain map of domain name to attestation verification key file path (pulp_python 3.38.0+). Empty by default; the real per-environment maps are set as app-interface parameters for the stage and prod deployments.
     value: >
-      '@json {"public-trusted-libraries": "/etc/pki/sigstore/SIGSTORE-redhat-release3", "lightwell": "/etc/pki/sigstore/SIGSTORE-redhat-release3", "lightwell-stage": "/etc/pki/sigstore/SIGSTORE-redhat-release3"}'
+      '@json {}'
   - name: PULP_CACHE_ENABLED
     description: Enable CACHE. Need REDIS installed.
     value: "true"
