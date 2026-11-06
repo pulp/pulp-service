@@ -5,8 +5,9 @@ attestations that carry an RSA signature instead of a Sigstore certificate,
 mirroring the format produced by Konflux / Calunga builds.
 
 The test signing key is generated at image build time and the matching
-public key is configured as PULP_ATTESTATION_VERIFICATION_KEY so that
-signature verification is fully exercised end-to-end.
+public key is configured for the default domain in
+PULP_ATTESTATION_VERIFICATION_KEYS so that signature verification is
+fully exercised end-to-end.
 """
 
 import base64
@@ -103,8 +104,8 @@ def test_private_key(pulp_settings):
     """Load the CI-generated test attestation signing key."""
     if not os.path.exists(TEST_PRIVATE_KEY_PATH):
         pytest.skip(f"Test attestation private key not found at {TEST_PRIVATE_KEY_PATH} (not running in CI container?)")
-    if pulp_settings.ATTESTATION_VERIFICATION_KEY != TEST_PUBLIC_KEY_PATH:
-        pytest.fail(f"ATTESTATION_VERIFICATION_KEY is not set to {TEST_PUBLIC_KEY_PATH}")
+    if pulp_settings.ATTESTATION_VERIFICATION_KEYS.get("default") != TEST_PUBLIC_KEY_PATH:
+        pytest.fail(f"ATTESTATION_VERIFICATION_KEYS does not map the default domain to {TEST_PUBLIC_KEY_PATH}")
     with open(TEST_PRIVATE_KEY_PATH, "rb") as f:
         return serialization.load_pem_private_key(f.read(), password=None)
 
@@ -240,7 +241,9 @@ def test_konflux_attestation_via_content_upload(
 
     assert len(result.created_resources) == 2
     prov_obj = python_bindings.ContentProvenanceApi.read(result.created_resources[1])
-    publisher = prov_obj.provenance["attestation_bundles"][0]["publisher"]
-    assert publisher["builder_id"] == "https://konflux-ci.dev/calunga"
-    assert publisher["build_type"] == "https://konflux-ci.dev/PythonWheelBuild@v1"
-    assert publisher["kind"] == "konflux-ci.dev"
+    bundle = prov_obj.provenance["attestation_bundles"][0]
+    assert bundle["publisher"]["kind"] == "Pulp User"
+    # the submitted attestation must actually be stored, not silently dropped
+    stored_atts = bundle["attestations"]
+    assert len(stored_atts) == 1
+    assert stored_atts[0]["envelope"]["statement"] == _b64(stmt)

@@ -52,7 +52,7 @@ REST_FRAMEWORK__DEFAULT_PERMISSION_CLASSES = (
 AUTHENTICATION_JSON_HEADER = "HTTP_X_RH_IDENTITY"
 AUTHENTICATION_JSON_HEADER_JQ_FILTER = ".identity.user.username"
 
-ATTESTATION_VERIFICATION_KEY = "/etc/pki/attestation/test-key.pem"
+ATTESTATION_VERIFICATION_KEYS = {"default": "/etc/pki/attestation/test-key.pem"}
 
 DOMAIN_ACCESS_POLICIES = {
     "lightwell": {
