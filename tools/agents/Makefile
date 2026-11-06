@@ -1,4 +1,4 @@
-.PHONY: build build-alertmanager build-splunk tidy test test-splunk
+.PHONY: build build-alertmanager build-splunk tidy test test-shared test-splunk
 
 build: build-alertmanager build-splunk
 
@@ -15,8 +15,11 @@ tidy:
 	go work sync
 	cd agent-splunk && GOWORK=off go mod tidy
 
-test:
+test: test-shared
 	go test ./agent-alertmanager/... -v
+
+test-shared:
+	go test ./shared/... -v
 
 test-splunk:
 	cd agent-splunk && GOWORK=off go test ./... -v

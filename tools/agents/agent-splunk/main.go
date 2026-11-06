@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -19,7 +20,8 @@ import (
 	mcpClient "agent-splunk/mcp-client"
 	"agent-splunk/models"
 	"agent-splunk/skills"
-	"agent-splunk/splunk"
+
+	"github.com/pulp/pulp-service/tools/agents/shared/sumo"
 )
 
 func main() {
@@ -29,7 +31,7 @@ func main() {
 }
 
 func run() error {
-	const DEFAULT_QUESTION = "verify all splunk 5xx errors related to pulp in packages.redhat.com found in the last hour, " +
+	const DEFAULT_QUESTION = "verify all Akamai 5xx errors (Sumo Logic) related to pulp in packages.redhat.com found in the last hour, " +
 		"trace sample requests through the NSGW gateway and into Pulp, and determine which hop emitted each error"
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -109,19 +111,23 @@ func run() error {
 	mcpMgr := mcpClient.NewMCPManager()
 	var tools []llms.Tool
 
-	// --- Splunk (native tool) ---
-	if splunkURL := os.Getenv("SPLUNK_URL"); splunkURL != "" {
-		splunkToken := os.Getenv("SPLUNK_TOKEN")
-		if splunkToken == "" {
-			return fmt.Errorf("SPLUNK_TOKEN is required when SPLUNK_URL is set")
-		}
-		splunkClient := splunk.NewClient(splunkURL, splunkToken)
-		tools = append(tools, splunkClient.RegisterTool(mcpMgr))
-		fmt.Fprintf(os.Stderr, "[splunk] registered splunk_search tool (%s)\n", splunkURL)
+	// --- Sumo Logic: Akamai edge logs (native tool, shared/sumo) ---
+	// Configured via SUMO_API_URL, SUMO_ACCESS_ID, SUMO_ACCESS_KEY.
+	sumoClient, err := sumo.NewClientFromEnv()
+	switch {
+	case errors.Is(err, sumo.ErrNotConfigured):
+		fmt.Fprintf(os.Stderr, "[sumo] %s not set, sumo_search tool disabled\n", sumo.EnvAPIURL)
+	case err != nil:
+		return fmt.Errorf("sumo: %w", err)
+	default:
+		tool := sumoClient.Tool()
+		mcpMgr.RegisterNativeTool(tool, sumoClient.Handle)
+		tools = append(tools, tool)
+		fmt.Fprintf(os.Stderr, "[sumo] registered sumo_search tool (%s)\n", sumoClient.Endpoint())
 	}
 
 	// --- CloudWatch: NSGW gateway + Pulp application logs (native tool) ---
-	// Optional: without AWS credentials the agent still analyzes Splunk, but
+	// Optional: without AWS credentials the agent still analyzes the Akamai logs, but
 	// reports the error origin as unknown.
 	cwClient, cwErr := cloudwatch.NewClientFromEnv(ctx)
 	if cwErr != nil {

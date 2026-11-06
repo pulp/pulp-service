@@ -116,3 +116,21 @@ func TestHandle(t *testing.T) {
 		t.Error("expected error for unknown source")
 	}
 }
+
+// After "parse", output columns must be chosen with "display": "fields <parsed
+// field>" fails with "Ephemeral field is already defined" in Logs Insights.
+func TestNSGWParsedQueriesUseDisplay(t *testing.T) {
+	for _, q := range []string{"errors-list", "trace"} {
+		got, err := ExpandQuery(SourceNSGW, "prod", q, "/api/pulp/", 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		afterParse := got[strings.Index(got, "| parse "):]
+		if strings.Contains(afterParse, "| fields ") {
+			t.Errorf("%s: uses 'fields' after parse:\n%s", q, got)
+		}
+		if !strings.Contains(afterParse, "| display @timestamp") {
+			t.Errorf("%s: missing display clause:\n%s", q, got)
+		}
+	}
+}

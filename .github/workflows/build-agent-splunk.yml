@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'tools/agents/agent-splunk/**'
+      - 'tools/agents/shared/**'
   workflow_dispatch:
 
 jobs:

@@ -41,7 +41,10 @@ const nsgwStreamFilter = "filter @logStream like /cluster-default-gateway-opensh
 // envoyParse extracts the fields of the NSGW Envoy access log line.
 const envoyParse = `parse message /\[(?<start>[^\]]+)\] "(?<method>\S+) (?<path>\S+) (?<proto>[^"]+)" (?<status>\d+) (?<flags>\S+) (?<details>\S+) (?<term>\S+) "(?<upstream_failure>[^"]*)" (?<bytes_in>\d+) (?<bytes_out>\d+) (?<duration>\d+) (?<upstream_time>\S+) "(?<xff>[^"]*)" "(?<ua>[^"]*)" "(?<request_id>[^"]*)" "(?<authority>[^"]*)" "(?<upstream_host>[^"]*)" (?<upstream_cluster>\S+)/`
 
-const envoyFields = "fields @timestamp, kubernetes.pod_name, method, path, status, flags, details, upstream_failure, " +
+// envoyFields selects the output columns after envoyParse. It must use
+// "display", not "fields": listing parsed fields in "fields" redefines them and
+// Logs Insights rejects the query with "Ephemeral field is already defined".
+const envoyFields = "display @timestamp, kubernetes.pod_name, method, path, status, flags, details, upstream_failure, " +
 	"duration, upstream_time, upstream_host, upstream_cluster, request_id, xff, ua"
 
 // LogGroups maps source -> environment -> CloudWatch log groups.
@@ -153,8 +156,10 @@ func ExpandQuery(source, env, query, match string, limit int) (string, error) {
 				"| fields @timestamp, kubernetes.pod_name, message\n| sort @timestamp asc\n| limit %d",
 				stream, matchFilter, limit), nil
 		case "errors":
-			return fmt.Sprintf("%s\n%s| filter message like /(?i)(ERROR|CRITICAL|Traceback|Exception|WORKER TIMEOUT|"+
-				"Worker exiting|OOMKilled|out of memory|Booting worker)/\n"+
+			// Case-sensitive on purpose: a case-insensitive "error" also matches
+			// request paths (e.g. ".../errornointernet/...") in access lines.
+			return fmt.Sprintf("%s\n%s| filter message like /\\bERROR\\b|\\bCRITICAL\\b|Traceback|Exception|WORKER TIMEOUT|"+
+				"Worker exiting|OOMKilled|[Oo]ut of memory|Booting worker/\n"+
 				"| fields @timestamp, kubernetes.pod_name, message\n| sort @timestamp asc\n| limit %d",
 				stream, matchFilter, limit), nil
 		}

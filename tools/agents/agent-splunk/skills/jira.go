@@ -17,14 +17,16 @@ func OpenJiraIssue(result, question string) string {
 	fmt.Fprintf(os.Stderr, "\n[jira] checking for existing issues before creating a new one...\n")
 	return fmt.Sprintf(
 		"Based on the following analysis, you need to create a Jira issue or add a comment to an existing one — but first check the preconditions and existing issues.\n\n"+
-			"Step 0: Check the analysis for Splunk failures.\n"+
-			"  If the analysis indicates that Splunk logs could not be retrieved or that Splunk was inaccessible (e.g. connection errors, authentication failures,\n"+
-			"  timeouts, or any indication that log data is missing due to Splunk unavailability), do NOT create or update any Jira issue.\n"+
-			"  Instead, report that the analysis is incomplete due to Splunk access failure and stop.\n\n"+
+			"Step 0: Check the analysis for Akamai log (Sumo Logic) failures.\n"+
+			"  If the analysis indicates that the Akamai logs could not be retrieved from Sumo Logic or that Sumo Logic was inaccessible\n"+
+			"  (e.g. connection errors, authentication failures, timeouts, query errors, or any indication that log data is missing\n"+
+			"  due to Sumo Logic unavailability), do NOT create or update any Jira issue.\n"+
+			"  Instead, report that the analysis is incomplete due to Sumo Logic access failure and stop.\n\n"+
 			"Step 1: Extract request attributes from the analysis.\n"+
 			"  Identify the following from the analysis:\n"+
 			"  a) The error origin, i.e. the hop that emitted the error, as determined by the request trace in the analysis:\n"+
-			"     pulp-api, pulp-content, pulp-worker, nsgw (north-south gateway), or akamai-edge.\n"+
+			"     pulp-api, pulp-content, nsgw (north-south gateway), or akamai-edge. pulp-worker is never an origin; if the\n"+
+			"     analysis lists it as a contributing cause, mention it in the issue but group by the error origin.\n"+
 			"     These are fundamentally different components. For example, pulp-api handles REST API\n"+
 			"     operations (POST /modify/, PUT /api/...) while pulp-content-app serves content downloads (GET requests),\n"+
 			"     and an nsgw error (e.g. Envoy UH/UF/UT flags) was produced by the gateway, not by Pulp.\n"+
@@ -33,7 +35,7 @@ func OpenJiraIssue(result, question string) string {
 			"  b) The HTTP method(s) involved (GET, POST, PUT, PATCH, DELETE, etc.).\n"+
 			"  c) The target domain(s) and endpoint path(s) (e.g. \"packages.redhat.com/api/pulp/...\").\n\n"+
 			"  HARD GROUPING RULES — an existing issue is only a match if ALL of these align:\n"+
-			"  1. SAME error origin (pulp-api vs pulp-content vs pulp-worker vs nsgw vs akamai-edge are NEVER grouped together).\n"+
+			"  1. SAME error origin (pulp-api vs pulp-content vs nsgw vs akamai-edge are NEVER grouped together).\n"+
 			"  2. SAME HTTP method (GET vs POST vs PUT etc. are NEVER grouped together, even on the same endpoint).\n"+
 			"  3. Same or similar endpoint path (same base path differing only in IDs, query params, or trailing segments).\n\n"+
 			"  If ANY of these three dimensions differ, the issues are SEPARATE — do not group, comment, or treat them as related.\n\n"+
