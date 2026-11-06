@@ -6,7 +6,7 @@ RUN git clone --depth=1 https://github.com/bmbouter/alcove.git . && \
 
 FROM registry.access.redhat.com/ubi9/ubi
 
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.12
 ENV PYTHONUNBUFFERED=0
 ENV DJANGO_SETTINGS_MODULE=pulpcore.app.settings
 ENV PULP_SETTINGS=/etc/pulp/settings.py

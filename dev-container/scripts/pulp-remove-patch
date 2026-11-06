@@ -8,7 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 PATCH_FILE="$1"
-SITE_PACKAGES="/usr/local/lib/pulp/lib/python${PYTHON_VERSION:-3.11}/site-packages"
+SITE_PACKAGES="/usr/local/lib/pulp/lib/python${PYTHON_VERSION:-3.12}/site-packages"
 
 if [ ! -f "$PATCH_FILE" ]; then
     echo "Error: Patch file not found: $PATCH_FILE"
