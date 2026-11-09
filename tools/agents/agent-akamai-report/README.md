@@ -1,6 +1,6 @@
 # agent-akamai-report
 
-An AI agent that queries Akamai access logs in Splunk to produce 7-day traffic analysis reports for hosted Pulp. It fetches traffic data (reqHost, base_path, request count), saves the raw JSON, generates an interactive HTML report, and uses an LLM (Claude or Gemini via Vertex AI) to produce analysis.
+An AI agent that queries the Akamai access logs in Sumo Logic (`_index=rh_akamai`) to produce 7-day traffic analysis reports for hosted Pulp. It fetches traffic data (reqHost, base_path, request count), saves the raw JSON, generates an interactive HTML report, and uses an LLM (Claude or Gemini via Vertex AI) to produce analysis.
 
 When configured with `--gitlab-repo`, the agent automatically publishes reports to a GitLab repository for serving via GitLab Pages, with a date-based index for browsing historical reports.
 
@@ -8,15 +8,16 @@ When configured with `--gitlab-repo`, the agent automatically publishes reports 
 
 - Go 1.25+
 - Google Cloud credentials configured (for Vertex AI access), or an Anthropic API key (proxy mode)
-- Access to a Splunk instance with Akamai logs
+- A Sumo Logic access ID/key with read access to `_index=rh_akamai`
 - (Optional) GitLab access token for publishing reports
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `SPLUNK_URL` | Yes | Splunk instance URL |
-| `SPLUNK_TOKEN` | Yes | Splunk bearer auth token |
+| `SUMO_API_URL` | Yes | Sumo Logic API endpoint for the deployment (e.g. `https://api.sumologic.com`, `https://api.us2.sumologic.com`) |
+| `SUMO_ACCESS_ID` | Yes | Sumo Logic access ID |
+| `SUMO_ACCESS_KEY` | Yes | Sumo Logic access key |
 | `GITLAB_TOKEN` | With `--gitlab-repo` | GitLab personal access token for publishing reports |
 | `ANTHROPIC_API_KEY` | One of | API key for proxy mode |
 | `ANTHROPIC_BASE_URL` | No | Base URL for proxy mode |
@@ -24,7 +25,6 @@ When configured with `--gitlab-repo`, the agent automatically publishes reports 
 | `VERTEX_SA_JSON` | No | Service account JSON for Vertex AI (alternative to project ID) |
 | `CLOUD_ML_REGION` | No | Vertex AI region (default: `global`) |
 | `CLAUDE_MODEL` | No | Override default model (default: `claude-opus-4-6`) |
-| `SPLUNK_INSECURE_SKIP_VERIFY` | No | Set to `true` to skip TLS verification for Splunk |
 
 **Anthropic / Vertex AI configuration:**
 Provide either Anthropic proxy configuration or Vertex AI configuration:
@@ -37,7 +37,7 @@ Provide either Anthropic proxy configuration or Vertex AI configuration:
 # Build
 go build -o agent-akamai-report .
 
-# Run with defaults (queries Splunk, saves to /tmp/traffic-report-<timestamp>/traffic.json)
+# Run with defaults (queries Sumo Logic, saves to /tmp/traffic-report-<timestamp>/traffic.json)
 ./agent-akamai-report
 
 # Run with a custom output directory
@@ -56,18 +56,19 @@ go build -o agent-akamai-report .
 ### Container
 
 ```bash
-podman build -f Containerfile -t agent-akamai-report .
+# from tools/agents (the build needs ./shared and go.work)
+podman build -f agent-akamai-report/Containerfile -t agent-akamai-report .
 podman run --env-file .env agent-akamai-report
 ```
 
 ## What It Does
 
-1. Queries Splunk for Akamai access logs from the last 7 days
-2. Aggregates traffic by `reqHost` and `base_path`, sorted by request count
-3. Saves the raw JSON results to `traffic.json` in the output directory
+1. Queries Sumo Logic for Akamai access logs from the last 7 days (see `trafficQuery` in `traffic.go`)
+2. Aggregates traffic by `reqhost`, `base_path` (first three path segments) and `path_type`, sorted by request count (all groups; the LLM receives the top 100 plus overall totals)
+3. Saves the results to `traffic.json` in the output directory (keys `reqHost`, `base_path`, `path_type`, `count`, unchanged from the Splunk-based reports, plus `warnings` when Sumo Logic returned any)
 4. Generates an interactive HTML report with sorting, filtering, and dark mode
 5. Feeds the data to an LLM that produces a formatted table and analysis
-6. The LLM has access to the `splunk_search` tool for follow-up queries
+6. The LLM gets no tools: it only summarizes the data it is given (request paths in the logs are untrusted text)
 7. (Optional) Publishes HTML report and JSON data to a GitLab repository
 
 ## GitLab Pages Publishing

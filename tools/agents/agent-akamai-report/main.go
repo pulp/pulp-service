@@ -11,12 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tmc/langchaingo/llms"
-
 	"github.com/pulp/pulp-service/tools/agents/shared/auth"
-	mcpClient "github.com/pulp/pulp-service/tools/agents/shared/mcp-client"
 	"github.com/pulp/pulp-service/tools/agents/shared/models"
-	"github.com/pulp/pulp-service/tools/agents/shared/skills/splunk"
+	"github.com/pulp/pulp-service/tools/agents/shared/sumo"
 )
 
 func main() {
@@ -64,23 +61,21 @@ func run() error {
 		}
 	}
 
-	// Splunk is required for this agent.
-	splunkURL := os.Getenv("SPLUNK_URL")
-	if splunkURL == "" {
-		return fmt.Errorf("SPLUNK_URL is required")
+	// Sumo Logic (Akamai edge logs) is required for this agent.
+	// Configured via SUMO_API_URL, SUMO_ACCESS_ID, SUMO_ACCESS_KEY.
+	sumoClient, err := sumo.NewClientFromEnv()
+	if err != nil {
+		return fmt.Errorf("sumo: %w", err)
 	}
-	splunkToken := os.Getenv("SPLUNK_TOKEN")
-	if splunkToken == "" {
-		return fmt.Errorf("SPLUNK_TOKEN is required")
-	}
+	fmt.Fprintf(os.Stderr, "[sumo] querying Akamai traffic data for the last 7 days (%s)...\n", sumoClient.Endpoint())
 
-	splunkClient := splunk.NewClient(splunkURL, splunkToken)
-	fmt.Fprintf(os.Stderr, "[splunk] querying Akamai traffic data for the last 7 days...\n")
-
-	// Query Splunk for traffic data.
-	results, err := splunkClient.Search(ctx, splunk.SPLUNK_TRAFFIC_QUERY, "-7d", "now", 0)
+	report, err := queryTraffic(ctx, sumoClient)
 	if err != nil {
 		return fmt.Errorf("traffic report search: %w", err)
+	}
+	results, err := report.JSON()
+	if err != nil {
+		return fmt.Errorf("encode results: %w", err)
 	}
 
 	// Save results to file.
@@ -111,13 +106,15 @@ func run() error {
 			"Sort by count descending. After the table, summarize notable patterns, " +
 			"top consumers, and any anomalies."
 	}
-	prompt := fmt.Sprintf("%s\n\n%s", question, results)
+	promptData, err := report.promptData()
+	if err != nil {
+		return fmt.Errorf("build prompt data: %w", err)
+	}
+	prompt := fmt.Sprintf("%s\n\n%s", question, promptData)
 
-	// Register the splunk_search tool so the LLM can run follow-up queries.
-	mcpMgr := mcpClient.NewMCPManager()
-	var tools []llms.Tool
-	tools = append(tools, splunkClient.RegisterTool(mcpMgr))
-
+	// No tools: the model only summarizes the data above. Giving it a search
+	// tool would let request paths in the logs (attacker-controlled text) steer
+	// queries against everything the Sumo credentials can read.
 	var model models.Model
 	switch *inputModel {
 	case "claude-opus-4-6":
@@ -136,16 +133,14 @@ func run() error {
 		}
 	}
 
-	report, err := model.ModelRun(ctx, models.RunConfig{
+	analysis, err := model.ModelRun(ctx, models.RunConfig{
 		Prompt: prompt,
-		Tools:  tools,
-		MCP:    mcpMgr,
 	})
 	if err != nil {
 		return fmt.Errorf("model run: %w", err)
 	}
 
-	fmt.Println(report)
+	fmt.Println(analysis)
 
 	if *inputGitLabRepo != "" {
 		publisher := newGitLabPublisher(*inputGitLabRepo, gitlabToken)

@@ -52,7 +52,8 @@ const (
 	maxMaxResults     = 1000
 	maxWindow         = 7 * 24 * time.Hour
 	maxOutputBytes    = 28000
-	jobTimeout        = 4 * time.Minute
+	maxPageSize       = 10000 // Search Job API limit per messages/records request
+	defaultJobTimeout = 4 * time.Minute
 	pollInterval      = 2 * time.Second
 )
 
@@ -79,6 +80,7 @@ type Client struct {
 	accessKey  string
 	httpClient *http.Client
 	now        func() time.Time
+	jobTimeout time.Duration
 }
 
 // NewClientFromEnv builds a client from SUMO_API_URL, SUMO_ACCESS_ID and
@@ -92,6 +94,10 @@ func NewClientFromEnv() (*Client, error) {
 	accessID, accessKey := os.Getenv(EnvAccessID), os.Getenv(EnvAccessKey)
 	if accessID == "" || accessKey == "" {
 		return nil, fmt.Errorf("%s and %s are required when %s is set", EnvAccessID, EnvAccessKey, EnvAPIURL)
+	}
+	// The access ID/key are sent as Basic Auth on every request: never over plain HTTP.
+	if u, err := url.Parse(strings.TrimSpace(endpoint)); err != nil || u.Scheme != "https" {
+		return nil, fmt.Errorf("%s must be an https:// URL, got %q", EnvAPIURL, endpoint)
 	}
 	return NewClient(endpoint, accessID, accessKey)
 }
@@ -119,7 +125,17 @@ func NewClient(endpoint, accessID, accessKey string) (*Client, error) {
 		accessKey:  accessKey,
 		httpClient: &http.Client{Timeout: time.Minute, Jar: jar},
 		now:        time.Now,
+		jobTimeout: defaultJobTimeout,
 	}, nil
+}
+
+// SetJobTimeout sets how long Search/SearchRows wait for a search job to
+// finish (default 4 minutes). Long aggregations, e.g. over 7 days of Akamai
+// logs, need more.
+func (c *Client) SetJobTimeout(d time.Duration) {
+	if d > 0 {
+		c.jobTimeout = d
+	}
 }
 
 // NormalizeEndpoint returns the API v1 base URL for a Sumo deployment endpoint.
@@ -220,20 +236,31 @@ func (c *Client) do(ctx context.Context, method, path string, body any) ([]byte,
 	return data, nil
 }
 
-// Search runs a query over [from, to) and returns the aggregate records when the
-// query produces them, otherwise the raw messages.
-func (c *Client) Search(ctx context.Context, query string, from, to time.Time, maxResults int) (string, error) {
+// Result holds the rows returned by SearchRows.
+type Result struct {
+	// Kind is "records" for aggregate queries, otherwise "messages".
+	Kind string
+	// Total is the number of records/messages produced by the job; Rows may
+	// hold fewer when capped by maxResults.
+	Total    int
+	Rows     []map[string]string
+	Warnings []string
+}
+
+// SearchRows runs a query over [from, to) and returns the raw result rows: the
+// aggregate records when the query produces them, otherwise the messages.
+func (c *Client) SearchRows(ctx context.Context, query string, from, to time.Time, maxResults int) (Result, error) {
 	data, err := c.do(ctx, http.MethodPost, "/search/jobs", createJobRequest{
 		Query: query, From: from.UnixMilli(), To: to.UnixMilli(), TimeZone: "UTC",
 	})
 	if err != nil {
-		return "", fmt.Errorf("create search job: %w", err)
+		return Result{}, fmt.Errorf("create search job: %w", err)
 	}
 	var job struct {
 		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(data, &job); err != nil || job.ID == "" {
-		return "", fmt.Errorf("create search job: unexpected response: %s", utils.Truncate(string(data), 500))
+		return Result{}, fmt.Errorf("create search job: unexpected response: %s", utils.Truncate(string(data), 500))
 	}
 	jobPath := "/search/jobs/" + url.PathEscape(job.ID)
 	defer func() {
@@ -246,45 +273,58 @@ func (c *Client) Search(ctx context.Context, query string, from, to time.Time, m
 
 	status, err := c.waitForJob(ctx, jobPath)
 	if err != nil {
+		return Result{}, err
+	}
+
+	res := Result{Kind: "messages", Total: status.MessageCount, Warnings: status.PendingWarnings}
+	if status.RecordCount > 0 {
+		res.Kind, res.Total = "records", status.RecordCount
+	}
+	limit := min(res.Total, maxResults)
+	for offset := 0; offset < limit; {
+		page := min(limit-offset, maxPageSize)
+		data, err = c.do(ctx, http.MethodGet, fmt.Sprintf("%s/%s?offset=%d&limit=%d", jobPath, res.Kind, offset, page), nil)
+		if err != nil {
+			return Result{}, fmt.Errorf("fetch %s: %w", res.Kind, err)
+		}
+		var rows resultRows
+		if err := json.Unmarshal(data, &rows); err != nil {
+			return Result{}, fmt.Errorf("parse %s: %w", res.Kind, err)
+		}
+		n := len(rows.Messages) + len(rows.Records)
+		for _, m := range rows.Messages {
+			res.Rows = append(res.Rows, m.Map)
+		}
+		for _, r := range rows.Records {
+			res.Rows = append(res.Rows, r.Map)
+		}
+		if n == 0 {
+			break
+		}
+		offset += n
+	}
+	return res, nil
+}
+
+// Search runs a query over [from, to) and returns the aggregate records when the
+// query produces them, otherwise the raw messages, formatted for an LLM.
+func (c *Client) Search(ctx context.Context, query string, from, to time.Time, maxResults int) (string, error) {
+	res, err := c.SearchRows(ctx, query, from, to, maxResults)
+	if err != nil {
 		return "", err
 	}
-
-	kind, count := "messages", status.MessageCount
-	if status.RecordCount > 0 {
-		kind, count = "records", status.RecordCount
-	}
-	limit := min(count, maxResults)
-
-	var rows []map[string]string
-	if limit > 0 {
-		data, err = c.do(ctx, http.MethodGet, fmt.Sprintf("%s/%s?offset=0&limit=%d", jobPath, kind, limit), nil)
-		if err != nil {
-			return "", fmt.Errorf("fetch %s: %w", kind, err)
-		}
-		var res resultRows
-		if err := json.Unmarshal(data, &res); err != nil {
-			return "", fmt.Errorf("parse %s: %w", kind, err)
-		}
-		for _, m := range res.Messages {
-			rows = append(rows, m.Map)
-		}
-		for _, r := range res.Records {
-			rows = append(rows, r.Map)
-		}
-	}
-
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "window=%s..%s result_type=%s total=%d returned=%d\n",
-		from.Format(time.RFC3339), to.Format(time.RFC3339), kind, count, len(rows))
-	if len(status.PendingWarnings) > 0 {
-		fmt.Fprintf(&sb, "warnings: %s\n", strings.Join(status.PendingWarnings, "; "))
+		from.Format(time.RFC3339), to.Format(time.RFC3339), res.Kind, res.Total, len(res.Rows))
+	if len(res.Warnings) > 0 {
+		fmt.Fprintf(&sb, "warnings: %s\n", strings.Join(res.Warnings, "; "))
 	}
-	sb.WriteString(FormatRows(rows))
+	sb.WriteString(FormatRows(res.Rows))
 	return sb.String(), nil
 }
 
 func (c *Client) waitForJob(ctx context.Context, jobPath string) (jobStatus, error) {
-	deadline := time.Now().Add(jobTimeout)
+	deadline := time.Now().Add(c.jobTimeout)
 	for {
 		data, err := c.do(ctx, http.MethodGet, jobPath, nil)
 		if err != nil {
@@ -304,7 +344,7 @@ func (c *Client) waitForJob(ctx context.Context, jobPath string) (jobStatus, err
 			return st, fmt.Errorf("search job %s", strings.ToLower(st.State))
 		}
 		if time.Now().After(deadline) {
-			return st, fmt.Errorf("search job did not finish within %s (state %q); narrow the time range", jobTimeout, st.State)
+			return st, fmt.Errorf("search job did not finish within %s (state %q); narrow the time range", c.jobTimeout, st.State)
 		}
 		select {
 		case <-ctx.Done():
