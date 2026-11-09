@@ -6,7 +6,7 @@ description: |
   Runs as a pre-compiled agent binary from GitHub Releases.
 
 executable:
-  url: https://github.com/pulp/pulp-service/releases/download/agent-splunk-20260429-7055927/agent-splunk
+  url: https://github.com/pulp/pulp-service/releases/download/agent-splunk-20261109-e483721/agent-splunk
   args: ["--model", "claude-opus-4-6"]
   env:
     JIRA_URL: "https://redhat.atlassian.net/"
