@@ -97,6 +97,7 @@ func fakeSumo(t *testing.T, status jobStatus, rows string) (*httptest.Server, *[
 		case r.URL.Path == "/api/v1/search/jobs/J1":
 			_ = json.NewEncoder(w).Encode(status)
 		case strings.HasPrefix(r.URL.Path, "/api/v1/search/jobs/J1/"):
+			calls = append(calls, "limit="+r.URL.Query().Get("limit"))
 			_, _ = w.Write([]byte(rows))
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -182,5 +183,32 @@ func TestNewClientFromEnv(t *testing.T) {
 	c, err := NewClientFromEnv()
 	if err != nil || c.Endpoint() != "https://api.sumologic.com/api/v1" {
 		t.Errorf("got %v, %v", c, err)
+	}
+}
+
+func TestSearchRowsReturnsRawRecords(t *testing.T) {
+	srv, calls := fakeSumo(t, jobStatus{State: stateDone, MessageCount: 50, RecordCount: 3},
+		`{"records":[{"map":{"reqhost":"packages.redhat.com","_count":"40"}},{"map":{"reqhost":"console.redhat.com","_count":"10"}}]}`)
+	c, _ := NewClient(srv.URL, "id", "key")
+	c.SetJobTimeout(time.Minute)
+	now := time.Now()
+	res, err := c.SearchRows(context.Background(), "_index=rh_akamai | count by reqhost", now.Add(-time.Hour), now, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Kind != "records" || res.Total != 3 || len(res.Rows) != 2 || res.Rows[0]["_count"] != "40" {
+		t.Errorf("unexpected result: %+v", res)
+	}
+	if !strings.Contains(strings.Join(*calls, ","), "limit=2") {
+		t.Errorf("maxResults not applied to the fetch: %v", *calls)
+	}
+}
+
+func TestNewClientFromEnvRequiresHTTPS(t *testing.T) {
+	t.Setenv(EnvAPIURL, "http://api.sumologic.com")
+	t.Setenv(EnvAccessID, "id")
+	t.Setenv(EnvAccessKey, "key")
+	if _, err := NewClientFromEnv(); err == nil || !strings.Contains(err.Error(), "https") {
+		t.Errorf("plain HTTP endpoint accepted: %v", err)
 	}
 }
