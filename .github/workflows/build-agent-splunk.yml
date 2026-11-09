@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'tools/agents/agent-splunk/**'
+      - 'tools/agents/shared/**'
   workflow_dispatch:
 
 jobs:
@@ -16,7 +17,10 @@ jobs:
           go-version: '1.27'
       - name: Build
         working-directory: tools/agents/agent-splunk
-        run: CGO_ENABLED=0 go build -o agent-splunk .
+        # agent-splunk is not part of tools/agents/go.work; build it as a standalone module.
+        run: |
+          GOWORK=off go test ./...
+          GOWORK=off CGO_ENABLED=0 go build -o agent-splunk .
       - name: Upload binary artifact
         uses: actions/upload-artifact@v7
         with:

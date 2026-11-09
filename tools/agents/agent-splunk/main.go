@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -14,11 +15,13 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
+	"agent-splunk/cloudwatch"
 	"agent-splunk/jira"
 	mcpClient "agent-splunk/mcp-client"
 	"agent-splunk/models"
 	"agent-splunk/skills"
-	"agent-splunk/splunk"
+
+	"github.com/pulp/pulp-service/tools/agents/shared/sumo"
 )
 
 func main() {
@@ -28,7 +31,8 @@ func main() {
 }
 
 func run() error {
-	const DEFAULT_QUESTION = "verify all splunk 5xx errors related to pulp in packages.redhat.com found in the last hour"
+	const DEFAULT_QUESTION = "verify all Akamai 5xx errors (Sumo Logic) related to pulp in packages.redhat.com found in the last hour, " +
+		"trace sample requests through the NSGW gateway and into Pulp, and determine which hop emitted each error"
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -79,6 +83,7 @@ func run() error {
 
 	inputModel := flag.String("model", defaultModel, fmt.Sprintf("Define the model (claude-opus-4-6,gemini-2.5-pro). Default: %s", defaultModel))
 	inputQuestion := flag.String("question", "", "Question to ask the model")
+	dryRun := flag.Bool("dry-run", false, "Run the analysis only: Jira tools are not registered and no Jira issue is searched, created, or commented on")
 	flag.Parse()
 
 	supportedModels := map[string]struct{}{
@@ -96,25 +101,48 @@ func run() error {
 		question = DEFAULT_QUESTION
 	}
 	promptParts = append(promptParts, question)
-	prompt := strings.Join(promptParts, "\n")
+	if *dryRun {
+		fmt.Fprintf(os.Stderr, "[dry-run] analysis only, Jira disabled\n")
+		promptParts = append(promptParts,
+			"NOTE: this is a dry run. Jira is not available; only produce the analysis report.")
+	}
 
 	// MCPManager routes tool calls to the correct handler (native or MCP).
 	mcpMgr := mcpClient.NewMCPManager()
 	var tools []llms.Tool
 
-	// --- Splunk (native tool) ---
-	if splunkURL := os.Getenv("SPLUNK_URL"); splunkURL != "" {
-		splunkToken := os.Getenv("SPLUNK_TOKEN")
-		if splunkToken == "" {
-			return fmt.Errorf("SPLUNK_TOKEN is required when SPLUNK_URL is set")
-		}
-		splunkClient := splunk.NewClient(splunkURL, splunkToken)
-		tools = append(tools, splunkClient.RegisterTool(mcpMgr))
-		fmt.Fprintf(os.Stderr, "[splunk] registered splunk_search tool (%s)\n", splunkURL)
+	// --- Sumo Logic: Akamai edge logs (native tool, shared/sumo) ---
+	// Configured via SUMO_API_URL, SUMO_ACCESS_ID, SUMO_ACCESS_KEY.
+	sumoClient, err := sumo.NewClientFromEnv()
+	switch {
+	case errors.Is(err, sumo.ErrNotConfigured):
+		fmt.Fprintf(os.Stderr, "[sumo] %s not set, sumo_search tool disabled\n", sumo.EnvAPIURL)
+	case err != nil:
+		return fmt.Errorf("sumo: %w", err)
+	default:
+		tool := sumoClient.Tool()
+		mcpMgr.RegisterNativeTool(tool, sumoClient.Handle)
+		tools = append(tools, tool)
+		fmt.Fprintf(os.Stderr, "[sumo] registered sumo_search tool (%s)\n", sumoClient.Endpoint())
+	}
+
+	// --- CloudWatch: NSGW gateway + Pulp application logs (native tool) ---
+	// Optional: without AWS credentials the agent still analyzes the Akamai logs, but
+	// reports the error origin as unknown.
+	cwClient, cwErr := cloudwatch.NewClientFromEnv(ctx)
+	if cwErr != nil {
+		fmt.Fprintf(os.Stderr, "[cloudwatch] disabled, request tracing past Akamai unavailable: %v\n", cwErr)
+		promptParts = append(promptParts,
+			"NOTE: the cloudwatch_trace_logs tool is not available in this run (no AWS credentials). "+
+				"Report the error origin as \"unknown (trace unavailable)\" for every error group.")
+	} else {
+		tools = append(tools, cwClient.RegisterTool(mcpMgr))
+		fmt.Fprintf(os.Stderr, "[cloudwatch] registered cloudwatch_trace_logs tool\n")
 	}
 
 	// --- Jira (native tool) ---
-	if jiraURL := os.Getenv("JIRA_URL"); jiraURL != "" {
+	// Skipped entirely in dry-run so the analysis run cannot touch Jira either.
+	if jiraURL := os.Getenv("JIRA_URL"); jiraURL != "" && !*dryRun {
 		jiraCredential := os.Getenv("JIRA_API_TOKEN")
 		if jiraCredential == "" {
 			return fmt.Errorf("JIRA_API_TOKEN is required when JIRA_URL is set (format: email:api_token)")
@@ -129,9 +157,12 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "[jira] registered %d jira tools (%s)\n", len(jiraTools), jiraURL)
 	}
 
-	// Load embedded skill
+	prompt := strings.Join(promptParts, "\n")
+
+	// Load embedded skills
 	skillMsg := skills.LoadSkill()
-	fmt.Fprintf(os.Stderr, "[skills] loaded jira-workflow.md\n")
+	traceSkillMsg := skills.LoadTraceSkill()
+	fmt.Fprintf(os.Stderr, "[skills] loaded jira-workflows.md, trace-requests.md\n")
 
 	var model models.Model
 	switch *inputModel {
@@ -157,10 +188,15 @@ func run() error {
 		Prompt:         prompt,
 		Tools:          tools,
 		MCP:            mcpMgr,
-		SystemMessages: []llms.MessageContent{skillMsg},
+		SystemMessages: []llms.MessageContent{skillMsg, traceSkillMsg},
 	})
 	if err != nil {
 		return fmt.Errorf("model run: %w", err)
+	}
+
+	if *dryRun {
+		fmt.Fprintf(os.Stderr, "[dry-run] skipping Jira issue creation\n")
+		return nil
 	}
 
 	// open Jira ticket if an issue is found

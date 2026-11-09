@@ -74,8 +74,8 @@ func (v *VertexClient) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	vertexURL := fmt.Sprintf(
-		"https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict",
-		v.Region, v.ProjectID, v.Region, v.Model,
+		"https://%s/v1/projects/%s/locations/%s/publishers/anthropic/models/%s:rawPredict",
+		VertexHost(v.Region), v.ProjectID, v.Region, v.Model,
 	)
 
 	newReq, err := http.NewRequestWithContext(ctx, http.MethodPost, vertexURL, bytes.NewReader(modifiedBody))
@@ -89,4 +89,14 @@ func (v *VertexClient) Do(req *http.Request) (*http.Response, error) {
 		Timeout: time.Duration(time.Minute * 2),
 	}
 	return httpClient.Do(newReq)
+}
+
+// VertexHost returns the Vertex AI API host for a region. The global location
+// has no regional prefix: "global-aiplatform.googleapis.com" does not exist
+// and returns 404.
+func VertexHost(region string) string {
+	if region == "" || region == "global" {
+		return "aiplatform.googleapis.com"
+	}
+	return region + "-aiplatform.googleapis.com"
 }

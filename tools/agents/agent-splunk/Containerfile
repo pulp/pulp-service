@@ -1,20 +1,27 @@
-# Build stage
+# Build from tools/agents (agent-splunk depends on ../shared):
+#   podman build -f agent-splunk/Containerfile -t agent-splunk .
 FROM registry.access.redhat.com/ubi9/go-toolset:9.8-1787774815 AS builder
 
 WORKDIR /opt/app-root/src
 
-COPY go.mod go.sum ./
-RUN go mod download
+# agent-splunk is not part of go.work; it pulls shared in via a replace directive.
+ENV GOWORK=off
 
-COPY . .
-RUN CGO_ENABLED=0 go build -buildvcs=false -o agent-splunk .
+COPY shared/go.mod shared/go.sum shared/
+COPY agent-splunk/go.mod agent-splunk/go.sum agent-splunk/
+RUN cd agent-splunk && go mod download
+
+COPY shared/ shared/
+COPY agent-splunk/ agent-splunk/
+# Write to WORKDIR (owned by the build user); COPY-ed sources are root-owned.
+RUN cd agent-splunk && CGO_ENABLED=0 go build -buildvcs=false -o ../agent-splunk.bin .
 
 # Runtime stage
 FROM registry.access.redhat.com/ubi9-minimal:latest
 
 WORKDIR /app
 
-COPY --from=builder /opt/app-root/src/agent-splunk .
+COPY --from=builder /opt/app-root/src/agent-splunk.bin ./agent-splunk
 
 USER 1001
 
