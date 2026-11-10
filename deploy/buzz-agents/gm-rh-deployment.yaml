@@ -144,7 +144,7 @@ spec:
           mountPath: /run/secrets/vault-approle
           readOnly: true
       - name: transcripts
-        image: ghcr.io/pulp/buzz-transcripts:v0.1.2
+        image: ghcr.io/pulp/buzz-transcripts:v0.1.3
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
