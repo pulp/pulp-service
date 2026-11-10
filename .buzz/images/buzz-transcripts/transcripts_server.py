@@ -175,8 +175,8 @@ def inside_root(f):
     return not os.path.islink(f) and os.path.isfile(f) and os.path.realpath(f).startswith(root)
 
 
-def sessions(since, cap=True):
-    """The transcripts active since a time, oldest first; with cap, only the newest MAX_SESSIONS."""
+def sessions(since):
+    """The transcripts active since a time, oldest first, only the newest MAX_SESSIONS."""
     out = []
     for f in glob.glob(f"{ROOT}/*/claude/projects/*/*.jsonl"):
         if not inside_root(f):
@@ -189,8 +189,6 @@ def sessions(since, cap=True):
             community = f[len(ROOT) + 1:].split("/", 1)[0]
             out.append((mt, os.path.basename(f)[:-6], community, f))
     out.sort()
-    if not cap:
-        return out
     return out[-MAX_SESSIONS:] if MAX_SESSIONS > 0 else []
 
 
@@ -402,10 +400,18 @@ class TranscriptHandler(BaseHandler):
             sid = q.get("id", [""])[0]
             if not UUID.match(sid):
                 return self.reply(400, "id must be a session uuid\n")
-            for mt, s, c, f in sessions(0, cap=False):
-                if s == sid:
-                    head = [f"===== session {sid} community {c} last active {stamp(mt)}"]
-                    return self.reply(200, capped(head + render(f, True)))
+            # The id is a validated uuid (hex and dashes only), so it is safe to glob for the one
+            # matching file directly instead of listing and sorting every session ever recorded.
+            for f in glob.glob(f"{ROOT}/*/claude/projects/*/{sid}.jsonl"):
+                if not inside_root(f):
+                    continue
+                try:
+                    mt = os.path.getmtime(f)
+                except OSError:
+                    continue
+                c = f[len(ROOT) + 1:].split("/", 1)[0]
+                head = [f"===== session {sid} community {c} last active {stamp(mt)}"]
+                return self.reply(200, capped(head + render(f, True)))
             return self.reply(404, "no such session\n")
         return self.reply(404, "see / for usage\n" if u.path != "/" else __doc__)
 
