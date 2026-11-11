@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: agent
-        image: ghcr.io/pulp/buzz-agent-auditor-rh:v0.1.6
+        image: ghcr.io/pulp/buzz-agent-auditor-rh:v0.1.7
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -43,7 +43,7 @@ spec:
         - name: AGENT_SLUG
           value: auditor-rh
         - name: AGENT_REVISION
-          value: v0.1.6
+          value: v0.1.7
         - name: AGENT_DEFINITION_REPO
           value: https://github.com/pulp/pulp-service.git
         - name: AGENT_DEFINITION_REF
@@ -100,6 +100,18 @@ spec:
           value: ''
         - name: PRESTOP
           value: ''
+        # relay-log-check (the daily relay-audit read). GITEA_TOKEN_FILE above is
+        # the auditor's existing read-only Gitea token; it also reads rh/relay-audit.
+        - name: RELAY_AUDIT_REPO
+          value: rh/relay-audit
+        - name: GITEA
+          value: https://gitea.bouterse.casa
+        - name: KNOWN_REPOS
+          value: rh/agents rh/cluster
+        - name: KNOWN_FILES
+          value: config/platform.yaml staff images render/pulp-service/.buzz/agents deploy
+        - name: PEOPLE_KEYS
+          value: 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1,643fc9b6baf936feaa6b8dc3951948de4fb3bc16eef0ec08b5f00b11db84d710,84fc6f8fd8b69388481a16467564845ed2d9d8f351a33e444453c81c6afa06bd
         lifecycle:
           preStop:
             exec:
