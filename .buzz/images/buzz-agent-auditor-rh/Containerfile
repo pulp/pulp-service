@@ -1,8 +1,8 @@
 # buzz-agent-auditor-rh: the Red Hat auditor image for OpenShift. It is the
 # shared buzz-agent-base plus auditor-rh's tamper-proof half, baked root owned per
 # model C: its bin tools (buzz lives in the base; these are staff-entrypoint, the
-# auditor's own checks skip-level-check, reach-check, approval-check and
-# audit-approvals, the transcripts-get helper that fetches a transcripts endpoint
+# auditor's own checks skip-level-check, reach-check, approval-check,
+# audit-approvals and relay-log-check, the transcripts-get helper that fetches a transcripts endpoint
 # with the bearer token kept off argv, secret-guard, and the restart/alive/prestop
 # helpers), the two pinned approver-list configs the audit-approvals check reads
 # (approval-check-cluster.env for rh/cluster and approval-check-agents.env for
@@ -32,6 +32,7 @@ RUN chmod 0755 /usr/local/bin/agent-alive-touch /usr/local/bin/agent-prestop \
       /usr/local/bin/skip-level-check /usr/local/bin/reach-check \
       /usr/local/bin/approval-check /usr/local/bin/audit-approvals \
       /usr/local/bin/transcripts-get /usr/local/bin/secret-guard \
+      /usr/local/bin/relay-log-check \
  && chmod 0644 /opt/agent/approval-check-cluster.env /opt/agent/approval-check-agents.env \
       /opt/agent/managed-settings.json \
  && chmod -R go-w /opt/agent \

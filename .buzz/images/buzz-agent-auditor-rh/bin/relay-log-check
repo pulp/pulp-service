@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""relay-log-check: the daily read of this community's relay audit export (host/relay-audit).
+
+Brian, 2026-11-10: a CoS may be a community admin on its relay only while the auditor reads the relay's
+membership and moderation record every day. The export is relay-audit.json in RELAY_AUDIT_REPO
+(written hourly on serrano, read here with the auditor's Gitea read token). Prints one line per finding:
+
+  STALE   the export is older than 26 hours (the exporter on serrano is down)
+  FLAG    an action on a person (ban, mute, remove from a channel or the community, delete of their
+          message, role change) by anyone other than Brian, or an admission or relay membership of an
+          identity that no definition explains
+  ok      an action on an agent's identity (an agent, or a retired agent key that is archived), or one
+          by Brian
+  and ends with "relay-log-check: N FLAG, M ok (export <time>)".
+
+Who is who comes from the repos, never from display names: every 64 hex pubkey that KNOWN_FILES (git
+pathspecs in the KNOWN_REPOS clones) name now or ever named is a known identity; PEOPLE_KEYS lists the humans (Brian first).
+A key that is in neither set and is not
+archived counts as a person, so an unknown target is treated as a person (fails safe).
+
+Environment:
+  RELAY_AUDIT_REPO   owner/repo of the export (bmbouter/relay-audit)
+  KNOWN_REPOS        space separated owner/repo list to read identities from
+  KNOWN_FILES        space separated globs inside those repos (agents/*/agent.yaml config/*.yaml ...)
+  PEOPLE_KEYS        comma separated hex pubkeys of the humans; the first is Brian
+  GITEA, GITEA_TOKEN_FILE  as for the other auditor tools
+"""
+import base64, datetime, json, os, re, subprocess, sys, tempfile, urllib.request
+
+GITEA = os.environ.get("GITEA", "http://192.168.6.7:3000")
+TOKEN = open(os.environ["GITEA_TOKEN_FILE"]).read().strip()
+REPO = os.environ.get("RELAY_AUDIT_REPO", "bmbouter/relay-audit")
+PEOPLE = [k.strip().lower() for k in os.environ.get("PEOPLE_KEYS", "").split(",") if k.strip()]
+BRIAN = PEOPLE[0] if PEOPLE else ""
+HEX = re.compile(r"\b[0-9a-f]{64}\b")
+WINDOW_H = int(os.environ.get("RELAY_LOG_WINDOW_HOURS", "36"))  # a daily run with overlap; each finding shows once or twice
+PERSON_KINDS = {9001: "removed from a channel", 9005: "had a message deleted", 9040: "banned",
+                9041: "unbanned", 9042: "muted", 9043: "unmuted"}
+
+
+NOPROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # Gitea is on the LAN, as for the other tools (curl --noproxy)
+
+
+def get(url):
+    req = urllib.request.Request(url, headers={"Authorization": f"token {TOKEN}"})
+    with NOPROXY.open(req, timeout=30) as r:
+        return r.read()
+
+
+def known_keys():
+    keys = set()
+    with tempfile.TemporaryDirectory() as d:
+        for repo in os.environ.get("KNOWN_REPOS", "").split():
+            dest = os.path.join(d, repo.replace("/", "_"))
+            env = dict(os.environ, GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="http.extraHeader",
+                       GIT_CONFIG_VALUE_0=f"Authorization: token {TOKEN}", GIT_TERMINAL_PROMPT="0",
+                       no_proxy="*", NO_PROXY="*")
+            subprocess.run(["git", "clone", "-q", "--filter=blob:none", f"{GITEA}/{repo}.git", dest], env=env,
+                           check=True, capture_output=True)
+            # Every key these files ever named, so a retired agent key (rotated, banned) still reads
+            # as an agent's, not a person's.
+            log = subprocess.run(["git", "-C", dest, "log", "-p", "--format=", "--", *os.environ.get("KNOWN_FILES", "").split()],
+                                 env=env, capture_output=True, text=True, errors="replace").stdout
+            keys |= set(HEX.findall(log.lower()))
+    return keys
+
+
+def tag(ev, name):
+    return [t[1].lower() for t in ev.get("tags") or [] if len(t) > 1 and t[0] == name]
+
+
+def main():
+    raw = json.loads(get(f"{GITEA}/api/v1/repos/{REPO}/contents/relay-audit.json"))
+    doc = json.loads(base64.b64decode(raw["content"]))
+    when = datetime.datetime.fromisoformat(doc["exported_at"])
+    age_h = (datetime.datetime.now(datetime.timezone.utc) - when).total_seconds() / 3600
+    known = known_keys() | set(PEOPLE)
+    archived = {a["pubkey"].lower() for a in doc.get("archived") or []}
+    people = set(PEOPLE)
+    flags, oks = [], []
+
+    def person(k):
+        return k in people or (k not in known and k not in archived)
+
+    def who(k):
+        return "Brian" if k == BRIAN else k[:8]
+
+    if age_h > 26:
+        flags.append(f"STALE relay audit export is {age_h:.0f} hours old ({doc['exported_at']}); the exporter on serrano may be down")
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=WINDOW_H)
+    for ev in doc.get("events") or []:
+        if datetime.datetime.fromisoformat(ev["created_at"]) <= cutoff:
+            continue
+        k, actor = ev["kind"], ev["actor"].lower()
+        if k in PERSON_KINDS:
+            targets = tag(ev, "p") or ["(none)"]
+            for t in targets:
+                line = f"{who(actor)} {PERSON_KINDS[k]}: {t[:8]} at {ev['created_at']} (event {ev['id'][:8]})"
+                if actor != BRIAN and t != "(none)" and person(t):
+                    flags.append("FLAG person " + line)
+                else:
+                    oks.append("ok " + line)
+        elif k in (9000, 9009):
+            for t in tag(ev, "p"):
+                line = f"{who(actor)} added {t[:8]} to a channel at {ev['created_at']}"
+                if t in known or t in archived:
+                    oks.append("ok " + line)
+                else:
+                    flags.append("FLAG admission " + line + ": no definition names this key")
+    for a in doc.get("moderation_actions") or []:
+        if datetime.datetime.fromisoformat(a["created_at"]) <= cutoff:
+            continue
+        actor, t = (a.get("actor") or "").lower(), (a.get("target") or "").lower()
+        line = f"{who(actor)} {a['action']} {t[:8]} at {a['created_at']}"
+        (flags.append("FLAG person " + line) if actor != BRIAN and t and person(t) else oks.append("ok " + line))
+    for a in doc.get("operator_audit") or []:
+        if datetime.datetime.fromisoformat(a["created_at"]) <= cutoff:
+            continue
+        line = f"{who((a.get('actor') or '').lower())} changed relay operator {(a.get('target') or '')[:8]} {a['prev_role']} to {a['new_role']} at {a['created_at']}"
+        flags.append("FLAG role " + line) if (a.get("actor") or "").lower() != BRIAN else oks.append("ok " + line)
+    for m in doc.get("relay_members") or []:
+        k = m["pubkey"].lower()
+        for field in ("created_at", "updated_at"):
+            ts = datetime.datetime.fromisoformat(m[field])
+            if ts > cutoff:
+                line = f"relay member {k[:8]} role {m['role']} {field.split('_')[0]} at {m[field]} (added_by {(m.get('added_by') or 'none')[:8]})"
+                if k in known:
+                    oks.append("ok " + line)
+                else:
+                    flags.append("FLAG admission " + line + ": no definition names this key")
+                break
+    for n in doc.get("new_identities") or []:
+        k = n["pubkey"].lower()
+        if datetime.datetime.fromisoformat(n["created_at"]) > cutoff and k not in known and k not in archived:
+            flags.append(f"FLAG admission new identity {k[:8]} ({n.get('name') or 'no name'}) first seen {n['created_at']}: no definition names this key")
+    for b in doc.get("bans") or []:
+        if b.get("updated_at") and datetime.datetime.fromisoformat(b["updated_at"]) > cutoff:
+            t, actor = b["pubkey"].lower(), (b.get("actor") or "").lower()
+            line = f"{who(actor)} set ban={b['banned']} on {t[:8]} at {b['updated_at']}"
+            (flags.append("FLAG person " + line) if actor != BRIAN and person(t) else oks.append("ok " + line))
+    for f in flags:
+        print(f)
+    for o in oks:
+        print(o)
+    print(f"relay-log-check: {len(flags)} FLAG, {len(oks)} ok (export {doc['exported_at']})")
+
+
+if __name__ == "__main__":
+    main()
