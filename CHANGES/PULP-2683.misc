@@ -1,0 +1,1 @@
+Replaced the decommissioned `SPLUNK_TOKEN` credential in the debug-env agent and task with the Sumo Logic credentials (`SUMO_API_URL`, `SUMO_ACCESS_ID`, `SUMO_ACCESS_KEY`).

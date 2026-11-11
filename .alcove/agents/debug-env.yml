@@ -5,6 +5,8 @@ executable:
 timeout: 60
 enforcement_mode: monitor
 credentials:
-  SPLUNK_TOKEN: splunk
+  SUMO_API_URL: SUMO_API_URL
+  SUMO_ACCESS_ID: SUMO_ACCESS_ID
+  SUMO_ACCESS_KEY: SUMO_ACCESS_KEY
   JIRA_TOKEN: jira
   VERTEX_SA_JSON: google-vertex
