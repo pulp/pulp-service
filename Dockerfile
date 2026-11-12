@@ -133,6 +133,7 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 
 
 COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-redhat-release3
+COPY images/assets/keys/SIGSTORE-konflux-stage.pem /etc/pki/sigstore/SIGSTORE-konflux-stage
 
 COPY images/assets/patches/0049-Skip-content-units-validation.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
