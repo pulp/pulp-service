@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# sumo-search: run one Sumo Logic search (Search Job API) and print the result as JSON,
+# with the Sumo access key pair read here, never by the session. secret-guard blocks a
+# session that expands $SUMO_ACCESS_KEY or passes `curl -u`; this is the tool that holds
+# the credential, the same way pulp-api holds the TBR netrc and gabi-query the GABI token.
+#
+#   sumo-search [--from <time>] [--to <time>] [--limit <n>] [--timeout <s>]   (query on stdin)
+#
+# <time> is now, a relative offset (-30m, -1h, -2d), epoch milliseconds, or UTC RFC3339
+# (2026-11-12T10:00:00Z). Defaults: --from -15m, --to now, --limit 100 (max 10000),
+# --timeout 240 seconds (max 900). The query goes on stdin through a quoted heredoc, so
+# its quotes and pipes never touch the shell:
+#
+#   sumo-search --from -1h <<'EOF'
+#   _index=rh_akamai statusCode>=500 | count by statusCode
+#   EOF
+#
+# stdout is one JSON object: {kind, total, returned, warnings, rows}. kind is "records"
+# when the query aggregates, otherwise "messages"; rows are the field maps with Sumo's
+# internal bookkeeping fields dropped. Progress and errors go to stderr.
+#
+# Where the credential can go: the API endpoint, ID and key are read from the mounted
+# Secret files at a literal path, never from the environment or the arguments, so a
+# session cannot point the credential at another host by setting SUMO_API_URL. The
+# endpoint must also be an https://api*.sumologic.com URL. The key pair reaches curl only
+# through its config on stdin (-K -), never argv. The CA store is pinned, proxies and
+# ~/.curlrc are ignored, as in pulp-api. Search jobs are read only by nature; the job is
+# deleted on the Sumo side when the script exits.
+set -uo pipefail
+
+SEC="/run/secrets/agent"
+cafile="/etc/ssl/certs/ca-certificates.crt"
+export SSL_CERT_FILE="$cafile"
+unset SSL_CERT_DIR CURL_CA_BUNDLE \
+      HTTPS_PROXY HTTP_PROXY ALL_PROXY NO_PROXY https_proxy http_proxy all_proxy no_proxy
+
+die() { echo "sumo-search: $*" >&2; exit 2; }
+
+read_secret() {
+  [ -s "$SEC/$1" ] || { echo "sumo-search: $1 not mounted in the agent-pulpbot Secret" >&2; exit 3; }
+  tr -d '\r\n' < "$SEC/$1"
+}
+
+from_arg="-15m" to_arg="now" limit=100 timeout=240
+while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || die "$1 needs a value"
+  case "$1" in
+    --from)    from_arg="$2" ;;
+    --to)      to_arg="$2" ;;
+    --limit)   limit="$2" ;;
+    --timeout) timeout="$2" ;;
+    *) die "unknown argument '$1' (usage: sumo-search [--from T] [--to T] [--limit N] [--timeout S], query on stdin)" ;;
+  esac
+  shift 2
+done
+case "$limit" in ''|*[!0-9]*) die "--limit must be a number" ;; esac
+case "$timeout" in ''|*[!0-9]*) die "--timeout must be a number of seconds" ;; esac
+[ "$limit" -ge 1 ] && [ "$limit" -le 10000 ] || die "--limit must be 1..10000"
+[ "$timeout" -ge 10 ] && [ "$timeout" -le 900 ] || die "--timeout must be 10..900"
+
+# Time argument to epoch milliseconds. Works with GNU date and busybox date.
+to_ms() {
+  local s="$1" now n
+  now=$(date -u +%s)
+  case "$s" in
+    now|"") echo $((now * 1000)); return ;;
+    -*[0-9]m) n=${s#-}; n=${n%m}; mult=60 ;;
+    -*[0-9]h) n=${s#-}; n=${n%h}; mult=3600 ;;
+    -*[0-9]d) n=${s#-}; n=${n%d}; mult=86400 ;;
+    *[!0-9]*)
+      local t
+      t=$(date -u -d "$s" +%s 2>/dev/null) \
+        || t=$(date -u -D '%Y-%m-%dT%H:%M:%SZ' -d "$s" +%s 2>/dev/null) \
+        || { echo "sumo-search: invalid time '$s' (use now, -30m, -1h, -2d, epoch ms or 2026-11-12T10:00:00Z)" >&2; return 1; }
+      echo $((t * 1000)); return ;;
+    *) echo "$s"; return ;;   # already epoch milliseconds
+  esac
+  case "$n" in ''|*[!0-9]*) echo "sumo-search: invalid relative time '$s'" >&2; return 1 ;; esac
+  echo $(((now - n * mult) * 1000))
+}
+from_ms=$(to_ms "$from_arg") || exit 2
+to_ms_v=$(to_ms "$to_arg") || exit 2
+[ "$from_ms" -lt "$to_ms_v" ] || die "--from must be before --to"
+
+query="$(cat)"
+[ -n "${query//[[:space:]]/}" ] || die "no query on stdin"
+
+endpoint=$(read_secret SUMO_API_URL) || exit 3
+access_id=$(read_secret SUMO_ACCESS_ID) || exit 3
+access_key=$(read_secret SUMO_ACCESS_KEY) || exit 3
+
+# Pin the destination: https, a sumologic.com API host, optional /api or /api/v1 suffix.
+if ! printf '%s' "$endpoint" | grep -qE '^https://api(\.[a-z0-9-]+)?\.sumologic\.com(/api(/v1)?)?/?$'; then
+  die "SUMO_API_URL in the Secret is not an https://api*.sumologic.com endpoint; refusing to send the credential"
+fi
+base="${endpoint%/}"; base="${base%/v1}"; base="${base%/api}/api/v1"
+# The pair goes into a curl config string; refuse characters that would break its quoting.
+case "$access_id$access_key" in *'"'*|*'\'*) die "the Sumo access ID or key contains a quote or backslash; cannot pass it safely" ;; esac
+
+work=$(umask 077; mktemp -d "${TMPDIR:-/tmp}/sumo-search.XXXXXX") || die "no temp dir"
+job_path=""
+cleanup() {
+  [ -n "$job_path" ] && sumo DELETE "$job_path" >/dev/null 2>&1
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+# One API call. The key pair goes through curl's config on stdin; the Search Job API needs
+# the session cookies from job creation on every follow-up call, hence the cookie jar.
+sumo() {
+  local method="$1" path="$2"; shift 2
+  printf 'user = "%s:%s"\n' "$access_id" "$access_key" \
+    | curl -q -fsS --max-time 60 --connect-timeout 15 --cacert "$cafile" -K - \
+        -b "$work/cookies" -c "$work/cookies" \
+        -H 'Accept: application/json' -X "$method" "$@" "$base$path"
+}
+
+( umask 077; jq -n --arg q "$query" --argjson f "$from_ms" --argjson t "$to_ms_v" \
+    '{query:$q, from:$f, to:$t, timeZone:"UTC", byReceiptTime:false}' > "$work/body" ) \
+  || die "could not build the request body"
+
+job=$(sumo POST /search/jobs -H 'Content-Type: application/json' --data @"$work/body") \
+  || { echo "sumo-search: could not create the search job (check reachability of the Sumo API and the credentials)" >&2; exit 4; }
+job_id=$(printf '%s' "$job" | jq -r '.id // ""')
+[ -n "$job_id" ] || { echo "sumo-search: unexpected job response" >&2; exit 4; }
+job_path="/search/jobs/$job_id"
+echo "sumo-search: job $job_id created" >&2
+
+deadline=$(( $(date +%s) + timeout ))
+while :; do
+  status=$(sumo GET "$job_path") || { echo "sumo-search: could not read job status" >&2; exit 4; }
+  errs=$(printf '%s' "$status" | jq -r '(.pendingErrors // []) | join("; ")')
+  [ -z "$errs" ] || { echo "sumo-search: search failed: $errs" >&2; exit 5; }
+  state=$(printf '%s' "$status" | jq -r '.state // ""')
+  case "$state" in
+    "DONE GATHERING RESULTS") break ;;
+    CANCELLED|"FORCE PAUSED") echo "sumo-search: job ended in state $state" >&2; exit 5 ;;
+  esac
+  [ "$(date +%s)" -lt "$deadline" ] || { echo "sumo-search: job still '$state' after ${timeout}s; narrow the window or raise --timeout" >&2; exit 6; }
+  sleep 2
+done
+
+records=$(printf '%s' "$status" | jq -r '.recordCount // 0')
+messages=$(printf '%s' "$status" | jq -r '.messageCount // 0')
+if [ "$records" -gt 0 ]; then kind=records total=$records; else kind=messages total=$messages; fi
+
+if [ "$total" -gt 0 ]; then
+  page=$(( total < limit ? total : limit ))
+  sumo GET "$job_path/$kind?offset=0&limit=$page" > "$work/rows" \
+    || { echo "sumo-search: could not fetch $kind" >&2; exit 4; }
+else
+  echo '{}' > "$work/rows"
+fi
+
+printf '%s' "$status" | jq --arg kind "$kind" --argjson total "$total" --slurpfile r "$work/rows" '
+  def internal: ["_blockid","_collector","_collectorid","_format","_messagecount","_messageid",
+                 "_receipttime","_size","_source","_sourcecategory","_sourcehost","_sourceid",
+                 "_sourcename","_view","_dte"];
+  (($r[0].messages // []) + ($r[0].records // []) | map(.map | with_entries(select(.key as $k | internal | index($k) | not))))
+  as $rows
+  | {kind: $kind, total: $total, returned: ($rows | length), warnings: (.pendingWarnings // []), rows: $rows}'
