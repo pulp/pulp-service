@@ -185,9 +185,6 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0079-Log-Maven-path-index-fallback-reasons.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0079-Log-Maven-path-index-fallback-reasons.patch
 
-COPY images/assets/patches/0080-Optimize-read-only-content-queries.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0080-Optimize-read-only-content-queries.patch
-
 COPY images/assets/patches/0081-Fix-task-cancellation-during-graceful-shutdown.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0081-Fix-task-cancellation-during-graceful-shutdown.patch
 
