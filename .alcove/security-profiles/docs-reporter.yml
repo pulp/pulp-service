@@ -1,0 +1,13 @@
+name: docs-reporter
+display_name: Documentation Reporter
+description: Jira access for searching, creating, and commenting on docs-validation tickets
+tools:
+  jira:
+    rules:
+      - projects: ["PULP"]
+        operations:
+          - search_issues
+          - create_issue
+          - add_comment
+          - read_issues
+          - update_issue
