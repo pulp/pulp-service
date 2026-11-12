@@ -5,8 +5,8 @@
 # the secret-guard hook. Charter, config, mcp.json and any heartbeat come from the git
 # definition at .buzz/agents/pulpbot/, so a charter edit is a push, not a rebuild. Keys
 # never live in the image: nsec and auth-tag (identity 849e1ead) arrive as
-# the Secret agent-pulpbot; the standing creds (SPLUNK_TOKEN, GLITCHTIP_TOKEN, TBR_*, the
-# Pulp netrc, GITLAB_TOKEN, GH_TOKEN, the Atlassian token and JIRA_USERNAME) mount from
+# the Secret agent-pulpbot; the standing creds (SUMO_API_URL/ACCESS_ID/ACCESS_KEY, read only by
+# sumo-search, GLITCHTIP_TOKEN, TBR_*, the Pulp netrc, GITLAB_TOKEN, GH_TOKEN, the Atlassian token and JIRA_USERNAME) mount from
 # the agent secret. Built by pulp-service CI to ghcr.io/pulp/buzz-agent-pulpbot.
 #
 # v0.2.5 carries the /run/agent-session memory mount (pulp-service #1592); the base
@@ -52,7 +52,7 @@ ARG PYDANTIC_VERSION=2.14.1
 #   - aws            CloudWatch, RDS Performance Insights (AWS creds collected by DM)
 #   - uv             runs the pulp-docs skill scripts (uv run --script)
 #   - mcp-atlassian  Jira via the Atlassian MCP (see mcp.json and the jira-mcp wrapper)
-#   - curl, jq, git  Pulp API (netrc), GABI, general use (already in the base)
+#   - curl, jq, git  Pulp API (netrc), GABI, Sumo Logic (sumo-search), general use (already in the base)
 # rh-aws-saml-login is NOT installed: it needs the person's SSO and a browser, so it
 # runs on the requester's own machine; the pod only receives the AWS env lines by DM.
 #
@@ -121,7 +121,7 @@ COPY managed-settings.json /opt/agent/
 RUN chmod 0755 /usr/local/bin/pulpbot-entrypoint /usr/local/bin/dm-watch \
       /usr/local/bin/oc-login /usr/local/bin/aws-creds /usr/local/bin/gabi-query \
       /usr/local/bin/pulpbot-wt /usr/local/bin/jira-mcp /usr/local/bin/jira-selftest \
-      /usr/local/bin/pulp-api /usr/local/bin/secret-guard \
+      /usr/local/bin/pulp-api /usr/local/bin/sumo-search /usr/local/bin/secret-guard \
  && chmod 0644 /opt/agent/managed-settings.json \
  && chmod -R go-w /opt/agent \
  # Claude Code loads enterprise-managed settings from this path; root owned and read

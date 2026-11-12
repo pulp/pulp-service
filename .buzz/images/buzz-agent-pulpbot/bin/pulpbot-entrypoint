@@ -26,7 +26,9 @@ export_secret() {
     echo "pulpbot-entrypoint: $var not mounted; tools that need it will report it missing" >&2
   fi
 }
-export_secret SPLUNK_TOKEN     "$SEC/SPLUNK_TOKEN"
+# The Sumo Logic credentials (SUMO_API_URL, SUMO_ACCESS_ID, SUMO_ACCESS_KEY) are
+# deliberately NOT exported: sumo-search reads them from the mounted Secret itself, so
+# the session never holds them and cannot print them (declare -p, a stray echo).
 export_secret GLITCHTIP_TOKEN  "$SEC/GLITCHTIP_TOKEN"
 export_secret GITLAB_TOKEN     "$SEC/GITLAB_TOKEN"
 export_secret GH_TOKEN         "$SEC/GH_TOKEN"
