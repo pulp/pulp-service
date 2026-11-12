@@ -5,8 +5,8 @@
 # the secret-guard hook. Charter, config, mcp.json and any heartbeat come from the git
 # definition at .buzz/agents/pulpbot/, so a charter edit is a push, not a rebuild. Keys
 # never live in the image: nsec and auth-tag (identity 849e1ead) arrive as
-# the Secret agent-pulpbot; the standing creds (SUMO_API_URL/ACCESS_ID/ACCESS_KEY,
-# GLITCHTIP_TOKEN, TBR_*, the Pulp netrc, GITLAB_TOKEN, GH_TOKEN, the Atlassian token and JIRA_USERNAME) mount from
+# the Secret agent-pulpbot; the standing creds (SUMO_API_URL/ACCESS_ID/ACCESS_KEY, read only by
+# sumo-search, GLITCHTIP_TOKEN, TBR_*, the Pulp netrc, GITLAB_TOKEN, GH_TOKEN, the Atlassian token and JIRA_USERNAME) mount from
 # the agent secret. Built by pulp-service CI to ghcr.io/pulp/buzz-agent-pulpbot.
 #
 # v0.2.5 carries the /run/agent-session memory mount (pulp-service #1592); the base

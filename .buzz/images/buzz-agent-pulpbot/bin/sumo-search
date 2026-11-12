@@ -7,17 +7,20 @@
 #   sumo-search [--from <time>] [--to <time>] [--limit <n>] [--timeout <s>]   (query on stdin)
 #
 # <time> is now, a relative offset (-30m, -1h, -2d), epoch milliseconds, or UTC RFC3339
-# (2026-11-12T10:00:00Z). Defaults: --from -15m, --to now, --limit 100 (max 10000),
-# --timeout 240 seconds (max 900). The query goes on stdin through a quoted heredoc, so
-# its quotes and pipes never touch the shell:
+# (2026-11-12T10:00:00Z). Defaults: --from -15m, --to now, --limit 100 (max 1000),
+# --timeout 240 seconds (max 900). The window may span at most 7 days. The query goes on
+# stdin through a quoted heredoc, so its quotes and pipes never touch the shell. Akamai
+# messages are JSON lines with lowercase string fields, so extract and convert them:
 #
 #   sumo-search --from -1h <<'EOF'
-#   _index=rh_akamai statusCode>=500 | count by statusCode
+#   _index=rh_akamai | json auto | where num(statuscode) >= 500 | count by statuscode
 #   EOF
 #
-# stdout is one JSON object: {kind, total, returned, warnings, rows}. kind is "records"
-# when the query aggregates, otherwise "messages"; rows are the field maps with Sumo's
-# internal bookkeeping fields dropped. Progress and errors go to stderr.
+# stdout is one compact JSON object: {kind, total, returned, truncated, warnings, rows}.
+# kind is "records" when the query aggregates, otherwise "messages"; rows are the field
+# maps with Sumo's internal bookkeeping fields dropped. The output is capped at 28000
+# bytes: rows that do not fit are dropped and truncated is true. Progress and errors go
+# to stderr.
 #
 # Where the credential can go: the API endpoint, ID and key are read from the mounted
 # Secret files at a literal path, never from the environment or the arguments, so a
@@ -29,6 +32,11 @@
 set -uo pipefail
 
 SEC="/run/secrets/agent"
+# A projected Secret is a ..data symlink to the current generation directory, swapped
+# atomically on rotation. Resolve it once so all three values come from one generation.
+if [ -L "$SEC/..data" ]; then
+  SEC=$(readlink -f "$SEC/..data") || { echo "sumo-search: cannot resolve the agent-pulpbot Secret" >&2; exit 3; }
+fi
 cafile="/etc/ssl/certs/ca-certificates.crt"
 export SSL_CERT_FILE="$cafile"
 unset SSL_CERT_DIR CURL_CA_BUNDLE \
@@ -55,7 +63,8 @@ while [ $# -gt 0 ]; do
 done
 case "$limit" in ''|*[!0-9]*) die "--limit must be a number" ;; esac
 case "$timeout" in ''|*[!0-9]*) die "--timeout must be a number of seconds" ;; esac
-[ "$limit" -ge 1 ] && [ "$limit" -le 10000 ] || die "--limit must be 1..10000"
+limit=$((10#$limit)) timeout=$((10#$timeout))
+[ "$limit" -ge 1 ] && [ "$limit" -le 1000 ] || die "--limit must be 1..1000"
 [ "$timeout" -ge 10 ] && [ "$timeout" -le 900 ] || die "--timeout must be 10..900"
 
 # Time argument to epoch milliseconds. Works with GNU date and busybox date.
@@ -76,11 +85,13 @@ to_ms() {
     *) echo "$s"; return ;;   # already epoch milliseconds
   esac
   case "$n" in ''|*[!0-9]*) echo "sumo-search: invalid relative time '$s'" >&2; return 1 ;; esac
-  echo $(((now - n * mult) * 1000))
+  # 10#: force decimal, so -08m is 8 minutes rather than an invalid octal number.
+  echo $(((now - 10#$n * mult) * 1000))
 }
 from_ms=$(to_ms "$from_arg") || exit 2
 to_ms_v=$(to_ms "$to_arg") || exit 2
 [ "$from_ms" -lt "$to_ms_v" ] || die "--from must be before --to"
+[ $((to_ms_v - from_ms)) -le $((7 * 86400 * 1000)) ] || die "the window spans more than 7 days; narrow --from/--to"
 
 query="$(cat)"
 [ -n "${query//[[:space:]]/}" ] || die "no query on stdin"
@@ -152,10 +163,18 @@ else
   echo '{}' > "$work/rows"
 fi
 
-printf '%s' "$status" | jq --arg kind "$kind" --argjson total "$total" --slurpfile r "$work/rows" '
+# Keep the longest prefix of rows that fits the 28000 byte output cap.
+printf '%s' "$status" | jq -c --arg kind "$kind" --argjson total "$total" --argjson max 28000 \
+    --slurpfile r "$work/rows" '
   def internal: ["_blockid","_collector","_collectorid","_format","_messagecount","_messageid",
                  "_receipttime","_size","_source","_sourcecategory","_sourcehost","_sourceid",
                  "_sourcename","_view","_dte"];
   (($r[0].messages // []) + ($r[0].records // []) | map(.map | with_entries(select(.key as $k | internal | index($k) | not))))
-  as $rows
-  | {kind: $kind, total: $total, returned: ($rows | length), warnings: (.pendingWarnings // []), rows: $rows}'
+  as $all
+  | {kind: $kind, total: $total, returned: 0, truncated: false, warnings: (.pendingWarnings // []), rows: []}
+  | (($max - (tojson | utf8bytelength) - 32)) as $budget
+  | ($all | map(tojson | utf8bytelength + 1)) as $sz
+  | (reduce range(0; $sz | length) as $i ({n: 0, used: 0};
+        if .n == $i and .used + $sz[$i] <= $budget then {n: ($i + 1), used: (.used + $sz[$i])} else . end)
+     | .n) as $n
+  | .rows = $all[:$n] | .returned = $n | .truncated = ($n < ($all | length))'
