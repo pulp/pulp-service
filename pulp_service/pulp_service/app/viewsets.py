@@ -5,7 +5,7 @@ import random
 from base64 import b64decode
 from binascii import Error as Base64DecodeError
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from django.conf import settings
 from django.db import transaction
@@ -15,7 +15,7 @@ from django.shortcuts import redirect
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, NotFound, ValidationError
 from rest_framework.mixins import CreateModelMixin, DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import BasePermission, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -37,6 +37,8 @@ from pulpcore.plugin.viewsets import (
     RolesMixin,
     TaskViewSet,
 )
+
+from pulp_npm.app.models import NpmRepository
 
 from pulp_service.app.authentication import (
     RHTermsBasedRegistryAuthentication,
@@ -70,6 +72,7 @@ from pulp_service.app.serializers import (
     AndGateContentGuardSerializer,
     ContentScanSerializer,
     FeatureContentGuardSerializer,
+    NpmManifestBackfillSerializer,
     PublicDebugAuthenticationHeadersSerializer,
     PyPIYankMonitorSerializer,
     VulnerabilityReportSerializer,
@@ -771,8 +774,6 @@ class RDSConnectionTestDispatcherView(APIView):
         # This forces tasks to run one at a time
         sequential_lock = []
         if run_sequentially:
-            from uuid import uuid4
-
             sequential_lock = [f"rds-test-sequential-{uuid4()}"]
 
         for test_name in tests:
@@ -2452,5 +2453,60 @@ class DataRepair7465View(APIView):
             "pulp_service.app.tasks.datarepair.repair_7465",
             exclusive_resources=exclusive_resources,
             args=[dry_run],
+        )
+        return OperationPostponedResponse(task, request)
+
+
+def _get_npm_backfill_task():
+    try:
+        from pulp_npm.app.tasks.backfill import backfill_repository_manifests
+    except ImportError:
+        return None
+    return backfill_repository_manifests
+
+
+class NpmManifestBackfillView(APIView):
+    """Backfill npm package manifests and checksums for a repository (admin only)."""
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        request=NpmManifestBackfillSerializer,
+        description=(
+            "Dispatch a task that populates npm package manifests, integrity and "
+            "shasum from stored tarballs for the repository's latest version."
+        ),
+        summary="Backfill npm package manifests",
+        responses={202: AsyncOperationResponseSerializer},
+    )
+    def post(self, request, **kwargs):
+        serializer = NpmManifestBackfillSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        repository_ref = serializer.validated_data["repository"].rstrip("/")
+        try:
+            repository_uuid = UUID(repository_ref.split("/")[-1])
+        except ValueError:
+            raise ValidationError({"repository": "Expected an NpmRepository href or UUID."}) from None
+
+        try:
+            repository = NpmRepository.objects.get(pk=repository_uuid, pulp_domain=request.pulp_domain)
+        except NpmRepository.DoesNotExist:
+            raise NotFound("Npm repository not found in this domain.") from None
+
+        task_function = _get_npm_backfill_task()
+        if task_function is None:
+            return Response(
+                {"detail": "The installed pulp_npm does not provide manifest backfill support."},
+                status=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
+        task = dispatch(
+            task_function,
+            exclusive_resources=[repository],
+            kwargs={
+                "repository_pk": str(repository.pk),
+                "overwrite": serializer.validated_data["overwrite"],
+            },
         )
         return OperationPostponedResponse(task, request)

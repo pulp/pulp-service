@@ -216,3 +216,16 @@ class ContentScanSerializer(serializers.Serializer, ValidateFieldsMixin):
             raise serializers.ValidationError(_("Invalid JSON format.")) from exc
 
         return temp_file.pk
+
+
+class NpmManifestBackfillSerializer(serializers.Serializer):
+    """Request body for the npm manifest backfill endpoint."""
+
+    repository = serializers.CharField(
+        help_text="Npm repository href or UUID.",
+    )
+    overwrite = serializers.BooleanField(
+        default=False,
+        required=False,
+        help_text="Replace existing manifests instead of only filling empty ones.",
+    )
