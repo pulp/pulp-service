@@ -435,6 +435,22 @@ objects:
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_FEATURE_SERVICE_API_URL
             value: ${{PULP_FEATURE_SERVICE_API_URL}}
+          - name: PULP_KESSEL_URL
+            value: ${KESSEL_URL}
+          - name: PULP_KESSEL_TOKEN_URL
+            value: ${KESSEL_TOKEN_URL}
+          - name: PULP_KESSEL_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: kessel-auth
+                key: client_id
+                optional: true
+          - name: PULP_KESSEL_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: kessel-auth
+                key: client_secret
+                optional: true
           - name: PULP_USE_X_FORWARDED_HOST
             value: ${PULP_USE_X_FORWARDED_HOST}
           - name: PULP_SECURE_PROXY_SSL_HEADER
@@ -625,6 +641,22 @@ objects:
             value: ${{PULP_FEATURE_SERVICE_API_CERT_PATH}}
           - name: PULP_FEATURE_SERVICE_API_URL
             value: ${{PULP_FEATURE_SERVICE_API_URL}}
+          - name: PULP_KESSEL_URL
+            value: ${KESSEL_URL}
+          - name: PULP_KESSEL_TOKEN_URL
+            value: ${KESSEL_TOKEN_URL}
+          - name: PULP_KESSEL_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: kessel-auth
+                key: client_id
+                optional: true
+          - name: PULP_KESSEL_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: kessel-auth
+                key: client_secret
+                optional: true
           - name: PULP_TOKEN_AUTH_DISABLED
             value: ${PULP_TOKEN_AUTH_DISABLED}
           - name: PULP_UVLOOP_ENABLED
@@ -1916,6 +1948,12 @@ parameters:
   - name: PULP_FEATURE_SERVICE_API_URL
     description: FeatureServices API URL to list the features from an owner
     value: "https://feature.stage.api.redhat.com/features/v2/featureStatus"
+  - name: KESSEL_URL
+    description: Kessel API endpoint (set per environment in app-interface deploy.yml)
+    value: ""
+  - name: KESSEL_TOKEN_URL
+    description: Red Hat SSO token endpoint for the Kessel client_credentials grant
+    value: "https://sso.stage.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
   - name: PULP_TASK_PROTECTION_TIME
     description: Set the time in minutes to purge tasks
     value: "20160"
