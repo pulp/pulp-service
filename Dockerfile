@@ -192,6 +192,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0081-Fix-task-cancellation-during-graceful-shutdown.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0081-Fix-task-cancellation-during-graceful-shutdown.patch
 
+COPY images/assets/patches/0082-Retry-redis-on-readonly-replica.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0082-Retry-redis-on-readonly-replica.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 
