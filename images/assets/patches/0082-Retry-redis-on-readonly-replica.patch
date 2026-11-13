@@ -15,18 +15,21 @@
 -if redis_module.VERSION >= (8,):
 -    from redis.backoff import ExponentialWithJitterBackoff
 -    from redis.retry import Retry
-+_CONNECTION_KWARGS = {
-+    # After an ElastiCache failover (e.g. a service-update rollout) the old primary stays up as a
-+    # replica, and pooled sockets still connected to it get READONLY on every write until the node
-+    # is restarted (minutes). Retrying on ReadOnlyError makes redis-py disconnect the socket and
-+    # reconnect, which re-resolves the primary endpoint DNS and reaches the new primary. The Lua
-+    # scripts are safe to retry: a replica rejects the first write, before any state is changed.
-+    "retry_on_error": [ReadOnlyError],
-+}
-+
-+
+ 
+-    _CONNECTION_KWARGS["retry"] = Retry(
+-        backoff=ExponentialWithJitterBackoff(base=0.01, cap=1), retries=3
+-    )
 +def _connection_kwargs(redis_class):
-+    kwargs = dict(_CONNECTION_KWARGS)
++    kwargs = {
++        # After an ElastiCache failover (e.g. a service-update rollout) the old primary stays up as
++        # a replica, and pooled sockets still connected to it get READONLY on every write until the
++        # node is restarted (minutes). Retrying on ReadOnlyError makes redis-py disconnect the
++        # socket and reconnect, which re-resolves the primary endpoint DNS and reaches the new
++        # primary. The Lua scripts are safe to retry: a replica rejects the first write, before any
++        # state is changed. Build a fresh list per client: redis-py stores it without copying and
++        # appends to it when retry_on_timeout is set.
++        "retry_on_error": [ReadOnlyError],
++    }
 +    # redis-py 8.0.0 changed default retries from 3 to 10, causing content app request timeouts
 +    # when Redis is unreachable. This reverts only retries; backoff base/cap are kept at 8.0.0
 +    # defaults. The asyncio client needs the asyncio Retry: the sync one never awaits the
@@ -38,10 +41,7 @@
 +            from redis.asyncio.retry import Retry
 +        else:
 +            from redis.retry import Retry
- 
--    _CONNECTION_KWARGS["retry"] = Retry(
--        backoff=ExponentialWithJitterBackoff(base=0.01, cap=1), retries=3
--    )
++
 +        kwargs["retry"] = Retry(backoff=ExponentialWithJitterBackoff(base=0.01, cap=1), retries=3)
 +    return kwargs
  
