@@ -1,0 +1,1 @@
+Retry Redis commands on `READONLY` errors after an ElastiCache failover, so workers reconnect to the new primary instead of failing task lock operations for minutes.

@@ -39,6 +39,13 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
 
+### 0082 - Retry Redis commands on READONLY after a failover
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/redis_connection.py`
+- **Description:** An ElastiCache service update (applied by app-interface ERv2) patches the replica, fails over, then patches the old primary. After the failover the old primary stays up as a replica, and the pooled redis-py sockets still connected to it got `READONLY` (`You can't write against a read only replica`) on every lock acquire/release Lua script until ElastiCache restarted the node. On stage (2026-11-13) that meant ~4 minutes of worker errors (~28K GlitchTip events). Fix: add `retry_on_error=[ReadOnlyError]` to the shared connection kwargs, so redis-py drops the stale socket and reconnects (re-resolving the primary endpoint) before retrying, using the existing 3-retry budget. Also sets `socket_connect_timeout=5`, `socket_timeout=10`, `socket_keepalive` and `health_check_interval=30` so dead or half-open sockets fail fast. Retrying the Lua scripts is safe: a replica rejects the first write, so nothing has changed when the error is returned. Pulpcore uses no blocking Redis commands, so the read timeout doesn't affect any of them. Also fixes a pre-existing bug: under redis-py 8 and later, pulpcore passed the sync `redis.retry.Retry` to the asyncio client as well. Its `call_with_retry` never awaits the command, so the content app's async client silently had no retries at all. Each client class now gets its matching `Retry`.
+- **Upstream:** Candidate for a pulpcore fix (ideally a configurable `REDIS_CONNECTION_OPTIONS` setting).
+
 ### 0081 - Fix task cancellation during graceful worker shutdown
 
 - **Package:** pulpcore
