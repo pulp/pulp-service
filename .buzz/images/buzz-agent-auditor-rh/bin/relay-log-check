@@ -8,21 +8,26 @@ membership and moderation record every day. The export is relay-audit.json in RE
   STALE   the export is older than 26 hours (the exporter on serrano is down)
   FLAG    an action on a person (ban, mute, remove from a channel or the community, delete of their
           message, role change) by anyone other than Brian, or an admission or relay membership of an
-          identity that no definition explains
+          identity that no definition explains, or an empty or missing relay_members list (a broken export)
   ok      an action on an agent's identity (an agent, or a retired agent key that is archived), or one
           by Brian
-  and ends with "relay-log-check: N FLAG, M ok (export <time>)".
+  Every current relay member is checked on every run, not only those changed in the last window, so a
+  long-standing member that no definition explains is caught. It ends with
+  "relay-log-check: N FLAG, M ok; read R relay members, E events (export <time>)", so an empty or broken
+  export cannot pass as a clean 0 FLAG run.
 
 Who is who comes from the repos, never from display names: every 64 hex pubkey that KNOWN_FILES (git
-pathspecs in the KNOWN_REPOS clones) name now or ever named is a known identity; PEOPLE_KEYS lists the humans (Brian first).
-A key that is in neither set and is not
-archived counts as a person, so an unknown target is treated as a person (fails safe).
+pathspecs in the KNOWN_REPOS clones) name now or ever named is a known identity; PEOPLE_KEYS lists the
+humans (Brian first); KNOWN_KEYS lists app keys that no definition names but that are explained (a relay
+operator or infra key), kept short and reviewed. A key in none of these sets and not archived counts as a
+person, so an unknown target or member is treated as a person (fails safe).
 
 Environment:
   RELAY_AUDIT_REPO   owner/repo of the export (bmbouter/relay-audit)
   KNOWN_REPOS        space separated owner/repo list to read identities from
   KNOWN_FILES        space separated globs inside those repos (agents/*/agent.yaml config/*.yaml ...)
   PEOPLE_KEYS        comma separated hex pubkeys of the humans; the first is Brian
+  KNOWN_KEYS         comma separated hex pubkeys of explained app keys no definition names (may be empty)
   GITEA, GITEA_TOKEN_FILE  as for the other auditor tools
 """
 import base64, datetime, json, os, re, subprocess, sys, tempfile, urllib.request
@@ -32,6 +37,7 @@ TOKEN = open(os.environ["GITEA_TOKEN_FILE"]).read().strip()
 REPO = os.environ.get("RELAY_AUDIT_REPO", "bmbouter/relay-audit")
 PEOPLE = [k.strip().lower() for k in os.environ.get("PEOPLE_KEYS", "").split(",") if k.strip()]
 BRIAN = PEOPLE[0] if PEOPLE else ""
+KNOWN_KEYS = {k.strip().lower() for k in os.environ.get("KNOWN_KEYS", "").split(",") if k.strip()}  # explained app keys no definition names; keep short and reviewed
 HEX = re.compile(r"\b[0-9a-f]{64}\b")
 WINDOW_H = int(os.environ.get("RELAY_LOG_WINDOW_HOURS", "36"))  # a daily run with overlap; each finding shows once or twice
 PERSON_KINDS = {9001: "removed from a channel", 9005: "had a message deleted", 9040: "banned",
@@ -74,7 +80,7 @@ def main():
     doc = json.loads(base64.b64decode(raw["content"]))
     when = datetime.datetime.fromisoformat(doc["exported_at"])
     age_h = (datetime.datetime.now(datetime.timezone.utc) - when).total_seconds() / 3600
-    known = known_keys() | set(PEOPLE)
+    known = known_keys() | set(PEOPLE) | KNOWN_KEYS
     archived = {a["pubkey"].lower() for a in doc.get("archived") or []}
     people = set(PEOPLE)
     flags, oks = [], []
@@ -88,7 +94,8 @@ def main():
     if age_h > 26:
         flags.append(f"STALE relay audit export is {age_h:.0f} hours old ({doc['exported_at']}); the exporter on serrano may be down")
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=WINDOW_H)
-    for ev in doc.get("events") or []:
+    all_events = doc.get("events") or []
+    for ev in all_events:
         if datetime.datetime.fromisoformat(ev["created_at"]) <= cutoff:
             continue
         k, actor = ev["kind"], ev["actor"].lower()
@@ -118,17 +125,20 @@ def main():
             continue
         line = f"{who((a.get('actor') or '').lower())} changed relay operator {(a.get('target') or '')[:8]} {a['prev_role']} to {a['new_role']} at {a['created_at']}"
         flags.append("FLAG role " + line) if (a.get("actor") or "").lower() != BRIAN else oks.append("ok " + line)
-    for m in doc.get("relay_members") or []:
+    # Every current member, every run: a long-standing member that no definition explains is caught, not
+    # only one whose created_at/updated_at fell in the window. An empty or missing list is a broken export.
+    members = doc.get("relay_members")
+    if not members:
+        flags.append("FLAG relay_members is empty or missing in the export: membership was not checked, so this is not a clean run (a broken or empty export)")
+        members = []
+    for m in members:
         k = m["pubkey"].lower()
-        for field in ("created_at", "updated_at"):
-            ts = datetime.datetime.fromisoformat(m[field])
-            if ts > cutoff:
-                line = f"relay member {k[:8]} role {m['role']} {field.split('_')[0]} at {m[field]} (added_by {(m.get('added_by') or 'none')[:8]})"
-                if k in known:
-                    oks.append("ok " + line)
-                else:
-                    flags.append("FLAG admission " + line + ": no definition names this key")
-                break
+        line = (f"relay member {k[:8]} role {m['role']} "
+                f"(added_by {(m.get('added_by') or 'none')[:8]}, created {m.get('created_at', '?')}, updated {m.get('updated_at', '?')})")
+        if k in known:
+            oks.append("ok " + line)
+        else:
+            flags.append("FLAG admission " + line + ": no definition names this key")
     for n in doc.get("new_identities") or []:
         k = n["pubkey"].lower()
         if datetime.datetime.fromisoformat(n["created_at"]) > cutoff and k not in known and k not in archived:
@@ -142,7 +152,7 @@ def main():
         print(f)
     for o in oks:
         print(o)
-    print(f"relay-log-check: {len(flags)} FLAG, {len(oks)} ok (export {doc['exported_at']})")
+    print(f"relay-log-check: {len(flags)} FLAG, {len(oks)} ok; read {len(members)} relay members, {len(all_events)} events (export {doc['exported_at']})")
 
 
 if __name__ == "__main__":
