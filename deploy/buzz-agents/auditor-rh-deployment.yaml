@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: agent
-        image: ghcr.io/pulp/buzz-agent-auditor-rh:v0.1.7
+        image: ghcr.io/pulp/buzz-agent-auditor-rh:v0.1.8
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -112,6 +112,11 @@ spec:
           value: config/platform.yaml staff images render/pulp-service/.buzz/agents deploy
         - name: PEOPLE_KEYS
           value: 763c87084f3b5afb6c422411601d135c57545bdc14a8d46499c1130c1b5735c1,643fc9b6baf936feaa6b8dc3951948de4fb3bc16eef0ec08b5f00b11db84d710,84fc6f8fd8b69388481a16467564845ed2d9d8f351a33e444453c81c6afa06bd
+        # Explained app keys that no agent definition names (a relay operator or infra key),
+        # so relay-log-check marks them ok instead of FLAG now that it checks every member each run.
+        # Empty until a first run names a long-standing member that needs explaining; keep short and reviewed.
+        - name: KNOWN_KEYS
+          value: ''
         lifecycle:
           preStop:
             exec:
