@@ -1,8 +1,187 @@
+diff --git a/pulpcore/app/models/publication.py b/pulpcore/app/models/publication.py
+index 8c9535d31..c66c235c7 100644
+--- a/pulpcore/app/models/publication.py
++++ b/pulpcore/app/models/publication.py
+@@ -26,6 +26,7 @@ from pulpcore.app.models import AutoAddObjPermsMixin
+ from pulpcore.app.models.fields import RelativePathField
+ from pulpcore.app.util import cache_key, get_domain_pk, get_url, retain_distributed_pub_enabled
+ from pulpcore.cache import Cache
++from pulp_service.exceptions import AuthenticationError
+ from pulpcore.responses import ArtifactResponse
+ 
+ from .base import BaseModel, MasterModel
+@@ -529,6 +530,13 @@ class HeaderContentGuard(ContentGuard, AutoAddObjPermsMixin):
+     def permit(self, request):
+         header_content = request.headers.get(self.header_name)
+         if not header_content:
++            if self.header_name.casefold() == "x-rh-identity":
++                _logger.info(
++                    "Authentication required. Header %s not found.",
++                    self.header_name,
++                )
++                raise AuthenticationError(_("Authentication required."))
++
+             _logger.debug(
+                 "Access not allowed. Header {header_name} not found.".format(
+                     header_name=self.header_name
+@@ -665,6 +673,7 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
+         Permit if ANY content-guard allows (OR permissions).
+         """
+         errors = []
++        authentication_error = None
+         if not self.guards.all():
+             # No guards specified? PASS
+             return
+@@ -674,6 +683,13 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
+             try:
+                 detail_guard.permit(request)
+                 return  # success on first-pass
++            except AuthenticationError as pe:
++                if authentication_error is None:
++                    authentication_error = pe
++                guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
++                    detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
++                )
++                errors.append(guard_error)
+             except PermissionError as pe:
+                 guard_error = _("Guard: '{}', HREF: '{}', class: '{}', denial: [{}].").format(
+                     detail_guard.name, get_url(detail_guard), type(detail_guard), str(pe)
+@@ -681,6 +697,8 @@ class CompositeContentGuard(ContentGuard, AutoAddObjPermsMixin):
+                 errors.append(guard_error)
+ 
+         # If we get here - FAIL
++        if authentication_error is not None:
++            raise authentication_error
+         msg = _("Access forbidden. Refusals: {}").format(errors)
+         raise PermissionError(msg)
+ 
+diff --git a/pulpcore/cache/cache.py b/pulpcore/cache/cache.py
+index 190b2f1a8..9ae115c08 100644
+--- a/pulpcore/cache/cache.py
++++ b/pulpcore/cache/cache.py
+@@ -18,7 +18,7 @@ from pulpcore.app.redis_connection import (
+     get_async_redis_connection,
+     get_redis_connection,
+ )
+-from pulpcore.app.util import check_request_was_modified
++from pulpcore.app.util import check_request_was_modified, get_domain
+ from pulpcore.metrics import artifacts_size_counter
+ from pulpcore.responses import ArtifactResponse
+ 
+@@ -87,7 +87,9 @@ class Cache:
+         base_key = base_key or self.default_base_key
+         ret = self.redis.hset(base_key, key, value)
+         if expires:
+-            self.redis.expire(base_key, expires)
++            current_ttl = self.redis.ttl(base_key)
++            if current_ttl < 0 or current_ttl < expires:
++                self.redis.expire(base_key, expires)
+         return ret
+ 
+     @connection_error_wrapper
+@@ -270,7 +272,9 @@ class AsyncCache:
+         base_key = base_key or self.default_base_key
+         ret = await self.redis.hset(base_key, key, value)
+         if expires:
+-            await self.redis.expire(base_key, expires)
++            current_ttl = await self.redis.ttl(base_key)
++            if current_ttl < 0 or current_ttl < expires:
++                await self.redis.expire(base_key, expires)
+         return ret
+ 
+     @aconnection_error_wrapper
+@@ -410,6 +414,19 @@ class AsyncContentCache(AsyncCache):
+         response.headers.update({"X-PULP-CACHE": "HIT"})
+         return response
+ 
++    @staticmethod
++    def _parse_max_age(response):
++        """Parse max-age value from response Cache-Control header."""
++        cache_control = response.headers.get("Cache-Control", "")
++        for directive in cache_control.split(","):
++            directive = directive.strip().lower()
++            if directive.startswith("max-age="):
++                try:
++                    return int(directive[8:])
++                except (ValueError, IndexError):
++                    return None
++        return None
++
+     async def make_entry(self, key, base_key, handler, args, kwargs, expires=DEFAULT_EXPIRES_TTL):
+         """Gets the response for the request and try to turn it into a cacheable entry"""
+         try:
+@@ -423,6 +440,11 @@ class AsyncContentCache(AsyncCache):
+ 
+         entry = {"headers": dict(response.headers), "status": response.status}
+ 
++        domain = get_domain()
++        max_age = self._parse_max_age(response)
++        if not domain.redirect_to_object_storage and max_age is not None and max_age > 0:
++            expires = max_age
++
+         if expires is not None:
+             # Redis TTL is not sufficient: https://github.com/pulp/pulpcore/issues/4845
+             entry["expires"] = expires + time.time()
+@@ -446,6 +468,9 @@ class AsyncContentCache(AsyncCache):
+             entry.pop("status")
+             entry["location"] = str(response.location)
+             entry["type"] = "Redirect"
++            if expires is not None and expires > DEFAULT_EXPIRES_TTL:
++                expires = DEFAULT_EXPIRES_TTL
++                entry["expires"] = expires + time.time()
+         elif isinstance(response, (Response, HTTPSuccessful)):
+             body = response.body
+             if isinstance(body, bytes):
 diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 5abe50f..0e83edd 100644
+index 666df58a6..8337c8a1b 100644
 --- a/pulpcore/content/handler.py
 +++ b/pulpcore/content/handler.py
-@@ -78,6 +78,8 @@ EDGE_CACHE_CONTROL = "public, max-age=0, must-revalidate"
+@@ -4,6 +4,7 @@ import os
+ import re
+ import socket
+ import struct
++from contextlib import nullcontext
+ from contextvars import ContextVar
+ from datetime import datetime, timedelta
+ from datetime import timezone as dt_timezone
+@@ -20,6 +21,7 @@ from aiohttp.web_exceptions import (
+     HTTPNotFound,
+     HTTPNotModified,
+     HTTPRequestRangeNotSatisfiable,
++    HTTPUnauthorized,
+ )
+ from asgiref.sync import sync_to_async
+ from django.utils import timezone
+@@ -41,7 +43,8 @@ from django.core.exceptions import (  # noqa: E402
+ from django.db import (  # noqa: E402
+     DatabaseError,
+     IntegrityError,
+-    connection,
++    InterfaceError,
++    connections,
+     models,
+     transaction,
+ )
+@@ -68,16 +71,25 @@ from pulpcore.exceptions import (  # noqa: E402
+     UnsupportedDigestValidationError,
+ )
+ from pulpcore.metrics import artifacts_size_counter  # noqa: E402
++from pulp_service.exceptions import AuthenticationError  # noqa: E402
++from urllib.parse import urlparse  # noqa: E402
+ 
+ log = logging.getLogger(__name__)
+ _current_distribution = ContextVar("current_distribution", default=None)
+ 
+-# The "shared cache" (cdn/edge) should always ask pulp if their cache is still valid
+-EDGE_CACHE_CONTROL = "public, max-age=0, must-revalidate"
++# Content is served with a one-day max-age so pulp's Redis response cache and the
++# CDN edge can retain it (this max-age also drives the Redis cache TTL; see
++# AsyncContentCache._parse_max_age in pulpcore/cache/cache.py). Authorization is
++# still enforced on every request: Akamai centralized auth forwards each request to
++# origin (revalidating via If-Modified-Since -> 304) regardless of max-age, and
++# must-revalidate forbids serving stale content once the max-age has expired.
++EDGE_CACHE_CONTROL = "public, max-age=86400, must-revalidate"
+ 
  # Tell HTTP caches not to store redirects containing signed URLs.
  NO_STORE_EDGE_CACHE_CONTROL = "no-store"
  
@@ -11,7 +190,171 @@ index 5abe50f..0e83edd 100644
  
  class PathNotResolved(HTTPNotFound):
      """
-@@ -1236,7 +1238,10 @@ class Handler:
+@@ -200,9 +212,41 @@ class Handler:
+     @staticmethod
+     def _reset_db_connection():
+         """
+-        Reset database connection if it's unusable or obselete to avoid "connection already closed".
++        Reset database connections if unusable or obsolete to avoid "connection already closed".
++
++        Resets every configured alias (not just "default") since a read-replica router
++        can send the failing query through a different connection than the one this
++        checks first.
++        """
++        for conn in connections.all():
++            conn.close_if_unusable_or_obsolete()
++
++    @classmethod
++    def _get_repository_publication_and_version(cls, distro):
++        """
++        Wraps ``distro.get_repository_publication_and_version()`` with a retry on
++        a replica connection conflict, mirroring ``_match_distribution``'s retry.
++        """
++        try:
++            return distro.get_repository_publication_and_version()
++        except (InterfaceError, DatabaseError):
++            cls._reset_db_connection()
++            return distro.get_repository_publication_and_version()
++
++    @classmethod
++    async def _retry_content_artifact_query(cls, query):
++        """
++        Await a ``ContentArtifact`` queryset call (e.g. ``.aget()``/``.aexists()``),
++        retrying once on a fresh connection if the read replica connection was
++        killed mid-query, e.g. by a standby recovery conflict.
++
++        ``MultipleObjectsReturned``/``ObjectDoesNotExist`` are left to the caller.
+         """
+-        connection.close_if_unusable_or_obsolete()
++        try:
++            return await query()
++        except (InterfaceError, DatabaseError):
++            cls._reset_db_connection()
++            return await query()
+ 
+     async def list_distributions(self, request):
+         """
+@@ -269,6 +313,7 @@ class Handler:
+         """
+         guard_key = "DISTRO#GUARD#PRESENT"
+         present = await cached.get(guard_key, base_key=base_key)
++        guard = None
+         if present == b"True" or present is None:
+             path = request.match_info["path"]
+             if not (distro := _current_distribution.get()):
+@@ -278,11 +323,11 @@ class Handler:
+                 _current_distribution.set(distro)
+             try:
+                 guard = await sync_to_async(cls._permit)(request, distro)
+-            except HTTPForbidden:
++            except (HTTPForbidden, HTTPUnauthorized):
+                 guard = True
+                 raise
+             finally:
+-                if not present:
++                if not present and guard is not None:
+                     await cached.set(guard_key, str(guard), base_key=base_key)
+ 
+     @AsyncContentCache(
+@@ -347,8 +392,9 @@ class Handler:
+         base_paths = cls._base_paths(path)
+         distro_model = cls.distribution_model or Distribution
+         domain = get_domain()
+-        try:
+-            distro_object = (
++
++        def _get_distro_object():
++            return (
+                 distro_model.objects.filter(pulp_domain=domain)
+                 .select_related(
+                     "repository",
+@@ -367,7 +413,15 @@ class Handler:
+                 .get(base_path__in=base_paths)
+                 .cast()
+             )
+-            return distro_object
++
++        try:
++            try:
++                return _get_distro_object()
++            except (InterfaceError, DatabaseError):
++                # A read replica connection can be killed mid-query, e.g. by a
++                # standby recovery conflict. Reset and retry once on a fresh connection.
++                cls._reset_db_connection()
++                return _get_distro_object()
+         except ObjectDoesNotExist:
+             if path.rstrip("/") in base_paths:
+                 distros = distro_model.objects.filter(
+@@ -517,6 +571,16 @@ class Handler:
+             return False
+         try:
+             guard.cast().permit(request)
++        except AuthenticationError as ae:
++            log.debug(
++                'Path: %(p)s requires authentication for guard: "%(g)s" reason: %(r)s',
++                {"p": request.path, "g": guard.name, "r": str(ae)},
++            )
++            realm = urlparse(settings.CONTENT_ORIGIN).hostname or "pulp-content"
++            raise HTTPUnauthorized(
++                reason=str(ae),
++                headers={"WWW-Authenticate": f'Basic realm="{realm}"'},
++            )
+         except PermissionError as pe:
+             log.debug(
+                 'Path: %(p)s not permitted by guard: "%(g)s" reason: %(r)s',
+@@ -834,8 +898,8 @@ class Handler:
+             original_rel_path = original_rel_path.split("/", 1)[1]
+         else:
+             repository, repo_version, publication = await sync_to_async(
+-                distro.get_repository_publication_and_version
+-            )()
++                self._get_repository_publication_and_version
++            )(distro)
+ 
+         if publication:
+             try:
+@@ -892,8 +956,8 @@ class Handler:
+             # pass-through
+             if publication.pass_through:
+                 try:
+-                    ca = (
+-                        await ContentArtifact.objects.select_related(
++                    ca = await self._retry_content_artifact_query(
++                        lambda: ContentArtifact.objects.select_related(
+                             "artifact", "artifact__pulp_domain"
+                         )
+                         .filter(
+@@ -937,9 +1001,11 @@ class Handler:
+             # Look for index.html or list the directory
+             index_path = "{}index.html".format(rel_path)
+ 
+-            contentartifact_exists = await ContentArtifact.objects.filter(
+-                content__in=repo_version.content, relative_path=index_path
+-            ).aexists()
++            contentartifact_exists = await self._retry_content_artifact_query(
++                lambda: ContentArtifact.objects.filter(
++                    content__in=repo_version.content, relative_path=index_path
++                ).aexists()
++            )
+             if contentartifact_exists:
+                 original_rel_path = index_path
+                 headers = self.response_headers(original_rel_path, distro)
+@@ -960,9 +1026,11 @@ class Handler:
+                     )
+ 
+             try:
+-                ca = await ContentArtifact.objects.select_related(
+-                    "artifact", "artifact__pulp_domain"
+-                ).aget(content__in=repo_version.content, relative_path=original_rel_path)
++                ca = await self._retry_content_artifact_query(
++                    lambda: ContentArtifact.objects.select_related(
++                        "artifact", "artifact__pulp_domain"
++                    ).aget(content__in=repo_version.content, relative_path=original_rel_path)
++                )
+ 
+             except MultipleObjectsReturned:
+                 log.error(
+@@ -1241,7 +1309,10 @@ class Handler:
              if not os.path.exists(path):
                  raise Exception(_("Expected path '{}' is not found").format(path))
              return FileResponse(path, headers=headers)

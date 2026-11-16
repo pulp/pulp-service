@@ -14,7 +14,6 @@ ENV PULP_WORKERS=2
 ENV PULP_HTTPS=false
 ENV PULP_STATIC_ROOT=/var/lib/operator/static/
 
-
 # Install updates & dnf plugins before disabling python36 to prevent errors
 # COPY images/repos.d/*.repo /etc/yum.repos.d/
 COPY images/repos.d/centos9-crb.repo /etc/yum.repos.d/
@@ -70,7 +69,6 @@ RUN pip install --upgrade pip setuptools wheel && \
          watchtower && \
          rm -rf /root/.cache/pip
 
-
 COPY pulp_service/ /tmp/pulp_service
 
 RUN pip install /tmp/pulp_service && \
@@ -125,12 +123,8 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0034-Fix-profile-artifact-being-stored-in-default-domain.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0034-Fix-profile-artifact-being-stored-in-default-domain.patch
 
-
-
 COPY images/assets/patches/0044-Move-content-app-heartbeat-to-a-thread.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
-
-
 
 COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-redhat-release3
 COPY images/assets/keys/SIGSTORE-konflux-stage.pem /etc/pki/sigstore/SIGSTORE-konflux-stage
@@ -144,44 +138,20 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0063-Redirect-large-artifacts-to-object-storage.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0063-Redirect-large-artifacts-to-object-storage.patch
 
-COPY images/assets/patches/0065-Route-content-pull-through-writes-to-primary.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0065-Route-content-pull-through-writes-to-primary.patch
-
-COPY images/assets/patches/0066-use-cache-control-max-age-for-redis-ttl.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0066-use-cache-control-max-age-for-redis-ttl.patch
-
 COPY images/assets/patches/0067-Make-cached-ArtifactResponse-DB-free.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0067-Make-cached-ArtifactResponse-DB-free.patch
-
-COPY images/assets/patches/0068-Reset-all-db-connections-on-stale-connection-retry.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0068-Reset-all-db-connections-on-stale-connection-retry.patch
-
-COPY images/assets/patches/0069-Retry-distribution-match-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0069-Retry-distribution-match-on-replica-conflict.patch
-
-COPY images/assets/patches/0070-Retry-publication-lookup-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0070-Retry-publication-lookup-on-replica-conflict.patch
 
 COPY images/assets/patches/0071-Retry-content-guard-lookup-on-replica-conflict.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0071-Retry-content-guard-lookup-on-replica-conflict.patch
 
-COPY images/assets/patches/0073-never-decrease-redis-hash-ttl.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0073-never-decrease-redis-hash-ttl.patch
-
 COPY images/assets/patches/0074-no-store-cache-control-on-302-redirects.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0074-no-store-cache-control-on-302-redirects.patch
-
-COPY images/assets/patches/0075-Retry-content-artifact-lookups-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0075-Retry-content-artifact-lookups-on-replica-conflict.patch
 
 COPY images/assets/patches/0076-Fix-false-positive-artifact-storage-prefix-check.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0076-Fix-false-positive-artifact-storage-prefix-check.patch
 
 COPY images/assets/patches/0077-Experiment-directory-membership-dates.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0077-Experiment-directory-membership-dates.patch
-
-COPY images/assets/patches/0078-Return-authentication-challenge-for-missing-identity.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0078-Return-authentication-challenge-for-missing-identity.patch
 
 COPY images/assets/patches/0079-Log-Maven-path-index-fallback-reasons.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0079-Log-Maven-path-index-fallback-reasons.patch
