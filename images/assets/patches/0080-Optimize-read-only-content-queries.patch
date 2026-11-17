@@ -41,7 +41,7 @@
 -                        )
 -                        .filter(
 -                            content__in=publication.repository_version.content,
-+                    rows, _ = await self._retry_content_artifact_query(
++                    rows, _lazy_queryset = await self._retry_content_artifact_query(
 +                        lambda: sync_to_async(content_query_experiment)(
 +                            "pass_through_file_lookup",
 +                            publication.repository_version,
@@ -65,7 +65,7 @@
 -                lambda: ContentArtifact.objects.filter(
 -                    content__in=repo_version.content, relative_path=index_path
 -                ).aexists()
-+            probe_rows, _ = await self._retry_content_artifact_query(
++            probe_rows, _lazy_queryset = await self._retry_content_artifact_query(
 +                lambda: sync_to_async(content_query_experiment)(
 +                    "index_probe",
 +                    repo_version,
@@ -86,7 +86,7 @@
 -                    lambda: ContentArtifact.objects.select_related(
 -                        "artifact", "artifact__pulp_domain"
 -                    ).aget(content__in=repo_version.content, relative_path=original_rel_path)
-+                rows, _ = await self._retry_content_artifact_query(
++                rows, _lazy_queryset = await self._retry_content_artifact_query(
 +                    lambda: sync_to_async(content_query_experiment)(
 +                        "file_lookup",
 +                        repo_version,
