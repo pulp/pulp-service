@@ -113,6 +113,15 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
+# Guard the patch inventory before applying it. The script checks that every
+# .patch file is wired into this Dockerfile exactly once and that every patch
+# invocation keeps --fuzz=0.
+COPY scripts/check-patches.sh /tmp/check-patches.sh
+COPY Dockerfile /tmp/Dockerfile
+COPY images/assets/patches/ /tmp/patches-inventory/
+RUN chmod +x /tmp/check-patches.sh && \
+    DOCKERFILE=/tmp/Dockerfile PATCH_DIR=/tmp/patches-inventory /tmp/check-patches.sh
+
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
 RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
