@@ -1,0 +1,1 @@
+The SRE log agent (agent-splunk) now keys Jira issues by error origin, HTTP method, exact status code and normalized endpoint path, so same-class errors on different URLs are tracked as separate issues instead of being merged.
