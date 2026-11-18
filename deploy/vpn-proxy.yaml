@@ -196,7 +196,22 @@ objects:
               echo "ERROR: neither UPSTREAM_SITE_HOSTNAME nor PROXY_SERVER_NAME is set" >&2
               exit 1
             fi
-            if ! printf '%s' "$TARGET" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'; then
+            # Validate TARGET as a DNS hostname before it reaches the nginx
+            # config. This uses the bash [[ =~ ]] operator rather than grep
+            # because it anchors to the whole string: grep -E '^...$' matches
+            # any single line, so a value carrying a trailing newline would
+            # pass the check and the sed below would inject the rest of it as
+            # extra nginx directives.
+            #
+            # Each label must be 1-63 characters, start and end with an
+            # alphanumeric character, and the whole name must fit in 253.
+            if [[ "$TARGET" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]; then
+              TARGET_LENGTH=$(printf '%s' "$TARGET" | wc -c | tr -d ' ')
+              if [ "$TARGET_LENGTH" -gt 253 ]; then
+                echo "ERROR: UPSTREAM_SITE_HOSTNAME is longer than 253 characters: $TARGET" >&2
+                exit 1
+              fi
+            else
               echo "ERROR: UPSTREAM_SITE_HOSTNAME is not a valid hostname: $TARGET" >&2
               exit 1
             fi
