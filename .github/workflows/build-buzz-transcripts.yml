@@ -11,7 +11,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Test redaction
         # the sidecar's whole point is redaction; prove it before shipping
         run: bash .buzz/images/buzz-transcripts/transcripts_server_test.sh
