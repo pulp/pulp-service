@@ -1,0 +1,8 @@
+Fixed a 500 (``UnboundLocalError: cannot access local variable '_'``) in the content app
+``pulpcore/content/handler.py`` ``_match_and_stream``. Patch 0080 used a bare ``_`` as the
+throwaway target of three tuple unpacks, which made ``_`` a function-local name and shadowed
+gettext's ``_``. Requests for a distribution with no repository, publication, or remote reached
+the "Distribution is not pointing to..." branch without executing any of those unpacks, so the
+gettext call raised ``UnboundLocalError`` and the content app returned 500 instead of 404
+(PULP-2717). The same shadowing turned upstream fetch failures into
+``TypeError: 'QuerySet' object is not callable``. The unpacks now use ``_lazy_queryset``.
