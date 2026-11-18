@@ -1,0 +1,15 @@
+name: docs-validator
+display_name: Documentation Validator
+description: Read-only access to pulp-docs repo for onboarding doc validation
+tools:
+  gitlab:
+    rules:
+      - repos: ["hosted-pulp/pulp-docs"]
+        operations:
+          - clone
+          - read_contents
+# NOTE: Network egress restriction (pypi.org, files.pythonhosted.org,
+# bootstrap.pypa.io, registry.access.redhat.com, cdn.redhat.com) must be
+# enforced at the runtime level via NetworkPolicy (OpenShift) or Podman
+# --internal network config. The security profile schema does not support
+# a network: field.

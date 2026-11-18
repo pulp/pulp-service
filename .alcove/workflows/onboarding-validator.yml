@@ -1,0 +1,32 @@
+name: Onboarding Docs Validator
+description: |
+  Weekly validation of pulp-docs onboarding guides. Executes documented
+  steps in a fresh container, dispatches specialist reviewers, and files
+  Jira tickets for failures — commenting on existing tickets when the
+  issue is already known.
+
+trigger:
+  schedule:
+    cron: "0 6 * * 1"
+    enabled: true
+
+workflow:
+  - id: validate
+    type: agent
+    agent: Doc Runner
+    max_retries: 1
+    inputs:
+      docs: "cli-guide.md,api-access.md,install-bindings.md"
+      dry_run: "{{inputs.dry_run}}"
+    outputs: [results, overall]
+
+  - id: report
+    type: agent
+    agent: Validation Reporter
+    depends: "validate.Completed"
+    max_retries: 1
+    inputs:
+      results: "{{steps.validate.outputs.results}}"
+      overall: "{{steps.validate.outputs.overall}}"
+      dry_run: "{{inputs.dry_run}}"
+    outputs: [digest_ticket, tickets_created, tickets_commented, stale_tickets_flagged, summary]
