@@ -1,4 +1,4 @@
-.PHONY: lint lint-fix lint-diff format format-check install-hook uninstall-hook
+.PHONY: lint lint-fix lint-diff format format-check install-hook uninstall-hook check-patches
 
 lint:
 	cd pulp_service && ruff check .
@@ -14,6 +14,9 @@ format:
 
 format-check:
 	cd pulp_service && ruff format --check --diff .
+
+check-patches:
+	./scripts/check-patches.sh
 
 install-hook:
 	@if [ -f .git/hooks/pre-commit ]; then \
