@@ -100,7 +100,7 @@ spec:
       default: "v7.10.0"
     - name: PYPI_API_TOKEN
       type: string
-      default: pypi-token
+      default: pypi-api-token
       description: "Secret with the token to push bindings to PyPI"
 
   results:
