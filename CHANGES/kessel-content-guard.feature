@@ -1,0 +1,1 @@
+Added KesselContentGuard, which permits content access only when Kessel grants the guard's permission (e.g. `content_sources_repository_view`) to the requesting user or service account on its org's default workspace.

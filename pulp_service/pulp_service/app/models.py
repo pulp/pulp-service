@@ -15,6 +15,7 @@ from pulpcore.plugin.util import get_domain_pk
 
 from pulp_service.app.content_view_models import ContentView, ContentViewSearchScope  # noqa: F401
 from pulp_service.app.features_service import check_subscription
+from pulp_service.app.kessel import check_permission
 from pulp_service.exceptions import AuthenticationError
 
 _logger = logging.getLogger(__name__)
@@ -134,6 +135,56 @@ class AndGateContentGuard(ContentGuard, AutoAddObjPermsMixin):
                 "Can manage role assignments on AndGate ContentGuard",
             ),
         )
+
+
+def _principal_from_identity_header(request):
+    """
+    Return ``(org_id, user_id)`` from the request's ``x-rh-identity`` header.
+
+    Raises AuthenticationError when the header is missing, PermissionError when it can't be
+    parsed or carries no user/service-account principal.
+    """
+    header = request.headers.get("x-rh-identity")
+    if header is None:
+        raise AuthenticationError(_("Authentication required."))
+    try:
+        identity = json.loads(b64decode(header))["identity"]
+        org_id = identity.get("org_id") or identity.get("internal", {}).get("org_id")
+        principal_key = {"User": "user", "ServiceAccount": "service_account"}.get(identity.get("type"))
+        user_id = identity.get(principal_key, {}).get("user_id") if principal_key else None
+    except (Base64DecodeError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise PermissionError(_("Access denied.")) from exc
+    if not (org_id and user_id):
+        raise PermissionError(_("Access denied."))
+    return str(org_id), str(user_id)
+
+
+class KesselContentGuard(ContentGuard, AutoAddObjPermsMixin):
+    """
+    Content guard that permits access only when Kessel grants ``permission`` to the requesting
+    principal on its org's default workspace (e.g. ``content_sources_repository_view``).
+
+    Fails closed: any error talking to RBAC/Kessel denies access.
+    """
+
+    TYPE = "kessel"
+
+    permission = models.TextField()
+
+    def permit(self, request):
+        org_id, user_id = _principal_from_identity_header(request)
+        try:
+            allowed = check_permission(org_id, user_id, self.permission)
+        except Exception as exc:
+            # permit() must only raise PermissionError/AuthenticationError (pulpcore's handler contract).
+            _logger.exception("Kessel permission check failed.")
+            raise PermissionError(_("Access denied.")) from exc
+        if not allowed:
+            raise PermissionError(_("Access denied."))
+
+    class Meta:
+        default_related_name = "%(app_label)s_%(model_name)s"
+        permissions = (("manage_roles_kesselcontentguard", "Can manage role assignments on Kessel ContentGuard"),)
 
 
 class YankedPackageReport(BaseModel):

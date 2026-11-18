@@ -36,6 +36,7 @@ from pulp_service.app.content_view_serializers import (  # noqa: F401
 from pulp_service.app.models import (
     AndGateContentGuard,
     FeatureContentGuard,
+    KesselContentGuard,
     PyPIYankMonitor,
     VulnerabilityReport,
     YankedPackageReport,
@@ -67,6 +68,23 @@ class FeatureContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerialize
     class Meta(ContentGuardSerializer.Meta):
         model = FeatureContentGuard
         fields = (*ContentGuardSerializer.Meta.fields, "header_name", "jq_filter", "features")
+
+
+class KesselContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerializerMixin):
+    """
+    A serializer for KesselContentGuard.
+    """
+
+    permission = serializers.CharField(
+        help_text=_(
+            "Kessel permission the requesting principal must have on its org's default workspace, "
+            "e.g. content_sources_repository_view."
+        ),
+    )
+
+    class Meta(ContentGuardSerializer.Meta):
+        model = KesselContentGuard
+        fields = (*ContentGuardSerializer.Meta.fields, "permission")
 
 
 class AndGateContentGuardSerializer(ContentGuardSerializer, GetOrCreateSerializerMixin):
