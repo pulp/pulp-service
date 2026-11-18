@@ -84,9 +84,14 @@ objects:
             proxy_buffering off;
             set $upstream https://${UPSTREAM_HOST}:${UPSTREAM_PORT};
             proxy_pass $upstream;
+            # Host and TLS SNI sent upstream are the canonical site hostname
+            # (rendered at container start from the template parameters), not
+            # this proxy's own Route host. That lets a proxy point at a
+            # non-canonical edge network, such as the Akamai staging network,
+            # while the upstream still sees the canonical site.
             proxy_ssl_server_name on;
-            proxy_ssl_name ${PROXY_SERVER_NAME};
-            proxy_set_header Host ${PROXY_SERVER_NAME};
+            proxy_ssl_name UPSTREAM_SITE_HOSTNAME;
+            proxy_set_header Host UPSTREAM_SITE_HOSTNAME;
             proxy_set_header X-Forwarded-Proto https;
 
             # Drop client-supplied identity assertions before forwarding.
@@ -158,6 +163,10 @@ objects:
               secretKeyRef:
                 name: pulp-vpn-proxy-certauth
                 key: proxy-certauth-secret
+          - name: PROXY_SERVER_NAME
+            value: ${PROXY_SERVER_NAME}
+          - name: UPSTREAM_SITE_HOSTNAME
+            value: ${UPSTREAM_SITE_HOSTNAME}
           command:
           - /bin/bash
           - -c
@@ -171,12 +180,33 @@ objects:
               echo "ERROR: PROXY_CERTAUTH_SECRET is empty" >&2
               exit 1
             fi
+            # Host header and TLS SNI sent upstream. Defaults to the proxy's own
+            # hostname so targets that do not set UPSTREAM_SITE_HOSTNAME render
+            # exactly as before.
+            #
+            # NOTE: these are deliberately written without braces. `oc process`
+            # substitutes ${...} anywhere in the template, including inside this
+            # script, which would bake the parameter values in at render time and
+            # defeat the runtime fallback.
+            TARGET=$UPSTREAM_SITE_HOSTNAME
+            if [ -z "$TARGET" ]; then
+              TARGET=$PROXY_SERVER_NAME
+            fi
+            if [ -z "$TARGET" ]; then
+              echo "ERROR: neither UPSTREAM_SITE_HOSTNAME nor PROXY_SERVER_NAME is set" >&2
+              exit 1
+            fi
+            if ! printf '%s' "$TARGET" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$'; then
+              echo "ERROR: UPSTREAM_SITE_HOSTNAME is not a valid hostname: $TARGET" >&2
+              exit 1
+            fi
             sed_escape() {
               printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
             }
             sed -e "s|NAMESERVER|${NAMESERVER}|g" \
                 -e "s|VPN_ACCESS_SECRET|$(sed_escape "${VPN_ACCESS_SECRET}")|g" \
                 -e "s|PROXY_CERTAUTH_SECRET|$(sed_escape "${PROXY_CERTAUTH_SECRET}")|g" \
+                -e "s|UPSTREAM_SITE_HOSTNAME|$(sed_escape "$TARGET")|g" \
                 /opt/nginx-template/nginx.conf.tpl > /opt/nginx-rendered/nginx.conf
             exec nginx -c /opt/nginx-rendered/nginx.conf -g 'daemon off;'
           ports:
@@ -281,8 +311,15 @@ parameters:
   description: Upstream HTTPS port
   value: "443"
 - name: PROXY_SERVER_NAME
-  description: Hostname the proxy accepts (e.g. packages.stage.redhat.com)
+  description: Hostname the proxy accepts and serves its certificate for (Route
+    host, e.g. packages.stage.redhat.com)
   required: true
+- name: UPSTREAM_SITE_HOSTNAME
+  description: Canonical site hostname sent to the upstream as the Host header and
+    TLS SNI (e.g. packages.stage.redhat.com). Defaults to PROXY_SERVER_NAME when
+    empty. Set this to keep the canonical Host while UPSTREAM_HOST points at a
+    different edge network, such as the Akamai staging network.
+  value: ""
 - name: REPLICAS
   description: Number of proxy replicas
   value: "2"
