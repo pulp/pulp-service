@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
     atomic = False  # DROP INDEX CONCURRENTLY cannot run in a transaction.
 
     dependencies = [
-        ("service", "0024_contentartifact_relative_path_pattern_index"),
+        ("service", "0026_andgatecontentguard"),
     ]
 
     operations = [
