@@ -1,0 +1,52 @@
+name: Pulp Task Monitor
+description: |
+  Polls the Pulp tasking system of packages.redhat.com every 5 minutes,
+  classifies why tasks are waiting, keeps 30 days of history in the
+  hosted-pulp-tasking-monitor S3 bucket, publishes the HTML status page to
+  GitLab Pages, pushes OTLP metrics (including
+  pulp_monitor_last_success_timestamp), and tracks persistent unexplained-wait
+  incidents in Jira. Any failure exits non-zero. Replaces the swamp-based
+  "Pulp Task Monitor Sync" agent (PULP-2729).
+  Runs as a pre-compiled agent binary from GitHub Releases.
+
+# TODO: point at the first agent-task-monitor release published by
+# .github/workflows/build-agent-task-monitor.yml, then enable the schedule.
+executable:
+  url: https://github.com/pulp/pulp-service/releases/download/agent-task-monitor-YYYYMMDD-SHA/agent-task-monitor
+  args:
+    - "--environment"
+    - "pulp-tasks-prod"
+    - "--base-url"
+    - "https://packages.redhat.com"
+    - "--otel-collector-url"
+    - "http://pulp-task-monitor-otel-collector.pulp-stage.svc.cluster.local:4318"
+    - "--gitlab-repo"
+    - "https://gitlab.cee.redhat.com/hosted-pulp/tasking-system-monitor-agent"
+    - "--jira-project"
+    - "PULP"
+    - "--model"
+    - "claude-sonnet-4-6"
+  env:
+    GIT_SSL_NO_VERIFY: "true"
+    JIRA_URL: "https://redhat.atlassian.net/"
+    S3_BUCKET: "hosted-pulp-tasking-monitor"
+
+timeout: 300
+enforcement_mode: monitor
+
+direct_outbound: true
+
+credentials:
+  PULP_USERNAME: PULP_ADMIN_READ_ONLY_USER
+  PULP_PASSWORD: PULP_ADMIN_READ_ONLY_PASSWORD
+  AWS_ACCESS_KEY_ID: k8s-secret:tasking-monitor-s3/aws_access_key_id
+  AWS_SECRET_ACCESS_KEY: k8s-secret:tasking-monitor-s3/aws_secret_access_key
+  AWS_REGION: k8s-secret:tasking-monitor-s3/aws_region
+  GITLAB_TOKEN: gitlab
+  JIRA_API_TOKEN: jira
+  ANTHROPIC_VERTEX_PROJECT_ID: ANTHROPIC_VERTEX_PROJECT_ID
+  VERTEX_SA_JSON: google-vertex
+
+schedule:
+  cron: "*/5 * * * *"
+  enabled: false
