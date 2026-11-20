@@ -39,6 +39,13 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
 
+### 0083 - Per-domain DB application_name for Performance Insights
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/util.py`, `pulpcore/middleware.py`, `pulpcore/content/authentication.py`, `pulpcore/app/contexts.py`
+- **Description:** Tags each DB connection's `application_name` with `pulp-<proc>:<domain>` (proc ∈ {api, content, worker}) at the four points where the domain becomes known — API middleware (`DomainMiddleware.process_view`), content auth (`validate_domain`), and the sync/async worker task contexts — so RDS Performance Insights can break down `db.load` per tenant via its Top Applications dimension, without touching individual query call sites. The `set_db_application_name` helper truncates the value to the 63-byte Postgres cap (UTF-8 safe) and suppresses DB errors so it never breaks a request, task, management command, or migration. No setting/toggle — the patch's presence is the switch. Delivers PULP-2747.
+- **Upstream:** not yet submitted (tracked for a follow-up pulpcore PR). Drop this patch once a pulpcore release with the change is pinned.
+
 ### 0082 - Retry Redis commands on READONLY after a failover
 
 - **Package:** pulpcore

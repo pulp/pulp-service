@@ -1,0 +1,126 @@
+diff --git a/pulpcore/app/contexts.py b/pulpcore/app/contexts.py
+index d86b9ce6f1..a8aaa6bc70 100644
+--- a/pulpcore/app/contexts.py
++++ b/pulpcore/app/contexts.py
+@@ -47,7 +47,11 @@ def with_domain(domain):
+ 
+ @contextmanager
+ def with_task_context(task):
++    # Imported here to avoid a circular import (util imports from this module).
++    from pulpcore.app.util import set_db_application_name
++
+     with with_domain(task.pulp_domain), with_guid(task.logging_cid), with_user(task.user):
++        set_db_application_name("worker", task.pulp_domain)
+         task_token = _current_task.set(task)
+         if not task.pulp_api_version:
+             vers_token = current_pulp_api_version.set(
+@@ -74,7 +78,12 @@ async def awith_task_context(task):
+         return task.pulp_domain, task.user
+ 
+     domain, user = await _fetch(task)
++    # Imported here to avoid a circular import (util imports from this module).
++    from pulpcore.app.util import set_db_application_name
++
+     with with_domain(domain), with_guid(task.logging_cid), with_user(user):
++        # Run the DB SET off the event loop; a sync DB call on the loop would fail.
++        await sync_to_async(set_db_application_name)("worker", domain)
+         task_token = _current_task.set(task)
+         if not task.pulp_api_version:
+             vers_token = current_pulp_api_version.set(
+diff --git a/pulpcore/app/util.py b/pulpcore/app/util.py
+index 02ce79a66e..924ee136b7 100644
+--- a/pulpcore/app/util.py
++++ b/pulpcore/app/util.py
+@@ -3,7 +3,7 @@ import logging
+ import os
+ import socket
+ import zlib
+-from contextlib import ExitStack
++from contextlib import ExitStack, suppress
+ from datetime import timedelta
+ from functools import lru_cache
+ from gettext import gettext as _
+@@ -722,6 +722,44 @@ def set_domain(new_domain):
+     return new_domain
+ 
+ 
++# Postgres caps ``application_name`` at NAMEDATALEN - 1 bytes.
++_APPLICATION_NAME_MAX_BYTES = 63
++
++
++def _db_application_name_value(process_type, domain):
++    """
++    Build the ``application_name`` value for a process type and domain.
++
++    Returns ``pulp-<process_type>:<domain.name>`` truncated to 63 bytes
++    (the Postgres ``application_name`` cap), dropping any partial trailing
++    UTF-8 byte so the result is always valid UTF-8. Pure: performs no I/O.
++    """
++    value = f"pulp-{process_type}:{domain.name}"
++    encoded = value.encode("utf-8")
++    if len(encoded) <= _APPLICATION_NAME_MAX_BYTES:
++        return value
++    return encoded[:_APPLICATION_NAME_MAX_BYTES].decode("utf-8", "ignore")
++
++
++def set_db_application_name(process_type, domain=None):
++    """
++    Set the current DB connection's ``application_name`` to the current domain.
++
++    Tags the connection as ``pulp-<process_type>:<domain.name>`` so RDS
++    Performance Insights can break down ``db.load`` per domain via its Top
++    Applications dimension. Called at the points where the domain becomes known
++    (API middleware, content auth, worker task context).
++
++    Any error issuing the ``SET`` is suppressed so a missing/unavailable DB
++    (management commands, migrations, tests) can never break the caller.
++    """
++    domain = domain or get_domain()
++    value = _db_application_name_value(process_type, domain)
++    with suppress(Exception):
++        with connection.cursor() as cursor:
++            cursor.execute("SET application_name = %s", [value])
++
++
+ def cache_key(base_path, domain=None):
+     """Return the cache base key or keys for the passed base path or paths."""
+     if settings.DOMAIN_ENABLED:
+diff --git a/pulpcore/content/authentication.py b/pulpcore/content/authentication.py
+index 966a238a77..ac3dc477f0 100644
+--- a/pulpcore/content/authentication.py
++++ b/pulpcore/content/authentication.py
+@@ -13,7 +13,7 @@ from rest_framework.exceptions import APIException
+ from rest_framework.views import APIView
+ 
+ from pulpcore.app.models import Domain
+-from pulpcore.app.util import set_domain
++from pulpcore.app.util import set_db_application_name, set_domain
+ 
+ from .handler import Handler, PathNotResolved
+ 
+@@ -98,4 +98,5 @@ def validate_domain(request):
+         raise PathNotResolved(path)
+ 
+     set_domain(domain)
++    set_db_application_name("content")
+     return domain
+diff --git a/pulpcore/middleware.py b/pulpcore/middleware.py
+index fd06ed63a6..81de4b46fb 100644
+--- a/pulpcore/middleware.py
++++ b/pulpcore/middleware.py
+@@ -12,6 +12,7 @@ from pulpcore.app.util import (
+     get_worker_name,
+     normalize_http_status,
+     set_current_user_lazy,
++    set_db_application_name,
+     set_domain,
+ )
+ from pulpcore.metrics import init_otel_meter
+@@ -48,6 +49,7 @@ class DomainMiddleware:
+         except Domain.DoesNotExist:
+             raise Http404()
+         set_domain(domain)
++        set_db_application_name("api")
+         setattr(request, "pulp_domain", domain)
+         return None
+ 
