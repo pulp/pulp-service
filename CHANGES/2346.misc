@@ -1,0 +1,1 @@
+Remove the PULP-2346 A/B content query experiment now that the optimized lookups ship in pulpcore 3.124.0. Migration 0027 drops the ``core_ca_relpath_pattern_idx`` index created by migration 0024, but only when it still carries the pulp-service ownership comment, so that pulpcore migration 0162 owns and recreates it.

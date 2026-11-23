@@ -2,7 +2,8 @@ from django.db import migrations
 
 _INDEX_NAME = "core_ca_relpath_pattern_idx"
 _INDEX_MARKER = "pulp-service:0024:core_ca_relpath_pattern_idx"
-_DROP_INDEX_SQL = f'DROP INDEX CONCURRENTLY IF EXISTS "{_INDEX_NAME}"'
+# A constant statement with no input: DROP INDEX cannot take bind parameters.
+_DROP_INDEX_SQL = 'DROP INDEX CONCURRENTLY IF EXISTS "core_ca_relpath_pattern_idx"'
 
 
 def remove_experiment_index(apps, schema_editor):  # noqa: ARG001
