@@ -1,8 +1,6 @@
-diff --git a/pulpcore/content/handler.py b/pulpcore/content/handler.py
-index 2a4d6c3..ddf8d48 100644
---- a/pulpcore/content/handler.py
-+++ b/pulpcore/content/handler.py
-@@ -225,6 +225,21 @@ class Handler:
+--- a/pulpcore/content/handler.py	2026-11-23 08:09:38.949912089 +0000
++++ b/pulpcore/content/handler.py	2026-11-23 08:09:34.877851862 +0000
+@@ -260,6 +260,21 @@
              cls._reset_db_connection()
              return distro.get_repository_publication_and_version()
  
@@ -24,7 +22,7 @@ index 2a4d6c3..ddf8d48 100644
      async def list_distributions(self, request):
          """
          The handler for an HTML listing all distributions
-@@ -929,8 +944,8 @@ class Handler:
+@@ -941,8 +956,8 @@
              # pass-through
              if publication.pass_through:
                  try:
@@ -35,33 +33,39 @@ index 2a4d6c3..ddf8d48 100644
                              "artifact", "artifact__pulp_domain"
                          )
                          .filter(
-@@ -974,9 +989,11 @@ class Handler:
+@@ -991,14 +1006,16 @@
              # Look for index.html or list the directory
              index_path = "{}index.html".format(rel_path)
  
--            contentartifact_exists = await ContentArtifact.objects.filter(
--                content__in=repo_version.content, relative_path=index_path
--            ).aexists()
+-            # Existence-only probe: select just the pk and stop at the first match.
+-            index_matches = ContentArtifact.objects.filter(
+-                Exists(
+-                    repo_version._content_relationships().filter(content_id=OuterRef("content_id"))
+-                ),
+-                relative_path=index_path,
+-            ).values_list("pk", flat=True)[:1]
+-            contentartifact_exists = bool([pk async for pk in index_matches])
 +            contentartifact_exists = await self._retry_content_artifact_query(
 +                lambda: ContentArtifact.objects.filter(
-+                    content__in=repo_version.content, relative_path=index_path
++                    Exists(
++                        repo_version._content_relationships().filter(
++                            content_id=OuterRef("content_id")
++                        )
++                    ),
++                    relative_path=index_path,
 +                ).aexists()
 +            )
              if contentartifact_exists:
                  original_rel_path = index_path
                  headers = self.response_headers(original_rel_path, distro)
-@@ -997,9 +1014,11 @@ class Handler:
+@@ -1019,8 +1036,8 @@
                      )
  
              try:
--                ca = await ContentArtifact.objects.select_related(
--                    "artifact", "artifact__pulp_domain"
--                ).aget(content__in=repo_version.content, relative_path=original_rel_path)
+-                ca = (
+-                    await ContentArtifact.objects.select_related(
 +                ca = await self._retry_content_artifact_query(
 +                    lambda: ContentArtifact.objects.select_related(
-+                        "artifact", "artifact__pulp_domain"
-+                    ).aget(content__in=repo_version.content, relative_path=original_rel_path)
-+                )
- 
-             except MultipleObjectsReturned:
-                 log.error(
+                         "artifact", "artifact__pulp_domain"
+                     )
+                     .filter(
