@@ -7,6 +7,12 @@ Each patch modifies files installed into site-packages via the Dockerfile.
 
 Apply the existing stack with GNU `patch`, as the Dockerfiles do. Some older
 patches rely on its context matching and do not apply with `git apply`.
+
+The Dockerfile applies every patch with `patch -p1 --fuzz=0`, so a fuzzy apply
+fails the build. After adding, removing or renaming a patch, run
+`scripts/check-patches.sh` (or `make check-patches`). It verifies that the
+patch directory and the Dockerfile COPY/RUN lists match, and that every patch
+invocation keeps `--fuzz=0`.
 When testing an isolated source tree through `oci-env exec`, set `PYTHONPATH`
 after `sudo -u pulp`; sudo can remove it even with `-E`.
 

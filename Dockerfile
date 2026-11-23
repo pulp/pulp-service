@@ -113,22 +113,31 @@ RUN ln -s /usr/local/lib/pulp/bin/pulpcore-manager /usr/local/bin/pulpcore-manag
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
+# Guard the patch inventory before applying it. The script checks that every
+# .patch file is wired into this Dockerfile exactly once and that every patch
+# invocation keeps --fuzz=0.
+COPY scripts/check-patches.sh /tmp/check-patches.sh
+COPY Dockerfile /tmp/Dockerfile
+COPY images/assets/patches/ /tmp/patches-inventory/
+RUN chmod +x /tmp/check-patches.sh && \
+    DOCKERFILE=/tmp/Dockerfile PATCH_DIR=/tmp/patches-inventory /tmp/check-patches.sh
+
 COPY images/assets/patches/0022-Adds-authentication-to-the-mvn-deploy-api.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0022-Adds-authentication-to-the-mvn-deploy-api.patch
 
 COPY images/assets/patches/0031-Replace-ResponseContentDisposition-in-cloudfront.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Replace-ResponseContentDisposition-in-cloudfront.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0031-Replace-ResponseContentDisposition-in-cloudfront.patch
 
 COPY images/assets/patches/0032-Disable-the-timestamp-of-interest-query.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0032-Disable-the-timestamp-of-interest-query.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0032-Disable-the-timestamp-of-interest-query.patch
 
 COPY images/assets/patches/0034-Fix-profile-artifact-being-stored-in-default-domain.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0034-Fix-profile-artifact-being-stored-in-default-domain.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0034-Fix-profile-artifact-being-stored-in-default-domain.patch
 
 
 
 COPY images/assets/patches/0044-Move-content-app-heartbeat-to-a-thread.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0044-Move-content-app-heartbeat-to-a-thread.patch
 
 
 
@@ -136,61 +145,61 @@ COPY images/assets/keys/SIGSTORE-redhat-release3.pem /etc/pki/sigstore/SIGSTORE-
 COPY images/assets/keys/SIGSTORE-konflux-stage.pem /etc/pki/sigstore/SIGSTORE-konflux-stage
 
 COPY images/assets/patches/0049-Skip-content-units-validation.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0049-Skip-content-units-validation.patch
 
 COPY images/assets/patches/0058-fix-migrate.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0058-fix-migrate.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0058-fix-migrate.patch
 
 COPY images/assets/patches/0063-Redirect-large-artifacts-to-object-storage.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0063-Redirect-large-artifacts-to-object-storage.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0063-Redirect-large-artifacts-to-object-storage.patch
 
 COPY images/assets/patches/0065-Route-content-pull-through-writes-to-primary.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0065-Route-content-pull-through-writes-to-primary.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0065-Route-content-pull-through-writes-to-primary.patch
 
 COPY images/assets/patches/0066-use-cache-control-max-age-for-redis-ttl.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0066-use-cache-control-max-age-for-redis-ttl.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0066-use-cache-control-max-age-for-redis-ttl.patch
 
 COPY images/assets/patches/0067-Make-cached-ArtifactResponse-DB-free.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0067-Make-cached-ArtifactResponse-DB-free.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0067-Make-cached-ArtifactResponse-DB-free.patch
 
 COPY images/assets/patches/0068-Reset-all-db-connections-on-stale-connection-retry.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0068-Reset-all-db-connections-on-stale-connection-retry.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0068-Reset-all-db-connections-on-stale-connection-retry.patch
 
 COPY images/assets/patches/0069-Retry-distribution-match-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0069-Retry-distribution-match-on-replica-conflict.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0069-Retry-distribution-match-on-replica-conflict.patch
 
 COPY images/assets/patches/0070-Retry-publication-lookup-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0070-Retry-publication-lookup-on-replica-conflict.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0070-Retry-publication-lookup-on-replica-conflict.patch
 
 COPY images/assets/patches/0071-Retry-content-guard-lookup-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0071-Retry-content-guard-lookup-on-replica-conflict.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0071-Retry-content-guard-lookup-on-replica-conflict.patch
 
 COPY images/assets/patches/0073-never-decrease-redis-hash-ttl.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0073-never-decrease-redis-hash-ttl.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0073-never-decrease-redis-hash-ttl.patch
 
 COPY images/assets/patches/0074-no-store-cache-control-on-302-redirects.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0074-no-store-cache-control-on-302-redirects.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0074-no-store-cache-control-on-302-redirects.patch
 
 COPY images/assets/patches/0075-Retry-content-artifact-lookups-on-replica-conflict.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0075-Retry-content-artifact-lookups-on-replica-conflict.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0075-Retry-content-artifact-lookups-on-replica-conflict.patch
 
 COPY images/assets/patches/0076-Fix-false-positive-artifact-storage-prefix-check.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0076-Fix-false-positive-artifact-storage-prefix-check.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0076-Fix-false-positive-artifact-storage-prefix-check.patch
 
 COPY images/assets/patches/0077-Experiment-directory-membership-dates.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0077-Experiment-directory-membership-dates.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0077-Experiment-directory-membership-dates.patch
 
 COPY images/assets/patches/0078-Return-authentication-challenge-for-missing-identity.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0078-Return-authentication-challenge-for-missing-identity.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0078-Return-authentication-challenge-for-missing-identity.patch
 
 COPY images/assets/patches/0079-Log-Maven-path-index-fallback-reasons.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0079-Log-Maven-path-index-fallback-reasons.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0079-Log-Maven-path-index-fallback-reasons.patch
 
 COPY images/assets/patches/0080-Optimize-read-only-content-queries.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0080-Optimize-read-only-content-queries.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0080-Optimize-read-only-content-queries.patch
 
 COPY images/assets/patches/0081-Fix-task-cancellation-during-graceful-shutdown.patch /tmp/
-RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0081-Fix-task-cancellation-during-graceful-shutdown.patch
+RUN patch -p1 --fuzz=0 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0081-Fix-task-cancellation-during-graceful-shutdown.patch
 
 COPY images/assets/patches/0082-Retry-redis-on-readonly-replica.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0082-Retry-redis-on-readonly-replica.patch
