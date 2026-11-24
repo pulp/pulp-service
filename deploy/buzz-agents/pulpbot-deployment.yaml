@@ -60,24 +60,25 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-        - name: CLAUDE_CODE_USE_VERTEX
+        - name: ANTHROPIC_BASE_URL
+          value: https://api.enmaas.devshift.net
+        - name: CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY
           value: '1'
-        - name: CLOUD_ML_REGION
-          value: global
-        - name: ANTHROPIC_VERTEX_PROJECT_ID
-          value: lightwell-devel
-        - name: GOOGLE_CLOUD_QUOTA_PROJECT
-          value: lightwell-devel
-        - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: /run/secrets/vertex/application_default_credentials.json
+        - name: ANTHROPIC_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: maas
+              key: token
         - name: ANTHROPIC_MODEL
-          value: claude-opus-4-8
+          value: rits/zai-org/glm-5-3
         - name: ANTHROPIC_DEFAULT_OPUS_MODEL
-          value: claude-opus-4-8
+          value: rits/zai-org/glm-5-3
         - name: ANTHROPIC_DEFAULT_SONNET_MODEL
-          value: claude-opus-4-8
+          value: rits/zai-org/glm-5-3
         - name: ANTHROPIC_DEFAULT_HAIKU_MODEL
-          value: claude-opus-4-8
+          value: rits/zai-org/glm-5-3
+        - name: ANTHROPIC_SMALL_FAST_MODEL
+          value: rits/zai-org/glm-5-3
         - name: HTTP_PROXY
           value: ''
         - name: HTTPS_PROXY
@@ -123,9 +124,6 @@ spec:
           mountPath: /run/agent-session
         - name: agent-secret
           mountPath: /run/secrets/agent
-          readOnly: true
-        - name: vertex
-          mountPath: /run/secrets/vertex
           readOnly: true
         - name: gitea-token
           mountPath: /run/secrets/gitea
@@ -174,8 +172,8 @@ spec:
         - name: agent-secret
           mountPath: /run/secrets/agent
           readOnly: true
-        - name: vertex
-          mountPath: /run/secrets/vertex
+        - name: maas
+          mountPath: /run/secrets/maas
           readOnly: true
         - name: gitea-token
           mountPath: /run/secrets/gitea
@@ -199,9 +197,9 @@ spec:
         secret:
           secretName: agent-pulpbot
           defaultMode: 0440
-      - name: vertex
+      - name: maas
         secret:
-          secretName: vertex-ai
+          secretName: maas
           defaultMode: 0440
       - name: gitea-token
         secret:
