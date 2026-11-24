@@ -308,7 +308,6 @@ Background tasks dispatched via pulpcore's RedisWorker (in `pulp_service/pulp_se
 - **redis_lock_utils.py** - Redis lock utility functions
 - **stale_lock_cleanup.py** - Stale Redis lock cleanup
 - **datarepair.py** - Data repair for content IDs cache (issue #7465)
-- **lightwell_period_sync.py** - Lightwell period synchronization
 - **util.py** - Utility tasks (no-op, diagnostics)
 
 ## Configuration Files
