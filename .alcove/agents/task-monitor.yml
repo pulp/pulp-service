@@ -9,10 +9,8 @@ description: |
   "Pulp Task Monitor Sync" agent (PULP-2729).
   Runs as a pre-compiled agent binary from GitHub Releases.
 
-# TODO: point at the first agent-task-monitor release published by
-# .github/workflows/build-agent-task-monitor.yml, then enable the schedule.
 executable:
-  url: https://github.com/pulp/pulp-service/releases/download/agent-task-monitor-YYYYMMDD-SHA/agent-task-monitor
+  url: https://github.com/pulp/pulp-service/releases/download/agent-task-monitor-20261124-be10155/agent-task-monitor
   args:
     - "--environment"
     - "pulp-tasks-prod"
