@@ -1,0 +1,52 @@
+diff --git a/pulpcore/app/models/repository.py b/pulpcore/app/models/repository.py
+index de093fa6eb..420d7d57a2 100644
+--- a/pulpcore/app/models/repository.py
++++ b/pulpcore/app/models/repository.py
+@@ -39,6 +39,11 @@ from .task import CreatedResource, Task
+ 
+ _logger = logging.getLogger(__name__)
+ 
++# Number of RepositoryContent rows constructed and inserted per batch in
++# RepositoryVersion.add_content(). Bounds peak memory when adding content from a
++# large base_version. See https://github.com/pulp/pulpcore/issues/8374.
++REPOSITORY_CONTENT_BATCH_SIZE = 2000
++
+ 
+ class Repository(MasterModel):
+     """
+@@ -1211,7 +1216,6 @@ class RepositoryVersion(BaseModel):
+             .exists()
+         )
+ 
+-        repo_content = []
+         to_add = set(content.values_list("pk", flat=True)) - set(self.content_ids)
+         with transaction.atomic():
+             if to_add:
+@@ -1228,15 +1232,23 @@ class RepositoryVersion(BaseModel):
+                     ).update(version_removed=None)
+                     to_add = to_add - to_readd
+ 
+-            for content_pk in to_add:
+-                repo_content.append(
++            # Build and insert RepositoryContent rows in bounded batches so that peak memory
++            # stays O(batch) instead of O(len(to_add)). Materializing one RepositoryContent
++            # instance per unit for a large base_version (millions of units) consumes several
++            # GB of RAM and can OOM the worker. Sort the pks so concurrent inserts acquire row
++            # locks in a consistent order. See https://github.com/pulp/pulpcore/issues/8374.
++            ordered_pks = sorted(to_add)
++            for start in range(0, len(ordered_pks), REPOSITORY_CONTENT_BATCH_SIZE):
++                batch = [
+                     RepositoryContent(
+                         repository=self.repository, content_id=content_pk, version_added=self
+                     )
++                    for content_pk in ordered_pks[start : start + REPOSITORY_CONTENT_BATCH_SIZE]
++                ]
++                RepositoryContent.objects.bulk_create(
++                    batch, batch_size=REPOSITORY_CONTENT_BATCH_SIZE
+                 )
+ 
+-            RepositoryContent.objects.bulk_create(repo_content)
+-
+     def remove_content(self, content):
+         """
+         Remove content from the repository.
