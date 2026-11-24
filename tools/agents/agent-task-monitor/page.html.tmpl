@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__TITLE__</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; line-height: 1.5; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: #8b949e; font-size: 0.875rem; margin-bottom: 20px; }
+  .banner { padding: 14px 20px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; font-size: 1rem; }
+  .banner-ok { background: #0d3320; border: 1px solid #1b7a41; color: #3fb950; }
+  .banner-warn { background: #3d2e00; border: 1px solid #9e6a03; color: #d29922; }
+  .banner-crit { background: #da3633; border: 1px solid #f85149; color: #ffffff; }
+  .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center; }
+  .panel-alert-warn { background: #3d2e00; border: 1px solid #9e6a03; }
+  .panel-alert-warn .panel-value { color: #d29922; }
+  .panel-alert-crit { background: #3d0a0a; border: 1px solid #da3633; }
+  .panel-alert-crit .panel-value { color: #f85149; }
+  .panel-value { font-size: 1.75rem; font-weight: 700; color: #f0f6fc; }
+  .panel-label { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+  .section { margin-bottom: 28px; }
+  .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #21262d; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 12px; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #8b949e; border-bottom: 1px solid #30363d; }
+  td { padding: 8px 12px; border-bottom: 1px solid #21262d; font-variant-numeric: tabular-nums; }
+  .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+  .cal-header { font-size: 0.7rem; color: #8b949e; text-align: center; padding: 4px; text-transform: uppercase; }
+  .cal-day { aspect-ratio: 1; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.75rem; cursor: default; position: relative; border: 1px solid transparent; }
+  .cal-day:hover { border-color: #58a6ff; }
+  .cal-day .day-num { font-weight: 600; }
+  .cal-day .day-count { font-size: 0.6rem; color: #8b949e; }
+  .cal-none { background: #161b22; }
+  .cal-green { background: #0d3320; }
+  .cal-yellow { background: #3d2e00; }
+  .cal-red { background: #3d0a0a; }
+  .cal-gray { background: #0d1117; border: 1px solid #21262d; }
+  .tooltip { display: none; position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: #1c2128; border: 1px solid #30363d; border-radius: 6px; padding: 8px 12px; font-size: 0.7rem; white-space: nowrap; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .cal-day:hover .tooltip { display: block; }
+  .event-row { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #21262d; font-size: 0.85rem; align-items: baseline; }
+  .event-time { color: #8b949e; font-size: 0.75rem; min-width: 170px; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  .badge-info { background: #1f3a5f; color: #58a6ff; }
+  .badge-warning { background: #3d2e00; color: #d29922; }
+  .badge-critical { background: #3d0a0a; color: #f85149; }
+  .event-detail { color: #c9d1d9; }
+  .num-bad { color: #f85149; }
+  .cal-day.selected { border-color: #58a6ff; box-shadow: 0 0 0 1px #58a6ff; }
+  .cal-day[data-date] { cursor: pointer; }
+  .detail-panel { display: none; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; position: absolute; top: 0; left: 0; right: 0; z-index: 5; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  .detail-panel.visible { display: block; }
+  .detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .detail-header h2 { font-size: 1.1rem; font-weight: 600; }
+  .detail-close { background: none; border: 1px solid #30363d; color: #8b949e; border-radius: 4px; width: 32px; height: 32px; cursor: pointer; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; }
+  .detail-close:hover { border-color: #58a6ff; color: #c9d1d9; }
+  .detail-nav { background: none; border: 1px solid #30363d; color: #8b949e; border-radius: 4px; width: 32px; height: 32px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; }
+  .detail-nav:hover { border-color: #58a6ff; color: #c9d1d9; }
+  .detail-nav:disabled { opacity: 0.3; cursor: default; border-color: #30363d; color: #8b949e; }
+  .detail-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .detail-stat { background: #0d1117; border-radius: 6px; padding: 10px; text-align: center; }
+  .detail-stat-value { font-size: 1.2rem; font-weight: 700; color: #f0f6fc; }
+  .detail-stat-label { font-size: 0.7rem; color: #8b949e; text-transform: uppercase; }
+  .detail-section { margin-top: 16px; }
+  .detail-section-title { font-size: 0.85rem; font-weight: 600; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .overlay-backdrop { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 50; }
+  .overlay-backdrop.visible { display: block; }
+  .overlay-panel { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 24px; z-index: 51; min-width: 400px; max-width: 700px; max-height: 80vh; overflow-y: auto; box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
+  .overlay-panel.visible { display: block; }
+  .queue-normal { color: #3fb950; }
+  .queue-anomaly { color: #f85149; }
+  .detail-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .detail-table th { text-align: left; padding: 6px 10px; font-size: 0.7rem; text-transform: uppercase; color: #8b949e; border-bottom: 1px solid #30363d; }
+  .detail-table td { padding: 6px 10px; border-bottom: 1px solid #21262d; font-variant-numeric: tabular-nums; }
+  .resource-list { font-size: 0.75rem; color: #8b949e; word-break: break-all; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>__TITLE__</h1>
+  <div class="subtitle">__BASE_URL__ &middot; Generated <span id="generated-time">__GENERATED_AT__</span></div>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="panels" id="panels"></div>
+
+  <div class="section">
+    <div class="section-title">Throughput</div>
+    <table id="throughput-table">
+      <thead><tr><th>Window</th><th>Completed</th><th>Failed</th><th>Canceled</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="section" style="position:relative;">
+    <div class="section-title">30-Day History</div>
+    <div class="calendar" id="calendar">
+      <div class="cal-header">Mon</div><div class="cal-header">Tue</div><div class="cal-header">Wed</div>
+      <div class="cal-header">Thu</div><div class="cal-header">Fri</div><div class="cal-header">Sat</div>
+      <div class="cal-header">Sun</div>
+    </div>
+    <div class="detail-panel" id="detail-panel">
+    <div class="detail-header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="detail-nav" id="detail-prev" onclick="navigateDay(-1)">&larr;</button>
+        <h2 id="detail-title" style="margin:0;"></h2>
+        <button class="detail-nav" id="detail-next" onclick="navigateDay(1)">&rarr;</button>
+      </div>
+      <button class="detail-close" onclick="closeDetail()">&times;</button>
+    </div>
+    <div class="detail-stats" id="detail-stats"></div>
+    <div id="detail-task-types" class="detail-section"></div>
+    <div id="detail-resources" class="detail-section"></div>
+    <div id="detail-events" class="detail-section"></div>
+  </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Unexplained Wait Incidents</div>
+    <div id="events"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Monthly Throughput</div>
+    <div id="throughput-chart" style="margin-bottom:16px;"></div>
+    <div class="section-title">Monthly Details</div>
+    <table id="monthly-table">
+      <thead><tr><th>Month</th><th>Completed</th><th>Failed</th><th>Total</th><th>Avg Duration</th><th>Events</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="overlay-backdrop" id="queue-backdrop" onclick="closeQueueOverlay()"></div>
+<div class="overlay-panel" id="queue-overlay">
+  <div class="detail-header">
+    <h2>Waiting Tasks by Resource</h2>
+    <button class="detail-close" onclick="closeQueueOverlay()">&times;</button>
+  </div>
+  <div id="queue-content"></div>
+</div>
+
+<script>
+const DATA = __DATA__;
+
+function h(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+function updateBanner() {
+  var banner = document.getElementById("banner");
+  var ageMs = Date.now() - new Date(DATA.generatedAt).getTime();
+  var ageMin = Math.floor(ageMs / 60000);
+
+  if (ageMin > 60) {
+    var ageStr = ageMin >= 120 ? Math.floor(ageMin / 60) + " hours" : ageMin + " minutes";
+    banner.className = "banner banner-crit";
+    banner.textContent = "\u26a0 Stale Data — last updated " + ageStr + " ago";
+    return;
+  }
+
+  if (ageMin > 10) {
+    banner.className = "banner banner-warn";
+    banner.textContent = "\u26a0 Data is " + ageMin + " minutes old";
+    return;
+  }
+
+  if (DATA.activeProblems > 0) {
+    banner.className = "banner banner-crit";
+    banner.textContent = "\u26a0 Tasking System Degraded — " + DATA.activeProblems + " active problem(s)";
+    return;
+  }
+
+  var saturation = (DATA.saturation && DATA.saturation.peak1h) || 0;
+  var recentIncidents = (DATA.incidents || []).filter(function(inc) {
+    return !inc.ongoing && (Date.now() - new Date(inc.end).getTime()) < 30 * 60 * 1000;
+  });
+
+  if (saturation > 0.8 || recentIncidents.length > 0) {
+    var reasons = [];
+    if (saturation > 0.8) reasons.push("worker saturation at " + (saturation * 100).toFixed(0) + "%");
+    if (recentIncidents.length > 0) reasons.push(recentIncidents.length + " recently resolved incident(s)");
+    banner.className = "banner banner-warn";
+    banner.textContent = "\u26a0 Tasking System Elevated — " + reasons.join(", ");
+    return;
+  }
+
+  banner.className = "banner banner-ok";
+  banner.textContent = "\u2713 Tasking System Healthy";
+}
+
+function render() {
+  // Banner
+  updateBanner();
+
+  // Convert generated time to local timezone
+  var genEl = document.getElementById("generated-time");
+  if (genEl && DATA.generatedAt) {
+    genEl.textContent = new Date(DATA.generatedAt).toLocaleString(undefined, { timeZoneName: "short" });
+  }
+
+  // Panels
+  const panels = document.getElementById("panels");
+  const latest = DATA.latest || {};
+  var waitCount = latest.waiting_count ?? 0;
+  var waitCls = waitCount > 100 ? "panel panel-alert-crit" : waitCount > 0 ? "panel panel-alert-warn" : "panel";
+  var waitSub = waitCount > 0 ? '<div style="margin-top:4px;font-size:0.7rem;color:#58a6ff;text-decoration:underline;cursor:pointer;" onclick="showQueueOverlay()">View queue details</div>' : '';
+
+  var panelHtml = '<div class="' + waitCls + '" style="cursor:pointer;" onclick="showQueueOverlay()"><div class="panel-value">' + h(String(waitCount)) + '</div><div class="panel-label">Waiting</div>' + waitSub + '</div>';
+
+  const panelData = [
+    { value: latest.running_count ?? "—", label: "Running" },
+    { value: latest.online_workers ?? "—", label: "Workers" },
+    { value: DATA.saturation.avg1h != null ? (DATA.saturation.avg1h * 100).toFixed(0) + "%" : "—", label: "Avg Saturation (1h)", sublabel: DATA.saturation.peak1h != null ? "peak " + (DATA.saturation.peak1h * 100).toFixed(0) + "%" : "" },
+  ];
+  panelHtml += panelData.map(function(p) {
+    var sub = p.sublabel ? '<div class="panel-label" style="margin-top:2px;">' + h(p.sublabel) + '</div>' : '';
+    return '<div class="panel"><div class="panel-value">' + h(String(p.value)) + '</div><div class="panel-label">' + h(p.label) + '</div>' + sub + '</div>';
+  }).join("");
+  panels.innerHTML = panelHtml;
+
+  // Throughput table
+  var tbody = document.querySelector("#throughput-table tbody");
+  tbody.innerHTML = DATA.throughput.map(function(row) {
+    var failCls = row.failed > 0 ? ' class="num-bad"' : "";
+    return "<tr><td>" + h(row.label) + "</td><td>" + row.completed.toLocaleString() + "</td><td" + failCls + ">" + row.failed.toLocaleString() + "</td><td>" + row.canceled.toLocaleString() + "</td></tr>";
+  }).join("");
+
+  // Calendar — build grid ascending for correct alignment, then reverse rows
+  var cal = document.getElementById("calendar");
+  var days = DATA.daySummaries.slice().sort(function(a, b) { return a.date.localeCompare(b.date); });
+  if (days.length > 0) {
+    var cells = [];
+    var firstDow = new Date(days[0].date + "T00:00:00").getDay();
+    var offset = firstDow === 0 ? 6 : firstDow - 1;
+    for (var i = 0; i < offset; i++) {
+      cells.push('<div class="cal-day cal-gray"></div>');
+    }
+    days.forEach(function(day) {
+      var cls = "cal-none";
+      if (day.maxSeverity === "critical") cls = "cal-red";
+      else if (day.maxSeverity === "warning") cls = "cal-yellow";
+      else if (day.completed > 0 || day.failed > 0 || day.canceled > 0) cls = "cal-green";
+      else cls = "cal-gray";
+
+      var d = new Date(day.date + "T00:00:00");
+      var num = d.getDate();
+      var total = day.completed + day.failed + day.canceled;
+      var tooltip = day.date + "\nCompleted: " + day.completed + "\nFailed: " + day.failed;
+      if (day.eventCount > 0) tooltip += "\nEvents: " + day.eventCount + " (" + h(day.eventTypes.join(", ")) + ")";
+
+      cells.push('<div class="cal-day ' + cls + '" data-date="' + day.date + '" onclick="showDetail(\'' + day.date + '\')"><span class="day-num">' + num + '</span><span class="day-count">' + (total > 0 ? total : "") + '</span><div class="tooltip">' + h(tooltip).replace(/\n/g, "<br>") + '</div></div>');
+    });
+    // Pad last row to 7
+    while (cells.length % 7 !== 0) {
+      cells.push('<div class="cal-day cal-gray"></div>');
+    }
+    // Reverse rows so newest week is on top
+    var rows = [];
+    for (var r = 0; r < cells.length; r += 7) {
+      rows.push(cells.slice(r, r + 7));
+    }
+    rows.reverse();
+    cal.innerHTML += rows.map(function(row) { return row.join(""); }).join("");
+  }
+
+  // Incidents
+  var evDiv = document.getElementById("events");
+  if (DATA.incidents.length === 0) {
+    evDiv.innerHTML = '<div style="color:#8b949e;padding:12px 0;">No unexplained wait incidents recorded.</div>';
+  } else {
+    evDiv.innerHTML = DATA.incidents.map(function(inc) {
+      var startStr = inc.start.replace("T", " ").slice(0, 19) + " UTC";
+      var durationMs = new Date(inc.end).getTime() - new Date(inc.start).getTime();
+      var durationMin = Math.round(durationMs / 60000);
+      var durationStr;
+      if (durationMin < 1) durationStr = "<1 min";
+      else if (durationMin < 60) durationStr = durationMin + " min";
+      else durationStr = (durationMin / 60).toFixed(1) + " hours";
+
+      var bcls = inc.ongoing ? "badge-critical" : "badge-warning";
+      var statusLabel = inc.ongoing ? "ONGOING" : "resolved";
+      var statusLine = inc.ongoing
+        ? '<span class="badge badge-critical" style="animation:pulse 2s infinite;">ONGOING</span> started ' + startStr + ' (' + durationStr + ' so far)'
+        : '<span class="badge badge-warning">resolved</span> ' + startStr + ' — duration: ' + durationStr;
+
+      var taskList = inc.tasks.length > 0
+        ? '<div style="margin-top:4px;font-size:0.75rem;color:#8b949e;">Tasks: ' + inc.tasks.map(function(t) { return h(t.name); }).join(", ") + '</div>'
+        : '';
+
+      return '<div class="event-row" style="flex-direction:column;gap:4px;"><div style="display:flex;gap:10px;align-items:baseline;">' + statusLine + ' <span style="color:#8b949e;font-size:0.75rem;">(' + inc.count + ' detection' + (inc.count > 1 ? 's' : '') + ')</span></div>' + taskList + '</div>';
+    }).join("");
+  }
+
+  // Monthly throughput chart
+  var chartDiv = document.getElementById("throughput-chart");
+  var ms = (DATA.monthlySummaries || []).slice().sort(function(a, b) { return a.month.localeCompare(b.month); });
+  if (ms.length > 0) {
+    var W = 700, H = 200, padL = 55, padR = 20, padT = 15, padB = 30;
+    var chartW = W - padL - padR, chartH = H - padT - padB;
+    var maxVal = Math.max.apply(null, ms.map(function(m) { return m.completed; }));
+    if (maxVal === 0) maxVal = 1;
+
+    function fmtK(n) { return n >= 1000 ? (n / 1000).toFixed(0) + "K" : String(n); }
+
+    var points = ms.map(function(m, i) {
+      var x = padL + (ms.length === 1 ? chartW / 2 : i * chartW / (ms.length - 1));
+      var y = padT + chartH - (m.completed / maxVal) * chartH;
+      return { x: x, y: y, data: m };
+    });
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-width:' + W + 'px;height:auto;" xmlns="http://www.w3.org/2000/svg">';
+
+    // Grid lines
+    for (var g = 0; g <= 4; g++) {
+      var gy = padT + chartH - (g / 4) * chartH;
+      var gv = Math.round(maxVal * g / 4);
+      svg += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" stroke="#21262d" stroke-width="1"/>';
+      svg += '<text x="' + (padL - 8) + '" y="' + (gy + 4) + '" fill="#8b949e" font-size="11" text-anchor="end">' + fmtK(gv) + '</text>';
+    }
+
+    // Completed line
+    if (points.length > 1) {
+      var linePts = points.map(function(p) { return p.x + "," + p.y; }).join(" ");
+      svg += '<polyline points="' + linePts + '" fill="none" stroke="#3fb950" stroke-width="2"/>';
+    }
+
+    // Data points with tooltips
+    points.forEach(function(p) {
+      svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#3fb950" stroke="#0d1117" stroke-width="2">';
+      svg += '<title>' + p.data.month + ': ' + p.data.completed.toLocaleString() + ' completed, ' + p.data.failed.toLocaleString() + ' failed</title>';
+      svg += '</circle>';
+    });
+
+    // X-axis labels
+    points.forEach(function(p) {
+      var label = p.data.month.slice(5);
+      var monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      var mi = parseInt(label, 10) - 1;
+      var mlabel = monthNames[mi] || label;
+      svg += '<text x="' + p.x + '" y="' + (H - 5) + '" fill="#8b949e" font-size="11" text-anchor="middle">' + mlabel + '</text>';
+    });
+
+    // Failed line (if any failures exist)
+    var hasFailed = ms.some(function(m) { return m.failed > 0; });
+    if (hasFailed) {
+      var maxFailed = Math.max.apply(null, ms.map(function(m) { return m.failed; }));
+      if (maxFailed > 0) {
+        var failPts = ms.map(function(m, i) {
+          var x = padL + (ms.length === 1 ? chartW / 2 : i * chartW / (ms.length - 1));
+          var y = padT + chartH - (m.failed / maxVal) * chartH;
+          return x + "," + y;
+        }).join(" ");
+        if (ms.length > 1) {
+          svg += '<polyline points="' + failPts + '" fill="none" stroke="#f85149" stroke-width="1.5" stroke-dasharray="4,3"/>';
+        }
+      }
+    }
+
+    svg += '</svg>';
+    chartDiv.innerHTML = svg;
+  } else {
+    chartDiv.innerHTML = '<div style="color:#8b949e;padding:12px 0;">No monthly data available yet.</div>';
+  }
+
+  // Monthly details table
+  var monthlyBody = document.getElementById("monthly-table").querySelector("tbody");
+  if (ms.length > 0) {
+    monthlyBody.innerHTML = ms.slice().reverse().map(function(m) {
+      var avgDur = m.avgDuration != null ? m.avgDuration.toFixed(1) + "s" : "—";
+      var failedCls = m.failed > 0 ? " num-bad" : "";
+      return "<tr><td>" + h(m.month) + "</td><td>" + m.completed.toLocaleString() + "</td><td class='" + failedCls.trim() + "'>" + m.failed.toLocaleString() + "</td><td>" + m.total.toLocaleString() + "</td><td>" + avgDur + "</td><td>" + m.eventCount + "</td></tr>";
+    }).join("");
+  } else {
+    monthlyBody.innerHTML = '<tr><td colspan="6" style="color:#8b949e;">No monthly data available yet.</td></tr>';
+  }
+}
+
+var selectedDate = null;
+var sortedDates = DATA.daySummaries.map(function(d) { return d.date; }).sort();
+
+function showQueueOverlay() {
+  var queues = (DATA.latest && DATA.latest.resource_queues) || [];
+  var content = document.getElementById("queue-content");
+  if (queues.length === 0) {
+    content.innerHTML = '<div style="color:#8b949e;padding:12px 0;">No tasks waiting.</div>';
+  } else {
+    var html = '<table class="detail-table"><thead><tr><th>Resource</th><th>Waiting</th><th>Status</th></tr></thead><tbody>';
+    queues.forEach(function(q) {
+      var statusCls = q.status === "anomaly" ? "queue-anomaly" : "queue-normal";
+      var statusLabel = q.status === "anomaly" ? "Unexplained" : "Normal";
+      html += '<tr><td class="resource-list">' + h(q.resource) + '</td><td>' + q.waiting + '</td><td class="' + statusCls + '">' + statusLabel + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    content.innerHTML = html;
+  }
+  document.getElementById("queue-backdrop").classList.add("visible");
+  document.getElementById("queue-overlay").classList.add("visible");
+}
+
+function closeQueueOverlay() {
+  document.getElementById("queue-backdrop").classList.remove("visible");
+  document.getElementById("queue-overlay").classList.remove("visible");
+}
+
+function closeDetail() {
+  document.getElementById("detail-panel").classList.remove("visible");
+  document.querySelectorAll(".cal-day.selected").forEach(function(el) { el.classList.remove("selected"); });
+  selectedDate = null;
+}
+
+function navigateDay(offset) {
+  if (!selectedDate) return;
+  var idx = sortedDates.indexOf(selectedDate);
+  var newIdx = idx + offset;
+  if (newIdx >= 0 && newIdx < sortedDates.length) {
+    showDetail(sortedDates[newIdx]);
+  }
+}
+
+function showDetail(dateKey) {
+  if (selectedDate === dateKey) { closeDetail(); return; }
+  selectedDate = dateKey;
+
+  document.querySelectorAll(".cal-day.selected").forEach(function(el) { el.classList.remove("selected"); });
+  document.querySelectorAll('.cal-day[data-date="' + dateKey + '"]').forEach(function(el) { el.classList.add("selected"); });
+
+  var detail = DATA.dayDetails[dateKey];
+  var summary = DATA.daySummaries.find(function(d) { return d.date === dateKey; });
+  if (!detail || !summary) return;
+
+  document.getElementById("detail-title").textContent = dateKey;
+
+  var totalTasks = detail.completed + detail.failed + detail.canceled;
+
+  var statsDiv = document.getElementById("detail-stats");
+  var stats = [
+    { value: totalTasks, label: "Total Tasks" },
+    { value: detail.completed, label: "Completed" },
+    { value: detail.failed, label: "Failed" },
+    { value: detail.canceled, label: "Canceled" },
+    { value: detail.avgDuration, label: "Avg Duration" },
+    { value: summary.eventCount, label: "Events" },
+  ];
+  statsDiv.innerHTML = stats.map(function(s) {
+    var cls = (s.label === "Failed" && s.value > 0) ? " num-bad" : "";
+    return '<div class="detail-stat"><div class="detail-stat-value' + cls + '">' + h(String(s.value)) + '</div><div class="detail-stat-label">' + h(s.label) + '</div></div>';
+  }).join("");
+
+  var ttDiv = document.getElementById("detail-task-types");
+  if (detail.taskTypes.length > 0) {
+    var ttHtml = '<div class="detail-section-title">Task Types</div><table class="detail-table"><thead><tr><th>Task Type</th><th>Count</th><th>Avg Duration</th></tr></thead><tbody>';
+    detail.taskTypes.forEach(function(tt) {
+      ttHtml += "<tr><td>" + h(tt.name) + "</td><td>" + tt.count + "</td><td>" + h(tt.avgDuration) + "</td></tr>";
+    });
+    ttHtml += "</tbody></table>";
+    ttDiv.innerHTML = ttHtml;
+  } else {
+    ttDiv.innerHTML = "";
+  }
+
+  var resDiv = document.getElementById("detail-resources");
+  if (detail.topResources.length > 0) {
+    var resHtml = '<div class="detail-section-title">Top Resources</div><table class="detail-table"><thead><tr><th>Resource</th><th>Exclusive</th><th>Shared</th></tr></thead><tbody>';
+    detail.topResources.forEach(function(r) {
+      resHtml += "<tr><td class='resource-list'>" + h(r.resource) + "</td><td>" + r.exclusive + "</td><td>" + r.shared + "</td></tr>";
+    });
+    resHtml += "</tbody></table>";
+    resDiv.innerHTML = resHtml;
+  } else {
+    resDiv.innerHTML = "";
+  }
+
+  var evDiv = document.getElementById("detail-events");
+  if (detail.events.length > 0) {
+    var evHtml = '<div class="detail-section-title">Events</div>';
+    detail.events.sort(function(a, b) { return b.timestamp.localeCompare(a.timestamp); }).forEach(function(ev) {
+      var bcls = "badge-" + ev.severity;
+      evHtml += '<div class="event-row"><span class="event-time">' + h(ev.timestamp.replace("T", " ").slice(0, 19)) + ' UTC</span><span class="badge ' + bcls + '">' + h(ev.severity) + '</span><span class="event-detail">' + h(ev.event_type) + (ev.task_name ? " — " + h(ev.task_name) : "") + '</span></div>';
+    });
+    evDiv.innerHTML = evHtml;
+  } else {
+    evDiv.innerHTML = "";
+  }
+
+  var idx = sortedDates.indexOf(dateKey);
+  document.getElementById("detail-prev").disabled = (idx <= 0);
+  document.getElementById("detail-next").disabled = (idx >= sortedDates.length - 1);
+
+  var panel = document.getElementById("detail-panel");
+  panel.classList.add("visible");
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+render();
+setInterval(updateBanner, 60000);
+</script>
+</body>
+</html>

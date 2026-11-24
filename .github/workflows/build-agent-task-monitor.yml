@@ -1,0 +1,67 @@
+name: Build agent-task-monitor
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/agents/agent-task-monitor/**'
+      - 'tools/agents/shared/**'
+      - 'tools/agents/go.work'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (default: auto-generated)'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+      - name: Test
+        working-directory: tools/agents/agent-task-monitor
+        run: go vet ./... && go test ./...
+      - name: Build
+        working-directory: tools/agents/agent-task-monitor
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o agent-task-monitor .
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: agent-task-monitor
+          path: tools/agents/agent-task-monitor/agent-task-monitor
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="agent-task-monitor-$(date +'%Y%m%d')-${GITHUB_SHA::7}"
+          fi
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Download binary artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: agent-task-monitor
+          path: .
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          chmod +x agent-task-monitor
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" agent-task-monitor --clobber
+          else
+            gh release create "$TAG" \
+              --title "agent-task-monitor $TAG" \
+              agent-task-monitor
+          fi
