@@ -47,4 +47,4 @@ credentials:
 
 schedule:
   cron: "*/5 * * * *"
-  enabled: false
+  enabled: true
