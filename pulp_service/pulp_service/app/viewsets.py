@@ -66,12 +66,19 @@ from pulp_service.app.content_view_viewsets import (  # noqa: F401
     RpmContentViewPackageListViewSet,
     RpmContentViewPackageSearchViewSet,
 )
-from pulp_service.app.models import AndGateContentGuard, FeatureContentGuard, PyPIYankMonitor, YankedPackageReport
+from pulp_service.app.models import (
+    AndGateContentGuard,
+    FeatureContentGuard,
+    KesselContentGuard,
+    PyPIYankMonitor,
+    YankedPackageReport,
+)
 from pulp_service.app.models import VulnerabilityReport as VulnReport
 from pulp_service.app.serializers import (
     AndGateContentGuardSerializer,
     ContentScanSerializer,
     FeatureContentGuardSerializer,
+    KesselContentGuardSerializer,
     NpmManifestBackfillSerializer,
     PublicDebugAuthenticationHeadersSerializer,
     PyPIYankMonitorSerializer,
@@ -255,6 +262,77 @@ class FeatureContentGuardViewSet(ContentGuardViewSet, RolesMixin):
             "service.manage_roles_featurecontentguard",
         ],
         "service.featurecontentguard_viewer": ["service.view_featurecontentguard"],
+    }
+
+
+class KesselContentGuardViewSet(ContentGuardViewSet, RolesMixin):
+    """
+    Content guard to protect content with Kessel permission checks.
+    """
+
+    endpoint_name = "kessel"
+    queryset = KesselContentGuard.objects.all()
+    serializer_class = KesselContentGuardSerializer
+    queryset_filtering_required_permission = "service.view_kesselcontentguard"
+
+    DEFAULT_ACCESS_POLICY = {
+        "statements": [
+            {"action": ["list", "my_permissions"], "principal": "authenticated", "effect": "allow"},
+            {
+                "action": ["create"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_perms:service.add_kesselcontentguard",
+            },
+            {
+                "action": ["retrieve"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.view_kesselcontentguard",
+            },
+            {
+                "action": ["update", "partial_update"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.change_kesselcontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_kesselcontentguard",
+                ],
+            },
+            {
+                "action": ["destroy"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": [
+                    "has_model_or_domain_or_obj_perms:service.delete_kesselcontentguard",
+                    "has_model_or_domain_or_obj_perms:service.view_kesselcontentguard",
+                ],
+            },
+            {
+                "action": ["list_roles", "add_role", "remove_role"],
+                "principal": "authenticated",
+                "effect": "allow",
+                "condition": "has_model_or_domain_or_obj_perms:service.manage_roles_kesselcontentguard",
+            },
+        ],
+        "creation_hooks": [
+            {
+                "function": "add_roles_for_object_creator",
+                "parameters": {"roles": "service.kesselcontentguard_owner"},
+            }
+        ],
+        "queryset_scoping": {"function": "scope_queryset"},
+    }
+
+    LOCKED_ROLES = {
+        "service.kesselcontentguard_creator": ["service.add_kesselcontentguard"],
+        "service.kesselcontentguard_owner": [
+            "service.view_kesselcontentguard",
+            "service.change_kesselcontentguard",
+            "service.delete_kesselcontentguard",
+            "service.manage_roles_kesselcontentguard",
+        ],
+        "service.kesselcontentguard_viewer": ["service.view_kesselcontentguard"],
     }
 
 

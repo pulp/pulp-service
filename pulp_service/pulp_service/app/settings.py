@@ -17,6 +17,12 @@ FEATURE_SERVICE_API_CERT_PATH = ""
 # malformed timeout value and raises a ValueError.
 FEATURE_SERVICE_API_CONNECT_TIMEOUT = 2
 FEATURE_SERVICE_API_READ_TIMEOUT = 5
+# Kessel (KesselContentGuard); set via PULP_KESSEL_* env vars in deploy/clowdapp.yaml.
+KESSEL_URL = ""  # Kessel Inventory gRPC host:port, no scheme (TLS when client credentials are set)
+KESSEL_TOKEN_URL = ""
+KESSEL_CLIENT_ID = ""
+KESSEL_CLIENT_SECRET = ""
+KESSEL_RBAC_URL = ""
 AUTHENTICATION_HEADER_DEBUG = False
 INSTALLED_APPS = "@merge django.contrib.admin.apps.SimpleAdminConfig,hijack,hijack.contrib.admin"
 TEST_TASK_INGESTION = False
