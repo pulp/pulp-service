@@ -1,0 +1,1 @@
+Patched pulpcore so creating a repository version from a large base_version inserts RepositoryContent rows in bounded batches, eliminating the multi-GB memory spike that could OOM a worker (pulpcore #8374).
