@@ -39,6 +39,13 @@ The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
 
+### 0084 - Batch RepositoryContent inserts in add_content
+
+- **Package:** pulpcore
+- **Files:** `pulpcore/app/models/repository.py`
+- **Description:** `RepositoryVersion.add_content()` materialized one `RepositoryContent` instance per content unit into a single Python list and then called `RepositoryContent.objects.bulk_create()` with no `batch_size`. For a large `base_version` (millions of units, e.g. a ~2M-unit copy) the per-instance list alone consumes several GB of RAM, scaling linearly with repository size, and can trigger an OOM kill of a memory-constrained worker (8 GiB observed). Fix: introduce a module-level `REPOSITORY_CONTENT_BATCH_SIZE = 2000` and construct + insert the `RepositoryContent` rows in fixed-size batches, so peak memory is O(batch) instead of O(len(to_add)). The to-add pks are sorted before batching so concurrent inserts acquire row locks in a consistent order. Delivers the fix for https://github.com/pulp/pulpcore/issues/8374.
+- **Upstream:** not yet submitted (GitHub issue [pulp/pulpcore#8374](https://github.com/pulp/pulpcore/issues/8374) open; PR deferred). The fix + a discriminating unit test are committed on the local pulpcore branch `8374-batch-repository-content`. Drop this patch once a pulpcore release containing the change is pinned.
+
 ### 0083 - Per-domain DB application_name for Performance Insights
 
 - **Package:** pulpcore
