@@ -176,7 +176,7 @@ def _teardown_service_domains(created, pulpcore_bindings, bindings_cfg, monitor_
 
 
 @pytest.fixture
-def create_service_domain(pulpcore_bindings, bindings_cfg, template_domain_s3, monitor_task):
+def create_service_domain(pulpcore_bindings, bindings_cfg, template_domain_s3, monitor_task):  # noqa: ARG001
     """Create a domain via the self-service ``POST /api/pulp/create-domain/`` endpoint.
 
     New users are granted ``core.domain_creator`` on creation, so a non-admin user

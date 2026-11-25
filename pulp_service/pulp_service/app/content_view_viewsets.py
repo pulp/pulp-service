@@ -380,14 +380,10 @@ def parse_sort_by(value, allowed, default):
     descending = value.startswith("-")
     field = value[1:] if descending else value
     if field not in allowed:
-        raise ValidationError(
-            {
-                "sort_by": [
-                    f"Unsupported sort field {field!r}. Allowed: {', '.join(allowed)} "
-                    "(prefix with '-' for descending order)."
-                ]
-            }
+        message = (
+            f"Unsupported sort field {field!r}. Allowed: {', '.join(allowed)} (prefix with '-' for descending order)."
         )
+        raise ValidationError({"sort_by": [message]})
     return field, descending
 
 

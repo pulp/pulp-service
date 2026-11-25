@@ -166,7 +166,7 @@ COMPS_B = _comps_xml(
 )
 
 
-def _advisory(advisory_id, *, type_, severity, issued, title=None, summary=None, cves=()):
+def _advisory(advisory_id, *, type_, severity, issued, cves=(), **overrides):
     # The advisory upload format names the reference fields "id"/"type" (stored as ref_id/ref_type).
     references = [{"href": f"https://cve.example/{cve}", "id": cve, "title": cve, "type": "cve"} for cve in cves]
     if cves:
@@ -177,8 +177,8 @@ def _advisory(advisory_id, *, type_, severity, issued, title=None, summary=None,
         "severity": severity,
         "issued": issued,
         "updated": issued,
-        "title": title or f"{advisory_id} title",
-        "summary": summary or f"{advisory_id} summary",
+        "title": f"{advisory_id} title",
+        "summary": f"{advisory_id} summary",
         "description": "",
         "solution": "",
         "release": "1",
@@ -203,6 +203,7 @@ def _advisory(advisory_id, *, type_, severity, issued, title=None, summary=None,
             }
         ],
     }
+    advisory.update(overrides)
     return advisory
 
 
