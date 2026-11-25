@@ -50,7 +50,7 @@ class TestContentViewCRUD:
         assert content_view.name == name
         assert content_view.description == "test content view"
         assert len(content_view.distributions) == 1
-        assert content_view.distributions_status[0]["status"] == "ok"
+        assert content_view.distributions_status[0].status == "ok"
 
         fetched = service_bindings.ContentViewsApi.read(content_view.pulp_href)
         assert fetched.pulp_href == content_view.pulp_href
@@ -83,9 +83,7 @@ class TestContentViewCrossDomainSearch:
     def test_packages_list_search(self, two_domain_content_views, service_bindings):
         _domain_a, domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        result = service_bindings.ContentViewsSearchRpmPackagesListApi.list(
-            service_content_view_href=content_view.pulp_href
-        )
+        result = service_bindings.ContentViewsRpmPackagesListApi.list(service_content_view_href=content_view.pulp_href)
         assert result.count == 2 * RPM_PACKAGE_COUNT
         domains_seen = {href.split("/")[3] for href in (r.pulp_href for r in result.results)}
         assert domain_b.name in domains_seen
@@ -93,7 +91,7 @@ class TestContentViewCrossDomainSearch:
     def test_packages_typeahead_search_is_limited(self, two_domain_content_views, service_bindings):
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        result = service_bindings.ContentViewsSearchRpmPackagesApi.list(
+        result = service_bindings.ContentViewsRpmPackagesApi.list(
             service_content_view_href=content_view.pulp_href, limit=5
         )
         assert len(result.results) <= 5
@@ -101,23 +99,19 @@ class TestContentViewCrossDomainSearch:
     def test_errata_search(self, two_domain_content_views, service_bindings):
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        result = service_bindings.ContentViewsSearchRpmErrataApi.list(service_content_view_href=content_view.pulp_href)
+        result = service_bindings.ContentViewsRpmErrataApi.list(service_content_view_href=content_view.pulp_href)
         assert result.count == 2 * RPM_ADVISORY_COUNT
 
     def test_package_groups_search(self, two_domain_content_views, service_bindings):
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        result = service_bindings.ContentViewsSearchRpmPackageGroupsApi.list(
-            service_content_view_href=content_view.pulp_href
-        )
+        result = service_bindings.ContentViewsRpmPackageGroupsApi.list(service_content_view_href=content_view.pulp_href)
         assert isinstance(result.results, list)
 
     def test_environments_search(self, two_domain_content_views, service_bindings):
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        result = service_bindings.ContentViewsSearchRpmEnvironmentsApi.list(
-            service_content_view_href=content_view.pulp_href
-        )
+        result = service_bindings.ContentViewsRpmEnvironmentsApi.list(service_content_view_href=content_view.pulp_href)
         assert isinstance(result.results, list)
 
     def test_module_streams_search(self, two_domain_content_views, service_bindings):
@@ -125,9 +119,7 @@ class TestContentViewCrossDomainSearch:
         # verifies the endpoint responds correctly (empty results) rather than erroring.
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        result = service_bindings.ContentViewsSearchRpmModuleStreamsApi.list(
-            service_content_view_href=content_view.pulp_href
-        )
+        result = service_bindings.ContentViewsRpmModuleStreamsApi.list(service_content_view_href=content_view.pulp_href)
         assert result.results == []
 
 
@@ -136,12 +128,10 @@ class TestContentViewErrataFilters:
     def test_pagination(self, two_domain_content_views, service_bindings):
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        all_errata = service_bindings.ContentViewsSearchRpmErrataApi.list(
-            service_content_view_href=content_view.pulp_href
-        )
+        all_errata = service_bindings.ContentViewsRpmErrataApi.list(service_content_view_href=content_view.pulp_href)
         assert len(all_errata.results) == 2 * RPM_ADVISORY_COUNT
 
-        page = service_bindings.ContentViewsSearchRpmErrataApi.list(
+        page = service_bindings.ContentViewsRpmErrataApi.list(
             service_content_view_href=content_view.pulp_href, limit=1, offset=1
         )
         assert len(page.results) == 1
@@ -150,12 +140,10 @@ class TestContentViewErrataFilters:
     def test_sort_by_descending(self, two_domain_content_views, service_bindings):
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        all_errata = service_bindings.ContentViewsSearchRpmErrataApi.list(
-            service_content_view_href=content_view.pulp_href
-        )
+        all_errata = service_bindings.ContentViewsRpmErrataApi.list(service_content_view_href=content_view.pulp_href)
         all_ids = [erratum.id for erratum in all_errata.results]
 
-        sorted_desc = service_bindings.ContentViewsSearchRpmErrataApi.list(
+        sorted_desc = service_bindings.ContentViewsRpmErrataApi.list(
             service_content_view_href=content_view.pulp_href, sort_by="-id"
         )
         sorted_ids = [erratum.id for erratum in sorted_desc.results]
@@ -164,12 +152,10 @@ class TestContentViewErrataFilters:
     def test_type_filter(self, two_domain_content_views, service_bindings):
         _domain_a, _domain_b, _dist_a, _dist_b, content_view = two_domain_content_views
 
-        all_errata = service_bindings.ContentViewsSearchRpmErrataApi.list(
-            service_content_view_href=content_view.pulp_href
-        )
+        all_errata = service_bindings.ContentViewsRpmErrataApi.list(service_content_view_href=content_view.pulp_href)
         known_type = all_errata.results[0].type
 
-        filtered = service_bindings.ContentViewsSearchRpmErrataApi.list(
+        filtered = service_bindings.ContentViewsRpmErrataApi.list(
             service_content_view_href=content_view.pulp_href, type=known_type
         )
         assert filtered.count > 0
@@ -194,18 +180,18 @@ class TestContentViewRBACExclusion:
 
         with limited_user:
             fetched = service_bindings.ContentViewsApi.read(content_view.pulp_href)
-            statuses = {entry["domain"]: entry["status"] for entry in fetched.distributions_status}
+            statuses = {entry.domain: entry.status for entry in fetched.distributions_status}
             assert statuses[domain_a.name] == "ok"
             assert statuses[domain_b.name] == "no_domain_access"
 
-            result = service_bindings.ContentViewsSearchRpmPackagesListApi.list(
+            result = service_bindings.ContentViewsRpmPackagesListApi.list(
                 service_content_view_href=content_view.pulp_href
             )
             assert result.count == RPM_PACKAGE_COUNT
             domains_seen = {href.split("/")[3] for href in (r.pulp_href for r in result.results)}
             assert domains_seen == {domain_a.name}
 
-            errata_result = service_bindings.ContentViewsSearchRpmErrataApi.list(
+            errata_result = service_bindings.ContentViewsRpmErrataApi.list(
                 service_content_view_href=content_view.pulp_href
             )
             assert errata_result.count == RPM_ADVISORY_COUNT

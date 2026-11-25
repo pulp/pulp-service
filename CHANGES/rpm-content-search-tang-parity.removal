@@ -1,0 +1,4 @@
+Content search errata ``severity`` values are now matched exactly and case-sensitively, and
+``type``/``severity`` values other than the special ``other``/``Unknown`` no longer act as a
+catch-all. An unsupported ``sort_by`` value is now a ``400`` instead of silently falling back to
+the default order.

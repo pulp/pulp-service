@@ -29,6 +29,7 @@ from pulp_service.app.content_view_serializers import (  # noqa: F401
     ContentViewModuleStreamSerializer,
     ContentViewPackageEnvironmentSerializer,
     ContentViewPackageGroupSerializer,
+    ContentViewPackageNameSerializer,
     ContentViewPackageSerializer,
     ContentViewSerializer,
     ContentViewUpdateReferenceSerializer,
