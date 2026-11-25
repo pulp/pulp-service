@@ -27,7 +27,7 @@ jobs:
         working-directory: tools/agents/agent-task-monitor
         run: CGO_ENABLED=0 go build -ldflags="-s -w" -o agent-task-monitor .
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: agent-task-monitor
           path: tools/agents/agent-task-monitor/agent-task-monitor
@@ -48,7 +48,7 @@ jobs:
           fi
           echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Download binary artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: agent-task-monitor
           path: .
