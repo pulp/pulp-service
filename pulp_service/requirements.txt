@@ -4,7 +4,7 @@ solv>=0.7.21,<0.7.38
 pulp-python==3.38.0
 pulp-npm==0.11.0
 pulp-container==2.29.0
-pulp-maven==0.37.2
+pulp-maven==0.38.0
 pulp-cli
 requests
 sentry-sdk
