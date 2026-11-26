@@ -34,8 +34,13 @@ _index=rh_akamai "packages.redhat.com"
   single message (`| limit 1`) and check which fields actually exist.** `_messagetime` is the
   event time (UTC).
 - To build error groups, start with an aggregate:
-  `... | count by statuscode, reqmethod, reqpath | sort by _count desc`. Then pull 1–3 sample
-  messages per group by adding `and reqpath = "<path>"` to the `where` clause, with `| limit 3`.
+  `... | count by statuscode, reqmethod, reqpath | sort by _count desc`. The rows are raw paths:
+  before ranking, roll them up into error groups by normalizing each `reqpath` to its endpoint
+  pattern (see "Report format") and summing the counts of rows that share status code, method and
+  endpoint pattern. Rank and budget the error groups, never the raw rows.
+- Then pull 1–3 sample messages per group by adding
+  `and statuscode = "<status>" and reqmethod = "<METHOD>" and reqpath = "<path>"` to the `where`
+  clause (one of the group's raw paths), with `| limit 3`. Never take samples filtered by path alone.
 - `errorcode` and `breadcrumbs` often show an edge-generated error (origin connect failure,
   origin timeout, edge read timeout). Note them; they are evidence for the classification.
 
@@ -45,7 +50,9 @@ For each sample request, query a window of **±2 minutes around the Akamai times
 (absolute `start_time`/`end_time` in UTC) with `query=trace` and `match=<request path
 without query string>`. If that returns too many rows, narrow `match` to a more specific
 path segment, or use a raw query filtering on both path and the client IP (Akamai `cliip`
-appears in the Envoy `xff` field).
+appears in the Envoy `xff` field). `match` is a substring match, so it also returns longer paths
+that share the prefix: only use a line whose method and path (without query string) are exactly
+those of the sample request.
 
 When you write a raw query that uses `parse`, choose the output columns with `display`, never
 `fields`. Logs Insights rejects `fields <parsed field>` after a `parse` with
@@ -122,6 +129,7 @@ Otherwise set `Contributing cause: none found`.
 ## Classification: where was the error emitted?
 
 Decide the origin for each sample request with this table, then roll it up per error group.
+If the samples of one group show different origins, split the group into one group per origin.
 
 | Evidence | Error origin |
 |---|---|
@@ -141,11 +149,19 @@ Akamai data alone.
 
 ## Budget
 
-Each CloudWatch query takes 5–30 s. Trace at most **5 error groups**, ordered by volume, and
-at most **2 sample requests per group**. If more than 2 samples in a group already agree on
-the origin, stop tracing that group.
+Each CloudWatch query takes 5–30 s. Trace at most **5 error groups**, ordered by the rolled-up
+group volume (not by raw path), and at most **2 sample requests per group**. If more than 2
+samples in a group already agree on the origin, stop tracing that group.
 
 ## Report format
+
+An error group is one error origin + `statuscode` + `reqmethod` + endpoint pattern. Requests of
+the same status, method and endpoint pattern emitted by different hops are separate groups. The
+endpoint pattern is the request path with only generated identifiers replaced: numeric ids →
+`<id>`, UUIDs → `<uuid>`, digests → `<digest>`, and, for content downloads, the file path after
+the distribution base path → `<file>`. Keep domain names, distribution base paths, resource and action names literal. Never
+merge different literal paths into one group, even if they share the status code and method:
+errors of the same class on different paths usually have different root causes.
 
 For each error group:
 

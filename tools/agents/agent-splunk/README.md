@@ -22,7 +22,9 @@ client → Akamai (Sumo Logic: _index=rh_akamai) → NSGW Envoy gateway (CloudWa
 Requests are correlated by method, path, and timestamp (± 2 min); the Akamai client IP appears in the
 Envoy `x-forwarded-for` field, and pulp-api correlation IDs link the access line to tracebacks.
 The origin is decided from the Envoy response flags and details (see `skills/trace-requests.md`,
-which is embedded into the system prompt). Jira issues are grouped by error origin, HTTP method, and endpoint.
+which is embedded into the system prompt). Jira issues are keyed by error origin, HTTP method, exact HTTP status
+code, and normalized endpoint path (only generated identifiers such as ids, UUIDs, digests and content file paths
+are replaced); an existing issue is reused only when all four match. An unconfirmed origin is keyed as `unknown`.
 
 CloudWatch is optional: without AWS credentials, the agent still analyzes the Akamai logs but reports the origin as
 `unknown (trace unavailable)`.
