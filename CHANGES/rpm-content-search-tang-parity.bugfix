@@ -1,0 +1,11 @@
+Fixed the ad-hoc ``rpm/content-search/`` and ``content-views/{pk}/search/rpm/...`` endpoints
+disagreeing with their own OpenAPI schema, which broke generated clients: every list response now
+includes ``count``, and errata ``cves`` and module-stream ``packages`` are typed as lists.
+Also fixed: paging across several domains skipping or repeating rows when names differ in case
+(results now sort case-insensitively, the same for one domain or many); offsets above 10,000
+being silently clamped; one database query per result row. Errata now default to newest
+``issued_date`` first with a stable tie-breaker, match ``search`` against id, title and summary,
+and filter severity by Pulp's values (``Critical``, ``Important``, ``Moderate``, ``Low``, with
+``Unknown`` for anything else) and type with ``other`` covering everything except
+``security``/``bugfix``/``enhancement``. Module streams return one row (the lowest version) per
+name and stream, ``search`` matches the module name only, and ``limit`` defaults to 5000.

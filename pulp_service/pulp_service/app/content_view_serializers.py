@@ -1,5 +1,6 @@
 from gettext import gettext as _
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from pulpcore.plugin.models import Distribution
@@ -87,6 +88,7 @@ class ContentViewSerializer(ModelSerializer):
         )
     )
 
+    @extend_schema_field(ContentViewDistributionStatusSerializer(many=True))
     def get_distributions_status(self, obj):
         request = self.context.get("request")
         user = getattr(request, "user", None) if request else None
@@ -133,6 +135,16 @@ class ContentViewPackageSerializer(serializers.Serializer):
     is_modular = serializers.BooleanField(help_text=_("Whether the package is modular"))
 
 
+class ContentViewPackageNameSerializer(serializers.Serializer):
+    """
+    A distinct package name (with the summary of one of its packages), for the ad-hoc
+    ``rpm/content-search/package-names`` typeahead endpoint.
+    """
+
+    name = serializers.CharField(help_text=_("Name of the package"))
+    summary = serializers.CharField(help_text=_("Short description of the packaged software"))
+
+
 class ContentViewPackageGroupSerializer(serializers.Serializer):
     """A representation of a PackageGroup for Content View search results."""
 
@@ -157,8 +169,8 @@ class ContentViewUpdateReferenceSerializer(serializers.Serializer):
     """A representation of an UpdateReference, used to surface CVEs on errata search results."""
 
     href = serializers.CharField(help_text=_("Reference URL"))
-    ref_id = serializers.CharField(help_text=_("ID of the reference"))
-    title = serializers.CharField(help_text=_("Title of the reference"))
+    ref_id = serializers.CharField(help_text=_("ID of the reference"), allow_null=True)
+    title = serializers.CharField(help_text=_("Title of the reference"), allow_null=True)
     ref_type = serializers.CharField(help_text=_("Type of the reference, e.g. 'cve'"))
 
 
@@ -167,7 +179,7 @@ class ContentViewErrataSerializer(serializers.Serializer):
 
     pulp_href = IdentityField(view_name="content-rpm/advisories-detail")
     id = serializers.CharField(help_text=_("Update id (e.g. RHEA-2013:1777)"))
-    updated_date = serializers.CharField(help_text=_("Date when the update was updated"))
+    updated_date = serializers.CharField(help_text=_("Date when the update was updated"), allow_null=True)
     issued_date = serializers.CharField(help_text=_("Date when the update was issued"))
     description = serializers.CharField(help_text=_("Update description"))
     title = serializers.CharField(help_text=_("Update name"))
@@ -181,6 +193,7 @@ class ContentViewErrataSerializer(serializers.Serializer):
     reboot_suggested = serializers.BooleanField(help_text=_("Whether a reboot is suggested"))
     cves = serializers.SerializerMethodField(help_text=_("CVE references attached to this errata"))
 
+    @extend_schema_field(ContentViewUpdateReferenceSerializer(many=True))
     def get_cves(self, obj):
         return ContentViewUpdateReferenceSerializer(
             [ref for ref in obj.references.all() if ref.ref_type == "cve"], many=True
@@ -200,5 +213,7 @@ class ContentViewModuleStreamSerializer(serializers.Serializer):
     profiles = serializers.JSONField(help_text=_("Package lists of installable profiles"))
     packages = serializers.SerializerMethodField(help_text=_("Names of packages in this module"))
 
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
     def get_packages(self, obj):
-        return list(obj.packages.values_list("name", flat=True))
+        # Reads the prefetched relation (see module_stream_search), so this issues no query.
+        return sorted({package.name for package in obj.packages.all()})

@@ -5,7 +5,10 @@ from urllib.parse import urljoin
 import pytest
 import requests
 
+from pulpcore.client.pulp_rpm import RpmRepositorySyncURL
 from pulpcore.tests.functional.utils import BindingsNamespace
+
+from pulp_rpm.tests.functional.constants import RPM_SIGNED_FIXTURE_URL
 
 # Bindings API Fixtures
 
@@ -39,6 +42,59 @@ def pypi_yank_monitor_api(service_bindings):
 def service_content_guards_api_client(service_bindings):
     """Api for service content guards."""
     return service_bindings.ContentguardsFeatureApi
+
+
+@pytest.fixture(scope="class")
+def rpm_domain_factory(pulpcore_bindings, rpm_rpmremote_api, rpm_repository_api, gen_object_with_cleanup, monitor_task):
+    """
+    Create an RPM repository -- optionally synced (``on_demand``, so only metadata is stored) --
+    in a new FileSystem-storage domain, or in ``pulp_domain`` if given.
+
+    Returns ``(domain, remote, repository)``; ``remote`` is None when ``url`` is None.
+    """
+
+    def _create(url=RPM_SIGNED_FIXTURE_URL, sync=True, pulp_domain=None):
+        if pulp_domain is None:
+            pulp_domain = gen_object_with_cleanup(
+                pulpcore_bindings.DomainsApi,
+                {
+                    "name": str(uuid.uuid4()),
+                    "storage_class": "pulpcore.app.models.storage.FileSystem",
+                    "storage_settings": {"MEDIA_ROOT": "/var/lib/pulp/media/"},
+                },
+            )
+        remote = None
+        body = {"name": str(uuid.uuid4())}
+        if url:
+            remote = gen_object_with_cleanup(
+                rpm_rpmremote_api,
+                {"name": str(uuid.uuid4()), "url": url, "policy": "on_demand"},
+                pulp_domain=pulp_domain.name,
+            )
+            body["remote"] = remote.pulp_href
+        repository = gen_object_with_cleanup(rpm_repository_api, body, pulp_domain=pulp_domain.name)
+        if url and sync:
+            monitor_task(rpm_repository_api.sync(repository.pulp_href, RpmRepositorySyncURL()).task)
+            repository = rpm_repository_api.read(repository.pulp_href)
+        return pulp_domain, remote, repository
+
+    return _create
+
+
+@pytest.fixture
+def setup_domain(rpm_domain_factory, rpm_repository_api, gen_object_with_cleanup):
+    """
+    The same contract as pulp_rpm's ``setup_domain`` fixture, which lives in pulp_rpm's own
+    conftest.py and therefore isn't available to pulp_service's tests: returns
+    ``(domain, remote, synced_source_repository, empty_destination_repository)``.
+    """
+
+    def _setup_domain(sync=True, url=RPM_SIGNED_FIXTURE_URL, pulp_domain=None):
+        domain, remote, src = rpm_domain_factory(url=url, sync=sync, pulp_domain=pulp_domain)
+        dest = gen_object_with_cleanup(rpm_repository_api, {"name": str(uuid.uuid4())}, pulp_domain=domain.name)
+        return domain, remote, src, dest
+
+    return _setup_domain
 
 
 @pytest.fixture

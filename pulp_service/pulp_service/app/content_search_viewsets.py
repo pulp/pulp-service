@@ -13,7 +13,6 @@ creating and maintaining a named ContentView resource.
 
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework.exceptions import ValidationError
-from rest_framework.response import Response
 
 from pulpcore.plugin.viewsets import NamedModelViewSet
 
@@ -21,21 +20,23 @@ from pulp_service.app.content_view_models import ContentViewSearchScope
 from pulp_service.app.content_view_serializers import (
     ContentViewErrataSerializer,
     ContentViewModuleStreamSerializer,
+    ContentViewPackageEnvironmentSerializer,
     ContentViewPackageGroupSerializer,
+    ContentViewPackageNameSerializer,
     ContentViewPackageSerializer,
 )
 from pulp_service.app.content_view_util import group_versions_by_domain, resolve_repository_versions
 from pulp_service.app.content_view_viewsets import (
-    ERRATA_SEVERITY_PARAMETER,
-    ERRATA_TYPE_PARAMETER,
-    LIMIT_PARAMETER,
-    OFFSET_PARAMETER,
-    RPM_NAMES_PARAMETER,
-    SEARCH_PARAMETER,
-    SORT_BY_PARAMETER,
+    COMPS_SEARCH_PARAMETERS,
+    ERRATA_SEARCH_PARAMETERS,
+    MODULE_STREAM_SEARCH_PARAMETERS,
+    PACKAGE_LIST_PARAMETERS,
+    PACKAGE_NAME_SEARCH_PARAMETERS,
+    environment_search,
     errata_search,
     module_stream_search,
     package_group_search,
+    package_name_search,
     paginated_package_search,
     paginated_response,
 )
@@ -56,12 +57,19 @@ REPOSITORY_VERSION_PARAMETER = OpenApiParameter(
 
 
 class RpmContentSearchViewSet(NamedModelViewSet):
-    """Shared plumbing for the ad-hoc ``rpm/content-search/...`` endpoints."""
+    """
+    Shared plumbing for the ad-hoc ``rpm/content-search/...`` endpoints.
+
+    Subclasses set ``search_function`` to one of the shared search functions in
+    ``content_view_viewsets.py``; each returns ``(page, total, limit, offset)`` and the response is
+    always the standard ``count``/``next``/``previous``/``results`` envelope.
+    """
 
     # A dedicated, unmanaged placeholder -- not a real RPM content model. See
     # ContentViewSearchScope's docstring for why sharing e.g. Package's own queryset here would
     # be unsafe (it would make pulpcore's get_viewset_for_model ambiguous for that model).
     queryset = ContentViewSearchScope.objects.none()
+    search_function = None
 
     DEFAULT_ACCESS_POLICY = {
         "statements": [
@@ -76,25 +84,18 @@ class RpmContentSearchViewSet(NamedModelViewSet):
         resolutions = resolve_repository_versions(hrefs, request.user)
         return group_versions_by_domain(resolutions)
 
+    def list(self, request, *args, **kwargs):
+        versions_by_domain = self._versions_by_domain(request)
+        page, total, limit, offset = type(self).search_function(request, versions_by_domain)
+        serializer = self.get_serializer(page, many=True)
+        return paginated_response(request, serializer.data, total, limit, offset)
 
-@extend_schema_view(
-    list=extend_schema(
-        parameters=[
-            REPOSITORY_VERSION_PARAMETER,
-            LIMIT_PARAMETER,
-            OFFSET_PARAMETER,
-            OpenApiParameter(
-                name="name",
-                description="Exact package name to filter by.",
-                required=False,
-                type=str,
-            ),
-        ],
-    )
-)
+
+@extend_schema_view(list=extend_schema(parameters=[REPOSITORY_VERSION_PARAMETER, *PACKAGE_LIST_PARAMETERS]))
 class RpmContentSearchPackagesViewSet(RpmContentSearchViewSet):
     """
-    Ad-hoc, cross-domain RPM package search: exact name filter, fixed NEVRA sort, paginated.
+    Ad-hoc, cross-domain RPM package listing: one row per package build, sorted by NEVRA,
+    paginated. ``name`` filters by exact name, ``search`` by case-insensitive name prefix.
 
     Same query behavior as the ContentView-backed ``search/rpm/packages/list`` endpoint, but the
     repository versions to search come directly from ``repository_version`` query parameters
@@ -103,102 +104,72 @@ class RpmContentSearchPackagesViewSet(RpmContentSearchViewSet):
 
     endpoint_name = "rpm/content-search/packages"
     serializer_class = ContentViewPackageSerializer
-
-    def list(self, request, *args, **kwargs):
-        versions_by_domain = self._versions_by_domain(request)
-        page, total, limit, offset = paginated_package_search(request, versions_by_domain)
-        serializer = self.get_serializer(page, many=True)
-        return paginated_response(request, serializer.data, total, limit, offset)
+    search_function = paginated_package_search
 
 
-@extend_schema_view(
-    list=extend_schema(
-        parameters=[
-            REPOSITORY_VERSION_PARAMETER,
-            SEARCH_PARAMETER,
-            LIMIT_PARAMETER,
-        ],
-    )
-)
+@extend_schema_view(list=extend_schema(parameters=[REPOSITORY_VERSION_PARAMETER, *PACKAGE_NAME_SEARCH_PARAMETERS]))
+class RpmContentSearchPackageNamesViewSet(RpmContentSearchViewSet):
+    """
+    Ad-hoc, cross-domain package name typeahead: case-insensitive name prefix, each package name
+    returned once (with the summary of one of its packages), sorted by name.
+    """
+
+    endpoint_name = "rpm/content-search/package-names"
+    serializer_class = ContentViewPackageNameSerializer
+    search_function = package_name_search
+
+
+@extend_schema_view(list=extend_schema(parameters=[REPOSITORY_VERSION_PARAMETER, *COMPS_SEARCH_PARAMETERS]))
 class RpmContentSearchPackageGroupsViewSet(RpmContentSearchViewSet):
     """
-    Ad-hoc, cross-domain RPM package-group search: substring match, with the ``packages`` list of
-    same-keyed groups found in multiple repository versions unioned together.
+    Ad-hoc, cross-domain RPM package-group search: case-insensitive name substring, with the
+    ``packages`` list of same-keyed groups found in multiple repository versions unioned together.
 
-    Same query behavior as the ContentView-backed ``search/rpm/package-groups`` endpoint, but the
-    repository versions to search come directly from ``repository_version`` query parameters
-    instead of a persisted ContentView's Distributions.
+    Same query behavior as the ContentView-backed ``search/rpm/package-groups`` endpoint.
     """
 
     endpoint_name = "rpm/content-search/package-groups"
     serializer_class = ContentViewPackageGroupSerializer
-
-    def list(self, request, *args, **kwargs):
-        versions_by_domain = self._versions_by_domain(request)
-        page = package_group_search(request, versions_by_domain)
-        serializer = self.get_serializer(page, many=True)
-        return Response({"results": serializer.data})
+    search_function = package_group_search
 
 
-@extend_schema_view(
-    list=extend_schema(
-        parameters=[
-            REPOSITORY_VERSION_PARAMETER,
-            SEARCH_PARAMETER,
-            LIMIT_PARAMETER,
-            OFFSET_PARAMETER,
-            SORT_BY_PARAMETER,
-            ERRATA_TYPE_PARAMETER,
-            ERRATA_SEVERITY_PARAMETER,
-        ],
-    )
-)
+@extend_schema_view(list=extend_schema(parameters=[REPOSITORY_VERSION_PARAMETER, *COMPS_SEARCH_PARAMETERS]))
+class RpmContentSearchEnvironmentsViewSet(RpmContentSearchViewSet):
+    """
+    Ad-hoc, cross-domain RPM package-environment search: case-insensitive name substring,
+    deduplicated by ``(name, id)``.
+
+    Same query behavior as the ContentView-backed ``search/rpm/environments`` endpoint.
+    """
+
+    endpoint_name = "rpm/content-search/environments"
+    serializer_class = ContentViewPackageEnvironmentSerializer
+    search_function = environment_search
+
+
+@extend_schema_view(list=extend_schema(parameters=[REPOSITORY_VERSION_PARAMETER, *ERRATA_SEARCH_PARAMETERS]))
 class RpmContentSearchErrataViewSet(RpmContentSearchViewSet):
     """
     Ad-hoc, cross-domain errata (advisory) search: filter/sort/paginate, with CVE references
     included.
 
-    Same query behavior as the ContentView-backed ``search/rpm/errata`` endpoint, but the
-    repository versions to search come directly from ``repository_version`` query parameters
-    instead of a persisted ContentView's Distributions.
+    Same query behavior as the ContentView-backed ``search/rpm/errata`` endpoint.
     """
 
     endpoint_name = "rpm/content-search/errata"
     serializer_class = ContentViewErrataSerializer
-
-    def list(self, request, *args, **kwargs):
-        versions_by_domain = self._versions_by_domain(request)
-        page, total, limit, offset = errata_search(request, versions_by_domain)
-        serializer = self.get_serializer(page, many=True)
-        return paginated_response(request, serializer.data, total, limit, offset)
+    search_function = errata_search
 
 
-@extend_schema_view(
-    list=extend_schema(
-        parameters=[
-            REPOSITORY_VERSION_PARAMETER,
-            SEARCH_PARAMETER,
-            LIMIT_PARAMETER,
-            SORT_BY_PARAMETER,
-            RPM_NAMES_PARAMETER,
-        ],
-    )
-)
+@extend_schema_view(list=extend_schema(parameters=[REPOSITORY_VERSION_PARAMETER, *MODULE_STREAM_SEARCH_PARAMETERS]))
 class RpmContentSearchModuleStreamsViewSet(RpmContentSearchViewSet):
     """
-    Ad-hoc, cross-domain module stream search: name/stream substring match, optional RPM name
-    filter, capped.
+    Ad-hoc, cross-domain module stream search: one row per ``(name, stream)`` (the lowest
+    version), case-insensitive module-name substring, optional RPM-name and has-packages filters.
 
-    Same query behavior as the ContentView-backed ``search/rpm/module-streams`` endpoint, but the
-    repository versions to search come directly from ``repository_version`` query parameters
-    instead of a persisted ContentView's Distributions.
+    Same query behavior as the ContentView-backed ``search/rpm/module-streams`` endpoint.
     """
 
     endpoint_name = "rpm/content-search/module-streams"
     serializer_class = ContentViewModuleStreamSerializer
-
-    def list(self, request, *args, **kwargs):
-        versions_by_domain = self._versions_by_domain(request)
-        page = module_stream_search(request, versions_by_domain)
-        serializer = self.get_serializer(page, many=True)
-        return Response({"results": serializer.data})
+    search_function = module_stream_search

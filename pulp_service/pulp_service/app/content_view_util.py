@@ -9,19 +9,26 @@ These are the pieces the nested ``content-views/{pk}/search/...`` viewsets in
     versions_by_domain = group_versions_by_domain(resolutions)
     page, total = scatter_gather(
         versions_by_domain,
-        build_queryset=lambda versions: Package.objects.filter(
-            pk__in=functools.reduce(operator.or_, (v.content for v in versions))
-        ).order_by("name"),
-        order_by=("name",),
+        build_queryset=lambda versions: content_for_versions(Package, versions),
+        order_by=(SortField("name"), SortField("pk", text=False)),
         limit=limit,
         offset=offset,
     )
+
+Every domain is queried separately (inside its own ``with_domain`` context) and the per-domain
+results are merged in Python, so the ordering applied in SQL and the ordering applied by the
+Python merge must be identical. Database collations (e.g. ``en_US.UTF-8``) can't be reproduced in
+Python, so text columns are ordered explicitly: case-insensitively first, then by exact value,
+both compared by code point (``COLLATE "C"``) -- exactly what ``sort_key`` does in Python.
 """
 
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
+
+from django.db.models import F, Func
+from django.db.models.functions import Collate, Lower
 
 from pulpcore.app.contexts import with_domain
 from pulpcore.app.models import RepositoryVersion
@@ -164,24 +171,105 @@ def group_versions_by_domain(resolutions):
     return dict(by_domain)
 
 
-def _sort_key(fields):
-    def key(row):
-        return tuple(
-            (
-                (value := (row[field] if isinstance(row, dict) else getattr(row, field))) is None,
-                value,
-            )
-            for field in fields
-        )
+def content_for_versions(model, versions):
+    """
+    Combine the content of one or more RepositoryVersions (all in the same domain).
+
+    The content ids stay in the database (an ``unnest`` subquery over ``content_ids``) instead of
+    being loaded into Python and sent back as a huge ``IN (...)`` list of bound parameters.
+    """
+    if not versions:
+        return model.objects.none()
+    if len(versions) == 1:
+        return versions[0].get_content(model.objects)
+    content_ids = (
+        RepositoryVersion.objects.filter(pk__in=[version.pk for version in versions])
+        .annotate(cid=Func(F("content_ids"), function="unnest"))
+        .values_list("cid", flat=True)
+    )
+    return model.objects.filter(pk__in=content_ids)
+
+
+@dataclass(frozen=True)
+class SortField:
+    """
+    One column of a cross-domain sort order.
+
+    ``text`` columns are ordered case-insensitively first and by exact value second, both by code
+    point, so that SQL and the Python merge agree. Non-text columns (UUIDs, ints) are ordered by
+    their natural value, which is identical in PostgreSQL and Python.
+    """
+
+    name: str
+    text: bool = True
+
+
+def db_ordering(fields: Sequence[SortField], descending: bool = False):
+    """The ``order_by()`` expressions matching ``sort_key(fields)``."""
+    parts = []
+    for field in fields:
+        if field.text:
+            parts += [Collate(Lower(field.name), "C"), Collate(F(field.name), "C")]
+        else:
+            parts.append(F(field.name))
+    return [part.desc(nulls_first=True) if descending else part.asc(nulls_last=True) for part in parts]
+
+
+def _text_key(value):
+    if value is None:
+        return (True, "", "")
+    return (False, value.lower(), value)
+
+
+def _raw_key(value):
+    return (value is None, value)
+
+
+def sort_key(fields: Sequence[SortField]):
+    """
+    A ``key=`` function ordering a sequence of values (one per field, in ``fields`` order)
+    exactly like ``db_ordering(fields)`` orders rows in PostgreSQL. NULLs sort last ascending and
+    first descending (``reverse=True``), matching PostgreSQL's defaults.
+    """
+    key_functions = [_text_key if field.text else _raw_key for field in fields]
+
+    def key(values):
+        return tuple(function(value) for function, value in zip(key_functions, values, strict=True))
 
     return key
+
+
+def attach_domain(objects, domain):
+    """
+    Cache ``domain`` as each object's ``pulp_domain``.
+
+    Serializing ``pulp_href`` reads ``obj.pulp_domain.name``; without this that's one extra query
+    per row, executed outside the domain's ``with_domain`` context.
+    """
+    for obj in objects:
+        obj.pulp_domain = domain
+    return objects
+
+
+def _fetch_by_pk(versions_by_domain, build_queryset, refs):
+    """Fetch full objects for ``(domain, pk)`` refs, one query per domain, in ``refs`` order."""
+    pks_by_domain = defaultdict(list)
+    for domain, pk in refs:
+        pks_by_domain[domain].append(pk)
+    objects = {}
+    for domain, pks in pks_by_domain.items():
+        with with_domain(domain):
+            for obj in build_queryset(versions_by_domain[domain]).filter(pk__in=pks):
+                objects[(domain, obj.pk)] = attach_domain([obj], domain)[0]
+    # A row deleted between the two phases is simply left out of the page.
+    return [objects[ref] for ref in refs if ref in objects]
 
 
 def scatter_gather(  # noqa: PLR0913
     versions_by_domain: dict,
     build_queryset: Callable[[list], Any],
     *,
-    order_by,
+    order_by: Sequence[SortField],
     limit: int,
     offset: int = 0,
     descending: bool = False,
@@ -191,35 +279,33 @@ def scatter_gather(  # noqa: PLR0913
     Execute ``build_queryset(versions)`` once per domain, inside that domain's routing context
     (``with_domain``), and merge the results into a single page.
 
-    For the common case -- a ContentView resolving to a single domain -- this executes exactly
-    one query with native ``ORDER BY``/``LIMIT``/``OFFSET`` (plus one ``COUNT`` if requested),
-    identical in cost to a single-domain query. For multiple domains, each domain's queryset is
-    over-fetched to ``limit + offset`` rows (sufficient, since a single domain can supply at most
-    the entire final page), concatenated, re-sorted in Python, and sliced -- bounding worst-case
-    cost to ``len(versions_by_domain) * (limit + offset)`` rather than the full dataset size.
+    For a single domain this is one query with native ``ORDER BY``/``LIMIT``/``OFFSET`` (plus one
+    ``COUNT`` if requested). For multiple domains it works in two phases: first each domain returns
+    only the sort keys and pk of its top ``offset + limit`` rows (sufficient, since a single domain
+    can supply at most every row up to the end of the requested page); those small tuples are
+    merged in Python. Then the full rows are fetched only for the pks on the requested page. This
+    keeps large offsets cheap enough that no offset cap is needed.
 
     Args:
         versions_by_domain (dict): Domain -> list[RepositoryVersion], as returned by
             ``group_versions_by_domain``.
         build_queryset (callable): Given a list of RepositoryVersions (all belonging to the same
-            domain), returns a QuerySet already filtered *and ordered* by ``order_by``
-            (ascending), but not sliced. May return a ``.values()``/``.values_list()`` queryset.
-        order_by (str or tuple[str]): One or more field names (without ``-`` prefixes) that
-            ``build_queryset`` already orders by; used here to merge-sort rows fetched from
-            multiple domains. Must match the ordering ``build_queryset`` applies.
+            domain), returns a filtered (unordered, unsliced) QuerySet of model instances.
+            Prefetches may be applied; they only run for the rows on the returned page.
+        order_by (Sequence[SortField]): The sort order. Should end with a unique column (e.g.
+            ``SortField("pk", text=False)``) so that paging is stable.
         limit (int): Maximum number of rows to return.
         offset (int): Number of rows to skip.
-        descending (bool): Whether the ordering above is descending. Applies uniformly to all
-            ``order_by`` fields (sufficient for every current use case -- callers needing mixed
-            per-field directions should pre-negate/annotate instead).
+        descending (bool): Whether to sort descending. Applies uniformly to all ``order_by``
+            fields.
         count (bool): If True, also compute an exact total count across all domains.
 
     Returns:
-        tuple: ``(page, total)``. ``page`` is a list of model instances (or dicts, if
-            ``build_queryset`` uses ``.values()``/``.values_list()``) of length <= ``limit``.
-            ``total`` is an int, or None if ``count=False``.
+        tuple: ``(page, total)``. ``page`` is a list of model instances of length <= ``limit``,
+            with ``pulp_domain`` already cached. ``total`` is an int, or None if ``count=False``.
     """
-    fields = (order_by,) if isinstance(order_by, str) else tuple(order_by)
+    fields = tuple(order_by)
+    ordering = db_ordering(fields, descending)
     domains = list(versions_by_domain.items())
 
     if not domains:
@@ -228,23 +314,48 @@ def scatter_gather(  # noqa: PLR0913
     if len(domains) == 1:
         domain, versions = domains[0]
         with with_domain(domain):
-            qs = build_queryset(versions)
-            if descending:
-                qs = qs.order_by(*[f"-{field}" for field in fields])
+            qs = build_queryset(versions).order_by(*ordering)
             total = qs.count() if count else None
-            page = list(qs[offset : offset + limit])
+            page = attach_domain(list(qs[offset : offset + limit]), domain)
         return page, total
 
-    rows = []
+    names = [field.name for field in fields]
+    value_names = ["pk", *(name for name in names if name != "pk")]
+    candidates = []
     total = 0 if count else None
-    fetch_bound = limit + offset
     for domain, versions in domains:
         with with_domain(domain):
-            qs = build_queryset(versions)
+            qs = build_queryset(versions).prefetch_related(None).order_by(*ordering)
             if count:
                 total += qs.count()
-            rows.extend(qs[:fetch_bound])
+            for row in qs.values_list(*value_names)[: offset + limit]:
+                values = dict(zip(value_names, row, strict=True))
+                candidates.append((domain, values))
 
-    rows.sort(key=_sort_key(fields), reverse=descending)
-    page = rows[offset : offset + limit]
-    return page, total
+    key = sort_key(fields)
+    candidates.sort(key=lambda candidate: key([candidate[1][name] for name in names]), reverse=descending)
+    refs = [(domain, values["pk"]) for domain, values in candidates[offset : offset + limit]]
+    return _fetch_by_pk(versions_by_domain, build_queryset, refs), total
+
+
+def distinct_keys(versions_by_domain, build_queryset, key_fields: Sequence[SortField]):
+    """
+    Collect the distinct key tuples (e.g. ``(name, id)``) of every row matching
+    ``build_queryset`` in each domain.
+
+    Used by the typeahead-style searches, which deduplicate rows by key across domains: the union
+    of these sets gives an exact ``count`` and, once sorted with ``sort_key(key_fields)``, the keys
+    of any requested page.
+
+    Returns:
+        tuple: ``(ordered_keys, keys_by_domain)`` -- the sorted union of all keys, and
+            Domain -> set of key tuples present in that domain.
+    """
+    names = [field.name for field in key_fields]
+    keys_by_domain = {}
+    for domain, versions in versions_by_domain.items():
+        with with_domain(domain):
+            qs = build_queryset(versions).prefetch_related(None).order_by()
+            keys_by_domain[domain] = set(qs.values_list(*names).distinct())
+    all_keys = set().union(*keys_by_domain.values())
+    return sorted(all_keys, key=sort_key(key_fields)), keys_by_domain
