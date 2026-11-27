@@ -19,7 +19,7 @@ after `sudo -u pulp`; sudo can remove it even with `-E`.
 | `pulp_container/`| [pulp/pulp_container](https://github.com/pulp/pulp_container) | pulp-container | 2.28.0              |
 | `pulp_python/`   | [pulp/pulp_python](https://github.com/pulp/pulp_python)    | pulp-python      | 3.38.0              |
 | `pulp_maven/`    | [pulp/pulp_maven](https://github.com/pulp/pulp_maven)      | pulp-maven       | 0.37.2              |
-| `pulp_rpm/`      | [pulp/pulp_rpm](https://github.com/pulp/pulp_rpm)          | pulp-rpm         | 3.39.0              |
+| `pulp_rpm/`      | [pulp/pulp_rpm](https://github.com/pulp/pulp_rpm)          | pulp-rpm         | 3.39.2              |
 | `storages/`      | [jschneier/django-storages](https://github.com/jschneier/django-storages) | django-storages | 1.14.6 |
 
 Versions are pinned in `pulp_service/requirements.txt`. Django-storages is a
@@ -38,6 +38,13 @@ The custom OCI storage backend (`OCIStorage`, ORAS client, Quay.io blob storage)
 The separate `oci-storage-backup-setup` repository is unaffected.
 
 ## Patches
+
+### 0084 - Fix comps.xml upload 500 for non-superusers
+
+- **Package:** pulp_rpm
+- **Files:** `pulp_rpm/app/viewsets/comps.py`
+- **Description:** `CompsXmlViewSet` is a plain `ViewSet` with no `serializer_class`, but its access policy uses the `has_required_repo_perms_on_upload` condition, which instantiates `view.serializer_class` to validate the request for every non-superuser. That raised `AttributeError` during the permission check, so `POST /rpm/comps/` returned a 500 for any regular user (seen in prod on 2026-11-27 for the `public-copr-stage` domain). Fix: set `serializer_class = CompsXmlSerializer` on the viewset. The condition then validates the payload and checks `rpm.modify_content_rpmrepository` / `rpm.view_rpmrepository` on the target repository, as intended. Note that a non-superuser upload without `repository` now gets a 400 (`Destination upload repository was not provided.`) instead of a 500.
+- **Upstream:** Candidate for a pulp_rpm fix. Drop this patch once a pulp-rpm release with the fix is pinned.
 
 ### 0083 - Per-domain DB application_name for Performance Insights
 

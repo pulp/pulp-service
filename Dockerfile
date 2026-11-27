@@ -198,6 +198,9 @@ RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages <
 COPY images/assets/patches/0083-per-domain-db-application-name.patch /tmp/
 RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0083-per-domain-db-application-name.patch
 
+COPY images/assets/patches/0084-Fix-comps-upload-500-for-non-superusers.patch /tmp/
+RUN patch -p1 -d /usr/local/lib/pulp/lib/python${PYTHON_VERSION}/site-packages < /tmp/0084-Fix-comps-upload-500-for-non-superusers.patch
+
 RUN mkdir /licenses
 COPY LICENSE /licenses/LICENSE
 

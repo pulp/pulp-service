@@ -1,0 +1,14 @@
+diff --git a/pulp_rpm/app/viewsets/comps.py b/pulp_rpm/app/viewsets/comps.py
+--- a/pulp_rpm/app/viewsets/comps.py
++++ b/pulp_rpm/app/viewsets/comps.py
+@@ -32,6 +32,10 @@
+     ViewSet for comps.xml Upload.
+     """
+ 
++    # Not used by create(), but the has_required_repo_perms_on_upload access condition
++    # instantiates view.serializer_class; without it non-superusers get an AttributeError (500).
++    serializer_class = CompsXmlSerializer
++
+     DEFAULT_ACCESS_POLICY = {
+         "statements": [
+             {
